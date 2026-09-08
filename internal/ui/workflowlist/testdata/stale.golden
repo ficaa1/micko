@@ -1,0 +1,11 @@
+WORKFLOWS
+Search: (none)  / to filter by name  Phase: All  Sort: phase  stale 2m — connection refused
+NAME                            PHASE            AGE  DURATION 
+fixture-wf-0003                 Failed            3m  -        
+fixture-wf-0004                 Error             2m  -        
+fixture-wf-0001                 Running           5m  -        
+fixture-wf-0000                 Pending           6m  -        
+fixture-wf-0002                 Succeeded         4m  -        
+fixture-wf-0005                 WeirdFutu…        1m  -        
+
+j/k move  enter open  l logs  / search  s sort  r refresh  ? help
