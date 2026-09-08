@@ -2,6 +2,7 @@ package argo
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ const MaxWatchEventBytes = 2 * 1024 * 1024
 type watchEnvelope struct {
 	Type   string          `json:"type"`
 	Object json.RawMessage `json:"object"`
+	Result json.RawMessage `json:"result"`
 	Error  *errorChunk     `json:"error"`
 }
 
@@ -63,6 +65,14 @@ func (c *Client) Watch(ctx context.Context, req core.WatchRequest, cb func(core.
 		}
 		line, err = readWatchLine(reader)
 		if len(line) > 0 {
+			line = stripWatchSSE(line)
+			trimmed := bytes.TrimSpace(line)
+			if len(trimmed) == 0 || bytes.HasPrefix(trimmed, []byte(":")) {
+				if errors.Is(err, io.EOF) {
+					return core.NewWatchError(core.WatchEnded, "watch stream ended before a terminal event; outcome may be stale", lastRV, io.EOF)
+				}
+				continue
+			}
 			event, parsedErr := decodeWatchEvent(line, lastRV)
 			if parsedErr != nil {
 				return parsedErr
@@ -112,10 +122,26 @@ func bytesTrimLine(b []byte) []byte {
 	return []byte(strings.TrimSuffix(strings.TrimSuffix(string(b), "\n"), "\r"))
 }
 
+func stripWatchSSE(line []byte) []byte {
+	line = bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r"))
+	if bytes.HasPrefix(line, []byte("data: ")) {
+		return line[len("data: "):]
+	}
+	if bytes.Equal(line, []byte("data:")) {
+		return nil
+	}
+	return line
+}
+
 func decodeWatchEvent(line []byte, lastRV string) (*core.WatchEvent, error) {
 	var env watchEnvelope
 	if err := json.Unmarshal(line, &env); err != nil {
 		return nil, core.NewWatchError(core.WatchProtocol, "watch event is not valid JSON", lastRV, err)
+	}
+	if len(env.Result) > 0 {
+		if err := json.Unmarshal(env.Result, &env); err != nil {
+			return nil, core.NewWatchError(core.WatchProtocol, "watch result is not valid JSON", lastRV, err)
+		}
 	}
 	if env.Error != nil {
 		return nil, classifyWatchChunk(env.Error, lastRV)
@@ -156,6 +182,14 @@ func classifyWatchChunk(ec *errorChunk, lastRV string) error {
 }
 
 func classifyWatchStatus(status int, message, lastRV string) error {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return core.NewWatchError(core.WatchEnded, redactMessage(message), lastRV,
+			core.NewAPIError(core.KindOf(status), 0, redactMessage(message)))
+	}
+	if status == http.StatusTooManyRequests {
+		return core.NewWatchError(core.WatchEnded, redactMessage(message), lastRV,
+			core.NewAPIError(core.ErrRateLimited, 0, redactMessage(message)))
+	}
 	kind := core.WatchProtocol
 	if status == http.StatusGone || status == http.StatusConflict {
 		kind = core.WatchExpired
