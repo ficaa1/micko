@@ -19,6 +19,8 @@
 package e2e
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -37,6 +39,9 @@ type e2eConfig struct {
 	// Token is an optional bearer token (server-mode SA token from a
 	// temp file path instead — never a literal in config).
 	Token string
+	// AllowActions must be true because the workflow journey submits and
+	// deletes synthetic resources; it is never inferred from ARGO_TUI_E2E.
+	AllowActions bool
 }
 
 // loadE2EConfig reads and validates the allowlist file.
@@ -64,6 +69,8 @@ func loadE2EConfig(path string) (e2eConfig, error) {
 			cfg.Namespace = strings.TrimSpace(v)
 		case "token":
 			cfg.Token = strings.TrimSpace(v)
+		case "allowActions":
+			cfg.AllowActions = strings.TrimSpace(v) == "true"
 		}
 	}
 	return cfg, nil
@@ -89,6 +96,9 @@ func e2eGate() (allowed bool, reason string) {
 		return false, "e2e config " + cfg + " must define server= and namespace= " +
 			"(explicit endpoint/namespace allowlist required; got server=" + parsed.Server +
 			" namespace=" + parsed.Namespace + ")"
+	}
+	if err := validateE2EConfig(parsed, true); err != nil {
+		return false, "e2e config rejected: " + err.Error()
 	}
 	return true, ""
 }
@@ -135,7 +145,28 @@ func parseAllowlist(text string) e2eConfig {
 			cfg.Namespace = strings.TrimSpace(v)
 		case "token":
 			cfg.Token = strings.TrimSpace(v)
+		case "allowActions":
+			cfg.AllowActions = strings.TrimSpace(v) == "true"
 		}
 	}
 	return cfg
+}
+
+// validateE2EConfig fails closed on unsafe endpoints and missing explicit
+// mutation authorization. Endpoint and namespace are kept exact by callers.
+func validateE2EConfig(cfg e2eConfig, mutation bool) error {
+	if cfg.Server == "" || cfg.Namespace == "" {
+		return fmt.Errorf("server and namespace are required")
+	}
+	u, err := url.Parse(cfg.Server)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil {
+		return fmt.Errorf("server must be an absolute URL without userinfo")
+	}
+	if u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")) {
+		return fmt.Errorf("server must use HTTPS or loopback HTTP")
+	}
+	if mutation && !cfg.AllowActions {
+		return fmt.Errorf("allowActions=true is required for the submit/delete journey")
+	}
+	return nil
 }
