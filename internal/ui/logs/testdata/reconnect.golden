@@ -1,0 +1,9 @@
+logs: wf-1
+Scope: workflow-wide · container: main · [FOLLOWING]
+retained: 3/10000 lines (0 evicted)
+── (all pods):main ── 3 lines recorded
+before disconnect
+── reconnect: new stream; overlap/gap possible ──
+after reconnect
+after reconnect
+space pause  f follow  / search  c container  pgup/pgdn scroll

@@ -1,0 +1,7 @@
+logs: wf-1
+Scope: workflow-wide · container: main · [CANCELED]
+retained: 1/10000 lines (0 evicted)
+── (all pods):main ── 1 line recorded
+so far, so good
+── stream canceled ──
+space pause  f follow  / search  c container  pgup/pgdn scroll
