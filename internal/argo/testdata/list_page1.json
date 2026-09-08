@@ -1,0 +1,33 @@
+{
+  "metadata": {"continue": "100", "resourceVersion": "rv-live-1"},
+  "items": [
+    {
+      "metadata": {
+        "name": "train-pipeline",
+        "namespace": "team-a",
+        "uid": "uid-1",
+        "resourceVersion": "11",
+        "labels": {"workflows.argoproj.io/phase": "Running"},
+        "creationTimestamp": "2026-09-08T10:00:00Z"
+      },
+      "status": {
+        "phase": "Running",
+        "message": "running",
+        "startedAt": "2026-09-08T10:01:00Z"
+      }
+    },
+    {
+      "metadata": {
+        "name": "nightly-report",
+        "namespace": "team-a",
+        "uid": "uid-2",
+        "resourceVersion": "12",
+        "creationTimestamp": "2026-09-08T09:00:00Z"
+      },
+      "status": {
+        "phase": "WaitingForDependency",
+        "finishedAt": "2026-09-08T09:37:00Z"
+      }
+    }
+  ]
+}
