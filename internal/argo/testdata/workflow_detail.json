@@ -1,0 +1,54 @@
+{
+  "metadata": {
+    "name": "dag-complex",
+    "namespace": "team-a",
+    "uid": "wf-uid-111",
+    "resourceVersion": "77",
+    "labels": {"workflows.argoproj.io/phase": "Running"},
+    "creationTimestamp": "2026-09-08T10:00:00Z"
+  },
+  "spec": {
+    "entrypoint": "main",
+    "templates": [{"name": "main", "dag": {"tasks": [{"name": "echo", "template": "echo"}]}}],
+    "x-custom-extension": "preserve-me-42"
+  },
+  "status": {
+    "phase": "Running",
+    "message": "progress 1/2",
+    "startedAt": "2026-09-08T10:00:05Z",
+    "nodes": {
+      "node-root": {
+        "name": "dag-complex",
+        "displayName": "dag-complex",
+        "type": "DAG",
+        "phase": "Running",
+        "children": ["node-echo"],
+        "outboundNodes": ["node-echo"],
+        "startedAt": "2026-09-08T10:00:05Z"
+      },
+      "node-echo": {
+        "name": "dag-complex.echo",
+        "displayName": "echo",
+        "type": "Pod",
+        "phase": "Succeeded",
+        "boundaryID": "node-root",
+        "startedAt": "2026-09-08T10:00:06Z",
+        "finishedAt": "2026-09-08T10:00:09Z"
+      },
+      "node-suspend": {
+        "name": "dag-complex.suspend",
+        "displayName": "suspend",
+        "type": "Suspend",
+        "phase": "Running",
+        "boundaryID": "node-root"
+      },
+      "node-ghost-parent": {
+        "name": "dag-complex.gap",
+        "displayName": "gap",
+        "type": "Steps",
+        "phase": "Pending",
+        "children": ["node-missing-id"]
+      }
+    }
+  }
+}
