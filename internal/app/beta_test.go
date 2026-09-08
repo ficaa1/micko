@@ -3,8 +3,11 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"argo-tui/internal/core"
 	"argo-tui/internal/testkit"
@@ -80,5 +83,73 @@ func TestAmbiguousActionNeverRetries(t *testing.T) {
 	}
 	if b.execCalls != 1 {
 		t.Fatalf("ambiguous execute calls=%d, want one", b.execCalls)
+	}
+}
+
+func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	m.route = RouteDetail
+	m.selection = wf.Summary.Ref
+	m.detailState = detailState{ref: wf.Summary.Ref, workflow: wf}
+
+	_, _ = m.Update(tea.KeyPressMsg{Text: "a"})
+	_, _ = m.Update(tea.KeyPressMsg{Text: "r"})
+	_, cmd := m.Update(tea.KeyPressMsg{Text: "y"})
+	if cmd == nil {
+		t.Fatal("confirmation did not emit an action intent command")
+	}
+	intent := cmd()
+	if _, ok := intent.(actions.ActionIntentMsg); !ok {
+		t.Fatalf("intent type = %T, want actions.ActionIntentMsg", intent)
+	}
+	_, cmd = m.Update(intent)
+	if cmd == nil {
+		t.Fatal("root did not start action execution")
+	}
+	result := cmd()
+	_, _ = m.Update(result)
+	if b.execCalls != 1 {
+		t.Fatalf("execute calls = %d, want 1", b.execCalls)
+	}
+	if !strings.Contains(m.View().Content, "outcome: confirmed") {
+		t.Fatalf("view did not render confirmed outcome: %s", m.View().Content)
+	}
+}
+
+func TestRootCtrlCQuitsWhileActionModalIsOpen(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	m.route = RouteDetail
+	m.actionView = actions.NewWithOptions(core.Ref{Name: "wf", Namespace: "ns", UID: "uid"}, actions.Options{AllowActions: true})
+	m.actionView.OpenMenu()
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Fatal("ctrl-c did not return quit command")
+	}
+	if !m.quitting {
+		t.Fatal("ctrl-c did not mark root quitting")
+	}
+}
+
+func TestWatchAuthFailureStopsAutomaticRecovery(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	_, cmd := m.Update(watchDoneMsg{genStamp: genStamp{}, Err: core.NewWatchError(core.WatchEnded, "unauthorized", "", core.NewAPIError(core.ErrUnauthenticated, 401, "unauthorized"))})
+	if cmd != nil {
+		t.Fatal("auth failure scheduled automatic recovery")
+	}
+	if !strings.Contains(m.watchMode, "authentication") {
+		t.Fatalf("watch mode = %q, want authentication terminal state", m.watchMode)
+	}
+}
+
+func TestWatchRateLimitDoesNotRelistImmediately(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	_, cmd := m.Update(watchDoneMsg{genStamp: genStamp{}, Err: core.NewWatchError(core.WatchEnded, "slow down", "", core.NewAPIError(core.ErrRateLimited, 429, "slow down"))})
+	if cmd == nil {
+		t.Fatal("rate limit did not schedule delayed recovery")
+	}
+	if !strings.Contains(m.watchMode, "rate limited") {
+		t.Fatalf("watch mode = %q, want rate-limited state", m.watchMode)
 	}
 }

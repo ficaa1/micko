@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"time"
 
 	"charm.land/bubbletea/v2"
 
@@ -10,6 +11,7 @@ import (
 )
 
 const watchQueueCap = 128
+const maxWatchRetries = 5
 
 type watchEventMsg struct {
 	genStamp
@@ -19,6 +21,7 @@ type watchDoneMsg struct {
 	genStamp
 	Err error
 }
+type watchRetryMsg struct{ genStamp }
 
 // startWatch opens one bounded watch. The coordinator, not the transport,
 // owns reconnect/relist policy; polling remains active as reconciliation.
@@ -127,7 +130,32 @@ func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
 	if errors.Is(msg.Err, context.Canceled) {
 		return nil
 	}
+	if ae := core.AsAPIError(msg.Err); ae != nil {
+		switch ae.Kind {
+		case core.ErrUnauthenticated, core.ErrForbidden:
+			m.watchMode = "authentication/permission required"
+			return nil
+		case core.ErrRateLimited:
+			m.watchMode = "rate limited"
+			if m.watchRetries >= maxWatchRetries {
+				m.watchMode = "rate limited; refresh required"
+				return nil
+			}
+			m.watchRetries++
+			delay := time.Second
+			if ae.RetryAfter != nil && *ae.RetryAfter > delay {
+				delay = *ae.RetryAfter
+			}
+			if delay > 5*time.Minute {
+				m.watchMode = "rate limited; refresh required"
+				return nil
+			}
+			g := genStamp{Conn: m.connGen, Sel: m.selGen}
+			return tea.Tick(delay, func(time.Time) tea.Msg { return watchRetryMsg{genStamp: g} })
+		}
+	}
 	m.watchMode = "polling fallback"
+	m.watchRetries = 0
 	// A closed/expired stream must not make the viewer unusable. Relist now;
 	// the normal tick continues periodic reconciliation after this completes.
 	return m.startListGeneration()

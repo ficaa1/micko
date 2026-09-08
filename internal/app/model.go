@@ -54,13 +54,14 @@ type Root struct {
 
 	ids requestIDProvider
 
-	listView   workflowlist.Model
-	detailView *detail.Model
-	logsView   *logs.Model
-	actionView *actions.Model
-	actionOpts actions.Options
-	watchRV    string
-	watchMode  string
+	listView     workflowlist.Model
+	detailView   *detail.Model
+	logsView     *logs.Model
+	actionView   *actions.Model
+	actionOpts   actions.Options
+	watchRV      string
+	watchMode    string
+	watchRetries int
 }
 
 // listState is the list route's data + status.
@@ -149,6 +150,10 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		// Ctrl-C is global, including while a child modal owns input.
+		if msg.String() == "ctrl+c" {
+			return m.handleKey(msg)
+		}
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			_, cmd := m.actionView.Update(msg)
 			return m, cmd
@@ -187,6 +192,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case watchDoneMsg:
 		return m, m.handleWatchDone(msg)
 
+	case watchRetryMsg:
+		if msg.Conn != m.connGen || msg.Sel != m.selGen || m.watchMode != "rate limited" {
+			return m, nil
+		}
+		return m, m.startWatch()
+
 	case actionResultMsg:
 		return m, m.handleActionResult(msg)
 
@@ -211,9 +222,16 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case BackMsg:
 		return m, m.back()
 
+	case actions.ActionIntentMsg:
+		// Only the active, confirmed child intent may reach the executor.
+		if msg.Request.Ref != m.selection || m.actionView == nil ||
+			m.actionView.State() != actions.StateSubmitting {
+			return m, nil
+		}
+		return m, m.startAction(msg.Request)
+
 	case ActionIntentMsg:
-		// F1: alpha/demo never converts action intents to writes (plan §6).
-		// No effect; I1 will gate this behind --allow-actions.
+		// Retain the obsolete app message as a no-op compatibility boundary.
 		return m, nil
 
 	default:
@@ -226,7 +244,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // fake-driven root route"; do not call this stub a finished alpha).
 func (m *Root) View() tea.View {
 	var b strings.Builder
-	b.WriteString("argo-tui | ns: " + m.deps.namespace + " | READ ONLY\n")
+	mode := "READ ONLY"
+	if m.actionOpts.AllowActions && !m.actionOpts.ReadOnly && !m.actionOpts.Demo {
+		mode = "ACTIONS ENABLED"
+	}
+	b.WriteString("argo-tui | ns: " + m.deps.namespace + " | " + mode + "\n")
 	switch m.route {
 	case RouteDetail:
 		b.WriteString("route: detail | " + m.detailSummary() + "\n")
@@ -241,6 +263,10 @@ func (m *Root) View() tea.View {
 	default:
 		b.WriteString("route: list | " + m.listSummary() + "\n")
 		b.WriteString(m.listView.View())
+	}
+	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
+		b.WriteString("\n")
+		b.WriteString(m.actionView.View().Content)
 	}
 	return tea.NewView(b.String())
 }
@@ -464,6 +490,14 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 			st.staleSince = m.deps.clock.Now()
 		}
 		m.listView.SetStatus(workflowlist.StatusStale, msg.Err.Message, m.deps.clock.Now().Sub(st.staleSince))
+		switch msg.Err.Kind {
+		case core.ErrUnauthenticated, core.ErrForbidden:
+			m.watchMode = "authentication/permission required"
+			return nil
+		case core.ErrRateLimited:
+			m.watchMode = "rate limited; refresh required"
+			return nil
+		}
 		return m.deps.tickCmd()
 	}
 	st.items = msg.Page.Items

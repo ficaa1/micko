@@ -26,7 +26,12 @@ func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 	if req.Ref.UID == "" || req.Ref.Namespace == "" || req.Ref.Name == "" {
 		return nil
 	}
-	m.cancelInflight("action")
+	m.mu.Lock()
+	_, alreadyRunning := m.inflight["action"]
+	m.mu.Unlock()
+	if alreadyRunning {
+		return nil
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.setInflight("action", cancel)
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
