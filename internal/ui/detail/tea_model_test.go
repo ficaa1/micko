@@ -105,4 +105,3 @@ func TestTeaModelInitNil(t *testing.T) {
 		t.Fatal("detail child must not start autonomous effects (plan §4)")
 	}
 }
-
