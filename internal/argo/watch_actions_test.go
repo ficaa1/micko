@@ -47,6 +47,61 @@ func TestWatchExpiredHTTP410IsClassified(t *testing.T) {
 	}
 }
 
+func TestWatchHTTPAuthAndThrottleErrorsPreserveAPIClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		kind   core.ErrorKind
+	}{
+		{"unauthenticated", http.StatusUnauthorized, core.ErrUnauthenticated},
+		{"forbidden", http.StatusForbidden, core.ErrForbidden},
+		{"rate limited", http.StatusTooManyRequests, core.ErrRateLimited},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.status == http.StatusTooManyRequests {
+					w.Header().Set("Retry-After", "7")
+				}
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(`{"code":16,"message":"watch denied"}`))
+			}))
+			t.Cleanup(srv.Close)
+			c := newTestClient(t, srv)
+			err := c.Watch(context.Background(), core.WatchRequest{Namespace: "ns", ResourceVersion: "rv"}, func(core.WatchEvent) error { return nil })
+			var we *core.WatchError
+			var ae *core.APIError
+			if !errors.As(err, &we) || !errors.As(err, &ae) || ae.Kind != tc.kind || we.LastResourceVersion != "rv" {
+				t.Fatalf("error = %v, watch=%#v api=%#v", err, we, ae)
+			}
+			if tc.status == http.StatusTooManyRequests && (ae.RetryAfter == nil || *ae.RetryAfter != 7*time.Second) {
+				t.Fatalf("Retry-After = %#v", ae.RetryAfter)
+			}
+		})
+	}
+}
+
+func TestWatchAcceptsWrappedJSONLinesAndSSEFrames(t *testing.T) {
+	for _, tc := range []struct {
+		name, prefix, suffix string
+	}{
+		{"json lines", "", "\n"},
+		{"sse", "data: ", "\n\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := tc.prefix + `{"result":{"type":"MODIFIED","object":{"metadata":{"namespace":"ns","name":"wf","uid":"u","resourceVersion":"22"},"status":{"phase":"Running"}}}}` + tc.suffix
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, body) }))
+			defer srv.Close()
+			c := newTestClient(t, srv)
+			var got []core.WatchEvent
+			err := c.Watch(context.Background(), core.WatchRequest{Namespace: "ns"}, func(e core.WatchEvent) error { got = append(got, e); return nil })
+			var ended *core.WatchError
+			if !errors.As(err, &ended) || ended.Kind != core.WatchEnded || len(got) != 1 || got[0].Type != core.WatchModified || got[0].Summary.Phase != "Running" {
+				t.Fatalf("got=%#v err=%v", got, err)
+			}
+		})
+	}
+}
+
 func TestWatchCancellationStopsStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
