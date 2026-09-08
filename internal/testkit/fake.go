@@ -1,0 +1,325 @@
+// Package testkit provides the independent fake core.Reader, a fake clock
+// and explicitly synthetic fixtures for deterministic tests (plan §8 F1
+// slice 3; environments ET-1 in docs/test-environment.md §1).
+//
+// Fixture policy: everything here is SYNTHETIC and named as such. Nothing in
+// this package is a captured production payload, and nothing may be
+// presented as one (plan: "Fixtures explicitly synthetic, never mislabeled
+// captures").
+package testkit
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"sync"
+	"time"
+
+	"argo-tui/internal/core"
+)
+
+// FakeClock is a controllable time source for deterministic tests. Zero
+// value is usable (Starts at its zero time); Advance moves it forward.
+type FakeClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+// NewFakeClock returns a clock pinned at t.
+func NewFakeClock(t time.Time) *FakeClock { return &FakeClock{now: t} }
+
+// Now implements a monotonic-ish wall clock read.
+func (c *FakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+// Advance moves the clock forward by d.
+func (c *FakeClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
+// FakeReader is an independent in-memory core.Reader for ET-1 tests and the
+// --demo backend. It never performs I/O and never constructs HTTP clients
+// (ADR 0001: demo runs on the fake Reader only).
+type FakeReader struct {
+	mu        sync.Mutex
+	Workflows map[core.Ref]core.Workflow
+	// Order defines deterministic List ordering (already sorted by the
+	// test/demo builder); when empty, items sort by (Namespace, Name).
+	Order []core.Ref
+	// PageLimit, when > 0, forces List to paginate in pages of this size
+	// so pagination consumers can be exercised deterministically.
+	PageLimit int64
+
+	// ListErr/GetErr/StreamErr are injectable errors returned by the
+	// corresponding call (before any other behavior).
+	ListErr   error
+	GetErr    error
+	StreamErr error
+
+	// ListDelay/GetDelay/StreamDelay are injected delays, applied with
+	// context awareness (canceled context aborts the wait).
+	ListDelay   time.Duration
+	GetDelay    time.Duration
+	StreamDelay time.Duration
+
+	// StreamSequence, when non-empty, feeds LogRecords to StreamLogs in
+	// order; when empty, StreamLogs finishes immediately (clean EOF → nil).
+	StreamSequence []core.LogRecord
+
+	// StreamHook, when set, is invoked at stream start with the request;
+	// returning an error fails the stream before any record is delivered.
+	StreamHook func(core.LogRequest) error
+
+	// Call counters (guarded by mu) for test assertions.
+	ListCalls, GetCalls, StreamStarts int
+	// StreamCancels counts streams that ended via context cancellation.
+	StreamCancels int
+}
+
+// compile-time proof the fake satisfies the frozen contract.
+var _ core.Reader = (*FakeReader)(nil)
+
+// List implements core.Reader.
+func (f *FakeReader) List(ctx context.Context, q core.Query) (core.Page, error) {
+	f.mu.Lock()
+	f.ListCalls++
+	listErr, delay := f.ListErr, f.ListDelay
+	items := f.collect(q)
+	f.mu.Unlock()
+
+	if err := sleepCtx(ctx, delay); err != nil {
+		return core.Page{}, err
+	}
+	if listErr != nil {
+		return core.Page{}, listErr
+	}
+	return f.page(items, q), nil
+}
+
+// collect snapshots and filters the workflow map (callers hold f.mu).
+func (f *FakeReader) collect(q core.Query) []core.Summary {
+	var order []core.Ref
+	if len(f.Order) > 0 {
+		order = append([]core.Ref(nil), f.Order...)
+	} else {
+		for ref := range f.Workflows {
+			order = append(order, ref)
+		}
+		sort.Slice(order, func(i, j int) bool {
+			if order[i].Namespace != order[j].Namespace {
+				return order[i].Namespace < order[j].Namespace
+			}
+			return order[i].Name < order[j].Name
+		})
+	}
+	items := make([]core.Summary, 0, len(order))
+	for _, ref := range order {
+		if q.Namespace != "" && ref.Namespace != q.Namespace {
+			continue
+		}
+		wf, ok := f.Workflows[ref]
+		if !ok {
+			continue
+		}
+		items = append(items, wf.Summary)
+	}
+	return items
+}
+
+// page applies the opaque-continue pagination contract over items.
+func (f *FakeReader) page(items []core.Summary, q core.Query) core.Page {
+	limit := q.Limit
+	if limit <= 0 && f.PageLimit > 0 {
+		limit = f.PageLimit
+	}
+	page := core.Page{ResourceVersion: "fake-rv"}
+	if limit <= 0 || int64(len(items)) <= limit {
+		page.Items = items
+		return page
+	}
+	start := int64(0)
+	if q.Continue != "" {
+		// The fake stores the *index* as its opaque token. Tests treat the
+		// token as opaque; only the fake knows the encoding.
+		for i, s := range items {
+			if continueToken(s.Ref) == q.Continue {
+				start = int64(i)
+				break
+			}
+		}
+	}
+	end := start + limit
+	if end > int64(len(items)) {
+		end = int64(len(items))
+	}
+	page.Items = items[start:end]
+	if end < int64(len(items)) {
+		page.Continue = continueToken(items[end].Ref)
+	}
+	return page
+}
+
+func continueToken(ref core.Ref) string {
+	return fmt.Sprintf("opaque:%s/%s", ref.Namespace, ref.Name)
+}
+
+// Get implements core.Reader.
+func (f *FakeReader) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
+	f.mu.Lock()
+	f.GetCalls++
+	getErr, delay := f.GetErr, f.GetDelay
+	f.mu.Unlock()
+
+	if err := sleepCtx(ctx, delay); err != nil {
+		return core.Workflow{}, err
+	}
+	if getErr != nil {
+		return core.Workflow{}, getErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	wf, ok := f.Workflows[ref]
+	if !ok {
+		return core.Workflow{}, core.ErrNotFoundf("workflow %s/%s not found", ref.Namespace, ref.Name)
+	}
+	return wf, nil
+}
+
+// StreamLogs implements core.Reader. It feeds StreamSequence records
+// serially, honoring injected per-record delay and context cancellation,
+// and returns nil on clean EOF.
+func (f *FakeReader) StreamLogs(ctx context.Context, req core.LogRequest, cb func(core.LogRecord) error) error {
+	f.mu.Lock()
+	f.StreamStarts++
+	streamErr, delay := f.StreamErr, f.StreamDelay
+	hook := f.StreamHook
+	seq := append([]core.LogRecord(nil), f.StreamSequence...)
+	f.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		f.mu.Lock()
+		f.StreamCancels++
+		f.mu.Unlock()
+		return err
+	}
+	if hook != nil {
+		if err := hook(req); err != nil {
+			return err
+		}
+	}
+	if streamErr != nil {
+		return streamErr
+	}
+	for i, rec := range seq {
+		if i > 0 {
+			if err := sleepCtx(ctx, delay); err != nil {
+				f.mu.Lock()
+				f.StreamCancels++
+				f.mu.Unlock()
+				return err
+			}
+		}
+		if ctx.Err() != nil {
+			f.mu.Lock()
+			f.StreamCancels++
+			f.mu.Unlock()
+			return ctx.Err()
+		}
+		if rec.Container == "" {
+			rec.Container = req.Container
+		}
+		if rec.PodName == "" {
+			rec.PodName = req.PodName
+		}
+		if err := cb(rec); err != nil {
+			return err
+		}
+	}
+	return nil // clean finite EOF
+}
+
+// StreamCancelCount returns the number of streams ended via context
+// cancellation (thread-safe counter for tests).
+func (f *FakeReader) StreamCancelCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.StreamCancels
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// Demo data builders -------------------------------------------------------
+
+// SyntheticWorkflow builds one explicitly synthetic workflow for tests and
+// demo mode. Name prefixes mark provenance: demo names start with "demo-".
+func SyntheticWorkflow(ns, name, phase string, created time.Time) core.Workflow {
+	wf := core.Workflow{
+		Summary: core.Summary{
+			Ref:             core.Ref{Namespace: ns, Name: name, UID: "synthetic-uid-" + name},
+			ResourceVersion: "100",
+			Phase:           phase,
+			CreatedAt:       created,
+			Labels:          map[string]string{"workflows.argoproj.io/phase": phase},
+		},
+		Nodes:          map[string]core.Node{},
+		NodesAvailable: true,
+		Resource:       []byte(fmt.Sprintf(`{"metadata":{"name":%q,"namespace":%q},"synthetic":true}`, name, ns)),
+	}
+	return wf
+}
+
+// DemoReader returns a FakeReader seeded with a small, clearly synthetic
+// demo dataset for `--demo` (plan §8 F1 slice 6).
+func DemoReader(clock *FakeClock) *FakeReader {
+	now := clock.Now()
+	ns := "demo"
+	f := &FakeReader{
+		Workflows: map[core.Ref]core.Workflow{},
+		PageLimit: 2, // exercise pagination in demo
+	}
+	mk := func(name, phase string, age time.Duration) {
+		wf := SyntheticWorkflow(ns, name, phase, now.Add(-age))
+		wf.Summary.StartedAt = ptrTime(now.Add(-age))
+		if phase == "Succeeded" || phase == "Failed" {
+			wf.Summary.FinishedAt = ptrTime(now.Add(-age + 4*time.Minute))
+		}
+		wf.Nodes["root"] = core.Node{
+			ID: "root", Name: name, DisplayName: name, Type: "Steps", Phase: phase,
+		}
+		wf.Nodes["step-1"] = core.Node{
+			ID: "step-1", Name: name + ".step-1", DisplayName: "step-1",
+			Type: "Pod", Phase: phase, BoundaryID: "root",
+		}
+		f.Workflows[wf.Summary.Ref] = wf
+		f.Order = append(f.Order, wf.Summary.Ref)
+	}
+	mk("demo-hello-world", "Succeeded", 26*time.Minute)
+	mk("demo-nightly-report", "Failed", 2*time.Hour)
+	mk("demo-train-pipeline", "Running", 4*time.Minute)
+	mk("demo-data-pull", "Running", 40*time.Minute)
+	mk("demo-cleanup", "Pending", 1*time.Minute)
+	f.StreamSequence = []core.LogRecord{
+		{PodName: "demo-train-pipeline", Container: "main", Content: "epoch 1/10 loss=0.542", ReceivedAt: now},
+		{PodName: "demo-train-pipeline", Container: "main", Content: "epoch 2/10 loss=0.391", ReceivedAt: now},
+	}
+	return f
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }

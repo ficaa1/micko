@@ -10,3 +10,11 @@ coverage.*
 # Editor / OS noise
 .DS_Store
 *.swp
+
+# Recovery-run leftovers: toolchain packages must never enter the repo
+# (re-downloadable; see AGENTS.md hygiene rules)
+*.deb
+
+# Pending-approval draft (AGENTS.md write requires explicit user consent;
+# draft kept for review only)
+AGENTS.md.draft
