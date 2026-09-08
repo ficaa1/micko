@@ -1,0 +1,4 @@
+DETAIL fixture-dag
+[Summary] [Nodes] [Resource]
+phase: Failed
+message: one task failed
