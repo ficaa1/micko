@@ -19,6 +19,8 @@ type Clock interface {
 // frozen core contract; the root model never knows about transport.
 type deps struct {
 	reader   core.Reader
+	watcher  core.Watcher
+	actioner core.Actioner
 	clock    Clock
 	interval time.Duration
 	// namespace is the active namespace; switching it bumps the connection

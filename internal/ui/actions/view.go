@@ -14,6 +14,9 @@ func render(m *Model) string {
 	switch m.state {
 	case StateUnavailable:
 		b.WriteString("status: unavailable\nreason: " + m.reason + "\n")
+	case StateMenu:
+		b.WriteString("choose action (all require confirmation):\n")
+		b.WriteString("[r] retry  [u] resubmit  [s] stop  [t] terminate  [esc] cancel\n")
 	case StateConfirm:
 		b.WriteString("action: " + actionLabel(m.action) + "\n")
 		if m.action == core.ActionStop {

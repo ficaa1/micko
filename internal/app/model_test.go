@@ -198,8 +198,8 @@ func TestListSnapshotCollectionViaFakePagination(t *testing.T) {
 	m.deps.pageSize = 2
 	cmd := m.startListGeneration()
 	msgs := runCmd(cmd)
-	if len(msgs) != 2 {
-		t.Fatalf("expected [listLoaded, tick], got %d messages", len(msgs))
+	if len(msgs) != 1 {
+		t.Fatalf("expected listLoaded, got %d messages", len(msgs))
 	}
 	lm, ok := msgs[0].(listLoadedMsg)
 	if !ok {
@@ -317,17 +317,14 @@ func TestInitStartsListGeneration(t *testing.T) {
 		t.Fatal("Init produced no messages")
 	}
 	sawList := false
-	sawTick := false
 	for _, msg := range msgs {
 		switch msg.(type) {
 		case listLoadedMsg:
 			sawList = true
-		case tickMsg:
-			sawTick = true
 		}
 	}
-	if !sawList || !sawTick {
-		t.Fatalf("Init messages missing list/tick: %v", msgs)
+	if !sawList {
+		t.Fatalf("Init messages missing list: %v", msgs)
 	}
 }
 

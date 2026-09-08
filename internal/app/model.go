@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbletea/v2"
 
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/actions"
 	"argo-tui/internal/ui/detail"
 	"argo-tui/internal/ui/logs"
 	"argo-tui/internal/ui/shared"
@@ -56,6 +57,10 @@ type Root struct {
 	listView   workflowlist.Model
 	detailView *detail.Model
 	logsView   *logs.Model
+	actionView *actions.Model
+	actionOpts actions.Options
+	watchRV    string
+	watchMode  string
 }
 
 // listState is the list route's data + status.
@@ -94,9 +99,25 @@ type logState struct {
 
 // NewRoot constructs the root model.
 func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duration) *Root {
+	return NewRootWithOptions(r, clock, namespace, interval, actions.Options{ReadOnly: true})
+}
+
+// NewRootWithOptions wires optional beta capabilities while retaining the
+// alpha-safe NewRoot constructor.
+func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval time.Duration, opts actions.Options) *Root {
+	var watcher core.Watcher
+	if w, ok := r.(core.Watcher); ok {
+		watcher = w
+	}
+	var actioner core.Actioner
+	if a, ok := r.(core.Actioner); ok {
+		actioner = a
+	}
 	return &Root{
 		deps: deps{
 			reader:      r,
+			watcher:     watcher,
+			actioner:    actioner,
 			clock:       clock,
 			interval:    interval,
 			namespace:   namespace,
@@ -106,6 +127,8 @@ func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duratio
 		inflight:   map[string]context.CancelFunc{},
 		listView:   workflowlist.New(shared.NewTheme(false), false),
 		detailView: detail.New(),
+		actionView: actions.NewWithOptions(core.Ref{}, opts),
+		actionOpts: opts,
 	}
 }
 
@@ -126,6 +149,15 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
+			_, cmd := m.actionView.Update(msg)
+			return m, cmd
+		}
+		if m.route == RouteDetail && msg.String() == "a" {
+			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
+			m.actionView.OpenMenu()
+			return m, nil
+		}
 		if msg.String() == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
 			return m, m.back()
 		}
@@ -148,6 +180,15 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case listLoadedMsg:
 		return m, m.handleListLoaded(msg)
+
+	case watchEventMsg:
+		return m, m.handleWatchEvent(msg)
+
+	case watchDoneMsg:
+		return m, m.handleWatchDone(msg)
+
+	case actionResultMsg:
+		return m, m.handleActionResult(msg)
 
 	case detailLoadedMsg:
 		return m, m.handleDetailLoaded(msg)
@@ -217,6 +258,9 @@ func (m *Root) listSummary() string {
 		return "list: empty"
 	default:
 		s := "list: " + lenItems(st.items)
+		if m.watchMode != "" {
+			s += " | mode: " + m.watchMode
+		}
 		if st.incomplete {
 			s += " (incomplete: snapshot cap reached)"
 		}
@@ -372,7 +416,7 @@ func (m *Root) startListGeneration() tea.Cmd {
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
 	cmd := m.deps.listCmd(ctx, g, id)
-	return tea.Batch(cmd, m.deps.tickCmd())
+	return cmd
 }
 
 // startDetailFetch starts a detail fetch for the current selection.
@@ -420,9 +464,10 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 			st.staleSince = m.deps.clock.Now()
 		}
 		m.listView.SetStatus(workflowlist.StatusStale, msg.Err.Message, m.deps.clock.Now().Sub(st.staleSince))
-		return nil
+		return m.deps.tickCmd()
 	}
 	st.items = msg.Page.Items
+	m.watchRV = msg.Page.ResourceVersion
 	st.incomplete = msg.Capped
 	st.lastErr = nil
 	st.staleSince = time.Time{}
@@ -432,7 +477,10 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		status = workflowlist.StatusIncomplete
 	}
 	m.listView.SetStatus(status, "", 0)
-	return nil
+	if m.deps.watcher != nil {
+		return tea.Batch(m.startWatch(), m.deps.tickCmd())
+	}
+	return m.deps.tickCmd()
 }
 
 // handleDetailLoaded applies a detail result honoring staleness + UID

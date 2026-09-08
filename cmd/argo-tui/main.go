@@ -20,6 +20,7 @@ import (
 	"argo-tui/internal/config"
 	"argo-tui/internal/core"
 	"argo-tui/internal/testkit"
+	"argo-tui/internal/ui/actions"
 )
 
 const version = "0.1.0-alpha"
@@ -45,6 +46,7 @@ func run(args []string) int {
 	caFile := fs.String("ca-file", "", "custom CA bundle")
 	refresh := fs.Duration("refresh-interval", 0, "poll interval")
 	insecure := fs.Bool("insecure-skip-tls-verify", false, "disable TLS verification (unsafe)")
+	allowActions := fs.Bool("allow-actions", false, "enable explicitly confirmed workflow actions")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2
@@ -98,7 +100,11 @@ func run(args []string) int {
 		}
 		activeNS, interval = cfg.Namespace, cfg.RefreshInterval
 	}
-	root := app.NewRoot(reader, clock, activeNS, interval)
+	root := app.NewRootWithOptions(reader, clock, activeNS, interval, actions.Options{
+		AllowActions: *allowActions && !*demo,
+		ReadOnly:     !*allowActions || *demo,
+		Demo:         *demo,
+	})
 	p := tea.NewProgram(root)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "argo-tui: %v\n", err)

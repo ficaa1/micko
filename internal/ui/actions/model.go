@@ -15,6 +15,7 @@ type State uint8
 const (
 	StateIdle State = iota
 	StateUnavailable
+	StateMenu
 	StateConfirm
 	StateTypedName
 	StateSubmitting
@@ -100,11 +101,22 @@ func (m *Model) Open(action core.Action) {
 }
 
 func (m *Model) Cancel() {
-	if m.state == StateConfirm || m.state == StateTypedName {
+	if m.state == StateMenu || m.state == StateConfirm || m.state == StateTypedName {
 		m.state = StateIdle
 		m.typedName = ""
 	}
 }
+
+// OpenMenu presents the four deliberately narrow supported actions.
+func (m *Model) OpenMenu() {
+	if !m.allowActions || m.readOnly || m.demo {
+		m.Open(core.ActionRetry)
+		return
+	}
+	m.state = StateMenu
+	m.reason = ""
+}
+
 func (m *Model) Confirm() bool {
 	if m.state != StateConfirm {
 		return false
@@ -153,6 +165,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch strings.ToLower(msg.String()) {
 		case "esc", "n", "q":
 			m.Cancel()
+		case "r":
+			if m.state == StateMenu {
+				m.Open(core.ActionRetry)
+			}
+		case "u":
+			if m.state == StateMenu {
+				m.Open(core.ActionResubmit)
+			}
+		case "s":
+			if m.state == StateMenu {
+				m.Open(core.ActionStop)
+			}
+		case "t":
+			if m.state == StateMenu {
+				m.Open(core.ActionTerminate)
+			}
 		case "y", "enter":
 			if m.state == StateConfirm {
 				m.Confirm()
