@@ -1,0 +1,153 @@
+# CI pipeline for argo-tui (E1 slice: "CI format/vet/test/race/build jobs
+# and pinned tool versions").
+#
+# Toolchain pins (docs/test-environment.md §2):
+#   - Go:      1.25.4 (go.mod toolchain go1.25.4; exact patch pinned here)
+#   - Argo:    v4.1.2 (wire contract target; NOT installed in CI)
+#   - kind:    v0.33.0 (only in the opt-in e2e job; NOT provisioned yet)
+#   - kubectl: v1.37.0 (only in the opt-in e2e job)
+#
+# Job topology mirrors docs/test-environment.md tiers:
+#   fmt + vet + unit (ET-1)  → always
+#   integration (ET-2/ET-3)  → always; PTY tests self-skip without /dev/ptmx
+#   race                     → always (requires default CGO runner)
+#   build + smoke            → always
+#   e2e (ET-4)               → workflow_dispatch / label only; skips itself
+#                              unless the allowlist secret is present.
+# The e2e job must NEVER run against a production cluster: its allowlist
+# comes from an explicit repo secret written for the disposable
+# environment (plan §9; docs/test-environment.md §4).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Pinned tool versions (single source: docs/test-environment.md §2).
+  GO_VERSION: "1.25.4"
+  KIND_VERSION: "v0.33.0"
+  KUBECTL_VERSION: "v1.37.0"
+
+jobs:
+  fmt:
+    name: format (gofmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - name: gofmt check (cmd internal tests)
+        run: |
+          out="$(gofmt -l cmd internal tests)"
+          if [ -n "$out" ]; then
+            echo "::error::gofmt needed on:" "$out"
+            exit 1
+          fi
+
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: go vet ./...
+
+  test:
+    name: unit tests (ET-1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: go test ./... -count=1
+
+  test-integration:
+    name: integration + PTY (ET-2/ET-3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      # ET-2: fixture-server conformance over real HTTP; ET-3: real PTY
+      # process lifecycle (ubuntu-latest provides /dev/ptmx — no skip).
+      - run: go test -tags=integration ./tests/integration/... -count=1
+
+  test-race:
+    name: race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      # CGO on the runner satisfies -race. (The dev LXC also gained a C
+      # toolchain on 2026-09-08 late — local race runs pass too; the CI
+      # job remains the canonical gate.)
+      - run: go test -race ./... -count=1
+
+  build:
+    name: build + smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - run: go build -o dist/argo-tui ./cmd/argo-tui
+      - run: ./dist/argo-tui --version
+      - name: non-demo start refuses (exit 1)
+        run: |
+          set +e
+          ./dist/argo-tui >/dev/null 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ]; then
+            echo "::error::non-demo start exited with $status, want 1"
+            exit 1
+          fi
+
+  e2e:
+    name: e2e (ET-4, opt-in)
+    # REAL tier: only on explicit dispatch, never on plain push/PR.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - name: Install pinned kind
+        run: |
+          curl -fsSL -o kind \
+            "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x kind && sudo mv kind /usr/local/bin/kind
+          kind version
+      - name: Install pinned kubectl
+        run: |
+          curl -fsSL -o kubectl \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  kubectl" | sha256sum -c -
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+      - name: Run e2e only when an allowlist secret exists
+        env:
+          E2E_CONFIG_B64: ${{ secrets.E2E_ALLOWLIST_B64 }}
+        run: |
+          if [ -z "$E2E_CONFIG_B64" ]; then
+            echo "E2E_ALLOWLIST_B64 not set — skipping REAL tier (recorded BLOCKED, not silent pass)."
+            exit 0
+          fi
+          echo "$E2E_CONFIG_B64" | base64 -d > e2e-config.yaml
+          ARGO_TUI_E2E=1 ARGO_TUI_E2E_CONFIG=./e2e-config.yaml \
+            go test -tags=e2e ./tests/e2e/... -count=1 -v

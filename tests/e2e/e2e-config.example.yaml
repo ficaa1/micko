@@ -1,0 +1,12 @@
+# e2e allowlist example — copy to e2e-config.yaml and edit for your
+# disposable environment. NEVER point these tests at a production cluster
+# (plan §9; docs/test-environment.md §4.2).
+#
+#   server:     base URL of the allowlisted Argo Server (loopback
+#               port-forward per test-environment.md §4.2)
+#   namespace:  the single allowlisted namespace (argo-tui-e2e per §4.4)
+#   token:      optional bearer token (prefer a temp SA token file via a
+#               wrapper script; never commit a real token here)
+server=http://127.0.0.1:2746
+namespace=argo-tui-e2e
+token=

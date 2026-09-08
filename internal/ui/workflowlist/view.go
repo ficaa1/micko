@@ -1,0 +1,266 @@
+package workflowlist
+
+import (
+	"strings"
+	"time"
+
+	"charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"argo-tui/internal/core"
+	"argo-tui/internal/ui/shared"
+)
+
+// Update implements the child Tea model. Key isolation rules (plan §2;
+// UI-04):
+//   - In search mode, printable keys go to the input; j/k/arrows/enter keep
+//     their navigation meaning ONLY as input editing/submit; `q` types a
+//     letter (does NOT quit) and no other command key fires. Esc leaves
+//     search (cancel semantics).
+//   - Outside search, the component handles j/k/arrows (move), enter (open
+//     intent), l (logs intent), / (enter search), s (cycle sort), p-local
+//     phase cycling is NOT bound here (p is the root's profile key; the
+//     root calls CyclePhase when it routes it), esc (BackMsg passthrough
+//     stays with the root).
+//
+// The component never issues commands that touch the network; intents are
+// returned as messages for the root (plan §4).
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		return m.handleKey(msg)
+	case tea.WindowSizeMsg:
+		m.SetSize(msg.Width, msg.Height)
+		return nil
+	default:
+		return nil
+	}
+}
+
+// handleKey implements the key matrix above.
+func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+	key := msg.String()
+	if m.SearchOn {
+		return m.handleSearchKey(key, msg)
+	}
+	switch key {
+	case "j", "down":
+		m.move(1)
+		return nil
+	case "k", "up":
+		m.move(-1)
+		return nil
+	case "enter":
+		if intent := m.OpenIntent(); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
+	case "l":
+		if intent := m.LogsIntent(); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
+	case "/":
+		m.SearchOn = true
+		if m.searchBuf == "" {
+			m.searchCur = 0
+		}
+		return nil
+	case "s":
+		m.CycleSort()
+		return nil
+	case "r":
+		if intent := m.RefreshIntent(); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
+	default:
+		// Everything else (q, n, p, ?, ...) belongs to the root; the child
+		// must not shadow it (UI-04).
+		return nil
+	}
+}
+
+// handleSearchKey routes keys while search has focus. Text-entry isolation
+// (UI-04): printable characters reach the buffer; `q` inserts a letter;
+// navigation command keys are not interpreted; enter applies; esc cancels.
+// Home/End/Backspace/arrow-left/right are the only other editing keys the
+// input recognizes; everything else is ignored (never a command).
+func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
+	switch key {
+	case "esc":
+		m.SearchOn = false
+		m.searchBuf, m.searchCur = "", 0
+		m.SetQuery("") // cancel clears the filter (Esc cancels, plan §2)
+		return nil
+	case "enter":
+		m.SearchOn = false
+		m.SetQuery(strings.TrimSpace(m.searchBuf))
+		m.searchBuf, m.searchCur = "", 0
+		return nil
+	case "backspace":
+		m.searchBackspace()
+		return nil
+	case "left":
+		m.searchLeft()
+		return nil
+	case "right":
+		m.searchRight()
+		return nil
+	case "home", "ctrl+a":
+		m.searchCur = 0
+		return nil
+	case "end", "ctrl+e":
+		m.searchCur = len([]rune(m.searchBuf))
+		return nil
+	default:
+		// Printable text goes to the buffer; every non-printable key is
+		// dropped (input-isolation: no command interpretation).
+		if runes := []rune(key); len(runes) == 1 && !isControlRune(runes[0]) {
+			m.searchInsert(runes[0])
+		}
+		return nil
+	}
+}
+
+// isControlRune reports whether r is a control character (never inserted
+// into the search buffer; the sanitizer keeps \n/	 only for display, and
+// a single-line filter needs neither).
+func isControlRune(r rune) bool { return r < 0x20 || r == 0x7f }
+
+// rowPhaseText renders the phase cell: text always present (color is
+// supplementary, plan §2).
+func (m *Model) rowPhaseText(phase string) string {
+	if phase == "" {
+		return "(no phase)"
+	}
+	return phase
+}
+
+// ageText renders the AGE cell from the most informative timestamp. Missing
+// timestamps render as "-" (LIST-09: sensible, never garbage).
+func ageText(s core.Summary, now time.Time) string {
+	t := s.CreatedAt
+	if s.StartedAt != nil && !s.StartedAt.IsZero() {
+		t = *s.StartedAt
+	}
+	if t.IsZero() || now.IsZero() {
+		return "-"
+	}
+	d := now.Sub(t)
+	if d < 0 {
+		d = 0
+	}
+	return humanDuration(d)
+}
+
+// durationText renders the DURATION cell; missing endpoints render "-".
+func durationText(s core.Summary) string {
+	start := s.StartedAt
+	if start == nil || start.IsZero() {
+		return "-"
+	}
+	if s.FinishedAt == nil || s.FinishedAt.IsZero() {
+		return "ongoing"
+	}
+	d := s.FinishedAt.Sub(*start)
+	if d < 0 {
+		d = 0
+	}
+	return humanDuration(d)
+}
+
+// humanDuration renders a compact human duration (4m, 2h13m, 3d).
+func humanDuration(d time.Duration) string {
+	switch {
+	case d >= 24*time.Hour:
+		days := int(d / (24 * time.Hour))
+		hours := int(d%(24*time.Hour)) / int(time.Hour)
+		if hours > 0 {
+			return itoa(days) + "d" + itoa(hours) + "h"
+		}
+		return itoa(days) + "d"
+	case d >= time.Hour:
+		h := int(d / time.Hour)
+		mins := int(d%time.Hour) / int(time.Minute)
+		if mins > 0 {
+			return itoa(h) + "h" + itoa(mins) + "m"
+		}
+		return itoa(h) + "h"
+	case d >= time.Minute:
+		return itoa(int(d/time.Minute)) + "m"
+	default:
+		return itoa(int(d/time.Second)) + "s"
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	var b [20]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		b[i] = '-'
+	}
+	return string(b[i:])
+}
+
+// padRight pads s to width cells (Unicode-aware, PLAN: wide names must not
+// break alignment). Wide runes count as 2 cells via ansi.StringWidth.
+func padRight(s string, width int) string {
+	w := ansi.StringWidth(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
+}
+
+// padLeft right-aligns s in width cells.
+func padLeft(s string, width int) string {
+	w := ansi.StringWidth(s)
+	if w >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-w) + s
+}
+
+// truncateRight clips s to width cells, appending a literal ellipsis when
+// cut (never mid-sequence: ansi-aware).
+func truncateRight(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(s) <= width {
+		return s
+	}
+	if width <= 1 {
+		return "…"
+	}
+	// Walk grapheme-ish via runes until width-1 for the ellipsis.
+	var b strings.Builder
+	w := 0
+	limit := width - 1
+	for _, r := range s {
+		rw := ansi.StringWidth(string(r))
+		if w+rw > limit {
+			break
+		}
+		b.WriteRune(r)
+		w += rw
+	}
+	return b.String() + "…"
+}
+
+// ensure app import used for intents (compile hint if drift).
+var _ = shared.OpenWorkflowMsg{}

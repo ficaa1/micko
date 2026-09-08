@@ -1,0 +1,9 @@
+: keepalive
+
+data: {"result":{"content":"line-one","podName":"pod-a"}}
+
+data: {"result":{"content":"line-two","podName":"pod-b"}}
+
+data: {"result":{"content":"line-ÿbad","podName":"pod-b"}}
+
+data: {"result":{"content":"final-no-newline","podName":"pod-c"}}

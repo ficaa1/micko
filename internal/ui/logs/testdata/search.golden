@@ -1,0 +1,11 @@
+logs: wf-1
+Scope: workflow-wide · container: main · [FOLLOWING]
+retained: 6/10000 lines (0 evicted) · search: 1 match(es) for "line-2" · search scope: retained buffer only (6 lines searched)
+── (all pods):main ── 6 lines recorded
+line-0
+line-1
+[match 1] line-2
+line-3
+line-4
+line-5
+space pause  f follow  / search  c container  pgup/pgdn scroll

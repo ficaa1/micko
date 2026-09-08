@@ -1,0 +1,155 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"argo-tui/internal/core"
+	"argo-tui/internal/testkit"
+	"argo-tui/internal/ui/actions"
+)
+
+type betaReader struct {
+	*testkit.FakeReader
+	execCalls int
+	execErr   error
+}
+
+func (b *betaReader) Execute(_ context.Context, req core.ActionRequest) (core.ActionResult, error) {
+	b.execCalls++
+	if b.execErr != nil {
+		return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}, b.execErr
+	}
+	ref := req.Ref
+	return core.ActionResult{Action: req.Action, Target: req.Ref, Affected: &ref, Outcome: core.ActionConfirmed}, nil
+}
+
+func TestWatchEventUpdatesByUIDAndBookmarksDoNothing(t *testing.T) {
+	wf := workflowFixture("wf")
+	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
+	m := testRoot(t, f)
+	m.listState.items = []core.Summary{wf.Summary}
+	changed := wf.Summary
+	changed.Phase = "Succeeded"
+	changed.ResourceVersion = "rv-2"
+	m.Update(watchEventMsg{genStamp: genStamp{}, Event: core.WatchEvent{Type: core.WatchModified, Summary: changed, ResourceVersion: "rv-2"}})
+	if len(m.listState.items) != 1 || m.listState.items[0].Phase != "Succeeded" || m.watchRV != "rv-2" {
+		t.Fatalf("watch update not applied: items=%+v rv=%q", m.listState.items, m.watchRV)
+	}
+	m.Update(watchEventMsg{genStamp: genStamp{}, Event: core.WatchEvent{Type: core.WatchBookmark, ResourceVersion: "rv-3"}})
+	if m.watchRV != "rv-3" || len(m.listState.items) != 1 {
+		t.Fatalf("bookmark changed snapshot: items=%d rv=%q", len(m.listState.items), m.watchRV)
+	}
+}
+
+func TestActionExecutesOnceAndRequiresReadBack(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	req := core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionRetry, Confirmation: core.Confirmation{Confirmed: true}}
+	msg := runCmd(m.startAction(req))
+	if len(msg) != 1 {
+		t.Fatalf("action command messages=%d", len(msg))
+	}
+	result := msg[0].(actionResultMsg)
+	if result.Result.Outcome != core.ActionConfirmed || result.Err != nil {
+		t.Fatalf("action result=%+v err=%v", result.Result, result.Err)
+	}
+	if b.execCalls != 1 {
+		t.Fatalf("execute calls=%d, want exactly one", b.execCalls)
+	}
+	if b.GetCalls != 2 {
+		t.Fatalf("GET calls=%d, want preflight + read-back", b.GetCalls)
+	}
+}
+
+func TestAmbiguousActionNeverRetries(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{
+		FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}},
+		execErr:    errors.New("connection reset after send"),
+	}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	req := core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionTerminate, Confirmation: core.Confirmation{Confirmed: true, TypedName: wf.Summary.Ref.Name}}
+	msg := runCmd(m.startAction(req))
+	result := msg[0].(actionResultMsg)
+	if result.Result.Outcome != core.ActionUnknown || result.Err == nil {
+		t.Fatalf("ambiguous outcome=%+v err=%v", result.Result, result.Err)
+	}
+	if b.execCalls != 1 {
+		t.Fatalf("ambiguous execute calls=%d, want one", b.execCalls)
+	}
+}
+
+func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	m.route = RouteDetail
+	m.selection = wf.Summary.Ref
+	m.detailState = detailState{ref: wf.Summary.Ref, workflow: wf}
+
+	_, _ = m.Update(tea.KeyPressMsg{Text: "a"})
+	_, _ = m.Update(tea.KeyPressMsg{Text: "r"})
+	_, cmd := m.Update(tea.KeyPressMsg{Text: "y"})
+	if cmd == nil {
+		t.Fatal("confirmation did not emit an action intent command")
+	}
+	intent := cmd()
+	if _, ok := intent.(actions.ActionIntentMsg); !ok {
+		t.Fatalf("intent type = %T, want actions.ActionIntentMsg", intent)
+	}
+	_, cmd = m.Update(intent)
+	if cmd == nil {
+		t.Fatal("root did not start action execution")
+	}
+	result := cmd()
+	_, _ = m.Update(result)
+	if b.execCalls != 1 {
+		t.Fatalf("execute calls = %d, want 1", b.execCalls)
+	}
+	if !strings.Contains(m.View().Content, "outcome: confirmed") {
+		t.Fatalf("view did not render confirmed outcome: %s", m.View().Content)
+	}
+}
+
+func TestRootCtrlCQuitsWhileActionModalIsOpen(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	m.route = RouteDetail
+	m.actionView = actions.NewWithOptions(core.Ref{Name: "wf", Namespace: "ns", UID: "uid"}, actions.Options{AllowActions: true})
+	m.actionView.OpenMenu()
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Fatal("ctrl-c did not return quit command")
+	}
+	if !m.quitting {
+		t.Fatal("ctrl-c did not mark root quitting")
+	}
+}
+
+func TestWatchAuthFailureStopsAutomaticRecovery(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	_, cmd := m.Update(watchDoneMsg{genStamp: genStamp{}, Err: core.NewWatchError(core.WatchEnded, "unauthorized", "", core.NewAPIError(core.ErrUnauthenticated, 401, "unauthorized"))})
+	if cmd != nil {
+		t.Fatal("auth failure scheduled automatic recovery")
+	}
+	if !strings.Contains(m.watchMode, "authentication") {
+		t.Fatalf("watch mode = %q, want authentication terminal state", m.watchMode)
+	}
+}
+
+func TestWatchRateLimitDoesNotRelistImmediately(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	_, cmd := m.Update(watchDoneMsg{genStamp: genStamp{}, Err: core.NewWatchError(core.WatchEnded, "slow down", "", core.NewAPIError(core.ErrRateLimited, 429, "slow down"))})
+	if cmd == nil {
+		t.Fatal("rate limit did not schedule delayed recovery")
+	}
+	if !strings.Contains(m.watchMode, "rate limited") {
+		t.Fatalf("watch mode = %q, want rate-limited state", m.watchMode)
+	}
+}

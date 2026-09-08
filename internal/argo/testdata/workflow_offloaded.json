@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "name": "big-hydrate",
+    "namespace": "team-a",
+    "uid": "wf-uid-222",
+    "resourceVersion": "90",
+    "creationTimestamp": "2026-09-08T08:00:00Z"
+  },
+  "status": {
+    "phase": "Succeeded",
+    "compressedNodes": "H4sIAAAAAAAA-w",
+    "offloadNodeStatusVersion": "v1"
+  }
+}

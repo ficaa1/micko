@@ -1,0 +1,6 @@
+logs: wf-1
+Scope: pod: mypod-abc · container: sidecar · [FOLLOWING]
+retained: 1/10000 lines (0 evicted)
+── mypod-abc:sidecar ── 1 line recorded
+sidecar says hi
+space pause  f follow  / search  c container  pgup/pgdn scroll

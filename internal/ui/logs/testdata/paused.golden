@@ -1,0 +1,7 @@
+logs: wf-1
+Scope: workflow-wide · container: main · [PAUSED]
+retained: 2/10000 lines (0 evicted)
+── (all pods):main ── 2 lines recorded
+line one
+line two
+space pause  f follow  / search  c container  pgup/pgdn scroll
