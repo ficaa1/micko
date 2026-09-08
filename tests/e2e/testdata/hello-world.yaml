@@ -1,0 +1,19 @@
+# SYNTHETIC FIXTURE (plan §8 F1 slice 3; docs/test-environment.md §4.4):
+# this manifest is written for argo-tui's ET-4 tests — it is NOT a capture
+# from any real cluster and must never be presented as one. Name is
+# namespaced to the e2e owner label so cleanup can select it.
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: argo-tui-e2e-hello-
+  labels:
+    argo-tui.e2e/owner: argo-tui-e2e
+    fixture: synthetic
+spec:
+  entrypoint: hello
+  templates:
+    - name: hello
+      container:
+        image: alpine:3.19
+        command: [echo]
+        args: ["synthetic argo-tui e2e hello"]
