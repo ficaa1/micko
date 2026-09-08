@@ -1,0 +1,6 @@
+logs: wf-1
+Scope: workflow-wide · container: main · [ERROR] — pod logs unavailable: pod deleted (log source gone)
+retained: 1/10000 lines (0 evicted)
+── (all pods):main ── 1 line recorded
+partial output before failure
+space pause  f follow  / search  c container  pgup/pgdn scroll
