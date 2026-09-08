@@ -1,0 +1,9 @@
+DETAIL fixture-dag
+[Summary] [Nodes] [Resource]
+- fixture-dag type=DAG phase=Failed
+  - task-a type=Pod phase=Succeeded
+  - task-b type=Pod phase=Failed msg=synthetic exit code 1
+  - task-c type=Suspend phase=Pending
+  - task-retry type=Retry phase=Failed
+    - task-retry(0) type=Pod phase=Failed
+    - task-retry(1) type=Pod phase=Failed
