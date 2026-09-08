@@ -1,0 +1,12 @@
+# F0 research cache — reproducible from pinned upstream sources (see docs/protocol.md)
+/f0-scratch/
+
+# Go build/test artifacts
+/dist/
+*.test
+*.out
+coverage.*
+
+# Editor / OS noise
+.DS_Store
+*.swp
