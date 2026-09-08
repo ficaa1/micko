@@ -22,7 +22,6 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/app"
 	"argo-tui/internal/core"
 	"argo-tui/internal/ui/shared"
 )
@@ -253,7 +252,7 @@ func (m *Model) OpenIntent() tea.Msg {
 	if sel.Ref.UID == "" {
 		return nil
 	}
-	return app.OpenWorkflowMsg{Ref: sel.Ref}
+	return shared.OpenWorkflowMsg{Ref: sel.Ref}
 }
 
 // LogsIntent returns the open-logs intent for the selected row, or nil.
@@ -264,7 +263,7 @@ func (m *Model) LogsIntent() tea.Msg {
 	if sel.Ref.UID == "" {
 		return nil
 	}
-	return app.OpenLogsMsg{Ref: sel.Ref, Container: "main"}
+	return shared.OpenLogsMsg{Ref: sel.Ref, Container: "main"}
 }
 
 // RefreshIntent is the manual refresh request (r). The frozen app contract

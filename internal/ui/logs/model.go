@@ -26,8 +26,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"argo-tui/internal/app"
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/shared"
 )
 
 // Phase is the stream lifecycle surfaced by the status row (distinguishable
@@ -168,6 +168,9 @@ func (m *Model) Paused() bool { return m.paused }
 
 // Following reports autoscroll state.
 func (m *Model) Following() bool { return m.follow }
+
+// EscapeConsumed reports whether Esc currently belongs to a text editor.
+func (m *Model) EscapeConsumed() bool { return m.searchOn || m.contextOn }
 
 // SetPhase records the stream lifecycle (root calls per logRecordMsg:
 // running/done/canceled/err — plan §4 batched delivery).
@@ -501,7 +504,7 @@ func (m *Model) OpenIntent() tea.Msg {
 	if m.ref.Name == "" {
 		return nil
 	}
-	return app.OpenLogsMsg{
+	return shared.OpenLogsMsg{
 		Ref:       m.ref,
 		PodName:   m.podName,
 		Container: m.container,

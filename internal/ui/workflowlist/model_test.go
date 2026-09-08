@@ -10,7 +10,6 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/app"
 	"argo-tui/internal/core"
 	"argo-tui/internal/testkit"
 	"argo-tui/internal/ui/shared"
@@ -59,7 +58,7 @@ func TestSelectionAndOpenIntent(t *testing.T) {
 		t.Fatalf("selection did not move: %v", second)
 	}
 	msg := m.OpenIntent()
-	ow, ok := msg.(app.OpenWorkflowMsg)
+	ow, ok := msg.(shared.OpenWorkflowMsg)
 	if !ok {
 		t.Fatalf("intent type = %T", msg)
 	}
@@ -68,7 +67,7 @@ func TestSelectionAndOpenIntent(t *testing.T) {
 	}
 
 	// Logs intent for the same row with visible default container (plan §2).
-	lm, ok := m.LogsIntent().(app.OpenLogsMsg)
+	lm, ok := m.LogsIntent().(shared.OpenLogsMsg)
 	if !ok {
 		t.Fatalf("logs intent type = %T", m.LogsIntent())
 	}

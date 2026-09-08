@@ -7,8 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"argo-tui/internal/app"
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/shared"
 )
 
 // ---------------------------------------------------------------------------
@@ -300,9 +300,9 @@ func TestGlobalKeysNotShadowed(t *testing.T) {
 func TestOpenIntentCarriesFrozenContract(t *testing.T) {
 	m := testModel(t)
 	msg := m.OpenIntent()
-	om, ok := msg.(app.OpenLogsMsg)
+	om, ok := msg.(shared.OpenLogsMsg)
 	if !ok {
-		t.Fatalf("intent type = %T, want app.OpenLogsMsg", msg)
+		t.Fatalf("intent type = %T, want shared.OpenLogsMsg", msg)
 	}
 	if om.Container != "main" || om.Ref.UID != "u1" || om.PodName != "" {
 		t.Fatalf("OpenLogsMsg = %+v", om)

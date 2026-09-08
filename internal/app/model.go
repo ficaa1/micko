@@ -9,7 +9,10 @@ import (
 	"charm.land/bubbletea/v2"
 
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/detail"
+	"argo-tui/internal/ui/logs"
 	"argo-tui/internal/ui/shared"
+	"argo-tui/internal/ui/workflowlist"
 )
 
 // Root is the top-level Tea model: it owns routing, generations,
@@ -49,6 +52,10 @@ type Root struct {
 	quitting bool
 
 	ids requestIDProvider
+
+	listView   workflowlist.Model
+	detailView *detail.Model
+	logsView   *logs.Model
 }
 
 // listState is the list route's data + status.
@@ -96,7 +103,9 @@ func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duratio
 			snapshotCap: 5000,
 			pageSize:    100,
 		},
-		inflight: map[string]context.CancelFunc{},
+		inflight:   map[string]context.CancelFunc{},
+		listView:   workflowlist.New(shared.NewTheme(false), false),
+		detailView: detail.New(),
 	}
 }
 
@@ -117,6 +126,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if msg.String() == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
+			return m, m.back()
+		}
+		if m.route != RouteList && msg.String() != "ctrl+c" {
+			return m, m.updateChild(msg)
+		}
 		return m.handleKey(msg)
 
 	case tea.QuitMsg:
@@ -146,6 +161,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)
 
+	case shared.SwitchContextIntent:
+		return m, m.openLogs(OpenLogsMsg{Ref: msg.Ref, PodName: msg.PodName, Container: msg.Container})
+
+	case detail.BackMsg:
+		return m, m.back()
+
 	case BackMsg:
 		return m, m.back()
 
@@ -164,14 +185,21 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // fake-driven root route"; do not call this stub a finished alpha).
 func (m *Root) View() tea.View {
 	var b strings.Builder
-	b.WriteString("argo-tui | ns: " + m.deps.namespace + "\n")
+	b.WriteString("argo-tui | ns: " + m.deps.namespace + " | READ ONLY\n")
 	switch m.route {
 	case RouteDetail:
 		b.WriteString("route: detail | " + m.detailSummary() + "\n")
+		if m.detailView != nil {
+			b.WriteString(m.detailView.View().Content)
+		}
 	case RouteLogs:
 		b.WriteString("route: logs | " + m.logSummary() + "\n")
+		if m.logsView != nil {
+			b.WriteString(m.logsView.View())
+		}
 	default:
-		b.WriteString(m.listSummary() + "\n")
+		b.WriteString("route: list | " + m.listSummary() + "\n")
+		b.WriteString(m.listView.View())
 	}
 	return tea.NewView(b.String())
 }
@@ -313,6 +341,7 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 	m.selGen++
 	m.route = RouteDetail
 	m.detailState = detailState{ref: ref, loading: true}
+	m.detailView.SetLoading()
 	return m.startDetailFetch()
 }
 
@@ -329,6 +358,7 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	m.selGen++
 	m.route = RouteLogs
 	m.logState = logState{ref: msg.Ref, container: msg.Container, running: true}
+	m.logsView = logs.NewModel(msg.Ref, msg.PodName, msg.Container)
 	return m.startLogStream(msg)
 }
 
@@ -389,12 +419,19 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		if st.staleSince.IsZero() {
 			st.staleSince = m.deps.clock.Now()
 		}
+		m.listView.SetStatus(workflowlist.StatusStale, msg.Err.Message, m.deps.clock.Now().Sub(st.staleSince))
 		return nil
 	}
 	st.items = msg.Page.Items
 	st.incomplete = msg.Capped
 	st.lastErr = nil
 	st.staleSince = time.Time{}
+	m.listView.SetItems(st.items, m.deps.clock.Now())
+	status := workflowlist.StatusIdle
+	if st.incomplete {
+		status = workflowlist.StatusIncomplete
+	}
+	m.listView.SetStatus(status, "", 0)
 	return nil
 }
 
@@ -413,10 +450,13 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 		if msg.Err.Kind == core.ErrNotFound {
 			st.notFound = true
 			st.lastErr = nil
+			st.loading = false
+			m.detailView.SetNotFound()
 			return nil
 		}
 		st.lastErr = msg.Err
 		st.loading = false
+		m.detailView.SetError(msg.Err.Message)
 		return nil
 	}
 	// UID check: response must match the selection that requested it.
@@ -430,6 +470,7 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	st.loading = false
 	st.lastErr = nil
 	st.notFound = false
+	m.detailView.SetWorkflow(msg.Workflow, m.deps.clock.Now())
 	return nil
 }
 
@@ -440,10 +481,23 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 	}
 	st := &m.logState
 	st.records = append(st.records, msg.Records...)
+	if m.logsView != nil && len(msg.Records) > 0 {
+		m.logsView.ApplyRecords(msg.Records)
+	}
 	if msg.Done {
 		st.running = false
 		st.lastErr = msg.Err
 		st.canceled = msg.Canceled
+		if m.logsView != nil {
+			switch {
+			case msg.Canceled:
+				m.logsView.SetPhase(logs.PhaseCanceled)
+			case msg.Err != nil:
+				m.logsView.SetError(msg.Err.Error())
+			default:
+				m.logsView.SetPhase(logs.PhaseEnded)
+			}
+		}
 		m.clearInflight("logs")
 		return nil
 	}
@@ -452,6 +506,23 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 }
 
 // inflight bookkeeping --------------------------------------------------------
+
+func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
+	switch m.route {
+	case RouteList:
+		return m.listView.Update(msg)
+	case RouteDetail:
+		_, cmd := m.detailView.Update(msg)
+		return cmd
+	case RouteLogs:
+		if m.logsView == nil {
+			return nil
+		}
+		return m.logsView.Update(msg)
+	default:
+		return nil
+	}
+}
 
 func (m *Root) setInflight(purpose string, cancel context.CancelFunc) {
 	m.mu.Lock()

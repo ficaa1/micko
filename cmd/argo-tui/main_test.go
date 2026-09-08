@@ -11,7 +11,7 @@ func TestSmokeVersionString(t *testing.T) {
 	if mainVersion == "" {
 		t.Fatal("mainVersion is empty")
 	}
-	if !strings.Contains(mainVersion, "f1") {
+	if !strings.Contains(mainVersion, "alpha") {
 		t.Errorf("mainVersion = %q, want the f1 baseline identifier", mainVersion)
 	}
 }

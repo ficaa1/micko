@@ -7,8 +7,8 @@ import (
 	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"argo-tui/internal/app"
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/shared"
 )
 
 // Update implements the child Tea model. Key isolation rules (plan §2;
@@ -263,4 +263,4 @@ func truncateRight(s string, width int) string {
 }
 
 // ensure app import used for intents (compile hint if drift).
-var _ = app.OpenWorkflowMsg{}
+var _ = shared.OpenWorkflowMsg{}

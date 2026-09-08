@@ -134,7 +134,7 @@ func TestPTYVersionAndNonDemoRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
-	if code != 0 || !strings.Contains(p.Screen(), "argo-tui 0.0.0-f1") {
+	if code != 0 || !strings.Contains(p.Screen(), "argo-tui 0.1.0-alpha") {
 		t.Fatalf("--version: code=%d screen=%q", code, p.Screen())
 	}
 	p.Close()
@@ -150,7 +150,7 @@ func TestPTYVersionAndNonDemoRefusal(t *testing.T) {
 	if code2 != 1 {
 		t.Fatalf("non-demo exit = %d, want 1", code2)
 	}
-	if s := p2.Screen(); !strings.Contains(s, "real connections are not wired yet") {
+	if s := p2.Screen(); !strings.Contains(s, "server endpoint missing") {
 		t.Fatalf("non-demo guidance missing: %q", s)
 	}
 	p2.Close()

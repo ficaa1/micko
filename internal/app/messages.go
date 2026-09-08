@@ -9,6 +9,7 @@ package app
 
 import (
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/shared"
 )
 
 // Route identifies the active top-level route. F1 implements empty routes
@@ -39,18 +40,12 @@ func (r Route) String() string {
 // OpenWorkflowMsg is an intent from the list view to open a workflow
 // detail. The root converts it to a fetch effect; the child never starts
 // goroutines (plan §4).
-type OpenWorkflowMsg struct {
-	Ref core.Ref
-}
+type OpenWorkflowMsg = shared.OpenWorkflowMsg
 
 // OpenLogsMsg is an intent to open logs. PodName empty means workflow-wide
 // logs; Container is always explicit (default "main" visible in the UI,
 // plan §2).
-type OpenLogsMsg struct {
-	Ref       core.Ref
-	PodName   string
-	Container string
-}
+type OpenLogsMsg = shared.OpenLogsMsg
 
 // BackMsg is an intent to go back one route (Esc).
 type BackMsg struct{}
