@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 // pty.go — ET-3 process/PTY lifecycle harness (docs/test-environment.md

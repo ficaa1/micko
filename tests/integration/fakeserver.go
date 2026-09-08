@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 // fakeserver.go — ET-2: an in-process httptest server speaking the pinned

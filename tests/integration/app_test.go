@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 // app_test.go — E1 slice "alpha journey tests against the fake server" at

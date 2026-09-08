@@ -1,3 +1,5 @@
+//go:build integration
+
 // Package integration hosts E1's independent test harnesses
 // (docs/test-environment.md §1, §5):
 //

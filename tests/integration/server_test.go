@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 // server_test.go — ET-2 conformance: the pinned v4.1.2 wire contract over

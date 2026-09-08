@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 // wire.go — test-only wire client for the ET-2 fixture server.

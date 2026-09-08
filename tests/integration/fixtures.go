@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 // fixtures.go — explicitly synthetic ET-2 fixture builders (plan: "fixtures

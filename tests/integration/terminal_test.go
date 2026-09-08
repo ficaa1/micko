@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 // terminal_test.go — ET-3 PTY acceptance (docs/test-environment.md §5:
