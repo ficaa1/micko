@@ -3,11 +3,14 @@ package actions
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"argo-tui/internal/core"
 	"argo-tui/internal/ui/shared"
 	tea "charm.land/bubbletea/v2"
 )
+
+const maxTypedNameLength = 256
 
 // State is the explicit UI lifecycle for a guarded action.
 type State uint8
@@ -125,7 +128,7 @@ func (m *Model) Confirm() bool {
 }
 func (m *Model) SetTypedName(name string) {
 	if m.state == StateTypedName {
-		m.typedName = name
+		m.typedName = appendInput("", name)
 	}
 }
 func (m *Model) TypedName() string { return m.typedName }
@@ -158,34 +161,16 @@ func (m *Model) SetOutcome(result core.ActionResult) {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		if m.state == StateTypedName {
+			m.updateTypedName(key)
+		} else {
+			m.updateNonInput(key)
+		}
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-	case tea.KeyPressMsg:
-		switch strings.ToLower(msg.String()) {
-		case "esc", "n", "q":
-			m.Cancel()
-		case "r":
-			if m.state == StateMenu {
-				m.Open(core.ActionRetry)
-			}
-		case "u":
-			if m.state == StateMenu {
-				m.Open(core.ActionResubmit)
-			}
-		case "s":
-			if m.state == StateMenu {
-				m.Open(core.ActionStop)
-			}
-		case "t":
-			if m.state == StateMenu {
-				m.Open(core.ActionTerminate)
-			}
-		case "y", "enter":
-			if m.state == StateConfirm {
-				m.Confirm()
-			}
-		}
 	}
 	if m.state == StateSubmitting && m.intent != nil {
 		req := *m.intent
@@ -193,6 +178,68 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return ActionIntentMsg{Request: req} }
 	}
 	return m, nil
+}
+
+func (m *Model) updateTypedName(key tea.KeyPressMsg) {
+	switch key.Code {
+	case tea.KeyEscape:
+		m.Cancel()
+	case tea.KeyBackspace:
+		if m.typedName != "" {
+			r := []rune(m.typedName)
+			m.typedName = string(r[:len(r)-1])
+		}
+	case tea.KeyEnter:
+		m.Submit()
+	default:
+		m.typedName = appendInput(m.typedName, key.Text)
+	}
+}
+
+func (m *Model) updateNonInput(key tea.KeyPressMsg) {
+	switch strings.ToLower(key.String()) {
+	case "esc":
+		if m.state == StateOutcome || m.state == StateUnavailable {
+			m.state = StateIdle
+		} else {
+			m.Cancel()
+		}
+	case "enter":
+		if m.state == StateOutcome || m.state == StateUnavailable || m.state == StateConfirm {
+			m.state = StateIdle
+		}
+	case "y":
+		if m.state == StateConfirm {
+			m.Confirm()
+		}
+	case "r":
+		if m.state == StateMenu {
+			m.Open(core.ActionRetry)
+		}
+	case "u":
+		if m.state == StateMenu {
+			m.Open(core.ActionResubmit)
+		}
+	case "s":
+		if m.state == StateMenu {
+			m.Open(core.ActionStop)
+		}
+	case "t":
+		if m.state == StateMenu {
+			m.Open(core.ActionTerminate)
+		}
+	}
+}
+
+func appendInput(current, input string) string {
+	runes := []rune(current)
+	for _, r := range input {
+		if unicode.IsControl(r) || len(runes) >= maxTypedNameLength {
+			continue
+		}
+		runes = append(runes, r)
+	}
+	return string(runes)
 }
 
 func (m *Model) View() tea.View {

@@ -95,3 +95,72 @@ func TestTeaUpdateEmitsIntentOnlyAfterConfirmation(t *testing.T) {
 		t.Fatal("expected intent message")
 	}
 }
+
+func TestTerminateKeyboardInputPreservesTextBackspacesAndBoundsPaste(t *testing.T) {
+	ref := core.Ref{Namespace: "ns", Name: "Wf-01", UID: "uid"}
+	m := New(ref, true, false, false)
+	m.Open(core.ActionTerminate)
+	for _, text := range []string{"q", "N", "y", "r", "Wf"} {
+		m.Update(tea.KeyPressMsg{Text: text})
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	m.Update(tea.KeyPressMsg{Text: "f-01"})
+	if got := m.TypedName(); got != "qNyrWf-01" {
+		t.Fatalf("typed name = %q", got)
+	}
+	tooLong := strings.Repeat("x", maxTypedNameLength+1)
+	m.SetTypedName("")
+	m.Update(tea.KeyPressMsg{Text: tooLong})
+	if len(m.TypedName()) != maxTypedNameLength {
+		t.Fatalf("paste bound length = %d", len(m.TypedName()))
+	}
+}
+
+func TestTerminateInputIsolatedAndExactEnterOnly(t *testing.T) {
+	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
+	m := New(ref, true, false, false)
+	m.Open(core.ActionTerminate)
+	for _, text := range []string{"q", "n", "y", "r"} {
+		m.Update(tea.KeyPressMsg{Text: text})
+	}
+	if m.State() != StateTypedName || m.TypedName() != "qnyr" {
+		t.Fatalf("input shortcuts leaked: state=%v text=%q", m.State(), m.TypedName())
+	}
+	m.SetTypedName("wf")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.State() != StateSubmitting || m.IntentCount() != 1 {
+		t.Fatalf("exact name should submit: state=%v intents=%d", m.State(), m.IntentCount())
+	}
+}
+
+func TestBareEnterCancelsConfirmationAndOutcomeIsDismissible(t *testing.T) {
+	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
+	m := New(ref, true, false, false)
+	m.Open(core.ActionRetry)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.State() != StateIdle || m.IntentCount() != 0 {
+		t.Fatalf("bare enter must cancel: state=%v intents=%d", m.State(), m.IntentCount())
+	}
+	m.Open(core.ActionRetry)
+	m.Update(tea.KeyPressMsg{Text: "y"})
+	m.SetOutcome(core.ActionResult{Action: core.ActionRetry, Target: ref, Outcome: core.ActionConfirmed})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.State() != StateIdle {
+		t.Fatalf("outcome should dismiss: state=%v", m.State())
+	}
+}
+
+func TestRenderedActionTextSanitizesTargetAndStatesConsequences(t *testing.T) {
+	ref := core.Ref{Namespace: "ns\x1b[31m", Name: "wf\x1b]8;;evil", UID: "uid"}
+	m := New(ref, true, false, false)
+	for _, action := range []core.Action{core.ActionRetry, core.ActionResubmit, core.ActionStop, core.ActionTerminate} {
+		m.Open(action)
+		view := m.View().Content
+		if strings.Contains(view, "\x1b") || !strings.Contains(view, "ns") || !strings.Contains(view, "uid") {
+			t.Fatalf("unsafe target rendering for %s: %q", action, view)
+		}
+		if !strings.Contains(view, "workflow") {
+			t.Fatalf("missing full-target consequence copy for %s: %q", action, view)
+		}
+	}
+}
