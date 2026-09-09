@@ -1,5 +1,14 @@
 # Local changelog
 
+## 0.2.0-beta.1 — live-smoke integration fixes (post-candidate, unreleased)
+
+- Routed list keys (j/k/arrows/Enter/l//s/r/manual refresh) into the list child while keeping q and Ctrl-C global and isolating text entry during search.
+- Propagated WindowSizeMsg to every child view model and redrew responsively on resize.
+- Rendered the AGE column from the injected/current clock instead of the zero clock (which showed "-" on every row).
+- Adopted Bubble Tea alternate-screen (full-window) behavior and restored the terminal on every exit/error path.
+- Word-wrapped long server/error text at the terminal width instead of clipping it at the right edge.
+- Integrated real-PTY regressions that pin the above against the compiled `--demo` binary.
+
 ## 0.2.0-beta.1 — local beta candidate
 
 - Integrated guarded retry, resubmit, stop and terminate journeys with root-owned preflight, single-send mutation execution, read-back verification and explicit UNKNOWN outcomes for ambiguous results.

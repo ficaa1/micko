@@ -231,8 +231,23 @@ func TestTerminalWatchStateSuppressesQueuedListRecovery(t *testing.T) {
 func TestRefreshClearsTerminalWatchState(t *testing.T) {
 	m := testRoot(t, &testkit.FakeReader{})
 	m.watchMode = "authentication/permission required"
-	_, cmd := m.Update(tea.KeyPressMsg{Text: "r"})
+	// KeyPressMsg "r" is routed into the list child, which answers with a
+	// RefreshListMsg intent command; the root converts that intent into the
+	// refresh effect (plan §4). Drive the same round-trip the Tea runtime
+	// would: execute the command, feed the message back into Update.
+	updated, cmd := m.Update(tea.KeyPressMsg{Text: "r"})
+	m = updated.(*Root)
 	if cmd == nil {
+		t.Fatal("r did not produce a refresh intent command")
+	}
+	for _, msg := range runCmd(cmd) {
+		next, cmd := m.Update(msg)
+		m = next.(*Root)
+		if cmd == nil {
+			t.Fatal("refresh intent command missing")
+		}
+	}
+	if !m.listState.loading {
 		t.Fatal("refresh did not start a new list")
 	}
 	if m.watchMode != "" {

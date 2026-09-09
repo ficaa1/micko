@@ -149,30 +149,47 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.resizeChildren(msg)
 		return m, nil
 
 	case tea.KeyPressMsg:
-		// Ctrl-C is global, including while a child modal owns input.
-		if msg.String() == "ctrl+c" {
+		key := msg.String()
+		// Ctrl-C quits globally, including while a child modal owns input.
+		if key == "ctrl+c" {
 			return m.handleKey(msg)
 		}
+		// A non-idle action modal owns all remaining input (UI-04).
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			_, cmd := m.actionView.Update(msg)
 			return m, cmd
 		}
-		if m.route == RouteDetail && msg.String() == "a" {
+		// q quits globally on every route (live-smoke: global q preserved),
+		// gated on text-entry isolation: while the list search input is
+		// focused, q types a letter and is consumed by the search handler
+		// below instead.
+		if key == "q" && !m.listView.SearchOn {
+			return m, m.quit()
+		}
+		if m.route == RouteDetail && key == "a" {
 			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
 			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 			m.actionView.OpenMenu()
 			return m, nil
 		}
-		if msg.String() == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
+		if key == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
 			return m, m.back()
 		}
-		if m.route != RouteList && msg.String() != "ctrl+c" {
+		// List route: route the keyboard into the list child (j/k/arrows/Enter/
+		// l//s/r and printable search text). The child emits intents (open,
+		// logs, refresh); the root converts them to effects below. Global
+		// keys (q, ctrl+c) stay at the root, and text-entry isolation means
+		// printable letters — including q and r — reach the search buffer
+		// while the search input is focused (UI-04).
+		if m.route == RouteList {
 			return m, m.updateChild(msg)
 		}
-		return m.handleKey(msg)
+		// Detail/logs routes: the active child consumes non-global keys.
+		return m, m.updateChild(msg)
 
 	case tea.QuitMsg:
 		m.quitting = true
@@ -209,6 +226,16 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case logRecordMsg:
 		return m, m.handleLogRecord(msg)
+
+	case workflowlist.RefreshListMsg:
+		// Manual refresh intent from the list child (r): an explicit
+		// operator refresh clears terminal watch state (the escape hatch
+		// from rate-limited/unauthorized states) and starts a fresh
+		// collection of this generation.
+		m.watchMode = ""
+		m.watchRetries = 0
+		m.cancelInflight("watch")
+		return m, m.startListGeneration()
 
 	case OpenWorkflowMsg:
 		return m, m.openWorkflow(msg.Ref)
@@ -268,14 +295,28 @@ func (m *Root) View() tea.View {
 			b.WriteString(m.logsView.View())
 		}
 	default:
-		b.WriteString("route: list | " + m.listSummary() + "\n")
-		b.WriteString(m.listView.View())
+		// The list pane renders AGE from the injected clock (defect 1: the
+		// live/beta view must not fall back to the zero clock that renders
+		// "-" on every row) and long error/stale text is word-wrapped to the
+		// terminal width instead of being clipped at the right edge (defect
+		// 5). Wrapping is a no-op when the width is unknown (<=0).
+		line := "route: list | " + m.listSummary()
+		if m.width > 0 {
+			line = shared.Wrap(line, m.width)
+		}
+		b.WriteString(line + "\n")
+		b.WriteString(m.listView.ViewAt(m.deps.clock.Now()))
 	}
 	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 		b.WriteString("\n")
 		b.WriteString(m.actionView.View().Content)
 	}
-	return tea.NewView(b.String())
+	v := tea.NewView(b.String())
+	// Full-window alternate screen (live-smoke defect 4b): the layout is
+	// stable in the alternate buffer, and bubbletea restores the terminal on
+	// every exit/error path (q, Ctrl-C, and any program teardown).
+	v.AltScreen = true
+	return v
 }
 
 func (m *Root) listSummary() string {
@@ -368,31 +409,13 @@ func (m *Root) logSummary() string {
 func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	if shared.QuitKeySet(key == "ctrl+c", key, shared.KeyCtxBrowsing) {
-		m.cancelAll()
-		m.quitting = true
-		return m, tea.Quit
+		return m, m.quit()
 	}
 	switch key {
-	case "q":
-		// browsing context only (QuitKeySet already gated ctrl+c); F1 root
-		// has no text entry, so q quits.
-		m.cancelAll()
-		m.quitting = true
-		return m, tea.Quit
 	case "esc":
 		return m, m.back()
 	case "n":
 		// F1: namespace switching is I1 scope; stub does nothing yet.
-		return m, nil
-	case "r":
-		if m.route == RouteList {
-			// Refresh is the explicit operator escape from terminal watch
-			// states; queued ticks and completions remain suppressed.
-			m.watchMode = ""
-			m.watchRetries = 0
-			m.cancelInflight("watch")
-			return m, m.startListGeneration()
-		}
 		return m, nil
 	default:
 		return m, nil
@@ -624,6 +647,32 @@ func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
 	default:
 		return nil
 	}
+}
+
+// resizeChildren propagates a terminal resize to every child view model so
+// the active route and the ones the user can switch to all re-lay out (live-
+// smoke defect 4). The Tea event loop re-renders View after every Update, so
+// mutating child sizes here is sufficient to trigger a responsive redraw.
+func (m *Root) resizeChildren(msg tea.WindowSizeMsg) {
+	m.listView.Update(msg)
+	if m.detailView != nil {
+		_, _ = m.detailView.Update(msg)
+	}
+	if m.logsView != nil {
+		m.logsView.Update(msg)
+	}
+	if m.actionView != nil {
+		_, _ = m.actionView.Update(msg)
+	}
+}
+
+// quit performs the shared teardown for every exit path (q, ctrl+c): cancel
+// all inflight work, mark quitting and return the Quit command so the
+// renderer restores the terminal (alternate screen) on the way out.
+func (m *Root) quit() tea.Cmd {
+	m.cancelAll()
+	m.quitting = true
+	return tea.Quit
 }
 
 func (m *Root) setInflight(purpose string, cancel context.CancelFunc) {

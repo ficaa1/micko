@@ -216,11 +216,30 @@ func (p *PTYProcess) SendKeys(delay time.Duration, keys ...string) error {
 	return nil
 }
 
+// Resize changes the pty size and signals SIGWINCH to the child so the Tea
+// loop re-queries the terminal size and delivers a fresh WindowSizeMsg.
+func (p *PTYProcess) Resize(cols, rows int) error {
+	if err := setWinsize(p.master.Fd(), uint16(cols), uint16(rows)); err != nil {
+		return err
+	}
+	return p.Cmd.Process.Signal(syscall.SIGWINCH)
+}
+
 // Screen returns the ANSI-scrubbed captured output so far.
 func (p *PTYProcess) Screen() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.scrub.String()
+}
+
+// ClearScreen discards accumulated output so far, so a later Screen()/Raw()
+// reflects only output produced after the call (used to assert a post-resize
+// re-layout rather than stale buffered frames).
+func (p *PTYProcess) ClearScreen() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.buf.Reset()
+	p.scrub.Reset()
 }
 
 // Raw returns the raw captured output (restore-sequence checks).

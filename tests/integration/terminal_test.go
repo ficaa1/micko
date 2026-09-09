@@ -263,3 +263,147 @@ func procTCPEstablished(pid int) []string {
 	}
 	return out
 }
+
+// --- F: live-smoke integration defect regressions (compiled demo) ------------
+//
+// These drive the REAL compiled binary through a PTY in --demo mode and pin
+// the behaviours the live smoke test found broken (AGE, list key routing,
+// resize, alternate screen). They fail on the baseline binary and pass once
+// the integrated slice lands (TDD: regressions written before the fix).
+
+// Defect 1: AGE must render from the injected clock (not time.Time{} which
+// renders "-" on every row). demo-data-pull started 40m ago → "40m".
+func TestPTYDemoAgeColumnNotEmpty(t *testing.T) {
+	bin := buildBinary(t)
+	p, err := StartPTY(bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	}()
+	ok := waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows") && strings.Contains(s, "40m")
+	})
+	if !ok {
+		t.Fatalf("AGE column empty (baseline renders '-' for every row); screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Defect 2: list keys must route. "j" moves the selection down and Enter
+// opens detail for the moved row. Demo default sort (SortPhaseName) puts the
+// single Failed workflow first (nightly-report); "j" moves to row 1
+// (data-pull, the first Running by name).
+func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
+	bin := buildBinary(t)
+	p, err := StartPTY(bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	}()
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("list never rendered: %q", p.Screen())
+	}
+	// "enter" must be sent as the carriage-return byte (the enter key); a
+	// literal "enter" string would just type five letters.
+	if err := p.SendKeys(30*time.Millisecond, "j", "\r"); err != nil {
+		t.Fatalf("send keys: %v", err)
+	}
+	ok := waitScreen(p, 10*time.Second, func(s string) bool {
+		// The detail pane titles the opened workflow; assert on that rendered
+		// title (the "route: detail" header prefix is unreliable here because
+		// the alternate-screen repaint overwrites it via C0 controls that the
+		// PTY harness's stripANSI discards, so the stream only carries the
+		// overwriting suffix).
+		return strings.Contains(s, "DETAIL demo-data-pull") && strings.Contains(s, "phase: Running")
+	})
+	if !ok {
+		t.Fatalf("j/enter did not open the second row's detail; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Defect 4(a): resize must re-layout. Shrinking to 40x10 shows the resize
+// notice; growing back to 120x40 clears it (WindowSizeMsg reaches the child).
+func TestPTYDemoResizeReacts(t *testing.T) {
+	bin := buildBinary(t)
+	p, err := StartPTYSize(80, 24, bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	}()
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("list never rendered: %q", p.Screen())
+	}
+
+	if err := p.Resize(40, 10); err != nil {
+		t.Fatalf("resize down: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "too small")
+	}) {
+		t.Fatalf("40x10 did not show the resize notice (WindowSizeMsg not propagated); screen=%q", p.Screen())
+	}
+
+	if err := p.Resize(120, 40); err != nil {
+		t.Fatalf("resize up: %v", err)
+	}
+	// Drop the buffered 40x10 "too small" frame so the restore assertion
+	// reflects only the re-laid-out render at the new size.
+	p.ClearScreen()
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return !strings.Contains(s, "too small") && strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("120x40 did not restore the full layout; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Defect 4(b): the program must use the alternate screen buffer (enter
+// sequence \x1b[?1049h in the raw capture) so the layout is stable, and must
+// exit it (\x1b[?1049l) on quit so the terminal is restored.
+func TestPTYDemoUsesAltScreenAndRestores(t *testing.T) {
+	bin := buildBinary(t)
+	p, err := StartPTY(bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer p.Close()
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("list never rendered: %q", p.Screen())
+	}
+	raw := p.Raw()
+	if !strings.Contains(raw, "\x1b[?1049h") {
+		t.Fatalf("alt-screen enter sequence missing; the TUI is not using the alternate screen buffer")
+	}
+	_ = p.Send("q")
+	if _, err := p.Wait(); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+	if after := p.Raw(); !strings.Contains(after, "\x1b[?1049l") {
+		t.Fatalf("alt-screen exit sequence missing on quit; terminal not restored")
+	}
+}

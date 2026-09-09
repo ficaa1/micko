@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"argo-tui/internal/core"
 	"argo-tui/internal/ui/shared"
 )
@@ -86,19 +88,68 @@ func (m *Model) toolbarView() string {
 	parts = append(parts, "Phase: "+string(m.phase))
 	parts = append(parts, "Sort: "+sortLabel(m.sort))
 
+	// Long, untrusted-derived error reasons (the stale / unauthenticated /
+	// forbidden message) are word-wrapped to fit the remaining width instead
+	// of being clipped at the right edge (live-smoke defect 5). Short
+	// reasons keep exactly one styled line (byte-identical to goldens);
+	// only genuinely long text gets wrapped.
 	switch m.status {
 	case StatusLoading:
 		parts = append(parts, m.theme.Warning.Render("loading…"))
 	case StatusStale:
-		parts = append(parts, m.theme.Warning.Render("stale "+humanDuration(m.errAge)+" — "+m.errMsg))
+		parts = append(parts, m.wrapStatusReason("stale "+humanDuration(m.errAge)+" — "+m.errMsg, m.theme.Warning.Render))
 	case StatusForbidden:
-		parts = append(parts, m.theme.ErrorText.Render("forbidden: "+m.errMsg))
+		parts = append(parts, m.wrapStatusReason("forbidden: "+m.errMsg, m.theme.ErrorText.Render))
 	case StatusUnauthenticated:
-		parts = append(parts, m.theme.ErrorText.Render("unauthenticated: "+m.errMsg))
+		parts = append(parts, m.wrapStatusReason("unauthenticated: "+m.errMsg, m.theme.ErrorText.Render))
 	case StatusIncomplete:
 		parts = append(parts, m.theme.Warning.Render("INCOMPLETE (snapshot cap)"))
 	}
 	return strings.Join(parts, "  ")
+}
+
+// wrapStatusReason word-wraps a long status reason into the remaining width
+// of the toolbar line. Short reasons (which goldens pin byte-for-byte) are
+// returned styled exactly as before; only text long enough to clip at the
+// right edge is reflowed.
+func (m *Model) wrapStatusReason(full string, style func(...string) string) string {
+	const shortReasonThreshold = 60
+	if m.width <= 0 || ansi.StringWidth(full) <= shortReasonThreshold {
+		return style(full)
+	}
+	// Remaining width after the non-status parts already joined (the status
+	// part is appended last). Leave room for the "  " separator.
+	prefixCells := 0
+	prefixCells = ansi.StringWidth(strings.Join(m.toolbarPrefixParts(), "  "))
+	budget := m.width - prefixCells - 3
+	if budget < 8 {
+		// Almost no room left after the toolbar prefix; wrapping would
+		// produce unusable slivers. Keep the single line (better to clip a
+		// tiny residual than to garble the layout).
+		return style(full)
+	}
+	return style(shared.Wrap(full, budget))
+}
+
+// toolbarPrefixParts returns the non-status toolbar cells so wrapStatusReason
+// can measure how much width remains for the (last) status reason. It mirrors
+// the search/scope/phase/sort cells built in toolbarView.
+func (m *Model) toolbarPrefixParts() []string {
+	q := m.query
+	if m.SearchOn {
+		q = m.searchLineView()
+	}
+	searchCell := "Search: " + q
+	if q == "" && !m.SearchOn {
+		searchCell = "Search: (none)  / to filter by name"
+	}
+	scope := ""
+	if m.total > m.visible {
+		scope = " [within " + itoa(m.total) + " collected]"
+	} else if m.query != "" || m.status == StatusIncomplete {
+		scope = " [within " + itoa(m.total) + " collected]"
+	}
+	return []string{searchCell + scope, "Phase: " + string(m.phase), "Sort: " + sortLabel(m.sort)}
 }
 
 // sortLabel gives human names for the sort cycle.
