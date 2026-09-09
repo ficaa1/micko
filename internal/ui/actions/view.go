@@ -12,6 +12,8 @@ func consequence(action core.Action) string {
 	switch action {
 	case core.ActionRetry:
 		return "retry the existing workflow"
+	case core.ActionResume:
+		return "resume the workflow's manual approval gate"
 	case core.ActionResubmit:
 		return "create a new workflow"
 	case core.ActionStop:
@@ -35,7 +37,7 @@ func render(m *Model) string {
 		b.WriteString("status: unavailable\nreason: " + shared.Sanitize(m.reason) + "\n")
 	case StateMenu:
 		b.WriteString("choose action (all require confirmation):\n")
-		b.WriteString("[r] retry  [u] resubmit  [s] stop  [t] terminate  [esc] cancel\n")
+		b.WriteString("[u] resume  [s] stop  [esc] cancel\n")
 	case StateConfirm:
 		b.WriteString("action: " + actionLabel(m.action) + "\n")
 		b.WriteString("consequence: " + consequence(m.action) + " on " + target(m.ref) + "\n")
