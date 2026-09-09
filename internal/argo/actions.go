@@ -18,7 +18,7 @@ var _ core.Actioner = (*Client)(nil)
 // path: a transport failure after the server receives a PUT is ambiguous.
 func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.ActionResult, error) {
 	result := core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}
-	if req.Action != core.ActionRetry && req.Action != core.ActionResubmit && req.Action != core.ActionStop && req.Action != core.ActionTerminate {
+	if req.Action != core.ActionResume && req.Action != core.ActionRetry && req.Action != core.ActionResubmit && req.Action != core.ActionStop && req.Action != core.ActionTerminate {
 		return result, fmt.Errorf("unsupported action %q", req.Action)
 	}
 	if !req.Confirmation.Confirmed {
