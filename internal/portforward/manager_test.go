@@ -55,13 +55,17 @@ func TestManagerReadinessAndCleanup(t *testing.T) {
 }
 func TestManagerUsesExplicitTargetAndRecovers(t *testing.T) {
 	var got []string
+	var gotMu sync.Mutex
 	n := 0
 	p1 := newFake()
 	p2 := newFake()
 	m, err := NewWithCommand(Target{"prod ctx", "team-a", "argo", "443", "15443"}, func(_ context.Context, name string, args ...string) Process {
+		gotMu.Lock()
 		got = append([]string{name}, args...)
 		n++
-		if n == 1 {
+		call := n
+		gotMu.Unlock()
+		if call == 1 {
 			return p1
 		}
 		return p2
@@ -79,8 +83,12 @@ func TestManagerUsesExplicitTargetAndRecovers(t *testing.T) {
 	awaitState(t, m.Events(), StateLost)
 	awaitState(t, m.Events(), StateStarting)
 	cancel()
-	if got[0] != "kubectl" || got[1] != "--context" || got[2] != "prod ctx" || got[3] != "--namespace" || got[4] != "team-a" {
-		t.Fatalf("unexpected command %v", got)
+	awaitState(t, m.Events(), StateStopped)
+	gotMu.Lock()
+	args := append([]string(nil), got...)
+	gotMu.Unlock()
+	if args[0] != "kubectl" || args[1] != "--context" || args[2] != "prod ctx" || args[3] != "--namespace" || args[4] != "team-a" {
+		t.Fatalf("unexpected command %v", args)
 	}
 }
 func TestTargetRejectsNewline(t *testing.T) {
