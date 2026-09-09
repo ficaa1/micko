@@ -13,6 +13,7 @@ import (
 type Action string
 
 const (
+	ActionResume    Action = "resume"
 	ActionRetry     Action = "retry"
 	ActionResubmit  Action = "resubmit"
 	ActionStop      Action = "stop"
@@ -72,6 +73,12 @@ func (r ActionRequest) Validate(actual Ref) error {
 
 // These four bodies mirror the v4.1.2 OpenAPI schemas exactly. UID and UI
 // confirmation fields are intentionally absent.
+type ResumeBody struct {
+	Name              string `json:"name,omitempty"`
+	Namespace         string `json:"namespace,omitempty"`
+	NodeFieldSelector string `json:"nodeFieldSelector,omitempty"`
+}
+
 type RetryBody struct {
 	Name              string   `json:"name,omitempty"`
 	Namespace         string   `json:"namespace,omitempty"`
@@ -101,6 +108,8 @@ type TerminateBody struct {
 
 func (r ActionRequest) WireBody() any {
 	switch r.Action {
+	case ActionResume:
+		return ResumeBody{r.Ref.Name, r.Ref.Namespace, r.NodeFieldSelector}
 	case ActionRetry:
 		return RetryBody{r.Ref.Name, r.Ref.Namespace, r.NodeFieldSelector, r.Parameters, r.RestartSuccessful}
 	case ActionResubmit:
