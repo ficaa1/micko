@@ -61,6 +61,10 @@ type Root struct {
 
 	ids requestIDProvider
 
+	// help is the global `?` overlay. Every route footer advertises it, so
+	// it is owned by the root rather than by any one child.
+	help shared.HelpOverlay
+
 	listView      workflowlist.Model
 	detailView    *detail.Model
 	logsView      *logs.Model
@@ -169,6 +173,23 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			_, cmd := m.actionView.Update(msg)
 			return m, cmd
+		}
+		// The help overlay is a dialog (shared.KeyCtxDialog): while it is
+		// open it owns every remaining key, so the view behind it cannot
+		// move. q closes it instead of quitting; only Ctrl-C, handled
+		// above, still quits globally.
+		if m.help.IsOpen() {
+			switch key {
+			case "?", "esc", "q":
+				m.help.Close()
+			}
+			return m, nil
+		}
+		// ? opens help everywhere except inside text entry, where it is an
+		// ordinary printable character (UI-04 text-entry isolation).
+		if key == "?" && !m.listView.SearchOn {
+			m.help.Toggle()
+			return m, nil
 		}
 		// q quits globally on every route (live-smoke: global q preserved),
 		// gated on text-entry isolation: while the list search input is
@@ -290,14 +311,24 @@ func (m *Root) View() tea.View {
 		mode = "ACTIONS ENABLED"
 	}
 	b.WriteString("argo-tui | ns: " + m.deps.namespace + " | " + mode + "\n")
+	if m.help.IsOpen() {
+		// The overlay replaces the route body but keeps the context header,
+		// so the frame geometry does not move when help opens.
+		b.WriteString(m.help.View(m.width, m.budgetBelow(1)))
+		return m.finishView(&b)
+	}
 	switch m.route {
 	case RouteDetail:
-		b.WriteString("route: detail | " + m.detailSummary() + "\n")
+		line := "route: detail | " + m.detailSummary()
+		b.WriteString(line + "\n")
+		m.sizeChildBelow(line)
 		if m.detailView != nil {
 			b.WriteString(m.detailView.View().Content)
 		}
 	case RouteLogs:
-		b.WriteString("route: logs | " + m.logSummary() + "\n")
+		line := "route: logs | " + m.logSummary()
+		b.WriteString(line + "\n")
+		m.sizeChildBelow(line)
 		if m.logsView != nil {
 			b.WriteString(m.logsView.View())
 		}
@@ -312,18 +343,74 @@ func (m *Root) View() tea.View {
 			line = shared.Wrap(line, m.width)
 		}
 		b.WriteString(line + "\n")
+		m.sizeChildBelow(line)
 		b.WriteString(m.listView.ViewAt(m.deps.clock.Now()))
 	}
 	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 		b.WriteString("\n")
 		b.WriteString(m.actionView.View().Content)
 	}
-	v := tea.NewView(b.String())
+	return m.finishView(&b)
+}
+
+// finishView clamps the assembled frame to the terminal height and marks it
+// as a full-window alternate-screen view.
+//
+// The alternate screen has no scrollback: a frame taller than the terminal
+// does not scroll, it loses its bottom rows outright, and the bottom row is
+// the footer with the key hints. The children size themselves to fit, so this
+// clamp should never fire; it exists so a miscalculating child degrades into
+// a clipped body rather than a UI with no visible keys.
+func (m *Root) finishView(b *strings.Builder) tea.View {
+	content := b.String()
+	if m.height > 0 {
+		lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+		content = strings.Join(shared.ClampLines(lines, m.height), "\n")
+	}
+	v := tea.NewView(content)
 	// Full-window alternate screen (live-smoke defect 4b): the layout is
 	// stable in the alternate buffer, and bubbletea restores the terminal on
 	// every exit/error path (q, Ctrl-C, and any program teardown).
 	v.AltScreen = true
 	return v
+}
+
+// budgetBelow returns the lines left for the route body after `chrome` header
+// lines, or 0 when the terminal height is not known yet.
+func (m *Root) budgetBelow(chrome int) int {
+	if m.height <= 0 {
+		return 0
+	}
+	if avail := m.height - chrome; avail > 0 {
+		return avail
+	}
+	return 1
+}
+
+// sizeChildBelow gives the active child the height that actually remains
+// under the root's own chrome: the context header plus the (possibly wrapped)
+// route summary line just written.
+//
+// This has to happen at render time rather than on WindowSizeMsg, because the
+// summary line grows and shrinks with the connection state — a wrapped error
+// reason costs the child a line that a plain "5 workflows" does not.
+func (m *Root) sizeChildBelow(summary string) {
+	if m.height <= 0 {
+		return
+	}
+	avail := m.budgetBelow(2 + strings.Count(summary, "\n"))
+	switch m.route {
+	case RouteDetail:
+		if m.detailView != nil {
+			m.detailView.SetSize(m.width, avail)
+		}
+	case RouteLogs:
+		if m.logsView != nil {
+			m.logsView.SetSize(m.width, avail)
+		}
+	default:
+		m.listView.SetSize(m.width, avail)
+	}
 }
 
 func (m *Root) listSummary() string {

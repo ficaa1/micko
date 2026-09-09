@@ -29,15 +29,95 @@ func (m *Model) ViewAt(now time.Time) string {
 	if m.width > 0 && m.width < minUsableWidth {
 		return m.resizeNotice()
 	}
-	var b strings.Builder
-	b.WriteString(m.headerView())
-	b.WriteString("\n")
-	b.WriteString(m.toolbarView())
-	b.WriteString("\n")
-	b.WriteString(m.tableView(now))
-	b.WriteString("\n")
-	b.WriteString(m.footerView())
-	return b.String()
+	lines := m.frameLines(now)
+	if m.height > 0 {
+		lines = shared.ClampLines(lines, m.height)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// frameLines assembles the pane as discrete terminal lines so the height
+// budget can be enforced on whole lines. The line sequence is identical to
+// the pre-viewport concatenation, so unsized renders stay byte-stable.
+func (m *Model) frameLines(now time.Time) []string {
+	lines := []string{m.headerView()}
+	lines = append(lines, strings.Split(m.toolbarView(), "\n")...)
+
+	wName, wPhase, wAge, wDur := m.colWidths()
+	head := padRight("NAME", wName) + "  " +
+		padRight("PHASE", wPhase) + "  " +
+		padLeft("AGE", wAge) + "  " +
+		padRight("DURATION", wDur)
+	lines = append(lines, m.theme.Header.Render(head))
+
+	if len(m.rows) == 0 {
+		return append(lines, m.emptyStateView(), m.footerView(0, 0))
+	}
+
+	start, end := m.window(len(lines))
+	for i := start; i < end; i++ {
+		lines = append(lines, m.rowLine(m.rows[i], i == m.selIndex(), now))
+	}
+	// The blank separator above the footer is part of the original layout.
+	return append(lines, "", m.footerView(start, end))
+}
+
+// window returns the half-open row range to render. chromeLines is the number
+// of lines already emitted above the rows; the footer, the blank separator
+// above it, and that chrome are all reserved before rows get their budget.
+//
+// The window is anchored on scrollTop and only moves far enough to keep the
+// selected row inside it, so paging feels stable rather than jumping.
+func (m *Model) window(chromeLines int) (start, end int) {
+	if m.height <= 0 {
+		m.scrollTop = 0
+		return 0, len(m.rows)
+	}
+	budget := m.height - chromeLines - 2 // blank separator + footer
+	if budget >= len(m.rows) {
+		m.scrollTop = 0
+		return 0, len(m.rows)
+	}
+	if budget < 1 {
+		budget = 1 // clampLines trims the rest; never render zero rows
+	}
+	start = m.scrollTop
+	if max := len(m.rows) - budget; start > max {
+		start = max
+	}
+	if start < 0 {
+		start = 0
+	}
+	if sel := m.selIndex(); sel >= 0 {
+		if sel < start {
+			start = sel
+		}
+		if sel >= start+budget {
+			start = sel - budget + 1
+		}
+	}
+	m.scrollTop = start
+	return start, start + budget
+}
+
+// rowLine renders one table row with its phase styling (or the selection
+// highlight, which must win so the selected row is never ambiguous).
+func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
+	wName, wPhase, wAge, wDur := m.colWidths()
+	name := sanitizeOne(r.Ref.Name)
+	phase := m.rowPhaseText(sanitizeOne(r.Phase))
+	msg := sanitizeOne(r.Message)
+	line := padRight(truncateRight(name, wName), wName) + "  " +
+		padRight(truncateRight(phase, wPhase), wPhase) + "  " +
+		padLeft(ageText(r, now), wAge) + "  " +
+		padRight(durationText(r), wDur)
+	if m.width >= 100 && msg != "" {
+		line += "  " + truncateRight(msg, maxString(10, m.width-wName-wPhase-wAge-wDur-14))
+	}
+	if selected {
+		return m.theme.Selected.Render(line)
+	}
+	return m.theme.PhaseStyle(r.Phase).Render(line)
 }
 
 // minUsableWidth below which the plan requires a resize notice (<60 cols).
@@ -206,44 +286,6 @@ func (m *Model) colWidths() (name, phase, age, dur int) {
 	return
 }
 
-// tableView renders the header row + one row per visible workflow.
-func (m *Model) tableView(now time.Time) string {
-	wName, wPhase, wAge, wDur := m.colWidths()
-	var b strings.Builder
-	head := padRight("NAME", wName) + "  " +
-		padRight("PHASE", wPhase) + "  " +
-		padLeft("AGE", wAge) + "  " +
-		padRight("DURATION", wDur)
-	b.WriteString(m.theme.Header.Render(head))
-	b.WriteString("\n")
-
-	if len(m.rows) == 0 {
-		b.WriteString(m.emptyStateView())
-		return b.String()
-	}
-
-	sel := m.selIndex()
-	for i, r := range m.rows {
-		name := sanitizeOne(r.Ref.Name)
-		phase := m.rowPhaseText(sanitizeOne(r.Phase))
-		msg := sanitizeOne(r.Message)
-		line := padRight(truncateRight(name, wName), wName) + "  " +
-			padRight(truncateRight(phase, wPhase), wPhase) + "  " +
-			padLeft(ageText(r, now), wAge) + "  " +
-			padRight(durationText(r), wDur)
-		if m.width >= 100 && msg != "" {
-			line += "  " + truncateRight(msg, maxString(10, m.width-wName-wPhase-wAge-wDur-14))
-		}
-		styled := m.theme.PhaseStyle(r.Phase).Render(line)
-		if i == sel {
-			styled = m.theme.Selected.Render(line)
-		}
-		b.WriteString(styled)
-		b.WriteString("\n")
-	}
-	return b.String()
-}
-
 func maxString(a, b int) int {
 	if a > b {
 		return a
@@ -268,9 +310,15 @@ func (m *Model) emptyStateView() string {
 	}
 }
 
-// footerView carries key hints; q is root-owned (outside text entry).
-func (m *Model) footerView() string {
-	return "j/k move  enter open  l logs  / search  s sort  r refresh  ? help"
+// footerView carries key hints; q is root-owned (outside text entry). When
+// the viewport hides rows it also carries the window position, so a windowed
+// list is distinguishable from a list that simply has few workflows.
+func (m *Model) footerView(start, end int) string {
+	hints := "j/k move  enter open  l logs  / search  s sort  r refresh  ? help"
+	if end-start > 0 && end-start < len(m.rows) {
+		hints += "  " + itoa(start+1) + "-" + itoa(end) + "/" + itoa(len(m.rows))
+	}
+	return hints
 }
 
 var _ = core.Summary{}
