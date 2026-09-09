@@ -75,7 +75,7 @@ never literal tokens in config or on the command line. See
 |---|---|
 | `j`/`k` or arrows | move selection |
 | Enter | open selected workflow (detail) |
-| Esc | back out / cancel (logs → detail → list) |
+| Esc | back out / cancel (logs → where it was opened from; detail → list) |
 | Tab | switch detail tabs |
 | `/` | focus local search (list); searches the collected snapshot only |
 | `n` | namespace input/picker (manual names allowed even if enumeration is forbidden) |
