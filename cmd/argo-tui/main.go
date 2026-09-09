@@ -64,6 +64,7 @@ func run(args []string) int {
 	var reader core.Reader
 	activeNS := ""
 	interval := config.DefaultRefreshInterval
+	activeServer, activeProfile := "synthetic demo", "demo"
 	if *demo {
 		reader = testkit.DemoReader(clock)
 		activeNS = "demo"
@@ -99,11 +100,14 @@ func run(args []string) int {
 			return 1
 		}
 		activeNS, interval = cfg.Namespace, cfg.RefreshInterval
+		activeServer, activeProfile = cfg.Server, cfg.ProfileName
 	}
 	root := app.NewRootWithOptions(reader, clock, activeNS, interval, actions.Options{
 		AllowActions: *allowActions && !*demo,
 		ReadOnly:     !*allowActions || *demo,
 		Demo:         *demo,
+		Server:       activeServer,
+		Profile:      activeProfile,
 	})
 	p := tea.NewProgram(root)
 	if _, err := p.Run(); err != nil {

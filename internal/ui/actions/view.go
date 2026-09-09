@@ -27,6 +27,9 @@ func render(m *Model) string {
 	var b strings.Builder
 	b.WriteString("workflow action\n")
 	b.WriteString("target: " + target(m.ref) + "\n")
+	b.WriteString("server: " + shared.Sanitize(m.server) + "\n")
+	b.WriteString("profile: " + shared.Sanitize(m.profile) + "\n")
+	b.WriteString("phase: " + shared.Sanitize(m.phase) + "\n")
 	switch m.state {
 	case StateUnavailable:
 		b.WriteString("status: unavailable\nreason: " + shared.Sanitize(m.reason) + "\n")

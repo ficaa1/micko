@@ -31,9 +31,10 @@ func (m *Root) startWatch() tea.Cmd {
 	}
 	m.cancelInflight("watch")
 	m.watchMode = "watch"
+	m.watchAttempt++
 	ctx, cancel := context.WithCancel(context.Background())
 	m.setInflight("watch", cancel)
-	g := genStamp{Conn: m.connGen, Sel: m.selGen}
+	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.watchAttempt}
 	ch := make(chan any, watchQueueCap)
 	go func() {
 		err := m.deps.watcher.Watch(ctx, core.WatchRequest{
@@ -86,10 +87,11 @@ func drainWatchCmd(ctx context.Context, g genStamp, ch chan any) tea.Cmd {
 }
 
 func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
-	if msg.Conn != m.connGen || msg.Sel != m.selGen {
+	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
 		return nil
 	}
 	e := msg.Event
+	m.watchRetries = 0
 	if e.ResourceVersion != "" {
 		m.watchRV = e.ResourceVersion
 	}
@@ -123,7 +125,7 @@ func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
 }
 
 func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
-	if msg.Conn != m.connGen || msg.Sel != m.selGen {
+	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
 		return nil
 	}
 	m.clearInflight("watch")
@@ -142,15 +144,12 @@ func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
 				return nil
 			}
 			m.watchRetries++
-			delay := time.Second
-			if ae.RetryAfter != nil && *ae.RetryAfter > delay {
-				delay = *ae.RetryAfter
-			}
+			delay := watchRetryDelay(m.watchRetries, ae.RetryAfter)
 			if delay > 5*time.Minute {
 				m.watchMode = "rate limited; refresh required"
 				return nil
 			}
-			g := genStamp{Conn: m.connGen, Sel: m.selGen}
+			g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.watchAttempt}
 			return tea.Tick(delay, func(time.Time) tea.Msg { return watchRetryMsg{genStamp: g} })
 		}
 	}
@@ -159,4 +158,19 @@ func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
 	// A closed/expired stream must not make the viewer unusable. Relist now;
 	// the normal tick continues periodic reconciliation after this completes.
 	return m.startListGeneration()
+}
+
+func watchRetryDelay(retries int, retryAfter *time.Duration) time.Duration {
+	if retries < 1 {
+		retries = 1
+	}
+	backoff := time.Second << uint(retries-1)
+	if backoff > 30*time.Second {
+		backoff = 30 * time.Second
+	}
+	delay := backoff + time.Duration(retries%5)*100*time.Millisecond
+	if retryAfter != nil && *retryAfter > delay {
+		delay = *retryAfter
+	}
+	return delay
 }

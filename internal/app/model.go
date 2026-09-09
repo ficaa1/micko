@@ -54,14 +54,16 @@ type Root struct {
 
 	ids requestIDProvider
 
-	listView     workflowlist.Model
-	detailView   *detail.Model
-	logsView     *logs.Model
-	actionView   *actions.Model
-	actionOpts   actions.Options
-	watchRV      string
-	watchMode    string
-	watchRetries int
+	listView      workflowlist.Model
+	detailView    *detail.Model
+	logsView      *logs.Model
+	actionView    *actions.Model
+	actionOpts    actions.Options
+	watchRV       string
+	watchMode     string
+	watchRetries  int
+	watchAttempt  uint64
+	actionAttempt uint64
 }
 
 // listState is the list route's data + status.
@@ -160,6 +162,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.route == RouteDetail && msg.String() == "a" {
 			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
+			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 			m.actionView.OpenMenu()
 			return m, nil
 		}
@@ -178,7 +181,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Only restart a poll when one is not already in flight for this
 		// generation (plan §5: exactly one list op per generation).
-		if m.route == RouteList && !m.listState.loading {
+		if m.route == RouteList && !m.listState.loading && !terminalWatchMode(m.watchMode) {
 			return m, m.startListGeneration()
 		}
 		return m, nil
@@ -193,7 +196,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleWatchDone(msg)
 
 	case watchRetryMsg:
-		if msg.Conn != m.connGen || msg.Sel != m.selGen || m.watchMode != "rate limited" {
+		if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt || m.watchMode != "rate limited" {
 			return m, nil
 		}
 		return m, m.startWatch()
@@ -237,6 +240,10 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		return m, nil
 	}
+}
+
+func terminalWatchMode(mode string) bool {
+	return mode == "authentication/permission required" || mode == "rate limited; refresh required"
 }
 
 // View implements tea.Model. F1 renders a minimal placeholder per route
@@ -377,6 +384,16 @@ func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "n":
 		// F1: namespace switching is I1 scope; stub does nothing yet.
 		return m, nil
+	case "r":
+		if m.route == RouteList {
+			// Refresh is the explicit operator escape from terminal watch
+			// states; queued ticks and completions remain suppressed.
+			m.watchMode = ""
+			m.watchRetries = 0
+			m.cancelInflight("watch")
+			return m, m.startListGeneration()
+		}
+		return m, nil
 	default:
 		return m, nil
 	}
@@ -511,6 +528,9 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		status = workflowlist.StatusIncomplete
 	}
 	m.listView.SetStatus(status, "", 0)
+	if terminalWatchMode(m.watchMode) {
+		return nil
+	}
 	if m.deps.watcher != nil {
 		return tea.Batch(m.startWatch(), m.deps.tickCmd())
 	}

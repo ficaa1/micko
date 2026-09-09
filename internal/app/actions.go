@@ -34,7 +34,8 @@ func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.setInflight("action", cancel)
-	g := genStamp{Conn: m.connGen, Sel: m.selGen}
+	m.actionAttempt++
+	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.actionAttempt}
 	return func() tea.Msg {
 		actual, err := m.deps.reader.Get(ctx, req.Ref)
 		if err != nil {
@@ -114,7 +115,7 @@ func terminalPhase(phase string) bool {
 }
 
 func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
-	if msg.Conn != m.connGen || msg.Sel != m.selGen {
+	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.actionAttempt {
 		return nil
 	}
 	m.clearInflight("action")
