@@ -66,6 +66,7 @@ type Manager struct {
 	once    sync.Once
 	mu      sync.Mutex
 	proc    Process
+	started bool
 }
 
 func New(target Target) (*Manager, error) {
@@ -82,8 +83,17 @@ func NewWithCommand(target Target, command Command) (*Manager, error) {
 	}
 	return &Manager{target: target, command: command, backoff: []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second}, events: make(chan Event, 16), done: make(chan struct{})}, nil
 }
-func (m *Manager) Events() <-chan Event      { return m.events }
-func (m *Manager) Start(ctx context.Context) { go m.run(ctx) }
+func (m *Manager) Events() <-chan Event { return m.events }
+func (m *Manager) Start(ctx context.Context) {
+	m.mu.Lock()
+	if m.started {
+		m.mu.Unlock()
+		return
+	}
+	m.started = true
+	m.mu.Unlock()
+	go m.run(ctx)
+}
 func (m *Manager) Close() {
 	m.once.Do(func() {
 		close(m.done)
@@ -127,16 +137,33 @@ func (m *Manager) run(ctx context.Context) {
 			}
 			continue
 		}
+		// Serialize Start with Close. Some Process implementations (including
+		// os/exec) cannot be killed before Start initializes their Process.
 		m.mu.Lock()
-		m.proc = p
-		m.mu.Unlock()
 		if err := p.Start(); err != nil {
+			m.mu.Unlock()
 			m.fail(err, attempt)
-			m.clearProc(p)
 			if !m.sleep(ctx, attempt) {
 				return
 			}
 			continue
+		}
+		m.proc = p
+		closed := false
+		select {
+		case <-m.done:
+			closed = true
+		case <-ctx.Done():
+			closed = true
+		default:
+		}
+		m.mu.Unlock()
+		if closed {
+			_ = p.Kill()
+			_ = p.Wait()
+			m.clearProc(p)
+			m.emit(Event{State: StateStopped, Message: "stopped", Attempt: attempt})
+			return
 		}
 		ready := make(chan struct{}, 1)
 		lines := make(chan string, 8)
@@ -249,4 +276,9 @@ func exitMessage(err error) string {
 
 type execCommand struct{ *exec.Cmd }
 
-func (p execCommand) Kill() error { return p.Cmd.Process.Kill() }
+func (p execCommand) Kill() error {
+	if p.Cmd.Process == nil {
+		return nil
+	}
+	return p.Cmd.Process.Kill()
+}
