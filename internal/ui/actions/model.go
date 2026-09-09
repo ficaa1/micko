@@ -111,10 +111,10 @@ func (m *Model) Cancel() {
 	}
 }
 
-// OpenMenu presents the four deliberately narrow supported actions.
+// OpenMenu presents the two milestone-supported workflow actions.
 func (m *Model) OpenMenu() {
 	if !m.allowActions || m.readOnly || m.demo {
-		m.Open(core.ActionRetry)
+		m.Open(core.ActionResume)
 		return
 	}
 	m.state = StateMenu
@@ -216,22 +216,15 @@ func (m *Model) updateNonInput(key tea.KeyPressMsg) {
 		if m.state == StateConfirm {
 			m.Confirm()
 		}
-	case "r":
+	case "r", "u":
 		if m.state == StateMenu {
-			m.Open(core.ActionRetry)
-		}
-	case "u":
-		if m.state == StateMenu {
-			m.Open(core.ActionResubmit)
+			m.Open(core.ActionResume)
 		}
 	case "s":
 		if m.state == StateMenu {
 			m.Open(core.ActionStop)
 		}
-	case "t":
-		if m.state == StateMenu {
-			m.Open(core.ActionTerminate)
-		}
+
 	}
 }
 

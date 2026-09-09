@@ -45,6 +45,7 @@ func run(args []string) int {
 	refresh := fs.Duration("refresh-interval", 0, "poll interval")
 	insecure := fs.Bool("insecure-skip-tls-verify", false, "disable TLS verification (unsafe)")
 	allowActions := fs.Bool("allow-actions", false, "enable explicitly confirmed workflow actions")
+	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2
@@ -80,7 +81,7 @@ func run(args []string) int {
 				return 1
 			}
 		}
-		cfg, err := config.Load(data, config.Options{ConfigPath: path, Profile: *profile, Server: *server, Namespace: *namespace, TokenFile: *tokenFile, CAFile: *caFile, RefreshInterval: *refresh, InsecureSkipTLSVerify: *insecure})
+		cfg, err := config.Load(data, config.Options{ConfigPath: path, Profile: *profile, Server: *server, Namespace: *namespace, TokenFile: *tokenFile, CAFile: *caFile, RefreshInterval: *refresh, InsecureSkipTLSVerify: *insecure, Debug: *debug})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "argo-tui:", err)
 			return 1

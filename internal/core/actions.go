@@ -56,7 +56,7 @@ type ActionRequest struct {
 }
 
 func (r ActionRequest) Validate(actual Ref) error {
-	if r.Action != ActionRetry && r.Action != ActionResubmit && r.Action != ActionStop && r.Action != ActionTerminate {
+	if r.Action != ActionResume && r.Action != ActionRetry && r.Action != ActionResubmit && r.Action != ActionStop && r.Action != ActionTerminate {
 		return fmt.Errorf("unsupported action %q", r.Action)
 	}
 	if r.Ref.Namespace != actual.Namespace || r.Ref.Name != actual.Name || r.Ref.UID != actual.UID {
