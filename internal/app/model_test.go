@@ -3,13 +3,16 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"argo-tui/internal/core"
 	"argo-tui/internal/testkit"
+	"argo-tui/internal/ui/workflowlist"
 )
 
 // testRoot builds a root model against a fake reader + fake clock.
@@ -272,8 +275,6 @@ func TestBackRouteCancelsStreamAndDetail(t *testing.T) {
 	_ = cmd
 
 	// Esc back out: stream must be canceled promptly.
-	before := f.StreamStarts
-	_ = before
 	updated, _ = root.Update(BackMsg{})
 	root = updated.(*Root)
 	if root.route != RouteDetail {
@@ -425,5 +426,233 @@ func TestStreamContextCancellationDistinguished(t *testing.T) {
 	}
 	if ended.Err != nil && !errors.Is(ended.Err, context.Canceled) {
 		t.Fatalf("end err = %v, want context.Canceled", ended.Err)
+	}
+}
+
+// --- F: live-smoke integration defects (RED-GREEN) ---------------------------
+
+// loadDemoList runs the demo list collection and applies the result so the
+// root's list route is populated and ready for key/size/render assertions.
+func loadDemoList(t *testing.T) *Root {
+	t.Helper()
+	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
+	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Second)
+	for _, msg := range runCmd(m.startListGeneration()) {
+		next, _ := m.Update(msg)
+		m = next.(*Root)
+	}
+	if len(m.listState.items) != 5 {
+		t.Fatalf("precondition: list not loaded (%d items)", len(m.listState.items))
+	}
+	return m
+}
+
+// Defect 2: list-route keys (j/k/arrows/Enter/l//s) must reach the list child
+// while q/ctrl+c keep quitting globally.
+func TestListKeysMoveSelectionAndEnterOpensDetail(t *testing.T) {
+	m := loadDemoList(t)
+	if m.route != RouteList {
+		t.Fatalf("precondition: route = %v, want list", m.route)
+	}
+	first := m.listView.SelectedRef().Name
+	if first == "" {
+		t.Fatal("precondition: no initial selection")
+	}
+
+	// j moves selection down one row (demo sort = PhaseName, cleanup → nightly).
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'j'})
+	m = next.(*Root)
+	afterJ := m.listView.SelectedRef().Name
+	if afterJ == first {
+		t.Fatalf("j did not move selection (still %q); list keys not routed to child", first)
+	}
+
+	// Enter on the moved selection opens detail for that workflow. The list
+	// child answers with an intent message wrapped in a command (plan §4: the
+	// root converts intents to effects); the bubbletea runtime runs the
+	// returned command and re-delivers the message, so drive that same loop
+	// here to observe the end-to-end route change.
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(*Root)
+	for _, msg := range runCmd(cmd) {
+		next, cmd = m.Update(msg)
+		m = next.(*Root)
+	}
+	if m.route != RouteDetail {
+		t.Fatalf("enter did not open detail (route=%v); enter not routed", m.route)
+	}
+	if m.detailState.ref.Name != afterJ {
+		t.Fatalf("detail opened for %q, want selected %q", m.detailState.ref.Name, afterJ)
+	}
+}
+
+// Defect 2: q must still quit globally on the list route (browsing context).
+func TestListQStillQuitsAfterRouting(t *testing.T) {
+	m := loadDemoList(t)
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	root := next.(*Root)
+	if !root.quitting || cmd == nil {
+		t.Fatalf("q on list no longer quits globally; routing broke global q")
+	}
+}
+
+// Defect 2: q must quit globally even after routing into a child route
+// (detail), not just on the list — the live operator expects q to quit from
+// anywhere and the child must not swallow it.
+func TestGlobalQQuitsOnDetailRoute(t *testing.T) {
+	m := loadDemoList(t)
+	// Open detail for the selected row (enter → intent message round-trip).
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(*Root)
+	for _, msg := range runCmd(cmd) {
+		next, cmd = m.Update(msg)
+		m = next.(*Root)
+	}
+	if m.route != RouteDetail {
+		t.Fatalf("precondition: route = %v, want detail", m.route)
+	}
+	next, c := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	root := next.(*Root)
+	if !root.quitting || c == nil {
+		t.Fatalf("q on detail did not quit globally; child swallowed global q")
+	}
+}
+
+// Defect 4(a): WindowSizeMsg must propagate to the list child so it re-lays
+// out (resize notice, wider columns) instead of keeping the initial size.
+func TestListResizePropagatesToChild(t *testing.T) {
+	m := loadDemoList(t)
+
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+	m = next.(*Root)
+	if v := m.View().Content; !strings.Contains(v, "too small") {
+		t.Fatalf("40x10 must propagate to the list child and show the resize notice; view=%q", v)
+	}
+
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = next.(*Root)
+	if v := m.View().Content; strings.Contains(v, "too small") {
+		t.Fatalf("resize to 100x40 must clear the notice: %q", v)
+	}
+}
+
+// Defect 1: AGE must render from the injected clock, not time.Time{} (which
+// makes every AGE a "-").
+func TestListAgeRendersUsingInjectedClock(t *testing.T) {
+	m := loadDemoList(t)
+	// demo-data-pull started FixtureEpoch-40m → AGE "40m".
+	if v := m.View().Content; !strings.Contains(v, "40m") {
+		t.Fatalf("AGE must render from the injected clock; no '40m' found:\n%s", v)
+	}
+}
+
+// Defect 2 (manual refresh): the root must convert the list child's refresh
+// intent (r) into a new collection and clear any terminal watch state — the
+// child emits workflowlist.RefreshListMsg; the root alone turns intents into
+// effects (plan §4), same as it does OpenWorkflowMsg/OpenLogsMsg.
+func TestRefreshIntentStartsNewListAndClearsWatchState(t *testing.T) {
+	m := loadDemoList(t)
+	m.watchMode = "authentication/permission required"
+
+	// Pump only the intent message: the root must treat the child's
+	// RefreshListMsg as the manual-refresh effect, independent of the key
+	// event that produced it.
+	next, cmd := m.Update(workflowlist.RefreshListMsg{})
+	m = next.(*Root)
+	if cmd == nil {
+		t.Fatal("refresh intent did not start a new list")
+	}
+	if m.watchMode != "" {
+		t.Fatalf("refresh intent retained terminal watch state: %q", m.watchMode)
+	}
+	if !m.listState.loading {
+		t.Fatal("refresh intent did not mark the list loading")
+	}
+}
+
+// Defect 2 (text-entry isolation): while the list search input is focused,
+// printable keys must reach the search buffer — including "r", which outside
+// search means "manual refresh". The root's r intercept must be gated on
+// SearchOn or typing a query containing "r" would fire a refresh instead.
+func TestSearchEntryIsolatesRLetter(t *testing.T) {
+	m := loadDemoList(t)
+
+	// "/" opens the search input (routed to the child).
+	next, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	m = next.(*Root)
+	if !m.listView.SearchOn {
+		t.Fatalf("precondition: '/' must open search input")
+	}
+
+	// "r" while searching inserts the letter; it must NOT refresh.
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = next.(*Root)
+	if m.listView.SearchValue() != "r" {
+		t.Fatalf("'r' during search must insert the letter; SearchValue=%q", m.listView.SearchValue())
+	}
+	if cmd != nil {
+		t.Fatalf("'r' during search must not trigger a refresh (cmd non-nil)")
+	}
+
+	// Enter applies the query; the letter survived editing.
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(*Root)
+	if m.listView.Query() != "r" {
+		t.Fatalf("search query after enter = %q, want 'r'", m.listView.Query())
+	}
+	if m.listView.SearchOn {
+		t.Fatal("enter must leave search mode")
+	}
+}
+
+// Defect 2 (text-entry + global keys): 'q' and Ctrl-C must still quit from
+// inside search editing (they are global), while every other letter stays in
+// the search buffer.
+func TestSearchEntryKeepsGlobalQuitKeys(t *testing.T) {
+	m := loadDemoList(t)
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	m = next.(*Root)
+	// Type "quick" — q must be inserted, not quit.
+	for _, r := range "quick" {
+		next, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m = next.(*Root)
+	}
+	if m.listView.SearchValue() != "quick" || m.quitting {
+		t.Fatalf("search entry broke: buffer=%q quitting=%v", m.listView.SearchValue(), m.quitting)
+	}
+
+	// Ctrl-C is global even mid-search (Code 3 + ModCtrl, Tea v2).
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	m = next.(*Root)
+	if !m.quitting || cmd == nil {
+		t.Fatalf("ctrl+c during search did not quit globally")
+	}
+}
+
+// Defect 5: a long list error must wrap at the terminal width instead of
+// being clipped on a single line.
+func TestListErrorTextWrapsAtWidth(t *testing.T) {
+	m := loadDemoList(t)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(*Root)
+
+	long := "server returned an HTML page instead of API data (content-type text/html; charset=UTF-8); this endpoint expects interactive browser login configure a server service-account token do not retry automatically -- tail-marker"
+	err := core.NewAPIError(core.ErrUnauthenticated, 401, long)
+	next, _ = m.Update(listLoadedMsg{
+		genStamp: genStamp{Conn: m.connGen, Sel: m.selGen},
+		Done:     true,
+		Err:      err,
+	})
+	m = next.(*Root)
+
+	v := m.View().Content
+	if !strings.Contains(v, "tail-marker") {
+		t.Fatalf("long error text is clipped/absent; full message must be reachable:\n%s", v)
+	}
+	for _, ln := range strings.Split(v, "\n") {
+		if ansi.StringWidth(ln) > 80 {
+			t.Fatalf("line exceeds 80 columns (error text not wrapped): %q", ln)
+		}
 	}
 }
