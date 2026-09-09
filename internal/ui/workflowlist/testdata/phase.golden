@@ -1,6 +1,6 @@
 WORKFLOWS
 Search: (none)  / to filter by name [within 6 collected]  Phase: Failed  Sort: phase
-NAME                            PHASE            AGE  DURATION 
-fixture-wf-0003                 Failed            3m  -        
+NAME                            PHASE              AGE  DURATION 
+fixture-wf-0003                 ✗ Failed            3m  -        
 
 j/k move  enter open  l logs  / search  s sort  r refresh  ? help

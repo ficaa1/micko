@@ -107,6 +107,7 @@ func run(args []string) int {
 		Server:       activeServer,
 		Profile:      activeProfile,
 	})
+	root.SetVersion(version)
 	p := tea.NewProgram(root)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "argo-tui: %v\n", err)

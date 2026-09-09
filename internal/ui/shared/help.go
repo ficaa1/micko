@@ -64,6 +64,7 @@ func helpLines() []string {
 		"          r refresh     esc clear filter",
 		"",
 		"Detail    tab next section                 esc back",
+		"          v reveal redacted resource values",
 		"          a actions (requires --allow-actions)",
 		"",
 		"Logs      space pause   f follow           c container",

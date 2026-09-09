@@ -77,6 +77,11 @@ type Model struct {
 	// selection itself is never index-based (LIST-12).
 	scrollTop int
 
+	// winStart/winEnd are the row range the last render actually showed.
+	// WindowStatus reports them to the shell footer; they are render output,
+	// never input to selection (LIST-12 keeps selection UID-based).
+	winStart, winEnd int
+
 	// counts for honest scope display: visible vs total snapshot size.
 	visible int
 	total   int

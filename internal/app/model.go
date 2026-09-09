@@ -13,6 +13,7 @@ import (
 	"argo-tui/internal/ui/detail"
 	"argo-tui/internal/ui/logs"
 	"argo-tui/internal/ui/shared"
+	"argo-tui/internal/ui/shell"
 	"argo-tui/internal/ui/workflowlist"
 )
 
@@ -64,6 +65,13 @@ type Root struct {
 	// help is the global `?` overlay. Every route footer advertises it, so
 	// it is owned by the root rather than by any one child.
 	help shared.HelpOverlay
+
+	// theme styles the shell chrome. The children keep their own copies for
+	// row-level styling; this one is only for the frame.
+	theme shared.Theme
+
+	// version is the build version shown in the context band.
+	version string
 
 	listView      workflowlist.Model
 	detailView    *detail.Model
@@ -139,6 +147,7 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 			pageSize:    100,
 		},
 		inflight:   map[string]context.CancelFunc{},
+		theme:      shared.NewTheme(false),
 		listView:   workflowlist.New(shared.NewTheme(false), false),
 		detailView: detail.New(),
 		actionView: actions.NewWithOptions(core.Ref{}, opts),
@@ -301,68 +310,137 @@ func terminalWatchMode(mode string) bool {
 	return mode == "authentication/permission required" || mode == "rate limited; refresh required"
 }
 
-// View implements tea.Model. F1 renders a minimal placeholder per route
-// (the plan gate: "children have a compiling baseline and one working
-// fake-driven root route"; do not call this stub a finished alpha).
+// View implements tea.Model. Every route renders through the same shell:
+// a context band, a bordered pane, and a key-hint band. The shell fixes the
+// geometry, so the bands stay put while routes and connection states change.
 func (m *Root) View() tea.View {
-	var b strings.Builder
-	mode := "READ ONLY"
-	if m.actionOpts.AllowActions && !m.actionOpts.ReadOnly && !m.actionOpts.Demo {
-		mode = "ACTIONS ENABLED"
+	f := shell.Frame{
+		// `?` is root-owned on every route, so the shell advertises it once
+		// rather than each pane repeating it in its own hints.
+		Help:      "? help",
+		Width:     m.width,
+		Height:    m.height,
+		App:       "argo-tui " + m.version,
+		Server:    m.serverLabel(),
+		Namespace: m.deps.namespace,
+		Mode:      m.modeLabel(),
 	}
-	b.WriteString("argo-tui | ns: " + m.deps.namespace + " | " + mode + "\n")
+
+	// An action modal is a dialog: it takes the pane so the route behind it
+	// cannot be mistaken for the thing being confirmed.
+	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
+		f.Title = "Confirm action"
+		f.Route = "action"
+		f.Hints = "y confirm  n cancel  esc close"
+		f.Help = ""
+		f.Body = splitLines(m.actionView.View().Content)
+		return m.finishView(f)
+	}
 	if m.help.IsOpen() {
-		// The overlay replaces the route body but keeps the context header,
-		// so the frame geometry does not move when help opens.
-		b.WriteString(m.help.View(m.width, m.budgetBelow(1)))
-		return m.finishView(&b)
+		f.Title = "Help"
+		f.Route = "help"
+		f.Help = "esc close"
+		f.Body = splitLines(m.help.View(f.BodyWidth(), f.BodyHeight()))
+		return m.finishView(f)
 	}
+
 	switch m.route {
 	case RouteDetail:
-		line := "route: detail | " + m.detailSummary()
-		b.WriteString(line + "\n")
-		m.sizeChildBelow(line)
+		f.Title = m.detailPaneTitle()
+		f.TitleRight = m.detailSummary()
+		f.Route = "detail"
 		if m.detailView != nil {
-			b.WriteString(m.detailView.View().Content)
+			m.detailView.SetSize(f.BodyWidth(), f.BodyHeight())
+			f.Hints = m.detailView.Hints()
+			f.Status = m.detailView.PaneStatus()
+			f.Body = m.detailView.BodyLines()
 		}
 	case RouteLogs:
-		line := "route: logs | " + m.logSummary()
-		b.WriteString(line + "\n")
-		m.sizeChildBelow(line)
+		f.Route = "logs"
 		if m.logsView != nil {
-			b.WriteString(m.logsView.View())
+			m.logsView.SetPaneMode(true)
+			m.logsView.SetSize(f.BodyWidth(), f.BodyHeight())
+			f.Title = m.logsView.PaneTitle()
+			f.TitleRight = m.logSummary()
+			f.Hints = m.logsView.Hints()
+			f.Status = m.logsView.PaneStatus()
+			f.Body = m.logsView.BodyLines()
 		}
 	default:
-		// The list pane renders AGE from the injected clock (defect 1: the
-		// live/beta view must not fall back to the zero clock that renders
-		// "-" on every row) and long error/stale text is word-wrapped to the
-		// terminal width instead of being clipped at the right edge (defect
-		// 5). Wrapping is a no-op when the width is unknown (<=0).
-		line := "route: list | " + m.listSummary()
-		if m.width > 0 {
-			line = shared.Wrap(line, m.width)
-		}
-		b.WriteString(line + "\n")
-		m.sizeChildBelow(line)
-		b.WriteString(m.listView.ViewAt(m.deps.clock.Now()))
+		m.listView.SetSize(f.BodyWidth(), f.BodyHeight())
+		f.Title = m.listView.PaneTitle()
+		f.TitleRight = m.listSummary()
+		f.Route = "list"
+		f.Hints = m.listView.Hints()
+		// The list body must render before WindowStatus, which reports the
+		// window that render chose.
+		f.Body = m.listView.BodyLines(m.deps.clock.Now())
+		f.Status = m.listStatusCell()
 	}
-	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
-		b.WriteString("\n")
-		b.WriteString(m.actionView.View().Content)
-	}
-	return m.finishView(&b)
+	return m.finishView(f)
 }
 
-// finishView clamps the assembled frame to the terminal height and marks it
-// as a full-window alternate-screen view.
+// splitLines turns a child's rendered block into frame body lines.
+func splitLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimRight(s, "\n"), "\n")
+}
+
+// modeLabel is the safety state: the single word that says whether this
+// session can mutate anything. It is always shown.
+func (m *Root) modeLabel() string {
+	if m.actionOpts.AllowActions && !m.actionOpts.ReadOnly && !m.actionOpts.Demo {
+		return "ACTIONS ENABLED"
+	}
+	return "READ ONLY"
+}
+
+// serverLabel names where the data comes from. The demo must never claim a
+// server it does not have.
+func (m *Root) serverLabel() string {
+	if m.actionOpts.Demo {
+		return "synthetic demo"
+	}
+	return m.actionOpts.Server
+}
+
+// listStatusCell is the right-aligned footer cell for the list: the watch
+// mode and the visible row window.
+func (m *Root) listStatusCell() string {
+	parts := []string{}
+	if m.watchMode != "" {
+		parts = append(parts, m.watchMode)
+	}
+	if w := m.listView.WindowStatus(); w != "" {
+		parts = append(parts, w)
+	}
+	return strings.Join(parts, " · ")
+}
+
+// detailPaneTitle names the pane, falling back to the route name before a
+// workflow loads.
+func (m *Root) detailPaneTitle() string {
+	if m.detailView == nil {
+		return "Detail"
+	}
+	return m.detailView.PaneTitle()
+}
+
+// SetVersion records the build version for the context band. main owns the
+// version string; the root only displays it.
+func (m *Root) SetVersion(v string) { m.version = v }
+
+// finishView renders the frame and marks it as a full-window alternate-screen
+// view.
 //
 // The alternate screen has no scrollback: a frame taller than the terminal
 // does not scroll, it loses its bottom rows outright, and the bottom row is
-// the footer with the key hints. The children size themselves to fit, so this
-// clamp should never fire; it exists so a miscalculating child degrades into
-// a clipped body rather than a UI with no visible keys.
-func (m *Root) finishView(b *strings.Builder) tea.View {
-	content := b.String()
+// the footer with the key hints. shell.Render already produces exactly the
+// terminal size, so the clamp here is a safety net for an unsized frame.
+func (m *Root) finishView(f shell.Frame) tea.View {
+	content := f.Render(m.theme)
 	if m.height > 0 {
 		lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
 		content = strings.Join(shared.ClampLines(lines, m.height), "\n")
@@ -373,44 +451,6 @@ func (m *Root) finishView(b *strings.Builder) tea.View {
 	// every exit/error path (q, Ctrl-C, and any program teardown).
 	v.AltScreen = true
 	return v
-}
-
-// budgetBelow returns the lines left for the route body after `chrome` header
-// lines, or 0 when the terminal height is not known yet.
-func (m *Root) budgetBelow(chrome int) int {
-	if m.height <= 0 {
-		return 0
-	}
-	if avail := m.height - chrome; avail > 0 {
-		return avail
-	}
-	return 1
-}
-
-// sizeChildBelow gives the active child the height that actually remains
-// under the root's own chrome: the context header plus the (possibly wrapped)
-// route summary line just written.
-//
-// This has to happen at render time rather than on WindowSizeMsg, because the
-// summary line grows and shrinks with the connection state — a wrapped error
-// reason costs the child a line that a plain "5 workflows" does not.
-func (m *Root) sizeChildBelow(summary string) {
-	if m.height <= 0 {
-		return
-	}
-	avail := m.budgetBelow(2 + strings.Count(summary, "\n"))
-	switch m.route {
-	case RouteDetail:
-		if m.detailView != nil {
-			m.detailView.SetSize(m.width, avail)
-		}
-	case RouteLogs:
-		if m.logsView != nil {
-			m.logsView.SetSize(m.width, avail)
-		}
-	default:
-		m.listView.SetSize(m.width, avail)
-	}
 }
 
 func (m *Root) listSummary() string {

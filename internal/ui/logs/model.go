@@ -101,6 +101,10 @@ type Model struct {
 	width, height int // last known terminal size (SetSize)
 	noColor       bool
 
+	// paneMode says a shell draws this pane's title and footer bands, so the
+	// pane renders content only and reclaims those two rows.
+	paneMode bool
+
 	headerDone bool // stream-open marker emitted for this context
 
 	mu sync.Mutex // guards Apply*/Clear for test/bench callers; the Tea

@@ -27,6 +27,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 )
 
@@ -236,43 +237,123 @@ func (p *PTYProcess) Kill() {
 	}
 }
 
-// stripANSI removes CSI/OSC escape sequences and C0/C1 controls (except
-// newline) for text-first assertions. Deliberately simple; the production
-// sanitizer under test is internal/ui/shared.Sanitize (unit-covered in F1).
+// stripANSI turns captured pty output into the text a viewer would see.
+//
+// It is not a full VT emulator, but it must model horizontal position,
+// because a renderer does not write runs of spaces: it moves the cursor.
+// A pure byte-stripper therefore glued neighbouring cells together — a
+// padded table came back as "NAMEPHASE" — so every geometry assertion
+// silently passed on text that was never on screen. It also dropped UTF-8
+// continuation bytes as "C1 controls", which destroyed box-drawing
+// characters and status glyphs.
+//
+// The production sanitizer under test is internal/ui/shared.Sanitize, which
+// is unit-covered separately; this is only the read-back path.
 func stripANSI(s string) string {
 	var b strings.Builder
-	for i := 0; i < len(s); i++ {
+	col := 0 // cells written on the current line
+
+	// moveTo pads with spaces up to target. A backwards move cannot be
+	// represented in append-only text, so it is ignored: over-writing is
+	// rare in this renderer and padding is the safer failure.
+	moveTo := func(target int) {
+		if target > col {
+			b.WriteString(strings.Repeat(" ", target-col))
+			col = target
+		}
+	}
+
+	for i := 0; i < len(s); {
 		c := s[i]
 		switch {
 		case c == 0x1B && i+1 < len(s) && s[i+1] == '[':
-			// CSI: skip to final byte 0x40–0x7E.
+			start := i + 2
 			i += 2
 			for i < len(s) && !(s[i] >= 0x40 && s[i] <= 0x7E) {
 				i++
 			}
+			if i >= len(s) {
+				break
+			}
+			params := s[start:i]
+			switch s[i] {
+			case 'C': // CUF: cursor forward N columns
+				moveTo(col + csiParam(params, 0, 1))
+			case 'G': // CHA: cursor to absolute column (1-based)
+				moveTo(csiParam(params, 0, 1) - 1)
+			case 'H', 'f': // CUP: row;col — only the column is representable
+				moveTo(csiParam(params, 1, 1) - 1)
+			}
+			i++
 		case c == 0x1B && i+1 < len(s) && s[i+1] == ']':
 			// OSC: skip to BEL or ESC\.
 			i += 2
 			for i < len(s) {
 				if s[i] == 0x07 {
+					i++
 					break
 				}
 				if s[i] == 0x1B && i+1 < len(s) && s[i+1] == '\\' {
-					i++
+					i += 2
 					break
 				}
 				i++
 			}
 		case c == 0x1B:
-			// Two-byte ESC sequence: skip one more byte.
+			i += 2 // two-byte ESC sequence
+		case c == '\n':
+			b.WriteByte('\n')
+			col = 0
 			i++
-		case c < 0x20 && c != '\n' && c != '\t':
-			// C0 control: drop.
-		case c >= 0x7F && c < 0xA0:
-			// C1 control: drop.
-		default:
+		case c == '\t':
+			moveTo((col/8 + 1) * 8)
+			i++
+		case c == '\r':
+			i++ // carriage return: column reset is not representable here
+		case c < 0x20:
+			i++ // other C0 control: drop
+		case c < 0x80:
 			b.WriteByte(c)
+			col++
+			i++
+		default:
+			// Multibyte UTF-8: decode the rune rather than dropping its
+			// continuation bytes as C1 controls.
+			r, n := utf8.DecodeRuneInString(s[i:])
+			if r == utf8.RuneError && n <= 1 {
+				i++
+				continue
+			}
+			if r >= 0x7F && r < 0xA0 {
+				i += n // real C1 control
+				continue
+			}
+			b.WriteString(s[i : i+n])
+			col++
+			i++
+			i += n - 1
 		}
 	}
 	return b.String()
+}
+
+// csiParam reads the nth ";"-separated numeric parameter of a CSI sequence,
+// returning def when it is absent or unparsable (per ECMA-48, an omitted or
+// zero parameter means the default).
+func csiParam(params string, n, def int) int {
+	fields := strings.Split(params, ";")
+	if n >= len(fields) || fields[n] == "" {
+		return def
+	}
+	v := 0
+	for _, r := range fields[n] {
+		if r < '0' || r > '9' {
+			return def
+		}
+		v = v*10 + int(r-'0')
+	}
+	if v == 0 {
+		return def
+	}
+	return v
 }

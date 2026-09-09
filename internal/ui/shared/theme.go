@@ -26,6 +26,13 @@ type Theme struct {
 	Dim       lipgloss.Style
 	Warning   lipgloss.Style
 	ErrorText lipgloss.Style
+
+	// Shell chrome: the frame border, the pane title inside it, and the
+	// key-hint footer band. Kept separate from Header so the pane title can
+	// be emphasised without restyling table column heads.
+	Border lipgloss.Style
+	Title  lipgloss.Style
+	Footer lipgloss.Style
 }
 
 // NewTheme builds the default theme; noColor forces plain output.
@@ -53,6 +60,9 @@ func coloredTheme() Theme {
 		Dim:            lipgloss.NewStyle().Faint(true),
 		Warning:        lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
 		ErrorText:      lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true),
+		Border:         lipgloss.NewStyle().Foreground(lipgloss.Color("8")), // dim gray
+		Title:          lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true),
+		Footer:         lipgloss.NewStyle().Faint(true),
 	}
 }
 
@@ -68,6 +78,9 @@ func plainTheme() Theme {
 		Dim:            lipgloss.NewStyle(),
 		Warning:        lipgloss.NewStyle(),
 		ErrorText:      lipgloss.NewStyle(),
+		Border:         lipgloss.NewStyle(),
+		Title:          lipgloss.NewStyle(),
+		Footer:         lipgloss.NewStyle(),
 	}
 }
 
@@ -85,5 +98,32 @@ func (t Theme) PhaseStyle(phase string) lipgloss.Style {
 		return t.PhasePending
 	default:
 		return t.PhaseOther
+	}
+}
+
+// PhaseSymbol returns a one-cell glyph for a workflow or node phase.
+//
+// Color must never be the only carrier of a status (UI-03/07): a mono
+// terminal, NO_COLOR, and a color-blind reader all lose the hue but keep the
+// glyph. The glyph is supplementary to the phase word, which is still
+// rendered in full — it is a third channel, not a replacement.
+//
+// Every glyph is exactly one rune and one terminal cell, so the PHASE column
+// keeps its alignment. Failed and Error deliberately share a glyph: they are
+// the same outcome to a reader scanning the list, and the phase word still
+// tells them apart.
+func PhaseSymbol(phase string) string {
+	switch phase {
+	case "Running":
+		return "\u25cf" // filled circle: work in progress
+	case "Succeeded":
+		return "\u2713" // check
+	case "Failed", "Error":
+		return "\u2717" // ballot X
+	case "Pending":
+		return "\u25cb" // hollow circle: not started
+	default:
+		// LIST-11: a phase the server invented still needs a visible cell.
+		return "\u2022"
 	}
 }

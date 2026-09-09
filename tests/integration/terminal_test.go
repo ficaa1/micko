@@ -74,7 +74,7 @@ func TestPTYDemoJourney(t *testing.T) {
 	}()
 
 	ok := waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "argo-tui | ns: demo") && strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, "ns: demo") && strings.Contains(s, "list: 5 workflows")
 	})
 	if !ok {
 		t.Fatalf("demo header/list never rendered; screen=%q", p.Screen())
@@ -327,7 +327,7 @@ func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
 		// the alternate-screen repaint overwrites it via C0 controls that the
 		// PTY harness's stripANSI discards, so the stream only carries the
 		// overwriting suffix).
-		return strings.Contains(s, "DETAIL demo-data-pull") && strings.Contains(s, "phase: Running")
+		return strings.Contains(s, "Detail demo-data-pull") && strings.Contains(s, "phase: Running")
 	})
 	if !ok {
 		t.Fatalf("j/enter did not open the second row's detail; screen=%q", p.Screen())
@@ -362,7 +362,7 @@ func TestPTYDemoEscFromListOpenedLogsReturnsToList(t *testing.T) {
 		t.Fatalf("send j/l: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "logs: demo-data-pull")
+		return strings.Contains(s, "Logs demo-data-pull")
 	}) {
 		t.Fatalf("logs never rendered after l; screen=%q", p.Screen())
 	}
@@ -402,12 +402,12 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
-	// j Enter -> DETAIL demo-data-pull (A); Esc back to list; j l -> logs B.
+	// j Enter -> Detail demo-data-pull (A); Esc back to list; j l -> logs B.
 	if err := p.SendKeys(30*time.Millisecond, "j", "\r"); err != nil {
 		t.Fatalf("send j/enter: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "DETAIL demo-data-pull")
+		return strings.Contains(s, "Detail demo-data-pull")
 	}) {
 		t.Fatalf("detail A never rendered; screen=%q", p.Screen())
 	}
@@ -426,7 +426,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 		t.Fatalf("send j/l: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "logs: demo-train-pipeline")
+		return strings.Contains(s, "Logs demo-train-pipeline")
 	}) {
 		t.Fatalf("logs B never rendered; screen=%q", p.Screen())
 	}
@@ -439,9 +439,9 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
 		screen := s
 		return strings.Contains(screen, "list: 5 workflows") &&
-			!strings.Contains(screen, "DETAIL demo-data-pull")
+			!strings.Contains(screen, "Detail demo-data-pull")
 	}) {
-		t.Fatalf("Esc from logs B did not return to the list without stale DETAIL demo-data-pull (A); screen=%q", p.Screen())
+		t.Fatalf("Esc from logs B did not return to the list without stale Detail demo-data-pull (A); screen=%q", p.Screen())
 	}
 	_ = p.Send("q")
 	_, _ = p.Wait()
@@ -654,6 +654,111 @@ func TestPTYDemoEscClearsAppliedFilter(t *testing.T) {
 		return strings.Contains(s, "demo-hello-world") && !strings.Contains(s, "no workflows match")
 	}) {
 		t.Fatalf("Esc did not clear the applied filter; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// --- H: UI shell -----------------------------------------------------------
+
+// The shell must actually reach the terminal. A bordered pane that renders
+// only in unit tests is the same defect the inert demo was.
+func TestPTYDemoRendersTheBorderedShell(t *testing.T) {
+	p := startDemo(t, 100, 30)
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "┌") && strings.Contains(s, "└") &&
+			strings.Contains(s, "Workflows")
+	}) {
+		t.Fatalf("the bordered pane never rendered; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// The context band and the help hint must be on screen at all times: the
+// band says whether this session can mutate anything, and `?` is the only
+// route to the rest of the keys.
+func TestPTYDemoShowsContextAndHelpHint(t *testing.T) {
+	p := startDemo(t, 100, 30)
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "READ ONLY") &&
+			strings.Contains(s, "ns: demo") &&
+			strings.Contains(s, "? help")
+	}) {
+		t.Fatalf("context band or help hint missing; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Statuses must never be carried by color alone (UI-03/07): each row shows
+// a glyph and the phase word.
+func TestPTYDemoRowsCarrySymbolAndWord(t *testing.T) {
+	p := startDemo(t, 100, 30)
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "✗ Failed") && strings.Contains(s, "● Running")
+	}) {
+		t.Fatalf("phase symbols missing from the rows; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// The frame must survive a live resize with its border intact. A pane that
+// keeps the old size leaves a torn border on the alternate screen.
+func TestPTYDemoShellSurvivesResize(t *testing.T) {
+	p := startDemo(t, 120, 40)
+	p.ClearScreen()
+	if err := p.Resize(90, 16); err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "└") && strings.Contains(s, "? help")
+	}) {
+		t.Fatalf("border or help hint lost after a resize; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Below the border width the shell must degrade to plain bands rather than
+// draw a border it has no room for.
+func TestPTYDemoNarrowTerminalDropsTheBorder(t *testing.T) {
+	bin := buildBinary(t)
+	p, err := StartPTYSize(50, 16, bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	})
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "help") && !strings.Contains(s, "┌")
+	}) {
+		t.Fatalf("narrow layout wrong; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Opening a workflow must keep the frame: the same bands, the same border,
+// a different pane.
+func TestPTYDemoDetailKeepsTheFrame(t *testing.T) {
+	p := startDemo(t, 100, 30)
+	// No ClearScreen here: the renderer repaints only the cells that
+	// changed, so a cleared capture holds fragments rather than a frame.
+	if err := p.Send("\r"); err != nil { // enter
+		t.Fatalf("send enter: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "Detail demo-nightly-report") &&
+			strings.Contains(s, "tab next section") &&
+			strings.Contains(s, "? help")
+	}) {
+		t.Fatalf("detail lost the frame; screen=%q", p.Screen())
 	}
 	_ = p.Send("q")
 	_, _ = p.Wait()
