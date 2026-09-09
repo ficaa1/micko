@@ -34,12 +34,15 @@ const (
 // file at TokenFile (mutually exclusive), and are read per request to
 // support rotation (plan §3).
 type Profile struct {
-	Server     string   `yaml:"server"`
-	Namespace  string   `yaml:"namespace"`
-	TokenEnv   string   `yaml:"tokenEnv,omitempty"`
-	TokenFile  string   `yaml:"tokenFile,omitempty"`
-	CAFile     string   `yaml:"caFile,omitempty"`
-	Namespaces []string `yaml:"namespaces,omitempty"`
+	KubeContext string   `yaml:"kubeContext"`
+	Service     string   `yaml:"service"`
+	RemotePort  int      `yaml:"remotePort"`
+	Server      string   `yaml:"server"`
+	Namespace   string   `yaml:"namespace"`
+	TokenEnv    string   `yaml:"tokenEnv,omitempty"`
+	TokenFile   string   `yaml:"tokenFile,omitempty"`
+	CAFile      string   `yaml:"caFile,omitempty"`
+	Namespaces  []string `yaml:"namespaces,omitempty"`
 }
 
 // File mirrors the on-disk config (plan §3 example).
@@ -77,7 +80,19 @@ type Config struct {
 	// InsecureSkipTLSVerify comes only from an explicit flag/config value;
 	// when set, the UI must render a permanent warning (plan §3).
 	InsecureSkipTLSVerify bool
+	Target                Target
+	Debug                 Debug
+	Demo                  bool
 }
+
+// Target identifies the exact Kubernetes service used by a forwarder.
+type Target struct {
+	Context, Namespace, Service string
+	RemotePort                  int
+}
+
+// Debug controls optional sanitized diagnostics.
+type Debug struct{ Enabled bool }
 
 // Options carries the explicit CLI layer. Empty fields mean "flag absent".
 type Options struct {
@@ -89,6 +104,8 @@ type Options struct {
 	CAFile                string
 	RefreshInterval       time.Duration
 	InsecureSkipTLSVerify bool
+	Demo                  bool
+	Debug                 bool
 }
 
 // Load reads, merges and validates configuration. cfgData may be empty
@@ -127,6 +144,14 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)
 	cfg.CAFile = firstNonEmpty(opts.CAFile, prof.CAFile)
 	cfg.InsecureSkipTLSVerify = opts.InsecureSkipTLSVerify
+	cfg.Target = Target{Context: prof.KubeContext, Namespace: cfg.Namespace, Service: prof.Service, RemotePort: prof.RemotePort}
+	cfg.Debug = Debug{Enabled: opts.Debug}
+	if opts.Demo {
+		if name != "" || opts.Server != "" || opts.Namespace != "" || opts.TokenFile != "" || opts.CAFile != "" || opts.InsecureSkipTLSVerify || opts.Debug {
+			return Config{}, fmt.Errorf("config: --demo cannot be combined with profile, connection, TLS, or debug options")
+		}
+		return Config{Demo: true}, nil
+	}
 
 	// Secret-source exclusivity (plan §3): tokenEnv and tokenFile together
 	// are rejected (CONN-19).
@@ -160,6 +185,11 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	}
 	if cfg.Namespace == "" {
 		return Config{}, fmt.Errorf("config: namespace missing (set namespace in profile %q or --namespace)", cfg.ProfileName)
+	}
+	if cfg.ProfileName != "" && (prof.Service != "" || prof.KubeContext != "" || prof.RemotePort != 0) {
+		if prof.KubeContext == "" || prof.Service == "" || prof.RemotePort < 1 || prof.RemotePort > 65535 {
+			return Config{}, fmt.Errorf("config: profile %q target requires kubeContext, service, and remotePort 1-65535", cfg.ProfileName)
+		}
 	}
 	if cfg.TokenEnv == "" && cfg.TokenFile == "" {
 		return Config{}, fmt.Errorf("config: token source missing: set tokenEnv or tokenFile in profile %q", cfg.ProfileName)
