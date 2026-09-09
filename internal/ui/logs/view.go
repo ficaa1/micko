@@ -41,6 +41,9 @@ const (
 	chromeRows   = 3 // header + status + count
 	chromeFooter = 1
 	editorRows   = 1 // search or context input line when focused
+	// paneChromeSaved is the header and footer the shell draws instead, and
+	// which the pane therefore gets back as content rows.
+	paneChromeSaved = 2
 )
 
 // snapshot builds the full scrollable row list from the buffer (match
@@ -95,8 +98,15 @@ func overlayMatches(rows []row, hits []int, hitLogIdx []int) {
 
 // viewRows is the scrollable window height (fixed chrome + footer + an
 // editor line when one is focused).
+//
+// In pane mode the shell draws the title and the footer as its own bands, so
+// the pane gets those two lines back for content. Scroll paging reads this
+// number, so it must agree with what View/BodyLines actually emits.
 func (m *Model) viewRows() int {
 	h := m.height - chromeRows - chromeFooter
+	if m.paneMode {
+		h += paneChromeSaved
+	}
 	if m.searchOn || m.contextOn {
 		h -= editorRows
 	}
@@ -192,6 +202,42 @@ func (m *Model) View() string {
 	var b strings.Builder
 	b.WriteString(m.headerView())
 	b.WriteString("\n")
+	b.WriteString(strings.Join(m.bodyLines(), "\n"))
+	b.WriteString("\n")
+	b.WriteString(m.footerView())
+	return b.String()
+}
+
+// SetPaneMode tells the pane that a shell draws its title and footer. It is
+// opt-in so any caller that renders logs standalone keeps a complete pane.
+func (m *Model) SetPaneMode(v bool) { m.paneMode = v }
+
+// PaneTitle is the shell border title: the sanitized workflow name (SEC-02).
+func (m *Model) PaneTitle() string { return "Logs " + shared.Sanitize(m.ref.Name) }
+
+// Hints is the log key contract, mirrored by the `?` overlay.
+func (m *Model) Hints() string { return m.footerView() }
+
+// PaneStatus is the right-aligned footer cell: the lifecycle state, which a
+// reader must be able to find in one fixed place.
+func (m *Model) PaneStatus() string {
+	s := m.phase.String()
+	if m.paused {
+		return s + " · paused"
+	}
+	if m.follow {
+		return s + " · follow"
+	}
+	return s
+}
+
+// BodyLines renders the pane content for the shell: no title, no footer.
+func (m *Model) BodyLines() []string { return m.bodyLines() }
+
+// bodyLines is the shared middle of the pane (status, editors, counts and
+// the scroll window) that both compositions place between their own chrome.
+func (m *Model) bodyLines() []string {
+	var b strings.Builder
 	b.WriteString(m.statusView())
 	b.WriteString("\n")
 	if m.searchOn {
@@ -206,19 +252,16 @@ func (m *Model) View() string {
 	}
 	b.WriteString(m.countView())
 	b.WriteString("\n")
-	for _, r := range m.window() {
-		switch r.kind {
-		case rowMarker:
-			b.WriteString(r.text)
-		case rowEnd:
-			b.WriteString(r.text)
-		default:
-			b.WriteString(r.text)
+	rows := m.window()
+	for i, r := range rows {
+		b.WriteString(r.text)
+		if i < len(rows)-1 {
+			b.WriteString("\n")
 		}
-		b.WriteString("\n")
 	}
-	b.WriteString(m.footerView())
-	return b.String()
+	// An empty buffer leaves the count line as the last written line, whose
+	// trailing newline would otherwise become a phantom blank row.
+	return strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
 }
 
 // headerView is the pane title: sanitized workflow name (SEC-02).

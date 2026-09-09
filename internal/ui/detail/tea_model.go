@@ -1,11 +1,13 @@
 package detail
 
 import (
+	"strings"
 	"time"
 
 	"charm.land/bubbletea/v2"
 
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/shared"
 )
 
 // Model is the detail route's child Tea model (bubbletea v2 Model surface
@@ -160,6 +162,74 @@ func (m *Model) View() tea.View {
 		state.Resource = RenderResource(wf, true)
 	}
 	return tea.NewView(RenderDetail(state, m.tab))
+}
+
+// PaneTitle is the shell border title: the sanitized workflow name (SEC-02).
+// Before a workflow loads there is no name to show, so the title states the
+// route instead of rendering an empty border.
+func (m *Model) PaneTitle() string {
+	if !m.loaded {
+		return "Detail"
+	}
+	return "Detail " + shared.Sanitize(m.state.Summary.Ref.Name)
+}
+
+// Hints is the detail key contract, mirrored by the `?` overlay.
+func (m *Model) Hints() string {
+	return "tab next section  v reveal  esc back"
+}
+
+// PaneStatus is the right-aligned footer cell: the workflow phase, carried
+// as symbol and word so color is never the only channel (UI-03/07).
+func (m *Model) PaneStatus() string {
+	if !m.loaded {
+		return ""
+	}
+	p := m.state.Summary.Phase
+	if p == "" {
+		return ""
+	}
+	return shared.PhaseSymbol(p) + " " + shared.Sanitize(p)
+}
+
+// BodyLines renders the pane content for the shell: the tab strip and the
+// active section, with no title. It is clipped to the height SetSize gave
+// it, so the shell never has to discard rows the pane thinks are visible.
+func (m *Model) BodyLines() []string {
+	lines := strings.Split(strings.TrimRight(m.bodyText(), "\n"), "\n")
+	if m.height > 0 {
+		lines = shared.ClampLines(lines, m.height)
+	}
+	return lines
+}
+
+// bodyText picks the body for the current state. Every state renders
+// something: an empty pane would say nothing about why it is empty.
+func (m *Model) bodyText() string {
+	switch {
+	case m.loading:
+		return "loading detail…"
+	case m.notFound:
+		return "workflow no longer available"
+	case m.lastErr != "":
+		return "detail error: " + shared.Sanitize(m.lastErr)
+	case !m.loaded:
+		return "(no workflow loaded)"
+	}
+	return RenderDetailBody(m.resolvedState(), m.tab)
+}
+
+// resolvedState applies the session-only resource reveal, which View also
+// does; both compositions must show the same content.
+func (m *Model) resolvedState() DetailViewState {
+	state := m.state
+	if m.revealResource {
+		state.Resource = RenderResource(core.Workflow{
+			Summary:  state.Summary,
+			Resource: m.rawResource,
+		}, true)
+	}
+	return state
 }
 
 // nextTab cycles summary → nodes → resource → summary.

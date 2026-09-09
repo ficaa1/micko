@@ -135,7 +135,7 @@ func TestRootLogStreamRecordsBeforeEndSentinel(t *testing.T) {
 	})
 	h.pump(300)
 	v := h.view()
-	if !contains(v, "route: logs") {
+	if !contains(v, "Logs ") {
 		t.Fatalf("logs route missing: %q", v)
 	}
 	if !contains(v, "10 records") {

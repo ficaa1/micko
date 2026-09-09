@@ -594,7 +594,7 @@ func TestRootModelJourneyOverFixtureServer(t *testing.T) {
 	// 2. Open detail of the failed workflow (real HTTP GET with uid).
 	h.send(app.OpenWorkflowMsg{Ref: core.Ref{Namespace: testNS, Name: "wf-b", UID: "uid-b"}})
 	h.pump(50)
-	if v := h.view(); !strings.Contains(v, "route: detail") || !strings.Contains(v, "workflow wf-b phase=Failed") {
+	if v := h.view(); !strings.Contains(v, "Detail wf-b") || !strings.Contains(v, "workflow wf-b phase=Failed") {
 		t.Fatalf("detail view = %q", v)
 	}
 
@@ -604,13 +604,13 @@ func TestRootModelJourneyOverFixtureServer(t *testing.T) {
 		Container: "main",
 	})
 	h.pump(200)
-	if v := h.view(); !strings.Contains(v, "route: logs") || !strings.Contains(v, "stream ended (4 records)") {
+	if v := h.view(); !strings.Contains(v, "Logs wf-b") || !strings.Contains(v, "stream ended (4 records)") {
 		t.Fatalf("logs view = %q (want stream ended (4 records))", v)
 	}
 
 	// 4. Esc back to detail, then to list.
 	h.send(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if v := h.view(); !strings.Contains(v, "route: detail") {
+	if v := h.view(); !strings.Contains(v, "Detail wf-b") {
 		t.Fatalf("route after esc from logs = %q", v)
 	}
 	h.send(tea.KeyPressMsg{Code: tea.KeyEscape})
@@ -644,7 +644,7 @@ func TestRootModelStaleDetailDiscarded(t *testing.T) {
 	h.send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	// Drain everything: the canceled detail must never be applied.
 	h.pump(100)
-	if v := h.view(); strings.Contains(v, "route: detail") {
+	if v := h.view(); strings.Contains(v, "Detail wf-b") {
 		t.Fatalf("late detail response resurrected detail route: %q", v)
 	}
 }

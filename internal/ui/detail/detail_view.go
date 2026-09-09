@@ -37,9 +37,15 @@ func DetailViewStateFromWorkflow(wf core.Workflow, now time.Time) DetailViewStat
 // unknown tabs render an explicit unknown-tab line (distinguishable
 // states, plan §2). Deterministic for identical state.
 func RenderDetail(state DetailViewState, active string) string {
+	return "DETAIL " + shared.Sanitize(state.Summary.Ref.Name) + "\n" +
+		RenderDetailBody(state, active)
+}
+
+// RenderDetailBody renders the tab strip and the active section without the
+// pane title, which the shell draws in its border.
+func RenderDetailBody(state DetailViewState, active string) string {
 	var b strings.Builder
-	b.WriteString("DETAIL " + shared.Sanitize(state.Summary.Ref.Name) + "\n")
-	b.WriteString("[Summary] [Nodes] [Resource]\n")
+	b.WriteString(tabStrip(active) + "\n")
 	switch active {
 	case "summary":
 		b.WriteString("phase: " + shared.Sanitize(phaseName(state.Summary.Phase)) + "\n")
@@ -56,4 +62,19 @@ func RenderDetail(state DetailViewState, active string) string {
 		b.WriteString("(unknown tab \"" + shared.Sanitize(active) + "\")\n")
 	}
 	return b.String()
+}
+
+// tabStrip marks the active section. Text carries the state, not color: the
+// active tab is the one wrapped in brackets, so a mono terminal keeps it.
+func tabStrip(active string) string {
+	cells := []string{"Summary", "Nodes", "Resource"}
+	out := make([]string, 0, len(cells))
+	for _, c := range cells {
+		if strings.EqualFold(c, active) {
+			out = append(out, "["+c+"]")
+			continue
+		}
+		out = append(out, " "+c+" ")
+	}
+	return strings.Join(out, " ")
 }

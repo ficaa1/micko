@@ -29,19 +29,67 @@ func (m *Model) ViewAt(now time.Time) string {
 	if m.width > 0 && m.width < minUsableWidth {
 		return m.resizeNotice()
 	}
-	lines := m.frameLines(now)
+	// Standalone composition: the pane title, the body, a blank separator and
+	// the pane's own footer. Under the shell (BodyLines) the title rides the
+	// border and the footer is a shell band, so neither is repeated here.
+	lines := append([]string{m.headerView()}, m.frameLines(now, 3)...)
+	lines = append(lines, "", m.Hints()+"  ? help"+m.footerPosition())
 	if m.height > 0 {
 		lines = shared.ClampLines(lines, m.height)
 	}
 	return strings.Join(lines, "\n")
 }
 
-// frameLines assembles the pane as discrete terminal lines so the height
-// budget can be enforced on whole lines. The line sequence is identical to
-// the pre-viewport concatenation, so unsized renders stay byte-stable.
-func (m *Model) frameLines(now time.Time) []string {
-	lines := []string{m.headerView()}
-	lines = append(lines, strings.Split(m.toolbarView(), "\n")...)
+// PaneTitle is the shell border title. It names what the pane holds; the
+// namespace and the connection state belong to the shell's own bands.
+func (m *Model) PaneTitle() string { return "Workflows" }
+
+// BodyLines renders the pane content for the shell: toolbar, column heads
+// and the visible row window, with no title and no footer.
+//
+// Below the minimum usable width the whole pane becomes the resize notice:
+// a 40-column table is not a degraded table, it is unreadable.
+func (m *Model) BodyLines(now time.Time) []string {
+	if m.width > 0 && m.width < minUsableWidth {
+		return strings.Split(strings.TrimRight(m.resizeNotice(), "\n"), "\n")
+	}
+	lines := m.frameLines(now, 0)
+	if m.height > 0 {
+		lines = shared.ClampLines(lines, m.height)
+	}
+	return lines
+}
+
+// WindowStatus reports the visible row range for the shell footer, so a
+// windowed list is distinguishable from one that simply has few workflows.
+// It reflects the most recent BodyLines/ViewAt call, which is the render
+// pass that decided the window.
+func (m *Model) WindowStatus() string {
+	if m.winEnd-m.winStart <= 0 || m.winEnd-m.winStart >= len(m.rows) {
+		return itoa(len(m.rows)) + " shown"
+	}
+	return itoa(m.winStart+1) + "-" + itoa(m.winEnd) + "/" + itoa(len(m.rows))
+}
+
+// Hints are the list key contract, mirrored by the `?` overlay.
+func (m *Model) Hints() string {
+	return "j/k move  enter open  l logs  / search  s sort  r refresh"
+}
+
+// footerPosition is the window indicator appended to the standalone footer.
+func (m *Model) footerPosition() string {
+	if m.winEnd-m.winStart <= 0 || m.winEnd-m.winStart >= len(m.rows) {
+		return ""
+	}
+	return "  " + itoa(m.winStart+1) + "-" + itoa(m.winEnd) + "/" + itoa(len(m.rows))
+}
+
+// frameLines assembles the pane body as discrete terminal lines so the height
+// budget can be enforced on whole lines. reserve is the number of lines the
+// caller will add below the body (the standalone footer and its separator);
+// the shell adds none.
+func (m *Model) frameLines(now time.Time, reserve int) []string {
+	lines := strings.Split(m.toolbarView(), "\n")
 
 	wName, wPhase, wAge, wDur := m.colWidths()
 	head := padRight("NAME", wName) + "  " +
@@ -51,20 +99,21 @@ func (m *Model) frameLines(now time.Time) []string {
 	lines = append(lines, m.theme.Header.Render(head))
 
 	if len(m.rows) == 0 {
-		return append(lines, m.emptyStateView(), m.footerView(0, 0))
+		m.winStart, m.winEnd = 0, 0
+		return append(lines, m.emptyStateView())
 	}
 
-	start, end := m.window(len(lines))
+	start, end := m.window(len(lines) + reserve)
+	m.winStart, m.winEnd = start, end
 	for i := start; i < end; i++ {
 		lines = append(lines, m.rowLine(m.rows[i], i == m.selIndex(), now))
 	}
-	// The blank separator above the footer is part of the original layout.
-	return append(lines, "", m.footerView(start, end))
+	return lines
 }
 
 // window returns the half-open row range to render. chromeLines is the number
-// of lines already emitted above the rows; the footer, the blank separator
-// above it, and that chrome are all reserved before rows get their budget.
+// of lines already emitted above the rows plus any the caller reserves below,
+// all deducted before the rows get their budget.
 //
 // The window is anchored on scrollTop and only moves far enough to keep the
 // selected row inside it, so paging feels stable rather than jumping.
@@ -73,13 +122,13 @@ func (m *Model) window(chromeLines int) (start, end int) {
 		m.scrollTop = 0
 		return 0, len(m.rows)
 	}
-	budget := m.height - chromeLines - 2 // blank separator + footer
+	budget := m.height - chromeLines
 	if budget >= len(m.rows) {
 		m.scrollTop = 0
 		return 0, len(m.rows)
 	}
 	if budget < 1 {
-		budget = 1 // clampLines trims the rest; never render zero rows
+		budget = 1 // ClampLines trims the rest; never render zero rows
 	}
 	start = m.scrollTop
 	if max := len(m.rows) - budget; start > max {
@@ -105,7 +154,9 @@ func (m *Model) window(chromeLines int) (start, end int) {
 func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	wName, wPhase, wAge, wDur := m.colWidths()
 	name := sanitizeOne(r.Ref.Name)
-	phase := m.rowPhaseText(sanitizeOne(r.Phase))
+	// Symbol AND word AND color: a mono terminal, NO_COLOR and a color-blind
+	// reader all keep two of the three channels (UI-03/07).
+	phase := shared.PhaseSymbol(r.Phase) + " " + m.rowPhaseText(sanitizeOne(r.Phase))
 	msg := sanitizeOne(r.Message)
 	line := padRight(truncateRight(name, wName), wName) + "  " +
 		padRight(truncateRight(phase, wPhase), wPhase) + "  " +
@@ -173,19 +224,29 @@ func (m *Model) toolbarView() string {
 	// of being clipped at the right edge (live-smoke defect 5). Short
 	// reasons keep exactly one styled line (byte-identical to goldens);
 	// only genuinely long text gets wrapped.
+	// A long reason is emitted as its own block after the toolbar cells, so
+	// it is joined with a newline rather than the two-space cell separator.
+	reason := ""
 	switch m.status {
 	case StatusLoading:
 		parts = append(parts, m.theme.Warning.Render("loading…"))
 	case StatusStale:
-		parts = append(parts, m.wrapStatusReason("stale "+humanDuration(m.errAge)+" — "+m.errMsg, m.theme.Warning.Render))
+		reason = m.wrapStatusReason("stale "+humanDuration(m.errAge)+" — "+m.errMsg, m.theme.Warning.Render)
 	case StatusForbidden:
-		parts = append(parts, m.wrapStatusReason("forbidden: "+m.errMsg, m.theme.ErrorText.Render))
+		reason = m.wrapStatusReason("forbidden: "+m.errMsg, m.theme.ErrorText.Render)
 	case StatusUnauthenticated:
-		parts = append(parts, m.wrapStatusReason("unauthenticated: "+m.errMsg, m.theme.ErrorText.Render))
+		reason = m.wrapStatusReason("unauthenticated: "+m.errMsg, m.theme.ErrorText.Render)
 	case StatusIncomplete:
 		parts = append(parts, m.theme.Warning.Render("INCOMPLETE (snapshot cap)"))
 	}
-	return strings.Join(parts, "  ")
+	line := strings.Join(parts, "  ")
+	if reason == "" {
+		return line
+	}
+	if strings.HasPrefix(reason, "\n") {
+		return line + reason
+	}
+	return line + "  " + reason
 }
 
 // wrapStatusReason word-wraps a long status reason into the remaining width
@@ -197,18 +258,12 @@ func (m *Model) wrapStatusReason(full string, style func(...string) string) stri
 	if m.width <= 0 || ansi.StringWidth(full) <= shortReasonThreshold {
 		return style(full)
 	}
-	// Remaining width after the non-status parts already joined (the status
-	// part is appended last). Leave room for the "  " separator.
-	prefixCells := 0
-	prefixCells = ansi.StringWidth(strings.Join(m.toolbarPrefixParts(), "  "))
-	budget := m.width - prefixCells - 3
-	if budget < 8 {
-		// Almost no room left after the toolbar prefix; wrapping would
-		// produce unusable slivers. Keep the single line (better to clip a
-		// tiny residual than to garble the layout).
-		return style(full)
-	}
-	return style(shared.Wrap(full, budget))
+	// A long reason gets its own full-width block below the toolbar cells
+	// rather than the sliver left over beside them. Wrapping into a 13-cell
+	// remainder turns one honest sentence into twenty rows and pushes the
+	// workflow list off the pane; the reason is the thing a reader must be
+	// able to read in full, so it gets the whole width.
+	return "\n" + style(shared.Wrap(full, m.width))
 }
 
 // toolbarPrefixParts returns the non-status toolbar cells so wrapStatusReason
@@ -271,7 +326,10 @@ func (m *Model) searchLineView() string {
 // colWidths computes column widths from the terminal size.
 func (m *Model) colWidths() (name, phase, age, dur int) {
 	name = 30
-	phase = 10
+	// The PHASE cell holds "symbol space word"; the longest phase word is
+	// "Succeeded" (9), so 11 is the narrowest width that never truncates a
+	// known phase, and 12 leaves one cell of slack in the wide layout.
+	phase = 12
 	age = 8
 	dur = 9
 	if m.width >= 100 {
@@ -279,7 +337,7 @@ func (m *Model) colWidths() (name, phase, age, dur int) {
 	}
 	if m.width < 80 {
 		name = 20
-		phase = 9
+		phase = 11
 		age = 6
 		dur = 8
 	}
@@ -308,17 +366,6 @@ func (m *Model) emptyStateView() string {
 	default:
 		return m.theme.Dim.Render("no workflows in this namespace yet")
 	}
-}
-
-// footerView carries key hints; q is root-owned (outside text entry). When
-// the viewport hides rows it also carries the window position, so a windowed
-// list is distinguishable from a list that simply has few workflows.
-func (m *Model) footerView(start, end int) string {
-	hints := "j/k move  enter open  l logs  / search  s sort  r refresh  ? help"
-	if end-start > 0 && end-start < len(m.rows) {
-		hints += "  " + itoa(start+1) + "-" + itoa(end) + "/" + itoa(len(m.rows))
-	}
-	return hints
 }
 
 var _ = core.Summary{}
