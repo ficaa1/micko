@@ -1,0 +1,101 @@
+package portforward
+
+import (
+	"context"
+	"errors"
+	"io"
+	"sync"
+	"testing"
+	"time"
+)
+
+type fakeProcess struct {
+	outR, errR *io.PipeReader
+	outW, errW *io.PipeWriter
+	wait       chan error
+	killed     chan struct{}
+	once       sync.Once
+}
+
+func newFake() *fakeProcess {
+	or, ow := io.Pipe()
+	er, ew := io.Pipe()
+	return &fakeProcess{outR: or, errR: er, outW: ow, errW: ew, wait: make(chan error, 1), killed: make(chan struct{})}
+}
+func (p *fakeProcess) StdoutPipe() (io.ReadCloser, error) { return p.outR, nil }
+func (p *fakeProcess) StderrPipe() (io.ReadCloser, error) { return p.errR, nil }
+func (p *fakeProcess) Start() error                       { return nil }
+func (p *fakeProcess) Wait() error                        { return <-p.wait }
+func (p *fakeProcess) Kill() error {
+	p.once.Do(func() { close(p.killed); p.outR.Close(); p.errR.Close(); p.wait <- errors.New("killed") })
+	return nil
+}
+func (p *fakeProcess) ready() {
+	_, _ = p.outW.Write([]byte("Forwarding from 127.0.0.1:1234 -> 8080\n"))
+}
+func TestManagerReadinessAndCleanup(t *testing.T) {
+	p := newFake()
+	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "1234"}, func(context.Context, string, ...string) Process { return p })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.Start(ctx)
+	awaitState(t, m.Events(), StateStarting)
+	p.ready()
+	awaitState(t, m.Events(), StateReady)
+	cancel()
+	awaitState(t, m.Events(), StateStopped)
+	select {
+	case <-p.killed:
+	case <-time.After(time.Second):
+		t.Fatal("owned process was not killed")
+	}
+}
+func TestManagerUsesExplicitTargetAndRecovers(t *testing.T) {
+	var got []string
+	n := 0
+	p1 := newFake()
+	p2 := newFake()
+	m, err := NewWithCommand(Target{"prod ctx", "team-a", "argo", "443", "15443"}, func(_ context.Context, name string, args ...string) Process {
+		got = append([]string{name}, args...)
+		n++
+		if n == 1 {
+			return p1
+		}
+		return p2
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.Start(ctx)
+	awaitState(t, m.Events(), StateStarting)
+	p1.ready()
+	awaitState(t, m.Events(), StateReady)
+	p1.wait <- errors.New("connection lost")
+	awaitState(t, m.Events(), StateLost)
+	awaitState(t, m.Events(), StateStarting)
+	cancel()
+	if got[0] != "kubectl" || got[1] != "--context" || got[2] != "prod ctx" || got[3] != "--namespace" || got[4] != "team-a" {
+		t.Fatalf("unexpected command %v", got)
+	}
+}
+func TestTargetRejectsNewline(t *testing.T) {
+	if _, err := NewWithCommand(Target{"ctx", "ns\n", "svc", "1", "2"}, func(context.Context, string, ...string) Process { return nil }); err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+func awaitState(t *testing.T, ch <-chan Event, want State) {
+	t.Helper()
+	select {
+	case e := <-ch:
+		if e.State != want {
+			t.Fatalf("state=%s want=%s (%s)", e.State, want, e.Message)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for %s", want)
+	}
+}
