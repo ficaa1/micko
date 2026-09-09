@@ -1,9 +1,7 @@
-// Command argo-tui is a read-only TUI for Argo Workflows.
+// Command argo-tui is a keyboard-first TUI for Argo Workflows.
 //
-// F1 scope: a compiling baseline with an explicit --demo mode backed by the
-// in-memory fake Reader — no network fallback, no writes (plan §8 F1 slice
-// 6). Real connections (config + REST adapter) arrive with A1/I1; the stub
-// UI is not a finished alpha.
+// The local beta keeps mutations explicitly opt-in and confirmation-gated;
+// --demo remains offline and never performs writes.
 package main
 
 import (
@@ -23,10 +21,10 @@ import (
 	"argo-tui/internal/ui/actions"
 )
 
-const version = "0.1.0-alpha"
+const version = "0.2.0-beta.1"
 
-// mainVersion exposes the build version to the smoke test (plan §8 F1
-// slice 1: compile/smoke test) without exporting a mutable API surface.
+// mainVersion exposes the build version to the smoke test without exporting
+// a mutable API surface.
 var mainVersion = version
 
 func main() {

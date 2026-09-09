@@ -1,4 +1,4 @@
-# argo-tui developer commands (F1 baseline).
+# argo-tui developer commands (0.2.0-beta.1 local candidate).
 # Go toolchain: pinned go 1.25.x (go.mod toolchain go1.25.4). CI/E1 owns
 # pipeline wiring; this Makefile covers local builds and tests only.
 
@@ -10,7 +10,7 @@ GO ?= go
 build:
 	$(GO) build -o dist/ ./cmd/argo-tui
 
-# Focused required test set (plan §8 F1 Run command).
+# Focused developer test set.
 test:
 	$(GO) test ./internal/core ./internal/config ./internal/app ./internal/ui/shared ./internal/testkit
 

@@ -1,16 +1,16 @@
 # argo-tui
 
-A keyboard-first terminal UI for Argo Workflows. It can inspect workflow lists and details, render deterministic node outlines and sanitized resources, and stream bounded logs through an Argo Server REST client. The beta watch/action wave is present locally, but Q2 found release-blocking beta defects; this handoff is an alpha-quality local build, not a beta promotion.
+A keyboard-first terminal UI for Argo Workflows. It can inspect workflow lists and details, render deterministic node outlines and sanitized resources, stream bounded logs, recover watches, and run explicitly enabled retry/resubmit/stop/terminate journeys through an Argo Server REST client. This is a local beta candidate, not an operational deployment claim.
 
 ## Current release status
 
-Version: `0.1.0-alpha`
+Version: `0.2.0-beta.1`
 
 - Read-only list, detail, node, resource and log journeys are covered by synthetic/fake-server tests and a Linux PTY smoke journey.
 - Demo mode performs no network I/O and no writes: `--demo` uses only the built-in synthetic reader.
 - TLS verification, custom CA, token environment-variable/file sources, base paths, pagination, log framing and terminal-text sanitization are tested locally.
-- Q2 did not approve beta: confirmed action intents currently do not reach the root executor, and watch 401/403/429 failures can reconnect without terminal auth handling/backoff. See `docs/reviews/beta.md`.
-- No real Argo Server or disposable Argo environment was available. Compatibility with a deployed Argo version is therefore unverified, not supported by inference.
+- The independent final beta approval passed the local action, watch-recovery, transport, security, integration, race, vet, benchmark and build gates. See `docs/reviews/beta-approval.md`.
+- No authorized disposable Argo environment was available. Live compatibility remains explicitly blocked; synthetic fixtures never establish deployment compatibility.
 
 ## Quick start
 
@@ -39,7 +39,7 @@ The endpoint and namespace must be supplied by the operator. SSO browser login a
 
 ## Local verification
 
-The release handoff was verified on Linux amd64 with Go 1.25.4:
+The beta handoff was verified on Linux amd64 with Go 1.25.4. Required commands and their logs are recorded in the local handoff evidence:
 
 ```sh
 gofmt -l cmd internal tests
@@ -49,9 +49,11 @@ go vet ./...
 go test -tags=integration ./tests/integration/... -count=1 -v
 go test ./internal/ui/detail -bench BenchmarkNodeOutline -benchmem -run '^$'
 go test ./internal/ui/logs -bench BenchmarkBuffer -benchmem -run '^$'
+go build -trimpath -o dist/argo-tui ./cmd/argo-tui
+./dist/argo-tui --version
 ```
 
-The integration suite exercised the built binary in a Linux PTY, including demo list rendering, `q`/Ctrl-C exit, version output, small-terminal behavior, terminal restoration bytes and the demo no-egress guard. Its server tests use local synthetic HTTP fixtures only. `make` was not available in the release environment, so the equivalent Go commands above were run directly.
+The integration suite exercised the built binary in a Linux PTY, including demo list rendering, action/watch regression paths, `q`/Ctrl-C exit, version output, small-terminal behavior, terminal restoration bytes and the demo no-egress guard. Its server tests use local synthetic HTTP fixtures only.
 
 ## Build artifacts
 
@@ -67,5 +69,5 @@ Local, ignored artifacts are written to `dist/`; they are not tagged, uploaded o
 - `docs/usage.md` — operator usage and interaction notes.
 - `docs/security.md` — credential, TLS, redirect and terminal-sanitization posture.
 - `docs/compatibility.md` — tested versus cross-compiled environments and unsupported claims.
-- `docs/reviews/alpha.md` and `docs/reviews/beta.md` — independent gate evidence and limitations.
-- `CHANGELOG.md` — local alpha handoff changes.
+- `docs/reviews/alpha.md`, `docs/reviews/beta.md` and `docs/reviews/beta-approval.md` — independent gate evidence and limitations.
+- `CHANGELOG.md` — local beta handoff changes.

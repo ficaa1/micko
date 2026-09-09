@@ -1,10 +1,8 @@
-# Usage — argo-tui (v0.1 read-only alpha)
+# Usage — argo-tui (v0.2.0-beta.1 local beta)
 
-Operator-facing quickstart and command reference. Status: the F1
-baseline binary ships the demo mode and the frozen CLI surface; the full
-alpha UI is assembled by I1 (list/detail/logs views exist as worker
-components on their branches). This page documents the target v0.1
-behavior and what works today; nothing here promises unreleased features.
+Operator-facing quickstart and command reference for the local beta
+candidate. This page documents locally verified behavior; live Argo
+compatibility and non-Linux execution remain explicitly unverified.
 
 ## 1. Install / build
 
@@ -71,7 +69,7 @@ Tokens: use `tokenEnv` (environment-variable name) or `tokenFile` —
 never literal tokens in config or on the command line. See
 [`security.md`](security.md) for the full credential/TLS contract.
 
-## 4. Keyboard map (v0.1)
+## 4. Keyboard map (beta)
 
 | Key | Action |
 |---|---|
@@ -86,7 +84,7 @@ never literal tokens in config or on the command line. See
 | `?` | help |
 | Space (logs) | pause autoscroll (collection continues, bounded) |
 | `f` (logs) | resume follow |
-| `a` | (v0.2) actions menu — absent/disabled in v0.1 |
+| `a` | open the guarded actions menu when `--allow-actions` is enabled |
 | `q` | quit — only outside text entry |
 | Ctrl-C | quit globally |
 
@@ -107,7 +105,7 @@ never literal tokens in config or on the command line. See
   unauthenticated, offline/stale (with stale age and last good data),
   deleted ("workflow no longer available"), unsupported, partial/incomplete.
 
-## 6. Connecting to a real Argo Server (when the alpha UI ships)
+## 6. Connecting to a real Argo Server
 
 ```sh
 export ARGO_TUI_TOKEN="<service-account token>"   # value never in config
@@ -117,13 +115,13 @@ export ARGO_TUI_TOKEN="<service-account token>"   # value never in config
 Requirements and caveats — see [`security.md`](security.md) for the
 normative detail:
 
-- Argo Server v4.1.x is the tested target (`/api/v1/version` is checked).
+- Argo Server v4.1.2 is the pinned protocol target; live compatibility is BLOCKED until an authorized disposable environment is tested.
 - `client` auth mode: pass a Kubernetes bearer token via
   `tokenEnv`/`tokenFile`. `server`/`sso` modes: use credentials that
   server already accepts; there is no browser login.
 - TLS verification stays on; use `--ca-file` for private CAs.
-- 401/403 render as distinct guidance states; neither is retried
-  automatically.
+- 401/403 render as distinct terminal guidance states; neither is retried
+  automatically. 429 recovery is bounded and honors Retry-After.
 - Minimum RBAC for read-only use: `get`/`list`/`watch` on
   `workflows.argoproj.io/workflows` in the target namespace, plus the
   log/pod-read paths your Argo Server delegates to (namespace-scoped
@@ -133,7 +131,7 @@ normative detail:
 
 | Symptom | Meaning / action |
 |---|---|
-| exits 1 with "real connections are not wired yet" | pre-alpha baseline binary: build from the integrated branch (I1) for real-connection support |
+| exits 1 with a configuration error | provide an endpoint, namespace and configured credential source; the app never falls back implicitly |
 | `unauthenticated` state | token wrong/expired or auth-mode mismatch; check `tokenEnv`/`tokenFile`, no auto-retry by design |
 | `forbidden` state | RBAC denial — authoritative; widen the namespace-scoped role or switch namespaces |
 | stale banner with last good data | server unreachable; the app keeps showing the previous snapshot with its age and backs off with jitter |
@@ -141,14 +139,12 @@ normative detail:
 | logs unavailable with a cause | pod GC'd / logs not archived / node ID ≠ pod name — the message names the cause; use workflow-wide logs or enter a pod name |
 | terminal size below 60×15 | resize notice; quit and help still work |
 
-## 8. Known gaps in the current build (honesty)
+## 8. Known gaps and safety boundaries
 
-- List/detail/logs views are composed by I1; this baseline renders the
-  placeholder screens (the components exist and are tested per-component
-  on their branches).
-- `internal/app` 404-detail view gate: a not-found detail sets the
-  correct internal state but the placeholder view still shows "loading"
-  (fix queued for I1; recorded in [`testing.md`](testing.md) §7).
-- Real-cluster compatibility is **unverified** until the ET-4 environment
-  is provisioned (see [`testing.md`](testing.md) §4 and the acceptance
-  matrix §6 ledger).
+- Actions remain disabled unless `--allow-actions` is supplied on that
+  invocation, and the server's RBAC remains authoritative.
+- The Argo action API is name-addressed and has no UID precondition; the
+  residual same-name replacement race is documented, not claimed solved.
+- Live compatibility is **BLOCKED**: no authorized disposable Argo v4.1.2
+  endpoint was available. Synthetic fixtures do not establish deployment
+  support. macOS and Windows artifacts are cross-build-only.

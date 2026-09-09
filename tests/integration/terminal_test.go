@@ -134,7 +134,7 @@ func TestPTYVersionAndNonDemoRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
-	if code != 0 || !strings.Contains(p.Screen(), "argo-tui 0.1.0-alpha") {
+	if code != 0 || !strings.Contains(p.Screen(), "argo-tui 0.2.0-beta.1") {
 		t.Fatalf("--version: code=%d screen=%q", code, p.Screen())
 	}
 	p.Close()
