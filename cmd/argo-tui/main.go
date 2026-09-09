@@ -5,9 +5,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +19,8 @@ import (
 	"argo-tui/internal/argo"
 	"argo-tui/internal/config"
 	"argo-tui/internal/core"
+	"argo-tui/internal/diagnostics"
+	"argo-tui/internal/portforward"
 	"argo-tui/internal/testkit"
 	"argo-tui/internal/ui/actions"
 )
@@ -26,6 +30,7 @@ const version = "0.2.0-beta.1"
 // mainVersion exposes the build version to the smoke test without exporting
 // a mutable API surface.
 var mainVersion = version
+var mainCommit = "unknown"
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -51,7 +56,7 @@ func run(args []string) int {
 		return 2
 	}
 	if *versionFlag {
-		fmt.Println("argo-tui " + mainVersion)
+		fmt.Printf("argo-tui %s (%s)\n", mainVersion, mainCommit)
 		return 0
 	}
 	if fs.NArg() > 0 {
@@ -93,7 +98,30 @@ func run(args []string) int {
 			}
 			return os.Getenv(cfg.TokenEnv), nil
 		}
-		reader, err = argo.NewClient(argo.Options{Server: cfg.Server, TokenFn: tokenFn, TokenSource: "configured credential source", CAFile: cfg.CAFile, InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify})
+		serverURL := cfg.Server
+		var forwarder *portforward.Manager
+		if cfg.Target.Service != "" {
+			localPort := cfg.Target.RemotePort
+			forwarder, err = portforward.New(portforward.Target{Context: cfg.Target.Context, Namespace: cfg.Target.Namespace, Service: cfg.Target.Service, RemotePort: strconv.Itoa(cfg.Target.RemotePort), LocalPort: strconv.Itoa(localPort)})
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "argo-tui: port-forward:", err)
+				return 1
+			}
+			forwarder.Start(context.Background())
+			defer forwarder.Close()
+			// The client deliberately starts immediately: failed initial requests
+			// remain read-only and the normal poll loop retries after readiness.
+			serverURL = "http://127.0.0.1:" + strconv.Itoa(localPort)
+			if *debug {
+				sink := diagnostics.New(os.Stderr)
+				go func() {
+					for e := range forwarder.Events() {
+						sink.Emit(diagnostics.StageForward, string(e.State), e.Attempt-1, e.State == portforward.StateLost, 0, "")
+					}
+				}()
+			}
+		}
+		reader, err = argo.NewClient(argo.Options{Server: serverURL, TokenFn: tokenFn, TokenSource: "configured credential source", CAFile: cfg.CAFile, InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "argo-tui:", err)
 			return 1
@@ -108,7 +136,7 @@ func run(args []string) int {
 		Server:       activeServer,
 		Profile:      activeProfile,
 	})
-	root.SetVersion(version)
+	root.SetVersion(mainVersion + " @ " + mainCommit)
 	p := tea.NewProgram(root)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "argo-tui: %v\n", err)
