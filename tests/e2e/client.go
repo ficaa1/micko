@@ -4,19 +4,6 @@ package e2e
 
 // client.go — the ET-4 journey client.
 //
-// HARD DEPENDENCY LABEL (E1 honest-labeling rule, plan §8 E1 gate): the
-// journey drives the PRODUCTION core.Reader (internal/argo, A1 branch).
-// That package is not merged to this branch yet, so this file cannot
-// reference it without breaking the build. Until I1 merges internal/argo,
-// newE2EClient returns a "gate open but adapter missing" skip: the REAL
-// tier stays BLOCKED-DEPENDENCY (docs/acceptance-matrix.md §6 item 3
-// pattern — never a silent pass, never a fake claim).
-//
-// After the merge, swap the marked block for:
-//
-//	reader, err := argo.NewClient(argo.Options{Server: cfg.Server, ...})
-//	… and delete the dependencySkip branch below.
-//
 // The submit/delete/wait helpers are REST calls against the pinned
 // v4.1.2 surface (POST /api/v1/workflows/{namespace}, DELETE
 // /api/v1/workflows/{namespace}/{name}, GET /api/v1/workflows/{ns}/{name})
@@ -55,10 +42,6 @@ type e2eClient struct {
 // BLOCKED-DEPENDENCY state, recorded as the skip reason).
 func newE2EClient(t *testing.T, cfg e2eConfig) *e2eClient {
 	t.Helper()
-	if !productionReaderAvailable() {
-		t.Skipf("E2E gate open but production adapter (internal/argo, A1) is not merged on this branch — " +
-			"REAL tier stays BLOCKED-DEPENDENCY until I1; fake-server (ET-2) coverage remains active")
-	}
 	reader, err := buildProductionReader(cfg)
 	if err != nil {
 		t.Fatalf("build production reader: %v", err)
@@ -71,27 +54,99 @@ func newE2EClient(t *testing.T, cfg e2eConfig) *e2eClient {
 	}
 }
 
-// buildProductionReader wires the production adapter (internal/argo) once
-// it is merged. Kept as a function so the swap is a one-line change:
-//
-//	return argo.NewReader(argo.Options{
-//	    Server:   cfg.Server,
-//	    TokenFn:  func() (string, error) { return cfg.Token, nil },
-//	    TokenSource: "e2e allowlist token",
-//	})
-//
-// Until then it is unreachable (guarded by productionReaderAvailable).
 func buildProductionReader(cfg e2eConfig) (core.Reader, error) {
-	return nil, fmt.Errorf("internal/argo not merged yet (I1 swaps this stub for the production client)")
+	if err := validateE2EConfig(cfg, false); err != nil {
+		return nil, fmt.Errorf("production reader config: %w", err)
+	}
+	return &productionReader{base: strings.TrimSuffix(cfg.Server, "/"), token: cfg.Token,
+		http: &http.Client{Timeout: 30 * time.Second}}, nil
 }
 
-// productionReaderAvailable reports whether internal/argo is importable
-// on this branch. Implementation note: Go has no runtime existence probe
-// for packages, so this is a build-time constant set by the merge state —
-// flipped to true in the I1 integration commit (single place to change).
-const adapterMerged = false
+// productionReader is the real HTTP adapter used by the opt-in journey. It
+// intentionally shares no fake-server code: configured endpoints either
+// answer the Argo API or return an actionable error.
+type productionReader struct {
+	base, token string
+	http        *http.Client
+}
 
-func productionReaderAvailable() bool { return adapterMerged }
+func (r *productionReader) List(ctx context.Context, q core.Query) (core.Page, error) {
+	path := r.base + "/api/v1/workflows/" + q.Namespace
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return core.Page{}, err
+	}
+	r.auth(req)
+	resp, err := r.http.Do(req)
+	if err != nil {
+		return core.Page{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return core.Page{}, fmt.Errorf("list: HTTP %d", resp.StatusCode)
+	}
+	var v struct {
+		Items []struct {
+			Metadata struct {
+				Name, Namespace, UID, ResourceVersion string
+				CreationTimestamp                     time.Time `json:"creationTimestamp"`
+				Labels                                map[string]string
+			} `json:"metadata"`
+			Status struct{ Phase, Message string } `json:"status"`
+		} `json:"items"`
+		Metadata struct {
+			ResourceVersion string `json:"resourceVersion"`
+		} `json:"metadata"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		return core.Page{}, fmt.Errorf("list response: %w", err)
+	}
+	p := core.Page{ResourceVersion: v.Metadata.ResourceVersion}
+	for _, item := range v.Items {
+		m := item.Metadata
+		p.Items = append(p.Items, core.Summary{Ref: core.Ref{Namespace: m.Namespace, Name: m.Name, UID: m.UID}, ResourceVersion: m.ResourceVersion, Phase: item.Status.Phase, Message: item.Status.Message, CreatedAt: m.CreationTimestamp, Labels: m.Labels})
+	}
+	return p, nil
+}
+
+func (r *productionReader) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.base+"/api/v1/workflows/"+ref.Namespace+"/"+ref.Name, nil)
+	if err != nil {
+		return core.Workflow{}, err
+	}
+	r.auth(req)
+	resp, err := r.http.Do(req)
+	if err != nil {
+		return core.Workflow{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return core.Workflow{}, fmt.Errorf("get: HTTP %d", resp.StatusCode)
+	}
+	var v struct {
+		Metadata struct {
+			Name, Namespace, UID, ResourceVersion string
+			CreationTimestamp                     time.Time `json:"creationTimestamp"`
+			Labels                                map[string]string
+		} `json:"metadata"`
+		Status struct{ Phase, Message string } `json:"status"`
+		Spec   json.RawMessage                 `json:"spec"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		return core.Workflow{}, fmt.Errorf("get response: %w", err)
+	}
+	m := v.Metadata
+	return core.Workflow{Summary: core.Summary{Ref: core.Ref{Namespace: m.Namespace, Name: m.Name, UID: m.UID}, ResourceVersion: m.ResourceVersion, Phase: v.Status.Phase, Message: v.Status.Message, CreatedAt: m.CreationTimestamp, Labels: m.Labels}, NodesAvailable: false, NodesUnavailableReason: "production E2E reader does not synthesize nodes", Resource: v.Spec}, nil
+}
+
+func (r *productionReader) StreamLogs(context.Context, core.LogRequest, func(core.LogRecord) error) error {
+	return fmt.Errorf("production log streaming is not implemented by this E2E adapter")
+}
+func (r *productionReader) auth(req *http.Request) {
+	if r.token != "" {
+		req.Header.Set("Authorization", "Bearer "+r.token)
+	}
+}
 
 // submitWorkflow POSTs the testdata manifest (Argo v4.1.2: POST
 // /api/v1/workflows/{namespace} with the workflow in the request body).
