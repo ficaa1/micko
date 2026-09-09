@@ -163,6 +163,18 @@ func (m *Root) Init() tea.Cmd {
 	return m.startListGeneration()
 }
 
+// textEntryActive reports whether the active route owns printable keys.
+func (m *Root) textEntryActive() bool {
+	switch m.route {
+	case RouteList:
+		return m.listView.SearchOn
+	case RouteLogs:
+		return m.logsView != nil && m.logsView.EscapeConsumed()
+	default:
+		return false
+	}
+}
+
 // Update implements tea.Model. All state mutation happens here; async
 // commands only produce messages (plan §4).
 func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -196,15 +208,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// ? opens help everywhere except inside text entry, where it is an
 		// ordinary printable character (UI-04 text-entry isolation).
-		if key == "?" && !m.listView.SearchOn {
+		if key == "?" && !m.textEntryActive() {
 			m.help.Toggle()
 			return m, nil
 		}
 		// q quits globally on every route (live-smoke: global q preserved),
-		// gated on text-entry isolation: while the list search input is
-		// focused, q types a letter and is consumed by the search handler
-		// below instead.
-		if key == "q" && !m.listView.SearchOn {
+		// except while the active child owns printable text entry.
+		if key == "q" && !m.textEntryActive() {
 			return m, m.quit()
 		}
 		if m.route == RouteDetail && key == "a" {
