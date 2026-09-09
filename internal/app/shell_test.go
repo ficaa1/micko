@@ -160,6 +160,37 @@ func TestHelpKeyDoesNotTypeIntoSearch(t *testing.T) {
 	}
 }
 
+// Printable global keys belong to the focused logs editor. They must not open
+// help or quit the application while a search query is being typed.
+func TestPrintableGlobalKeysReachLogsSearch(t *testing.T) {
+	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
+	wf := workflowFixture("wf-1")
+	f.Workflows[wf.Summary.Ref] = wf
+	m := testRoot(t, f)
+
+	next, _ := m.Update(OpenLogsMsg{Ref: wf.Summary.Ref, Container: "main"})
+	m = next.(*Root)
+	next, _ = m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	m = next.(*Root)
+	if m.logsView == nil || !m.logsView.EscapeConsumed() {
+		t.Fatal("precondition: / did not focus the logs search input")
+	}
+
+	for _, key := range []rune{'?', 'q'} {
+		next, _ = m.Update(tea.KeyPressMsg{Code: key, Text: string(key)})
+		m = next.(*Root)
+	}
+	if m.help.IsOpen() {
+		t.Fatal("? opened help while typing a logs search query")
+	}
+	if m.quitting {
+		t.Fatal("q quit while typing a logs search query")
+	}
+	if got := m.logsView.View(); !strings.Contains(got, "search: ?q_") {
+		t.Fatalf("printable keys did not reach logs search buffer:\n%s", got)
+	}
+}
+
 // TestHelpOpensOnEveryRoute: help is global, so it must open from detail and
 // logs too, and closing it must restore the route it was opened from.
 func TestHelpOpensOnEveryRoute(t *testing.T) {
