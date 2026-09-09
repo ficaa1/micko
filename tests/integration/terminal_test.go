@@ -518,3 +518,143 @@ func TestPTYDemoUsesAltScreenAndRestores(t *testing.T) {
 		t.Fatalf("alt-screen exit sequence missing on quit; terminal not restored")
 	}
 }
+
+// --- G: shell integration repair (viewport, help overlay, filter escape) ----
+
+// startDemo launches --demo at a given size and waits for the first list
+// frame, so the shell tests below start from a known screen.
+func startDemo(t *testing.T, cols, rows int) *PTYProcess {
+	t.Helper()
+	bin := buildBinary(t)
+	p, err := StartPTYSize(cols, rows, bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	})
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("list never rendered at %dx%d: %q", cols, rows, p.Screen())
+	}
+	return p
+}
+
+// Defect G1: on a terminal too short for every row, the frame overflowed and
+// the footer — the only place the key hints appear — was pushed off screen.
+// The alternate screen has no scrollback, so those lines were simply gone.
+func TestPTYDemoFooterSurvivesShortTerminal(t *testing.T) {
+	for _, rows := range []int{9, 11, 14} {
+		p := startDemo(t, 100, rows)
+		if !waitScreen(p, 10*time.Second, func(s string) bool {
+			return strings.Contains(s, "? help")
+		}) {
+			t.Fatalf("%d rows: key hints missing from the frame; screen=%q", rows, p.Screen())
+		}
+		_ = p.Send("q")
+		_, _ = p.Wait()
+	}
+}
+
+// Defect G1 (continued): shrinking the terminal while running must re-lay out
+// rather than lose the footer.
+func TestPTYDemoShrinkKeepsFooter(t *testing.T) {
+	p := startDemo(t, 120, 40)
+	if err := p.Resize(100, 10); err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+	p.ClearScreen()
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "? help") && strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("shrink to 100x10 lost the footer; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Defect G2: the footer advertised `? help` on every route while no `?`
+// handler existed anywhere in the binary — the key was inert.
+func TestPTYDemoHelpOverlayOpensAndCloses(t *testing.T) {
+	p := startDemo(t, 100, 30)
+	if strings.Contains(p.Screen(), "KEYS") {
+		t.Fatalf("help overlay visible before ? was pressed; screen=%q", p.Screen())
+	}
+	if err := p.Send("?"); err != nil {
+		t.Fatalf("send ?: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "KEYS")
+	}) {
+		t.Fatalf("? did not open the help overlay; screen=%q", p.Screen())
+	}
+
+	p.ClearScreen()
+	if err := p.Send("\x1b"); err != nil { // Esc
+		t.Fatalf("send esc: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows") && !strings.Contains(s, "KEYS")
+	}) {
+		t.Fatalf("Esc did not close the help overlay; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// The help overlay is a dialog: q closes it instead of quitting the program.
+func TestPTYDemoHelpOverlayQClosesWithoutQuitting(t *testing.T) {
+	p := startDemo(t, 100, 30)
+	if err := p.Send("?"); err != nil {
+		t.Fatalf("send ?: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "KEYS")
+	}) {
+		t.Fatalf("? did not open help; screen=%q", p.Screen())
+	}
+	p.ClearScreen()
+	if err := p.Send("q"); err != nil {
+		t.Fatalf("send q: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows") && !strings.Contains(s, "KEYS")
+	}) {
+		t.Fatalf("q did not close the help overlay; screen=%q", p.Screen())
+	}
+	if p.Exited() {
+		t.Fatal("q quit the program instead of closing the help overlay")
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Defect G3: a filter matching nothing renders exactly like an empty
+// namespace. Esc must clear it and restore the list.
+func TestPTYDemoEscClearsAppliedFilter(t *testing.T) {
+	p := startDemo(t, 100, 30)
+	if err := p.SendKeys(30*time.Millisecond, "/", "z", "z", "z", "\r"); err != nil {
+		t.Fatalf("send filter: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "no workflows match")
+	}) {
+		t.Fatalf("filter never applied; screen=%q", p.Screen())
+	}
+
+	p.ClearScreen()
+	if err := p.Send("\x1b"); err != nil { // Esc
+		t.Fatalf("send esc: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "demo-hello-world") && !strings.Contains(s, "no workflows match")
+	}) {
+		t.Fatalf("Esc did not clear the applied filter; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}

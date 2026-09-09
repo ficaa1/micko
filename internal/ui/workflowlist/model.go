@@ -71,6 +71,12 @@ type Model struct {
 	// width/height are the last-known size (SetSize).
 	width, height int
 
+	// scrollTop is the first visible row index of the viewport window. It is
+	// an anchor, not an identity: the window only moves far enough to keep
+	// the UID-selected row visible, so scrolling stays stable while the
+	// selection itself is never index-based (LIST-12).
+	scrollTop int
+
 	// counts for honest scope display: visible vs total snapshot size.
 	visible int
 	total   int

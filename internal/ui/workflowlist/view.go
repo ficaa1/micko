@@ -69,6 +69,16 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "s":
 		m.CycleSort()
 		return nil
+	case "esc":
+		// Esc backs out of the filter. A filter matching nothing renders
+		// exactly like an empty namespace, so without this the only way out
+		// is to reopen the search and submit an empty buffer. With no filter
+		// applied Esc stays inert: it must never become a surprise quit on
+		// the top route.
+		if m.query != "" {
+			m.SetQuery("")
+		}
+		return nil
 	case "r":
 		if intent := m.RefreshIntent(); intent != nil {
 			return func() tea.Msg { return intent }
