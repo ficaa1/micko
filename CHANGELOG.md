@@ -1,6 +1,6 @@
 # Local changelog
 
-## 0.2.0-beta.1 — live-smoke integration fixes (post-candidate, unreleased)
+## 0.2.0-beta.1 — live-smoke + review fixes (post-candidate, unreleased)
 
 - Routed list keys (j/k/arrows/Enter/l//s/r/manual refresh) into the list child while keeping q and Ctrl-C global and isolating text entry during search.
 - Propagated WindowSizeMsg to every child view model and redrew responsively on resize.
@@ -8,6 +8,7 @@
 - Adopted Bubble Tea alternate-screen (full-window) behavior and restored the terminal on every exit/error path.
 - Word-wrapped long server/error text at the terminal width instead of clipping it at the right edge.
 - Integrated real-PTY regressions that pin the above against the compiled `--demo` binary.
+- Fixed Esc-from-logs navigation (review finding): a single Esc now returns to the route the logs pane was opened from — the list when logs are opened with `l` on the list, or the loaded detail when logs are entered from detail — instead of landing on a never-loaded or stale detail pane.
 
 ## 0.2.0-beta.1 — local beta candidate
 

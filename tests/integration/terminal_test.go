@@ -336,6 +336,117 @@ func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
 	_, _ = p.Wait()
 }
 
+// Defect item 8 (partial): 'l' opens logs straight from the list, and a single
+// Esc must return to the LIST — never to a never-loaded detail pane ("(no
+// workflow loaded)") or a stale previously-viewed workflow (Q finding
+// t_fa36e201). Repro 1: --demo → j → l → Esc should land back on the list.
+func TestPTYDemoEscFromListOpenedLogsReturnsToList(t *testing.T) {
+	bin := buildBinary(t)
+	p, err := StartPTY(bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	}()
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("list never rendered: %q", p.Screen())
+	}
+	// j selects demo-data-pull, l opens its logs (nil pod -> workflow-wide).
+	if err := p.SendKeys(30*time.Millisecond, "j", "l"); err != nil {
+		t.Fatalf("send j/l: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "logs: demo-data-pull")
+	}) {
+		t.Fatalf("logs never rendered after l; screen=%q", p.Screen())
+	}
+	// A single Esc must return to the list (no detail pane was ever loaded).
+	p.ClearScreen()
+	if err := p.Send("\x1b"); err != nil { // Esc
+		t.Fatalf("send esc: %v", err)
+	}
+	ok := waitScreen(p, 10*time.Second, func(s string) bool {
+		screen := s
+		return strings.Contains(screen, "list: 5 workflows") &&
+			!strings.Contains(screen, "(no workflow loaded)")
+	})
+	if !ok {
+		t.Fatalf("Esc from list-opened logs did not return to the list; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
+// Repro 2 (stale detail): open detail A, Esc to list, move to B, l (logs B),
+// Esc must never land on the stale DETAIL A.
+func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
+	bin := buildBinary(t)
+	p, err := StartPTY(bin, "--demo")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	}()
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("list never rendered: %q", p.Screen())
+	}
+	// j Enter -> DETAIL demo-data-pull (A); Esc back to list; j l -> logs B.
+	if err := p.SendKeys(30*time.Millisecond, "j", "\r"); err != nil {
+		t.Fatalf("send j/enter: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "DETAIL demo-data-pull")
+	}) {
+		t.Fatalf("detail A never rendered; screen=%q", p.Screen())
+	}
+	p.ClearScreen()
+	if err := p.Send("\x1b"); err != nil { // Esc back to list
+		t.Fatalf("send esc: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "list: 5 workflows")
+	}) {
+		t.Fatalf("did not return to list; screen=%q", p.Screen())
+	}
+	// j selects demo-train-pipeline (B), l opens its logs.
+	p.ClearScreen()
+	if err := p.SendKeys(30*time.Millisecond, "j", "l"); err != nil {
+		t.Fatalf("send j/l: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "logs: demo-train-pipeline")
+	}) {
+		t.Fatalf("logs B never rendered; screen=%q", p.Screen())
+	}
+	// Esc from logs B: must NOT show the stale demo-data-pull detail, and
+	// must return to the list (the route logs B was opened from).
+	p.ClearScreen()
+	if err := p.Send("\x1b"); err != nil { // Esc
+		t.Fatalf("send esc: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		screen := s
+		return strings.Contains(screen, "list: 5 workflows") &&
+			!strings.Contains(screen, "DETAIL demo-data-pull")
+	}) {
+		t.Fatalf("Esc from logs B did not return to the list without stale DETAIL demo-data-pull (A); screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	_, _ = p.Wait()
+}
+
 // Defect 4(a): resize must re-layout. Shrinking to 40x10 shows the resize
 // notice; growing back to 120x40 clears it (WindowSizeMsg reaches the child).
 func TestPTYDemoResizeReacts(t *testing.T) {

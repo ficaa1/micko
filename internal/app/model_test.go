@@ -277,9 +277,6 @@ func TestBackRouteCancelsStreamAndDetail(t *testing.T) {
 	// Esc back out: stream must be canceled promptly.
 	updated, _ = root.Update(BackMsg{})
 	root = updated.(*Root)
-	if root.route != RouteDetail {
-		t.Fatalf("back from logs: route = %v, want detail", root.route)
-	}
 	if root.logState.running {
 		t.Error("stream still marked running after back")
 	}
@@ -294,6 +291,66 @@ func TestBackRouteCancelsStreamAndDetail(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Log("stream cancel signal observed asynchronously; asserting not-running state only")
+}
+
+// --- X: Esc-from-logs origin tracking (Q finding t_fa36e201) -------------------
+
+// Back from logs opened directly from the list route (the real 'l' key flow)
+// must return to the LIST, not to a never-loaded detail pane.
+func TestBackFromLogsOpenedFromListReturnsToList(t *testing.T) {
+	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
+	wf := workflowFixture("wf-1")
+	f.Workflows[wf.Summary.Ref] = wf
+	m := testRoot(t, f) // fresh root: route == RouteList
+
+	// OpenLogs from the list route: the demo/live "l" path.
+	updated, _ := m.Update(OpenLogsMsg{Ref: wf.Summary.Ref, Container: "main"})
+	root := updated.(*Root)
+	if root.route != RouteLogs {
+		t.Fatalf("precondition: route = %v, want logs", root.route)
+	}
+
+	updated, _ = root.Update(BackMsg{})
+	root = updated.(*Root)
+	if root.route != RouteList {
+		t.Fatalf("back from list-opened logs: route = %v, want list (not a never-loaded detail pane)", root.route)
+	}
+	if root.logState.running {
+		t.Error("stream still marked running after back")
+	}
+}
+
+// Back from logs opened from the detail route (the integration-test flow)
+// must return to THAT detail, preserving the canonical logs→detail→list stack.
+func TestBackFromLogsOpenedFromDetailReturnsToDetail(t *testing.T) {
+	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
+	wf := workflowFixture("wf-1")
+	f.Workflows[wf.Summary.Ref] = wf
+	m := testRoot(t, f)
+
+	// Enter detail first (route = detail), then open logs on it.
+	updated, _ := m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
+	root := updated.(*Root)
+	if root.route != RouteDetail {
+		t.Fatalf("precondition: route = %v, want detail", root.route)
+	}
+	updated, _ = root.Update(OpenLogsMsg{Ref: wf.Summary.Ref, Container: "main"})
+	root = updated.(*Root)
+	if root.route != RouteLogs {
+		t.Fatalf("precondition: route = %v, want logs", root.route)
+	}
+
+	updated, _ = root.Update(BackMsg{})
+	root = updated.(*Root)
+	if root.route != RouteDetail {
+		t.Fatalf("back from detail-opened logs: route = %v, want detail", root.route)
+	}
+	// Second Esc reaches the list (canonical unwinding).
+	updated, _ = root.Update(BackMsg{})
+	root = updated.(*Root)
+	if root.route != RouteList {
+		t.Fatalf("second back: route = %v, want list", root.route)
+	}
 }
 
 func TestOpenLogsDefaultsContainer(t *testing.T) {

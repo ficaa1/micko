@@ -46,6 +46,13 @@ type Root struct {
 	// logState is the retained log state for the logs route.
 	logState logState
 
+	// logsFrom records the route the logs pane was opened from (list via
+	// the 'l' key, or detail), so a single Esc returns to that route
+	// instead of dumping the user onto a never-loaded/stale detail pane
+	// (Q finding t_fa36e201). Zero value beats RouteList, which is the
+	// common origin.
+	logsFrom Route
+
 	// size is the last known terminal size.
 	width, height int
 
@@ -422,14 +429,24 @@ func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// back implements Esc semantics: logs -> detail -> list.
+// back implements Esc semantics: logs -> (origin) -> list. The logs pane
+// returns to the route it was opened from — the list when 'l' was pressed
+// on the list, or the loaded detail when logs were entered from detail —
+// so a single Esc never lands on a never-loaded or stale detail pane
+// (Q finding t_fa36e201).
 func (m *Root) back() tea.Cmd {
 	switch m.route {
 	case RouteLogs:
 		// Leaving logs cancels the stream promptly (plan §5; STR-02).
 		m.cancelInflight("logs")
 		m.logState.running = false
-		m.route = RouteDetail
+		// logsFrom is set by openLogs; a zero value (RouteList) is the
+		// safe fallback for a log view reached with no explicit origin.
+		target := m.logsFrom
+		if target != RouteDetail && target != RouteList {
+			target = RouteList
+		}
+		m.route = target
 		return nil
 	case RouteDetail:
 		m.cancelInflight("detail")
@@ -455,7 +472,10 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 	return m.startDetailFetch()
 }
 
-// openLogs handles the logs intent.
+// openLogs handles the logs intent. It records the route the logs pane is
+// opened from (unless it is itself already the logs route — a pod/container
+// context switch keeps the original origin), so a later single Esc returns
+// to where the user came from rather than a never-loaded/stale detail pane.
 func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if msg.Container == "" {
 		msg.Container = "main"
@@ -463,6 +483,9 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	// Re-opening logs for the same ref+container while running: ignore.
 	if m.route == RouteLogs && m.logState.running && m.logState.ref == msg.Ref && m.logState.container == msg.Container {
 		return nil
+	}
+	if m.route != RouteLogs {
+		m.logsFrom = m.route
 	}
 	m.selection = msg.Ref
 	m.selGen++
