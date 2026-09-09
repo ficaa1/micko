@@ -63,8 +63,9 @@ type ActionIntentMsg struct {
 // include (plan §4: "Root response messages include (connectionGeneration,
 // selectionGeneration, requestID)").
 type genStamp struct {
-	Conn int
-	Sel  int
+	Conn    int
+	Sel     int
+	Attempt uint64
 }
 
 // listLoadedMsg carries one collected page of the list snapshot.

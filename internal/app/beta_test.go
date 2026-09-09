@@ -153,3 +153,99 @@ func TestWatchRateLimitDoesNotRelistImmediately(t *testing.T) {
 		t.Fatalf("watch mode = %q, want rate-limited state", m.watchMode)
 	}
 }
+
+func TestActionLateResultCannotOverwriteLaterAttempt(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	m.selection = wf.Summary.Ref
+	m.actionView = actions.NewWithOptions(wf.Summary.Ref, actions.Options{AllowActions: true})
+	firstMsg := m.startAction(core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionRetry, Confirmation: core.Confirmation{Confirmed: true}})().(actionResultMsg)
+	m.clearInflight("action")
+	m.actionView = actions.NewWithOptions(wf.Summary.Ref, actions.Options{AllowActions: true})
+	secondMsg := m.startAction(core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionRetry, Confirmation: core.Confirmation{Confirmed: true}})().(actionResultMsg)
+	if firstMsg.Attempt == 0 || firstMsg.Attempt == secondMsg.Attempt {
+		t.Fatalf("attempt identities = %d and %d", firstMsg.Attempt, secondMsg.Attempt)
+	}
+	m.actionView.Open(core.ActionRetry)
+	wantState := m.actionView.State()
+	_, _ = m.Update(firstMsg)
+	if m.actionView.State() != wantState {
+		t.Fatalf("late result changed current action state to %v", m.actionView.State())
+	}
+}
+
+func TestTerminalWatchStateSuppressesQueuedTick(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	m.watchMode = "authentication/permission required"
+	_, cmd := m.Update(tickMsg{})
+	if cmd != nil {
+		t.Fatal("terminal auth state allowed queued polling tick")
+	}
+}
+
+func TestStaleWatchAttemptEventIsDiscarded(t *testing.T) {
+	wf := workflowFixture("wf")
+	m := testRoot(t, &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}})
+	m.listState.items = []core.Summary{wf.Summary}
+	m.watchAttempt = 2
+	changed := wf.Summary
+	changed.Phase = "Failed"
+	m.Update(watchEventMsg{genStamp: genStamp{Attempt: 1}, Event: core.WatchEvent{Type: core.WatchModified, Summary: changed}})
+	if m.listState.items[0].Phase != "Running" {
+		t.Fatalf("stale watch event applied: %s", m.listState.items[0].Phase)
+	}
+}
+
+func TestWatchRetryDelayIsExponentialAndCapped(t *testing.T) {
+	if got := watchRetryDelay(1, nil); got < time.Second || got > 2*time.Second {
+		t.Fatalf("first retry delay = %v", got)
+	}
+	if got := watchRetryDelay(5, nil); got < 16*time.Second || got > 31*time.Second {
+		t.Fatalf("fifth retry delay = %v", got)
+	}
+	wait := 45 * time.Second
+	if got := watchRetryDelay(1, &wait); got < wait {
+		t.Fatalf("retry-after lower bound shortened: %v", got)
+	}
+}
+
+func TestActionContextRendersServerProfileAndPhase(t *testing.T) {
+	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
+	m := actions.NewWithOptions(ref, actions.Options{AllowActions: true, Server: "https://argo.test", Profile: "dev", Phase: "Running"})
+	m.Open(core.ActionRetry)
+	if view := m.View().Content; !strings.Contains(view, "server: https://argo.test") || !strings.Contains(view, "profile: dev") || !strings.Contains(view, "phase: Running") {
+		t.Fatalf("context missing from action view: %s", view)
+	}
+}
+
+func TestTerminalWatchStateSuppressesQueuedListRecovery(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	m.watchMode = "authentication/permission required"
+	_, cmd := m.Update(listLoadedMsg{Page: core.Page{Items: []core.Summary{{Ref: core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}}}}})
+	if cmd != nil {
+		t.Fatal("terminal auth state allowed queued list to restart recovery")
+	}
+}
+
+func TestRefreshClearsTerminalWatchState(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	m.watchMode = "authentication/permission required"
+	_, cmd := m.Update(tea.KeyPressMsg{Text: "r"})
+	if cmd == nil {
+		t.Fatal("refresh did not start a new list")
+	}
+	if m.watchMode != "" {
+		t.Fatalf("refresh retained terminal watch state: %q", m.watchMode)
+	}
+}
+
+func TestStaleWatchRetryCannotStartReplacement(t *testing.T) {
+	m := testRoot(t, &testkit.FakeReader{})
+	m.watchMode = "rate limited"
+	m.watchAttempt = 2
+	_, cmd := m.Update(watchRetryMsg{genStamp: genStamp{Attempt: 1}})
+	if cmd != nil {
+		t.Fatal("stale retry started a replacement watch")
+	}
+}

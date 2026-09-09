@@ -41,6 +41,7 @@ type Model struct {
 	intentCount                  int
 	outcome                      *core.ActionResult
 	reason                       string
+	server, profile, phase       string
 	width, height                int
 }
 
@@ -132,6 +133,9 @@ func (m *Model) SetTypedName(name string) {
 	}
 }
 func (m *Model) TypedName() string { return m.typedName }
+func (m *Model) SetContext(server, profile, phase string) {
+	m.server, m.profile, m.phase = server, profile, phase
+}
 func (m *Model) Submit() bool {
 	if m.state != StateTypedName || m.typedName != m.ref.Name {
 		return false
