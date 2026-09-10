@@ -248,10 +248,14 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key == "q" && !m.textEntryActive() {
 			return m, m.quit()
 		}
-		if m.route == RouteDetail && key == "a" && m.connectionReady && m.connectionFresh {
+		if m.route == RouteDetail && key == "a" {
 			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
 			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
-			m.actionView.OpenMenu()
+			if m.connectionReady && m.connectionFresh {
+				m.actionView.OpenMenu()
+			} else {
+				m.actionView.OpenUnavailable(staleActionReason(m.connectionReady))
+			}
 			return m, nil
 		}
 		if key == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
@@ -506,6 +510,14 @@ func shortReason(msg string) string {
 		return msg
 	}
 	return msg[:max-1] + "…"
+}
+
+// staleActionReason explains why a mutation is blocked right now.
+func staleActionReason(connected bool) string {
+	if !connected {
+		return "connection lost: actions stay blocked until fresh data arrives"
+	}
+	return "data is stale: actions stay blocked until a fresh snapshot is accepted"
 }
 
 func (m *Root) listSummary() string {
