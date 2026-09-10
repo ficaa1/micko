@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-// TestSmokeVersionString pins the local beta build identity so the smoke
-// slice has a real executable-shaped assertion.
+// TestSmokeVersionString pins the build identity so the smoke slice has a
+// real executable-shaped assertion.
 func TestSmokeVersionString(t *testing.T) {
 	if mainVersion == "" {
 		t.Fatal("mainVersion is empty")
 	}
-	if !strings.Contains(mainVersion, "beta") {
-		t.Errorf("mainVersion = %q, want the beta identifier", mainVersion)
+	if strings.Count(mainVersion, ".") < 2 {
+		t.Errorf("mainVersion = %q, want a major.minor.patch version", mainVersion)
 	}
 }
 

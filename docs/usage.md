@@ -1,8 +1,8 @@
-# Usage — argo-tui (v0.2.0-beta.1 local beta)
+# Usage — argo-tui v0.2.0
 
-Operator-facing quickstart and command reference for the local beta
-candidate. This page documents locally verified behavior; live Argo
-compatibility and non-Linux execution remain explicitly unverified.
+Operator-facing command reference. For build and quick-start instructions see
+the [README](../README.md); this page is the longer form. Behavior here is
+verified locally and against a live Argo Workflows v4.1.2 server.
 
 ## 1. Install / build
 

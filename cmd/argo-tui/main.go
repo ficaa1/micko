@@ -26,7 +26,7 @@ import (
 	"argo-tui/internal/ui/actions"
 )
 
-const version = "0.2.0-beta.1"
+const version = "0.2.0"
 
 // mainVersion exposes the build version to the smoke test without exporting
 // a mutable API surface.

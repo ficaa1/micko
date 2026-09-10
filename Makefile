@@ -1,6 +1,6 @@
-# argo-tui developer commands (0.2.0-beta.1 local candidate).
-# Go toolchain: pinned go 1.25.x (go.mod toolchain go1.25.4). CI/E1 owns
-# pipeline wiring; this Makefile covers local builds and tests only.
+# argo-tui developer commands (v0.2.0).
+# Go toolchain: pinned go 1.25.x (go.mod toolchain go1.25.4). This Makefile
+# covers local builds and tests only.
 
 GO ?= go
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
