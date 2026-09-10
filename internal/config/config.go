@@ -47,6 +47,13 @@ type Profile struct {
 	TokenFile        string   `yaml:"tokenFile,omitempty"`
 	CAFile           string   `yaml:"caFile,omitempty"`
 	Namespaces       []string `yaml:"namespaces,omitempty"`
+	// WebURL is the browser address of this cluster's Argo UI, for example
+	// "https://argo.example.com". It is used only to build a link to open or
+	// copy; argo-tui never sends a request to it. Leave it out and the open
+	// key says the profile has no web address instead of guessing one, since
+	// the forwarded loopback port is not reachable from a browser session
+	// that outlives the program.
+	WebURL string `yaml:"webURL,omitempty"`
 }
 
 // File mirrors the on-disk config (plan §3 example).
@@ -74,8 +81,11 @@ func (f File) refreshInterval() (time.Duration, error) {
 // (plan §4: "Connection validated config is independent of UI, with
 // credential-source callbacks injected into A's client").
 type Config struct {
-	ProfileName     string
-	Server          string
+	ProfileName string
+	Server      string
+	// WebURL is the Argo UI address for links; empty means the profile did
+	// not configure one.
+	WebURL          string
 	Namespace       string
 	TokenEnv        string
 	TokenFile       string
@@ -143,6 +153,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 
 	// Merge: CLI > profile > config default > built-in default.
 	cfg.Server = firstNonEmpty(opts.Server, prof.Server)
+	cfg.WebURL = strings.TrimSuffix(prof.WebURL, "/")
 	cfg.Namespace = firstNonEmpty(opts.Namespace, prof.Namespace)
 	cfg.TokenEnv = prof.TokenEnv
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)

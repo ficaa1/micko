@@ -87,7 +87,31 @@ type Root struct {
 	connectionReady  bool
 	connectionFresh  bool
 	connectionTarget string
+
+	// rawMode renders the active pane's whole content with no border and no
+	// bands, so a terminal mouse selection copies clean text. rawTop is its
+	// scroll anchor.
+	rawMode bool
+	rawTop  int
+	// gPending is the armed half of vim's gg while the raw view is up.
+	gPending bool
+
+	// flash is a one-line result of the last explicit command (a copy, a
+	// browser open). It is shown in the footer and cleared by the next key,
+	// so an action never looks like it did nothing.
+	flash string
+
+	// webURL is the Argo UI address for this profile, used to build a link
+	// for the open and copy keys. Empty means the profile configured none.
+	webURL string
+
+	// openURL launches a browser. It is a field so tests can observe the
+	// call instead of opening a real window.
+	openURL func(string) error
 }
+
+// SetWebURL records the Argo UI address links are built from.
+func (m *Root) SetWebURL(u string) { m.webURL = u }
 
 // listState is the list route's data + status.
 type listState struct {
@@ -153,12 +177,20 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 		inflight:        map[string]context.CancelFunc{},
 		theme:           shared.NewTheme(false),
 		listView:        workflowlist.New(shared.NewTheme(false), false),
-		detailView:      detail.New(),
+		detailView:      newDetailView(),
 		actionView:      actions.NewWithOptions(core.Ref{}, opts),
 		actionOpts:      opts,
 		connectionReady: true,
 		connectionFresh: true,
 	}
+}
+
+// newDetailView builds the detail pane with the shared theme, so node rows
+// are styled from the same palette as every other pane.
+func newDetailView() *detail.Model {
+	d := detail.New()
+	d.SetTheme(shared.NewTheme(false))
+	return d
 }
 
 // ConnectionStateMsg carries transport lifecycle changes into the update loop.
@@ -223,7 +255,15 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// A non-idle action modal owns all remaining input (UI-04).
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
+			had := m.actionView.State()
 			_, cmd := m.actionView.Update(msg)
+			// Closing a finished action returns to the detail pane it was
+			// started from, and refetches it: the workflow the reader is
+			// looking at has just changed, and showing its pre-action state
+			// would be the most misleading moment to be stale.
+			if had == actions.StateOutcome && m.actionView.State() == actions.StateIdle && m.route == RouteDetail {
+				return m, tea.Batch(cmd, m.startDetailFetch())
+			}
 			return m, cmd
 		}
 		// The help overlay is a dialog (shared.KeyCtxDialog): while it is
@@ -247,6 +287,31 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// except while the active child owns printable text entry.
 		if key == "q" && !m.textEntryActive() {
 			return m, m.quit()
+		}
+		// Every explicit command below reports its result in the footer, so
+		// the previous report is cleared first: a stale "copied" line beside
+		// a new screen would be a lie.
+		m.flash = ""
+		if m.rawMode {
+			return m, m.handleRawKey(key)
+		}
+		if !m.textEntryActive() {
+			switch key {
+			case "f", "ctrl+f":
+				// The bordered pane wraps every line, so a mouse selection
+				// picks up the border columns too. The raw view drops all
+				// chrome for exactly that reason. On the logs route `f`
+				// already means follow, so there ctrl+f is the way in.
+				if key == "ctrl+f" || m.route != RouteLogs {
+					m.enterRaw()
+					return m, nil
+				}
+			case "y":
+				m.flash = m.copyLabel()
+				return m, tea.SetClipboard(m.copyText())
+			case "o":
+				return m, m.openInBrowser()
+			}
 		}
 		if m.route == RouteDetail && key == "a" {
 			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
@@ -335,6 +400,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case detail.BackMsg:
 		return m, m.back()
 
+	case detail.NodeLogsIntent:
+		// A node with no resolved pod would send the server a pod name that
+		// may not exist, so the request stays workflow-wide and the pane
+		// says which node the reader asked about.
+		return m, m.openLogs(OpenLogsMsg{Ref: m.selection, PodName: msg.PodName, Container: "main"})
+
 	case BackMsg:
 		return m, m.back()
 
@@ -363,6 +434,11 @@ func terminalWatchMode(mode string) bool {
 // a context band, a bordered pane, and a key-hint band. The shell fixes the
 // geometry, so the bands stay put while routes and connection states change.
 func (m *Root) View() tea.View {
+	// The raw view is deliberately outside the shell: its whole purpose is to
+	// put nothing but content on the screen.
+	if m.rawMode {
+		return m.rawView()
+	}
 	f := shell.Frame{
 		// `?` is root-owned on every route, so the shell advertises it once
 		// rather than each pane repeating it in its own hints.
@@ -489,6 +565,12 @@ func (m *Root) SetVersion(v string) { m.version = v }
 // the footer with the key hints. shell.Render already produces exactly the
 // terminal size, so the clamp here is a safety net for an unsized frame.
 func (m *Root) finishView(f shell.Frame) tea.View {
+	if m.flash != "" {
+		// The result of the last explicit command replaces the route hints
+		// for one screen: it answers the key the reader just pressed, and it
+		// disappears on their next key.
+		f.Hints = m.flash
+	}
 	content := f.Render(m.theme)
 	if m.height > 0 {
 		lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
