@@ -56,6 +56,11 @@ func render(m *Model) string {
 			switch m.outcome.Outcome {
 			case core.ActionConfirmed:
 				b.WriteString("outcome: confirmed\n")
+			case core.ActionAccepted:
+				b.WriteString("outcome: ACCEPTED — the server applied the action; it has not finished yet. Do not repeat it.\n")
+				if m.outcome.Workflow != nil {
+					b.WriteString("phase: " + shared.Sanitize(m.outcome.Workflow.Summary.Phase) + " (watch the workflow for the final state)\n")
+				}
 			case core.ActionUnknown:
 				b.WriteString("outcome: UNKNOWN — the server may have applied the action; inspect before retrying\n")
 			default:

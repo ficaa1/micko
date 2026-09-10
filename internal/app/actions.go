@@ -57,17 +57,25 @@ func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 			}
 			return actionResultMsg{genStamp: g, Result: result, Err: err}
 		}
+		// The server returned success, so the mutation is applied. From here
+		// on the outcome is at worst ACCEPTED; it never degrades to UNKNOWN,
+		// because a failed observation says nothing about a request the
+		// server already acknowledged.
 		ref := req.Ref
 		if result.Affected != nil {
 			ref = *result.Affected
 		}
-		wf, readErr := readBack(ctx, m.deps.reader, ref, req.Action)
+		wf, settled, readErr := readBack(ctx, m.deps.reader, ref, req.Action)
 		if readErr != nil {
-			result.Outcome = core.ActionUnknown
+			result.Outcome = core.ActionAccepted
 			return actionResultMsg{genStamp: g, Result: result, Err: readErr}
 		}
 		result.Workflow = &wf
-		result.Outcome = core.ActionConfirmed
+		if settled {
+			result.Outcome = core.ActionConfirmed
+		} else {
+			result.Outcome = core.ActionAccepted
+		}
 		return actionResultMsg{genStamp: g, Result: result}
 	}
 }
@@ -76,33 +84,42 @@ func unknownAction(req core.ActionRequest) core.ActionResult {
 	return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}
 }
 
-func readBack(ctx context.Context, reader core.Reader, ref core.Ref, action core.Action) (core.Workflow, error) {
-	wf, err := reader.Get(ctx, ref)
+// stopObservation bounds how long an accepted Stop is watched for a terminal
+// phase. A graceful Stop runs the workflow's exit handler first, so the phase
+// can lag the accepted request by many seconds.
+const (
+	stopObservationInterval = time.Second
+	stopObservationAttempts = 30
+)
+
+// readBack observes the state that follows an accepted mutation. settled
+// reports whether the expected end state was seen inside the budget; false
+// means the mutation is applied but still in progress, never that it failed.
+func readBack(ctx context.Context, reader core.Reader, ref core.Ref, action core.Action) (wf core.Workflow, settled bool, err error) {
+	wf, err = reader.Get(ctx, ref)
 	if err != nil {
-		return core.Workflow{}, err
+		return core.Workflow{}, false, err
 	}
 	if action != core.ActionStop && action != core.ActionTerminate {
-		return wf, nil
+		return wf, true, nil
 	}
-	// Status may be delayed after a successful PUT. Poll briefly, bounded and
-	// cancelable; timeout becomes unknown rather than false success.
-	for i := 0; i < 10 && !terminalPhase(wf.Summary.Phase); i++ {
-		timer := time.NewTimer(100 * time.Millisecond)
+	for i := 0; i < stopObservationAttempts && !terminalPhase(wf.Summary.Phase); i++ {
+		timer := time.NewTimer(stopObservationInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return core.Workflow{}, ctx.Err()
+			// Cancellation is not evidence about the workflow. Report the
+			// last observed state as still in progress.
+			return wf, false, nil
 		case <-timer.C:
 		}
-		wf, err = reader.Get(ctx, ref)
-		if err != nil {
-			return core.Workflow{}, err
+		next, getErr := reader.Get(ctx, ref)
+		if getErr != nil {
+			return wf, false, getErr
 		}
+		wf = next
 	}
-	if !terminalPhase(wf.Summary.Phase) {
-		return core.Workflow{}, errors.New("action status did not reach a terminal phase before observation deadline")
-	}
-	return wf, nil
+	return wf, terminalPhase(wf.Summary.Phase), nil
 }
 
 func terminalPhase(phase string) bool {
@@ -122,7 +139,10 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 	if m.actionView == nil {
 		return nil
 	}
-	if msg.Err != nil && msg.Result.Outcome != core.ActionUnknown {
+	// An error alongside an accepted result describes a failed observation,
+	// not a failed mutation, so the accepted outcome stands. Only a result
+	// that is neither confirmed nor accepted degrades to unknown.
+	if msg.Err != nil && msg.Result.Outcome != core.ActionAccepted && msg.Result.Outcome != core.ActionUnknown {
 		msg.Result.Outcome = core.ActionUnknown
 	}
 	m.actionView.SetOutcome(msg.Result)

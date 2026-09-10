@@ -32,8 +32,9 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 		return result, fmt.Errorf("marshal %s action: %w", req.Action, err)
 	}
 	path := "/api/v1/workflows/" + url.PathEscape(req.Ref.Namespace) + "/" + url.PathEscape(req.Ref.Name) + "/" + string(req.Action)
-	target := *c.base
-	target.Path = stringsTrimSlash(c.base.Path) + path
+	base := c.baseURL()
+	target := *base
+	target.Path = stringsTrimSlash(base.Path) + path
 	target.RawQuery = ""
 	token, err := c.tokenFn()
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 	if err != nil {
 		return result, core.ErrProtocalf("building action request: %v", err)
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+token)
+	setAuthorization(httpReq, token)
 	httpReq.Header.Set("User-Agent", "argo-tui/0.1")
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(httpReq)

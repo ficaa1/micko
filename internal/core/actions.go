@@ -126,13 +126,23 @@ func (r ActionRequest) WireBody() any {
 type ActionOutcome string
 
 const (
+	// ActionConfirmed means the server accepted the request and a read-back
+	// observed the expected resulting state.
 	ActionConfirmed ActionOutcome = "confirmed"
-	ActionUnknown   ActionOutcome = "unknown"
+	// ActionAccepted means the server returned success, so the mutation was
+	// definitely applied, but the expected end state was not observed within
+	// the observation budget. A graceful Stop that is still running exit
+	// handlers lands here. It is certain, unlike ActionUnknown, and must
+	// never be resent either: the request has already taken effect.
+	ActionAccepted ActionOutcome = "accepted"
+	// ActionUnknown means it is not known whether the request was applied.
+	ActionUnknown ActionOutcome = "unknown"
 )
 
 // ActionResult contains the exact target and any affected/new identity read
 // from the server. Unknown means the request may have been applied; callers
-// must inspect before retrying and must never auto-resubmit.
+// must inspect before retrying and must never auto-resubmit. Accepted means
+// it was applied but has not finished; callers must not resend it either.
 type ActionResult struct {
 	Action   Action
 	Target   Ref
