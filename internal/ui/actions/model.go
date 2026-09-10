@@ -104,6 +104,17 @@ func (m *Model) Open(action core.Action) {
 	}
 }
 
+// OpenUnavailable shows the action pane in its blocked state with an explicit
+// reason. A key that silently does nothing reads as a broken key, and the
+// operator needs to know the data is stale rather than the action unsupported.
+func (m *Model) OpenUnavailable(reason string) {
+	m.action = ""
+	m.outcome = nil
+	m.typedName = ""
+	m.state = StateUnavailable
+	m.reason = reason
+}
+
 func (m *Model) Cancel() {
 	if m.state == StateMenu || m.state == StateConfirm || m.state == StateTypedName {
 		m.state = StateIdle
