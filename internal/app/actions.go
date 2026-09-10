@@ -87,7 +87,9 @@ func unknownAction(req core.ActionRequest) core.ActionResult {
 // stopObservation bounds how long an accepted Stop is watched for a terminal
 // phase. A graceful Stop runs the workflow's exit handler first, so the phase
 // can lag the accepted request by many seconds.
-const (
+// They are variables, not constants, so a test can shorten the budget without
+// waiting out a real exit handler.
+var (
 	stopObservationInterval = time.Second
 	stopObservationAttempts = 30
 )
