@@ -161,6 +161,15 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	}
 }
 
+// ConnectionStateMsg carries transport lifecycle changes into the update loop.
+// The forwarding manager runs on its own goroutine, so it must never call
+// SetConnectionState directly; it sends this message through the program
+// instead and the single-threaded update loop applies it.
+type ConnectionStateMsg struct {
+	Ready  bool
+	Target string
+}
+
 // SetConnectionState is used by the transport lifecycle bridge. A lost
 // forward keeps the last-good snapshot visible but makes actions unavailable
 // until a fresh snapshot is accepted.
@@ -286,6 +295,10 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.startWatch()
+
+	case ConnectionStateMsg:
+		m.SetConnectionState(msg.Ready, msg.Target)
+		return m, nil
 
 	case actionResultMsg:
 		return m, m.handleActionResult(msg)
@@ -706,7 +719,12 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	st := &m.listState
 	st.loading = false
 	if msg.Err != nil {
-		// Keep last good data; record error + stale age (plan §5).
+		// Keep last good data; record error + stale age (plan §5). The
+		// snapshot is now stale, so mutations stay blocked until a fresh
+		// list is accepted, even if the transport itself never reported a
+		// loss (a server-side failure is just as stale as a dead forward).
+		m.connectionFresh = false
+		m.cancelInflight("action")
 		st.lastErr = msg.Err
 		if st.staleSince.IsZero() {
 			st.staleSince = m.deps.clock.Now()

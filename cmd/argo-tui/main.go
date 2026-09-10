@@ -8,6 +8,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -31,6 +32,27 @@ const version = "0.2.0-beta.1"
 // a mutable API surface.
 var mainVersion = version
 var mainCommit = "unknown"
+
+// forwardEndpoint combines the announced loopback address of the owned
+// port-forward with the scheme and path prefix of the configured server. The
+// forward moves the transport to a new host and port; it must not silently
+// downgrade a configured https endpoint to plain http, and it must not
+// discard a configured base path.
+func forwardEndpoint(configured, announced string) string {
+	if announced == "" {
+		return ""
+	}
+	a, err := url.Parse(announced)
+	if err != nil || a.Host == "" {
+		return ""
+	}
+	c, err := url.Parse(configured)
+	if err != nil || c.Scheme == "" {
+		return announced
+	}
+	out := url.URL{Scheme: c.Scheme, Host: a.Host, Path: strings.TrimSuffix(c.Path, "/")}
+	return out.String()
+}
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -66,6 +88,7 @@ func run(args []string) int {
 
 	clock := testkit.NewFakeClock(time.Now().UTC())
 	var reader core.Reader
+	var connStates chan app.ConnectionStateMsg
 	activeNS := ""
 	interval := config.DefaultRefreshInterval
 	activeServer, activeProfile := "synthetic demo", "demo"
@@ -100,45 +123,77 @@ func run(args []string) int {
 		}
 		serverURL := cfg.Server
 		var forwarder *portforward.Manager
+		var stateCh chan app.ConnectionStateMsg
 		if cfg.Target.Service != "" {
-			localPort := ""
-			forwarder, err = portforward.New(portforward.Target{Context: cfg.Target.Context, Namespace: cfg.Target.Namespace, Service: cfg.Target.Service, RemotePort: strconv.Itoa(cfg.Target.RemotePort), LocalPort: localPort})
+			// LocalPort stays empty so kubectl binds an ephemeral loopback
+			// port. Nothing is ever sent to a guessed or reused port: the
+			// endpoint comes only from the readiness line of the process we
+			// own, and it is re-read per request because every recovery
+			// binds a new port.
+			forwarder, err = portforward.New(portforward.Target{Context: cfg.Target.Context, Namespace: cfg.Target.Namespace, Service: cfg.Target.Service, RemotePort: strconv.Itoa(cfg.Target.RemotePort), LocalPort: ""})
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "argo-tui: port-forward:", err)
 				return 1
 			}
 			forwarder.Start(context.Background())
 			defer forwarder.Close()
-			// Do not construct a client against a guessed/reused port. Readiness
-			// and the actual owned endpoint are prerequisites for any request.
-			readyCtx, cancelReady := context.WithTimeout(context.Background(), 15*time.Second)
+
+			// Drain lifecycle events from the moment forwarding starts, before
+			// waiting for readiness: a stalled consumer must never be able to
+			// hold back the recovery loop. stateCh buffers the connection
+			// transitions until the Tea program exists to receive them.
+			stateCh = make(chan app.ConnectionStateMsg, 32)
+			sink := diagnostics.New(os.Stderr)
+			go func() {
+				defer close(stateCh)
+				for e := range forwarder.Events() {
+					if *debug {
+						sink.Emit(diagnostics.StageForward, string(e.State), e.Attempt-1, e.State == portforward.StateLost, 0, "")
+					}
+					msg := app.ConnectionStateMsg{Ready: e.State == portforward.StateReady}
+					if msg.Ready {
+						msg.Target = forwardEndpoint(cfg.Server, forwarder.Endpoint())
+					}
+					switch e.State {
+					case portforward.StateReady, portforward.StateLost, portforward.StateFailed, portforward.StateStopped:
+					default:
+						continue
+					}
+					select {
+					case stateCh <- msg:
+					default: // never block forwarding on the UI
+					}
+				}
+			}()
+
+			readyCtx, cancelReady := context.WithTimeout(context.Background(), 30*time.Second)
 			err = forwarder.Ready(readyCtx)
 			cancelReady()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "argo-tui: port-forward readiness:", err)
 				return 1
 			}
-			serverURL = forwarder.Endpoint()
+			serverURL = forwardEndpoint(cfg.Server, forwarder.Endpoint())
 			if serverURL == "" {
 				fmt.Fprintln(os.Stderr, "argo-tui: port-forward announced readiness without an endpoint")
 				return 1
 			}
-			sink := diagnostics.New(os.Stderr)
-			go func() {
-				for e := range forwarder.Events() {
-					if *debug {
-						sink.Emit(diagnostics.StageForward, string(e.State), e.Attempt-1, e.State == portforward.StateLost, 0, "")
-					}
-				}
-			}()
 		}
-		reader, err = argo.NewClient(argo.Options{Server: serverURL, TokenFn: tokenFn, TokenSource: "configured credential source", CAFile: cfg.CAFile, InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify})
+		// resolveServer keeps the transport pointed at the currently owned
+		// local port. The configured scheme, path prefix and TLS material are
+		// fixed at construction and are not affected by recovery.
+		var resolveServer func() string
+		if forwarder != nil {
+			resolveServer = func() string { return forwardEndpoint(cfg.Server, forwarder.Endpoint()) }
+		}
+		reader, err = argo.NewClient(argo.Options{Server: serverURL, TokenFn: tokenFn, TokenSource: "configured credential source", CAFile: cfg.CAFile, InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify, ResolveServer: resolveServer})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "argo-tui:", err)
 			return 1
 		}
 		activeNS, interval = cfg.Namespace, cfg.RefreshInterval
 		activeServer, activeProfile = cfg.Server, cfg.ProfileName
+		connStates = stateCh
 	}
 	root := app.NewRootWithOptions(reader, clock, activeNS, interval, actions.Options{
 		AllowActions: *allowActions && !*demo,
@@ -149,6 +204,16 @@ func run(args []string) int {
 	})
 	root.SetVersion(mainVersion + " @ " + mainCommit)
 	p := tea.NewProgram(root)
+	if connStates != nil {
+		// Bridge transport lifecycle into the update loop. Losing the forward
+		// keeps the last-good data on screen but disables actions until a
+		// fresh snapshot is accepted; the model owns that policy.
+		go func() {
+			for msg := range connStates {
+				p.Send(msg)
+			}
+		}()
+	}
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "argo-tui: %v\n", err)
 		return 1

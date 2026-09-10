@@ -47,6 +47,12 @@ type Client struct {
 	caFile string
 	// insecureSkipTLSVerify mirrors the explicit user opt-in.
 	insecureSkipTLSVerify bool
+	// resolveBase, when set, returns the currently valid base URL. A managed
+	// port-forward re-binds an ephemeral loopback port on every recovery, so
+	// a base captured once at startup goes stale. Resolving per request keeps
+	// the transport pointed at the owned endpoint across reconnects while the
+	// configured scheme, path prefix and TLS material stay fixed.
+	resolveBase func() string
 	// http performs the requests; redirects are rejected at this layer.
 	http *http.Client
 	// clock enables deterministic Retry-After parsing in tests.
@@ -77,6 +83,12 @@ type Options struct {
 	// DialTimeout bounds opening the connection (default 10s). Streaming
 	// reads are NOT bounded by it.
 	DialTimeout time.Duration
+	// ResolveServer optionally supplies the live base URL per request. It
+	// must return an endpoint equivalent to Server (same scheme and path
+	// prefix); only the host and port may change, as they do when a managed
+	// port-forward recovers onto a new ephemeral local port. An empty or
+	// unparseable return keeps the last known good base.
+	ResolveServer func() string
 }
 
 // NewClient validates the URL contract and builds the transport.
@@ -168,6 +180,7 @@ func NewClient(opts Options) (*Client, error) {
 		insecureSkipTLSVerify: opts.InsecureSkipTLSVerify,
 		http:                  hc,
 		now:                   now,
+		resolveBase:           opts.ResolveServer,
 	}, nil
 }
 
@@ -195,10 +208,46 @@ func isLoopback(host string) bool {
 
 // --- request plumbing -----------------------------------------------------------
 
+// baseURL returns the base URL to use for the next request. It preserves the
+// configured scheme, path prefix and userinfo-free contract: only host and
+// port are adopted from the resolver, and only when they parse and pass the
+// same plain-HTTP loopback rule enforced at construction.
+func (c *Client) baseURL() *url.URL {
+	if c.resolveBase == nil {
+		return c.base
+	}
+	raw := c.resolveBase()
+	if raw == "" {
+		return c.base
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil {
+		return c.base
+	}
+	next := *c.base
+	next.Host = u.Host
+	if next.Scheme == "http" && !isLoopback(next.Hostname()) {
+		return c.base
+	}
+	return &next
+}
+
+// setAuthorization attaches the bearer credential. An empty token means the
+// deployment authenticates by another means (for example an Argo server run
+// with --auth-mode=server), so no header is sent at all: an empty "Bearer "
+// value is malformed and some gateways reject it outright.
+func setAuthorization(req *http.Request, token string) {
+	if token == "" {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+}
+
 // newRequest builds an authenticated GET to the appended path.
 func (c *Client) newRequest(ctx context.Context, path string, query url.Values) (*http.Request, error) {
-	target := *c.base
-	target.Path = strings.TrimSuffix(c.base.Path, "/") + path
+	base := c.baseURL()
+	target := *base
+	target.Path = strings.TrimSuffix(base.Path, "/") + path
 	target.RawQuery = query.Encode()
 	token, err := c.tokenFn()
 	if err != nil {
@@ -212,7 +261,7 @@ func (c *Client) newRequest(ctx context.Context, path string, query url.Values) 
 	if err != nil {
 		return nil, core.ErrProtocalf("building request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	setAuthorization(req, token)
 	req.Header.Set("User-Agent", "argo-tui/0.1")
 	// Deliberately NO Accept header at all: no SSE hint (docs/protocol.md
 	// §6 v0.1 policy) and no content-negotiation surprises. The gateway
