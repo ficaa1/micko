@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"argo-tui/internal/core"
 	"argo-tui/internal/testkit"
@@ -119,5 +122,27 @@ func TestFailedListBlocksActionsUntilFreshData(t *testing.T) {
 	}
 	if cmd := m.startAction(req); cmd == nil {
 		t.Fatal("action still blocked after fresh data")
+	}
+}
+
+// A blocked action key must say why. A key that does nothing at all reads as
+// a broken key rather than a safety gate.
+func TestBlockedActionKeyExplainsItself(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	m.route = RouteDetail
+	m.selection = wf.Summary.Ref
+	m.SetConnectionState(false, "")
+	m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	if m.actionView == nil || m.actionView.State() != actions.StateUnavailable {
+		t.Fatalf("blocked action key did not open an explanation: %v", m.actionView)
+	}
+	if !strings.Contains(m.actionView.View().Content, "connection lost") {
+		t.Fatalf("reason not shown: %q", m.actionView.View().Content)
+	}
+	// Still no mutation may start.
+	if cmd := m.startAction(core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionResume, Confirmation: core.Confirmation{Confirmed: true}}); cmd != nil {
+		t.Fatal("action started while disconnected")
 	}
 }
