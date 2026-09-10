@@ -29,3 +29,8 @@ profiles:
     namespace: my-team-tst
     tokenEnv: ARGO_TUI_TOKEN
     # caFile: /absolute/path/to/company-ca.pem
+    # The browser address of this cluster's Argo UI. It is used only to build
+    # a link for the `o` (open) and `y` (copy) keys; argo-tui never sends a
+    # request to it. Leave it out and `o` says the profile has no web address
+    # rather than opening a guess.
+    webURL: https://argo.example.com
