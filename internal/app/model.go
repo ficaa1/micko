@@ -498,15 +498,28 @@ func (m *Root) finishView(f shell.Frame) tea.View {
 	return v
 }
 
+// shortReason caps an error message to the room a border title can spare.
+func shortReason(msg string) string {
+	const max = 60
+	msg = strings.TrimSpace(msg)
+	if len(msg) <= max {
+		return msg
+	}
+	return msg[:max-1] + "…"
+}
+
 func (m *Root) listSummary() string {
 	st := m.listState
 	switch {
 	case st.loading && len(st.items) == 0:
 		return "list: loading..."
 	case st.lastErr != nil && len(st.items) == 0:
-		return "list: error: " + st.lastErr.Message
+		return "list: error: " + shortReason(st.lastErr.Message)
 	case st.lastErr != nil:
-		return "list: stale (last good " + lenItems(st.items) + "): " + st.lastErr.Message
+		// The stale warning must survive the border's width budget, so the
+		// reason is capped: an operator needs to see "stale" far more than to
+		// read a full transport error on the border.
+		return "list: STALE (last good " + lenItems(st.items) + "): " + shortReason(st.lastErr.Message)
 	case len(st.items) == 0:
 		return "list: empty"
 	default:

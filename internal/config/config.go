@@ -34,15 +34,19 @@ const (
 // file at TokenFile (mutually exclusive), and are read per request to
 // support rotation (plan §3).
 type Profile struct {
-	KubeContext string   `yaml:"kubeContext"`
-	Service     string   `yaml:"service"`
-	RemotePort  int      `yaml:"remotePort"`
-	Server      string   `yaml:"server"`
-	Namespace   string   `yaml:"namespace"`
-	TokenEnv    string   `yaml:"tokenEnv,omitempty"`
-	TokenFile   string   `yaml:"tokenFile,omitempty"`
-	CAFile      string   `yaml:"caFile,omitempty"`
-	Namespaces  []string `yaml:"namespaces,omitempty"`
+	KubeContext string `yaml:"kubeContext"`
+	Service     string `yaml:"service"`
+	// ServiceNamespace is where the Argo Server service runs. It is often a
+	// different namespace from the workflows being watched, so it defaults to
+	// Namespace only when it is not set.
+	ServiceNamespace string   `yaml:"serviceNamespace,omitempty"`
+	RemotePort       int      `yaml:"remotePort"`
+	Server           string   `yaml:"server"`
+	Namespace        string   `yaml:"namespace"`
+	TokenEnv         string   `yaml:"tokenEnv,omitempty"`
+	TokenFile        string   `yaml:"tokenFile,omitempty"`
+	CAFile           string   `yaml:"caFile,omitempty"`
+	Namespaces       []string `yaml:"namespaces,omitempty"`
 }
 
 // File mirrors the on-disk config (plan §3 example).
@@ -144,7 +148,8 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)
 	cfg.CAFile = firstNonEmpty(opts.CAFile, prof.CAFile)
 	cfg.InsecureSkipTLSVerify = opts.InsecureSkipTLSVerify
-	cfg.Target = Target{Context: prof.KubeContext, Namespace: cfg.Namespace, Service: prof.Service, RemotePort: prof.RemotePort}
+	targetNS := firstNonEmpty(prof.ServiceNamespace, cfg.Namespace)
+	cfg.Target = Target{Context: prof.KubeContext, Namespace: targetNS, Service: prof.Service, RemotePort: prof.RemotePort}
 	cfg.Debug = Debug{Enabled: opts.Debug}
 	if opts.Demo {
 		if name != "" || opts.Server != "" || opts.Namespace != "" || opts.TokenFile != "" || opts.CAFile != "" || opts.InsecureSkipTLSVerify || opts.Debug {
@@ -301,11 +306,35 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// DefaultConfigPath is the plan §3 location resolved via os.UserConfigDir.
+// DefaultConfigPath resolves the configuration file location. It returns the
+// first candidate that exists, so an existing file is always found:
+//
+//  1. $XDG_CONFIG_HOME/argo-tui/config.yaml, when that variable is set
+//  2. ~/.config/argo-tui/config.yaml, the conventional location on every
+//     platform and the one this tool documents
+//  3. os.UserConfigDir()/argo-tui/config.yaml, which on macOS is
+//     ~/Library/Application Support
+//
+// When none exists it returns the first candidate, which is where a new file
+// should be written.
 func DefaultConfigPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("config: resolve user config dir: %w", err)
+	var candidates []string
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		candidates = append(candidates, filepath.Join(xdg, "argo-tui", "config.yaml"))
 	}
-	return filepath.Join(dir, "argo-tui", "config.yaml"), nil
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".config", "argo-tui", "config.yaml"))
+	}
+	if dir, err := os.UserConfigDir(); err == nil {
+		candidates = append(candidates, filepath.Join(dir, "argo-tui", "config.yaml"))
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("config: resolve user config dir: no home or config directory")
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && !st.IsDir() {
+			return c, nil
+		}
+	}
+	return candidates[0], nil
 }

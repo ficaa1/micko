@@ -1077,3 +1077,27 @@ func TestNoRetryOnMutations(t *testing.T) {
 			c.maxRetries)
 	}
 }
+
+// A plain-http endpoint cannot fail a TLS handshake. Reporting one sends the
+// operator after a certificate problem when the real cause is usually a dead
+// port-forward.
+func TestPlainHTTPFailureIsNotReportedAsTLS(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	base := srv.URL
+	srv.Close() // nothing is listening now
+
+	c, err := NewClient(Options{Server: base, TokenFn: func() (string, error) { return "", nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Get(context.Background(), core.Ref{Namespace: "ns", Name: "wf", UID: "u"})
+	if err == nil {
+		t.Fatal("expected a transport error")
+	}
+	if strings.Contains(err.Error(), "TLS handshake") {
+		t.Fatalf("plain http failure reported as TLS: %v", err)
+	}
+	if !strings.Contains(err.Error(), "server unreachable") {
+		t.Fatalf("want an unreachable-server error, got: %v", err)
+	}
+}
