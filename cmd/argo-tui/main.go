@@ -92,6 +92,7 @@ func run(args []string) int {
 	activeNS := ""
 	interval := config.DefaultRefreshInterval
 	activeServer, activeProfile := "synthetic demo", "demo"
+	activeWebURL := ""
 	if *demo {
 		reader = testkit.DemoReader(clock)
 		activeNS = "demo"
@@ -193,6 +194,7 @@ func run(args []string) int {
 		}
 		activeNS, interval = cfg.Namespace, cfg.RefreshInterval
 		activeServer, activeProfile = cfg.Server, cfg.ProfileName
+		activeWebURL = cfg.WebURL
 		connStates = stateCh
 	}
 	root := app.NewRootWithOptions(reader, clock, activeNS, interval, actions.Options{
@@ -203,6 +205,7 @@ func run(args []string) int {
 		Profile:      activeProfile,
 	})
 	root.SetVersion(mainVersion + " @ " + mainCommit)
+	root.SetWebURL(activeWebURL)
 	p := tea.NewProgram(root)
 	if connStates != nil {
 		// Bridge transport lifecycle into the update loop. Losing the forward
