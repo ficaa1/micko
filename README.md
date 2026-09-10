@@ -1,73 +1,192 @@
 # argo-tui
 
-A keyboard-first terminal UI for Argo Workflows. It can inspect workflow lists and details, render deterministic node outlines and sanitized resources, stream bounded logs, recover watches, and run explicitly enabled retry/resubmit/stop/terminate journeys through an Argo Server REST client. This is a local beta candidate, not an operational deployment claim.
+A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/workflows/).
 
-## Current release status
+It lists workflows, opens one, walks its node tree, streams the logs of a
+single node, and — only when you ask for it — resumes or stops a run. It
+reaches the Argo Server through a `kubectl port-forward` that it starts and
+stops itself, so nothing has to be exposed.
 
-Version: `0.2.0-beta.1`
+Version `0.2.0`. Verified against a real Argo Workflows v4.1.2 server.
 
-- Read-only list, detail, node, resource and log journeys are covered by synthetic/fake-server tests and a Linux PTY smoke journey.
-- Demo mode performs no network I/O and no writes: `--demo` uses only the built-in synthetic reader.
-- TLS verification, custom CA, token environment-variable/file sources, base paths, pagination, log framing and terminal-text sanitization are tested locally.
-- The independent final beta approval passed the local action, watch-recovery, transport, security, integration, race, vet, benchmark and build gates. See `docs/reviews/beta-approval.md`.
-- No authorized disposable Argo environment was available. Live compatibility remains explicitly blocked; synthetic fixtures never establish deployment compatibility.
+```
+argo-tui 0.2.0 @ 93caa40   server: http://127.0.0.1:2746   ns: batch-cd-prd      READ ONLY
+┌─ Workflows ──────────────────────────────────── list: 100 workflows | mode: watch ─┐
+│ Search: (none)  / to filter by name  Phase: All  5 awaiting resume                 │
+│ NAME                              PHASE           AGE  DURATION                    │
+│ deploy-multi-layer-p4r8w          ◐ Suspended     39m  ongoing                     │
+│ deploy-all-regions-r5t9z          ◐ Suspended      1d  ongoing                     │
+│ pr-diff-vertex-endpoints-skl62    ✗ Failed      1h55m  4m                          │
+│ web-users-full-deploy-6gq4k       ✓ Succeeded   1h17m  4m                          │
+└────────────────────────────────────────────────────────────────────────────────────┘
+list   enter open  l logs  / search  s sort  p phase  r refresh    ? help   1-39/100
+```
+
+## Build
+
+You need Go 1.25 or later. There is nothing else to install.
+
+```sh
+git clone <your-fork> argo-tui
+cd argo-tui
+make build            # or: go build -o dist/argo-tui ./cmd/argo-tui
+./dist/argo-tui --version
+```
+
+`make build` stamps the commit into the binary. `go build` alone does not, and
+the header then shows `unknown` where the commit goes.
+
+Cross-compile for another machine:
+
+```sh
+CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -o dist/argo-tui-linux  ./cmd/argo-tui
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/argo-tui-macos  ./cmd/argo-tui
+```
 
 ## Quick start
 
-Requires Go >= 1.25 (the module pins Go 1.25.0 and toolchain go1.25.4).
+### 1. Look at it with no cluster
 
-Run the offline demo:
+The demo uses built-in data. It opens no socket and writes nothing.
 
 ```sh
-go build -o dist/argo-tui ./cmd/argo-tui
 ./dist/argo-tui --demo
-./dist/argo-tui --version
 ```
 
-The demo uses synthetic data and never contacts a server. Press `q` to quit.
+Press `?` for the keys and `q` to quit.
 
-A real connection uses placeholder values only; provide credentials through an environment variable or token file, never by putting the token in the command line:
+### 2. Point it at your own Argo
+
+Write `~/.config/argo-tui/config.yaml`. A full commented example is in
+[`docs/argo-tui.config.example.yaml`](docs/argo-tui.config.example.yaml).
+
+```yaml
+currentProfile: team-prod
+refreshInterval: 5s
+
+profiles:
+  team-prod:
+    # argo-tui runs `kubectl port-forward` against this context itself.
+    kubeContext: gke_my-project_europe-west9_my-cluster
+    service: argo-workflows-server
+    serviceNamespace: argo
+    remotePort: 2746
+    # Only the scheme and any path prefix are read from this URL. The host
+    # and port always come from the forward argo-tui owns.
+    server: http://127.0.0.1:2746
+    # The namespace whose workflows are listed.
+    namespace: batch-cd-prd
+    # Optional. The browser address of this cluster's Argo UI, used by `o`.
+    webURL: https://workflows.prd.example.com
+```
+
+Then start it:
 
 ```sh
-export ARGO_TUI_TOKEN='placeholder-token'
-./dist/argo-tui \
-  --server https://argo.example.test/argo \
-  --namespace workflows
+./dist/argo-tui --profile team-prod
 ```
 
-The endpoint and namespace must be supplied by the operator. SSO browser login and direct Kubernetes access are not implemented. Do not use the placeholder endpoint or token against production.
+You need `kubectl` on your PATH and a working context. argo-tui starts the
+forward on a free local port, and stops it when you quit.
 
-## Local verification
+**Tokens.** An Argo Server started with `--auth-mode=server` needs no client
+token: leave the setting out and no `Authorization` header is sent. Otherwise
+name an environment variable with `tokenEnv`, or a file with `tokenFile`.
+Never put a token on the command line. The token is read per request and is
+never written to the config.
 
-The beta handoff was verified on Linux amd64 with Go 1.25.4. Required commands and their logs are recorded in the local handoff evidence:
+### 3. Turn on actions
+
+Resume and Stop are off unless you ask for them:
 
 ```sh
-gofmt -l cmd internal tests
-go test ./... -count=1
-go test -race ./... -count=1
-go vet ./...
-go test -tags=integration ./tests/integration/... -count=1 -v
-go test ./internal/ui/detail -bench BenchmarkNodeOutline -benchmem -run '^$'
-go test ./internal/ui/logs -bench BenchmarkBuffer -benchmem -run '^$'
-go build -trimpath -o dist/argo-tui ./cmd/argo-tui
-./dist/argo-tui --version
+./dist/argo-tui --profile team-prod --allow-actions
 ```
 
-The integration suite exercised the built binary in a Linux PTY, including demo list rendering, action/watch regression paths, `q`/Ctrl-C exit, version output, small-terminal behavior, terminal restoration bytes and the demo no-egress guard. Its server tests use local synthetic HTTP fixtures only.
+Even then, every action opens a pane that names the exact target, its UID and
+the server, and waits for a `y`. argo-tui sends the mutation once. If the
+result is ambiguous it says so and stops; it never retries a write.
 
-## Build artifacts
+The header states which mode you are in: `READ ONLY` or `ACTIONS ENABLED`.
 
-Local, ignored artifacts are written to `dist/`; they are not tagged, uploaded or published. The checked source commit and exact artifact checksums are recorded in the Kanban handoff. The local build produced:
+## Keys
 
-- `dist/argo-tui` — Linux amd64 host binary; executed for `--version`.
-- `dist/argo-tui-linux-amd64` — Linux amd64 cross-build; same source output as the host binary.
-- `dist/argo-tui-darwin-amd64` — macOS amd64 cross-build; not executed on macOS.
-- `dist/argo-tui-windows-amd64.exe` — Windows amd64 cross-build; not executed on Windows.
+Press `?` in the program for the full list. The ones you will use first:
+
+| Key | What it does |
+| --- | --- |
+| `j` `k`, arrows | move |
+| `pgup` `pgdn`, `ctrl+u` `ctrl+d` | page |
+| `gg` `G`, `home` `end` | first / last row |
+| `enter` | open the selected workflow |
+| `tab` | next section: Summary, Nodes, Resource |
+| `l` | logs — for the selected **node** in the Nodes tab |
+| `h` | show or hide skipped nodes |
+| `/` | filter the list; it narrows as you type |
+| `s` `p` | change the sort, change the phase filter |
+| `r` | refresh now |
+| `f` | full-screen view with no borders, so a mouse selection stays clean |
+| `y` | copy to the clipboard |
+| `o` | open the workflow in the Argo UI, and copy the link |
+| `t` | follow the log tail again (logs only) |
+| `a` | actions, with `--allow-actions` |
+| `esc` | back |
+| `q` | quit |
+
+## What it is for
+
+The job it was built around: a deployment stops at a manual approval gate,
+and you have to read the plan before you approve it.
+
+1. Suspended runs sort to the top of the list and read `◐ Suspended`. The
+   toolbar counts them.
+2. Open one and press `tab`. Skipped branches are hidden, so the tree shows
+   what actually ran. The gate row is marked `AWAITING RESUME`.
+3. Move to the node you care about and press `l`. Argo does not publish pod
+   names, so argo-tui derives each one with Argo's own algorithm. When the
+   server records no naming scheme, the key stays inert rather than guessing.
+4. Press `f` to read the logs full screen, or `y` to copy them.
+5. Press `esc`, then `a`, then resume.
+
+## Flags
+
+| Flag | Meaning |
+| --- | --- |
+| `--profile NAME` | the profile to use from the config |
+| `--config PATH` | a config file elsewhere |
+| `--demo` | built-in data, no network |
+| `--allow-actions` | arm Resume and Stop |
+| `--namespace`, `--server` | override the profile |
+| `--refresh-interval` | poll interval, default `5s` |
+| `--token-file`, `--ca-file` | token file, custom CA bundle |
+| `--insecure-skip-tls-verify` | disable TLS checks (unsafe) |
+| `--debug` | sanitized lifecycle diagnostics |
+| `--version` | print the version and exit |
+
+## Develop
+
+```sh
+make test        # focused package set
+go test ./...    # everything
+make vet
+make lint-fmt
+```
+
+Golden files are refreshed with `UPDATE_GOLDEN=1 go test ./...`. Check the
+diff before you commit one.
 
 ## Documentation
 
-- `docs/usage.md` — operator usage and interaction notes.
-- `docs/security.md` — credential, TLS, redirect and terminal-sanitization posture.
-- `docs/compatibility.md` — tested versus cross-compiled environments and unsupported claims.
-- `docs/reviews/alpha.md`, `docs/reviews/beta.md` and `docs/reviews/beta-approval.md` — independent gate evidence and limitations.
-- `CHANGELOG.md` — local beta handoff changes.
+- [`docs/usage.md`](docs/usage.md) — the longer command reference
+- [`docs/handson-testing.md`](docs/handson-testing.md) — testing notes against a real cluster, and what each one changed
+- [`docs/security.md`](docs/security.md) — token handling, sanitization, action safety
+- [`docs/protocol.md`](docs/protocol.md) — the Argo REST surface that is used
+- [`docs/contracts.md`](docs/contracts.md) — the internal data contract
+
+## Limits
+
+- Kubernetes access is through `kubectl`. There is no in-process client and no
+  SSO browser login.
+- Starting with no profile uses `currentProfile`. There is no profile picker
+  yet.
+- Resume and Stop are the only actions wired to the UI.
