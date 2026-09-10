@@ -50,6 +50,12 @@ type Summary struct {
 	StartedAt       *time.Time
 	FinishedAt      *time.Time
 	Labels          map[string]string
+	// Suspended reports that the workflow currently holds at least one
+	// Suspend node in a Running phase, i.e. it waits for a human Resume.
+	// It is derived from the node map the server sent with this summary;
+	// when the server sends no node data it stays false and the list says
+	// nothing rather than guessing (docs/protocol.md §8).
+	Suspended bool
 }
 
 // Page is one result page plus list metadata.
@@ -81,6 +87,11 @@ type Node struct {
 	OutboundNodes []string
 	StartedAt     *time.Time
 	FinishedAt    *time.Time
+	// TemplateName is the node's own template name. TemplateRefTemplate is
+	// the template named through a templateRef. Exactly one is normally
+	// set; both feed the version-aware pod-name resolution below.
+	TemplateName        string
+	TemplateRefTemplate string
 	// PodName is populated only from verified version-aware resolution
 	// (docs/protocol.md §8; v0.1 policy: do not guess pod names).
 	PodName string
@@ -99,6 +110,11 @@ type Workflow struct {
 	// verbatim for the resource view (docs/protocol.md §2). It is
 	// structured-parsed and redacted before rendering, never echoed raw.
 	Resource json.RawMessage
+	// PodNameVersion is the pod naming scheme the server recorded on this
+	// workflow (annotation workflows.argoproj.io/pod-name-format). "v1"
+	// means the node ID is the pod name; "v2" is the hashed form. An empty
+	// value means the server said nothing, and no pod name is derived.
+	PodNameVersion string
 }
 
 // LogRequest describes a log stream to open.

@@ -7,6 +7,8 @@ package argo
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"strconv"
 	"time"
 
 	"argo-tui/internal/core"
@@ -43,6 +45,7 @@ type rawWorkflow struct {
 		UID               string            `json:"uid"`
 		ResourceVersion   string            `json:"resourceVersion"`
 		Labels            map[string]string `json:"labels"`
+		Annotations       map[string]string `json:"annotations"`
 		CreationTimestamp *time.Time        `json:"creationTimestamp"`
 	} `json:"metadata"`
 	Status struct {
@@ -170,7 +173,114 @@ func wfFromRaw(raw json.RawMessage, rawForDetail []byte) (core.Workflow, error) 
 			wf.Nodes[id] = node
 		}
 	}
+	wf.PodNameVersion = w.Metadata.Annotations[podNameFormatAnnotation]
+	wf.Summary.Suspended = hasRunningSuspendNode(wf.Nodes)
+	resolvePodNames(&wf)
 	return wf, nil
+}
+
+// podNameFormatAnnotation is the annotation Argo writes on every workflow it
+// creates to record which pod naming scheme that workflow uses. The server is
+// the only authority on this; argo-tui never assumes a default.
+const podNameFormatAnnotation = "workflows.argoproj.io/pod-name-format"
+
+// hasRunningSuspendNode reports whether the workflow is parked on a manual
+// approval gate. A Suspend node in phase Running is exactly the state a
+// Resume clears, so the list can tell "running" apart from "waiting for me".
+func hasRunningSuspendNode(nodes map[string]core.Node) bool {
+	for _, n := range nodes {
+		if n.Type == "Suspend" && n.Phase == "Running" {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePodNames fills Node.PodName for pod-backed nodes, using the naming
+// scheme the SERVER recorded on the workflow. With no annotation nothing is
+// derived: a guessed pod name would send log requests to a pod that may
+// belong to another workflow, so the UI would rather offer no node-scoped
+// logs at all (docs/protocol.md §8).
+func resolvePodNames(wf *core.Workflow) {
+	if wf.PodNameVersion == "" || len(wf.Nodes) == 0 {
+		return
+	}
+	for id, n := range wf.Nodes {
+		if !podBackedNodeType(n.Type) {
+			continue
+		}
+		name := generatePodName(wf.Summary.Ref.Name, n.Name, nodeTemplateName(n), n.ID, wf.PodNameVersion)
+		if name == "" {
+			continue
+		}
+		n.PodName = name
+		wf.Nodes[id] = n
+	}
+}
+
+// podBackedNodeType mirrors the pinned log-capable node list
+// (docs/protocol.md §8). Only these nodes ever own a pod.
+func podBackedNodeType(t string) bool {
+	switch t {
+	case "Pod", "ContainerSet", "HTTP", "Plugin":
+		return true
+	default:
+		return false
+	}
+}
+
+func nodeTemplateName(n core.Node) string {
+	if n.TemplateName != "" {
+		return n.TemplateName
+	}
+	return n.TemplateRefTemplate
+}
+
+// generatePodName reproduces Argo's own pod naming (workflow/util/pod_name.go)
+// for the scheme the workflow declares.
+//
+//   - "v1": the node ID IS the pod name.
+//   - "v2": "<workflow>-<template>-<fnv32(nodeName)>", with the prefix cut so
+//     the whole name fits the 253-character Kubernetes limit.
+//
+// Any other value is unknown to this build and yields no name.
+func generatePodName(workflowName, nodeName, templateName, nodeID, version string) string {
+	switch version {
+	case "v1":
+		return nodeID
+	case "v2":
+	default:
+		return ""
+	}
+	if workflowName == "" || nodeName == "" {
+		return ""
+	}
+	if workflowName == nodeName {
+		return workflowName
+	}
+	prefix := workflowName
+	if templateName != "" {
+		prefix = workflowName + "-" + templateName
+	}
+	prefix = ensurePodNamePrefixLength(prefix)
+	// FNV-1a, matching Argo exactly. FNV-1 differs by one step order and
+	// produces a completely different name, so this is verified against a
+	// real cluster in podname_test.go rather than assumed.
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(nodeName))
+	return prefix + "-" + strconv.FormatUint(uint64(h.Sum32()), 10)
+}
+
+// ensurePodNamePrefixLength keeps room for the hash suffix inside the
+// 253-character Kubernetes resource-name limit, exactly as Argo does.
+func ensurePodNamePrefixLength(prefix string) string {
+	const maxK8sResourceNameLength = 253
+	const k8sNamingHashLength = 10
+	maxPrefixLength := maxK8sResourceNameLength - k8sNamingHashLength
+	if len(prefix) > maxPrefixLength-1 {
+		return prefix[:maxPrefixLength-1]
+	}
+	return prefix
 }
 
 func tsOrZero(t *time.Time) time.Time {
@@ -194,6 +304,11 @@ type rawNode struct {
 	OutboundNodes []string   `json:"outboundNodes"`
 	StartedAt     *time.Time `json:"startedAt"`
 	FinishedAt    *time.Time `json:"finishedAt"`
+	TemplateName  string     `json:"templateName"`
+	TemplateRef   *struct {
+		Name     string `json:"name"`
+		Template string `json:"template"`
+	} `json:"templateRef"`
 	// Pod-capable node types may carry a pod name in outputs/inputs, but
 	// PodName on the DTO is only ever populated from verified resolution
 	// (docs/contracts.md rule). The adapter intentionally never guesses
@@ -217,6 +332,14 @@ func decodeNode(id string, raw json.RawMessage) (core.Node, error) {
 		OutboundNodes: rn.OutboundNodes,
 		StartedAt:     rn.StartedAt,
 		FinishedAt:    rn.FinishedAt,
-		// PodName: never populated by A1 — verified resolution only.
+		TemplateName:  rn.TemplateName,
+		TemplateRefTemplate: func() string {
+			if rn.TemplateRef == nil {
+				return ""
+			}
+			return rn.TemplateRef.Template
+		}(),
+		// PodName: never populated here — see resolvePodNames, which only
+		// derives a name when the server stated the pod-name format.
 	}, nil
 }
