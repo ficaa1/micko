@@ -10,7 +10,7 @@ stops itself, so nothing has to be exposed.
 Version `0.2.0`. Verified against a real Argo Workflows v4.1.2 server.
 
 ```
-argo-tui 0.2.0 @ 93caa40   server: http://127.0.0.1:2746   ns: batch-cd-prd      READ ONLY
+argo-tui 0.2.0 @ a1b2c3d   server: http://127.0.0.1:2746   ns: batch-cd-prd      READ ONLY
 ┌─ Workflows ──────────────────────────────────── list: 100 workflows | mode: watch ─┐
 │ Search: (none)  / to filter by name  Phase: All  5 awaiting resume                 │
 │ NAME                              PHASE           AGE  DURATION                    │
