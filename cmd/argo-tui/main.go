@@ -101,25 +101,36 @@ func run(args []string) int {
 		serverURL := cfg.Server
 		var forwarder *portforward.Manager
 		if cfg.Target.Service != "" {
-			localPort := cfg.Target.RemotePort
-			forwarder, err = portforward.New(portforward.Target{Context: cfg.Target.Context, Namespace: cfg.Target.Namespace, Service: cfg.Target.Service, RemotePort: strconv.Itoa(cfg.Target.RemotePort), LocalPort: strconv.Itoa(localPort)})
+			localPort := ""
+			forwarder, err = portforward.New(portforward.Target{Context: cfg.Target.Context, Namespace: cfg.Target.Namespace, Service: cfg.Target.Service, RemotePort: strconv.Itoa(cfg.Target.RemotePort), LocalPort: localPort})
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "argo-tui: port-forward:", err)
 				return 1
 			}
 			forwarder.Start(context.Background())
 			defer forwarder.Close()
-			// The client deliberately starts immediately: failed initial requests
-			// remain read-only and the normal poll loop retries after readiness.
-			serverURL = "http://127.0.0.1:" + strconv.Itoa(localPort)
-			if *debug {
-				sink := diagnostics.New(os.Stderr)
-				go func() {
-					for e := range forwarder.Events() {
+			// Do not construct a client against a guessed/reused port. Readiness
+			// and the actual owned endpoint are prerequisites for any request.
+			readyCtx, cancelReady := context.WithTimeout(context.Background(), 15*time.Second)
+			err = forwarder.Ready(readyCtx)
+			cancelReady()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "argo-tui: port-forward readiness:", err)
+				return 1
+			}
+			serverURL = forwarder.Endpoint()
+			if serverURL == "" {
+				fmt.Fprintln(os.Stderr, "argo-tui: port-forward announced readiness without an endpoint")
+				return 1
+			}
+			sink := diagnostics.New(os.Stderr)
+			go func() {
+				for e := range forwarder.Events() {
+					if *debug {
 						sink.Emit(diagnostics.StageForward, string(e.State), e.Attempt-1, e.State == portforward.StateLost, 0, "")
 					}
-				}()
-			}
+				}
+			}()
 		}
 		reader, err = argo.NewClient(argo.Options{Server: serverURL, TokenFn: tokenFn, TokenSource: "configured credential source", CAFile: cfg.CAFile, InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify})
 		if err != nil {

@@ -20,7 +20,7 @@ type actionResultMsg struct {
 // startAction performs the safety-critical sequence in one cancelable command:
 // preflight identity, exactly one mutation, then authoritative read-back.
 func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
-	if !m.actionOpts.AllowActions || m.actionOpts.ReadOnly || m.actionOpts.Demo || m.deps.actioner == nil {
+	if !m.actionOpts.AllowActions || m.actionOpts.ReadOnly || m.actionOpts.Demo || m.deps.actioner == nil || !m.connectionReady || !m.connectionFresh {
 		return nil
 	}
 	if req.Ref.UID == "" || req.Ref.Namespace == "" || req.Ref.Name == "" {

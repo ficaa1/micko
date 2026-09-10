@@ -53,6 +53,31 @@ func TestManagerReadinessAndCleanup(t *testing.T) {
 		t.Fatal("owned process was not killed")
 	}
 }
+func TestManagerDoesNotReportReadyBeforeOwnedEndpoint(t *testing.T) {
+	p := newFake()
+	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "0"}, func(context.Context, string, ...string) Process { return p })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.Start(ctx)
+	awaitState(t, m.Events(), StateStarting)
+	readyCtx, readyCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer readyCancel()
+	if err := m.Ready(readyCtx); err == nil {
+		t.Fatal("ready before endpoint")
+	}
+	if got := m.Endpoint(); got != "" {
+		t.Fatalf("endpoint before ready: %q", got)
+	}
+	p.ready()
+	awaitState(t, m.Events(), StateReady)
+	if got := m.Endpoint(); got != "http://127.0.0.1:1234" {
+		t.Fatalf("endpoint=%q", got)
+	}
+}
+
 func TestManagerUsesExplicitTargetAndRecovers(t *testing.T) {
 	var got []string
 	var gotMu sync.Mutex
