@@ -8,4 +8,4 @@ line-1
 line-3
 line-4
 line-5
-space pause  f follow  / search  c container  pgup/pgdn scroll
+space pause  f follow  j/k scroll  pgup/pgdn page  gg/G ends  / search  c container  y copy  esc back

@@ -107,6 +107,9 @@ type Model struct {
 
 	headerDone bool // stream-open marker emitted for this context
 
+	// gPending is the armed half of vim's gg (see the list pane).
+	gPending bool
+
 	mu sync.Mutex // guards Apply*/Clear for test/bench callers; the Tea
 	// update loop itself is serial.
 }
@@ -284,9 +287,20 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.handleSearchKey(key)
 	case m.contextOn:
 		return m.handleContextKey(key)
-	default:
-		return m.handleBrowseKey(key)
 	}
+	// vim's gg: the first g arms, the second jumps to the oldest retained
+	// line. Any other key disarms and is then handled normally.
+	if m.gPending {
+		m.gPending = false
+		if key == "g" {
+			m.jumpToTop()
+			return nil
+		}
+	} else if key == "g" {
+		m.gPending = true
+		return nil
+	}
+	return m.handleBrowseKey(key)
 }
 
 // handleBrowseKey implements the log-viewer key matrix (plan §2 Logs row):
@@ -334,11 +348,28 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 	case "pgdown":
 		m.scrollBy(m.pageRows())
 		return nil
+	case "ctrl+u":
+		m.scrollBy(-m.pageRows())
+		return nil
+	case "ctrl+d":
+		m.scrollBy(m.pageRows())
+		return nil
 	case "up", "k":
 		m.scrollBy(-1)
 		return nil
 	case "down", "j":
 		m.scrollBy(1)
+		return nil
+	case "G", "end":
+		// Jump to the newest line and start following again: reaching the
+		// bottom of a live log is a request to keep watching it.
+		m.paused = false
+		m.follow = true
+		m.bottom = -1
+		m.phase = PhaseStreaming
+		return nil
+	case "home":
+		m.jumpToTop()
 		return nil
 	default:
 		// Everything else (q, n, p, ?, ...) belongs to the root (UI-04):
@@ -355,6 +386,15 @@ func (m *Model) pageRows() int {
 		return 1
 	}
 	return h - 1
+}
+
+// jumpToTop pins the viewport to the oldest retained line and detaches
+// follow, because the reader asked to look at history.
+func (m *Model) jumpToTop() {
+	m.ensureSnapshot()
+	m.bottom = m.clampBottomRaw(m.viewRows() - 1)
+	m.follow = false
+	m.paused = true
 }
 
 // scrollBy moves the viewport by delta rows. Scrolling while paused does

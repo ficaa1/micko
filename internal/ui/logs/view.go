@@ -186,12 +186,19 @@ func (m *Model) window() []row {
 		return nil
 	}
 	bottom := m.bottomAt()
-	top := bottom - h + 1
-	if top < 0 {
-		top = 0
+	// Scrolling up past the first line must not shrink the pane. Without
+	// this floor the window becomes rows[0:bottom+1], so every further press
+	// removed one more line from the BOTTOM of the screen while the top
+	// stayed put — text appeared to be eaten from below.
+	if min := h - 1; bottom < min {
+		bottom = min
 	}
 	if bottom >= len(m.rows) {
 		bottom = len(m.rows) - 1
+	}
+	top := bottom - h + 1
+	if top < 0 {
+		top = 0
 	}
 	return m.rows[top : bottom+1]
 }
@@ -233,6 +240,19 @@ func (m *Model) PaneStatus() string {
 
 // BodyLines renders the pane content for the shell: no title, no footer.
 func (m *Model) BodyLines() []string { return m.bodyLines() }
+
+// RawLines is every retained line with no window: the borderless full-screen
+// view pages over it, and the copy key yanks it.
+func (m *Model) RawLines() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.ensureSnapshot()
+	out := make([]string, 0, len(m.rows))
+	for _, r := range m.rows {
+		out = append(out, r.text)
+	}
+	return out
+}
 
 // bodyLines is the shared middle of the pane (status, editors, counts and
 // the scroll window) that both compositions place between their own chrome.
@@ -302,5 +322,5 @@ func (m *Model) countView() string {
 
 // footerView carries the key hints (q/n/p/? are root-owned).
 func (m *Model) footerView() string {
-	return "space pause  f follow  / search  c container  pgup/pgdn scroll"
+	return "space pause  f follow  j/k scroll  pgup/pgdn page  gg/G ends  / search  c container  y copy  esc back"
 }

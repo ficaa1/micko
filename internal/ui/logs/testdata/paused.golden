@@ -4,4 +4,4 @@ retained: 2/10000 lines (0 evicted)
 ── (all pods):main ── 2 lines recorded
 line one
 line two
-space pause  f follow  / search  c container  pgup/pgdn scroll
+space pause  f follow  j/k scroll  pgup/pgdn page  gg/G ends  / search  c container  y copy  esc back
