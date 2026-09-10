@@ -43,12 +43,36 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.SearchOn {
 		return m.handleSearchKey(key, msg)
 	}
+	// vim's gg: the first g arms, the second jumps to the top. Any other key
+	// disarms and is then handled normally, so g never swallows a command.
+	if m.gPending {
+		m.gPending = false
+		if key == "g" {
+			m.moveTo(0)
+			return nil
+		}
+	} else if key == "g" {
+		m.gPending = true
+		return nil
+	}
 	switch key {
 	case "j", "down":
 		m.move(1)
 		return nil
 	case "k", "up":
 		m.move(-1)
+		return nil
+	case "pgdown", "ctrl+d":
+		m.move(m.pageStep())
+		return nil
+	case "pgup", "ctrl+u":
+		m.move(-m.pageStep())
+		return nil
+	case "home":
+		m.moveTo(0)
+		return nil
+	case "G", "end":
+		m.moveTo(len(m.rows) - 1)
 		return nil
 	case "enter":
 		if intent := m.OpenIntent(); intent != nil {
@@ -62,12 +86,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "/":
 		m.SearchOn = true
-		if m.searchBuf == "" {
-			m.searchCur = 0
-		}
+		m.queryBefore = m.query
+		m.searchBuf = m.query
+		m.searchCur = len([]rune(m.searchBuf))
 		return nil
 	case "s":
 		m.CycleSort()
+		return nil
+	case "p":
+		// The phase bucket was reachable only through the API until now, so
+		// the Suspended bucket would have had no key at all.
+		m.CyclePhase()
 		return nil
 	case "esc":
 		// Esc backs out of the filter. A filter matching nothing renders
@@ -99,17 +128,23 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 	switch key {
 	case "esc":
+		// Cancel restores the filter that was applied before the input took
+		// focus. Typing filters live, so "cancel" has to undo the typing, not
+		// clear whatever filter the user already had.
 		m.SearchOn = false
 		m.searchBuf, m.searchCur = "", 0
-		m.SetQuery("") // cancel clears the filter (Esc cancels, plan §2)
+		m.SetQuery(m.queryBefore)
+		m.queryBefore = ""
 		return nil
 	case "enter":
 		m.SearchOn = false
-		m.SetQuery(strings.TrimSpace(m.searchBuf))
+		m.applyLiveQuery()
 		m.searchBuf, m.searchCur = "", 0
+		m.queryBefore = ""
 		return nil
 	case "backspace":
 		m.searchBackspace()
+		m.applyLiveQuery()
 		return nil
 	case "left":
 		m.searchLeft()
@@ -128,9 +163,52 @@ func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 		// dropped (input-isolation: no command interpretation).
 		if runes := []rune(key); len(runes) == 1 && !isControlRune(runes[0]) {
 			m.searchInsert(runes[0])
+			m.applyLiveQuery()
 		}
 		return nil
 	}
+}
+
+// applyLiveQuery re-filters on every keystroke, so the list narrows as the
+// user types instead of only on Enter. Filtering is local to the collected
+// snapshot, so it costs one pass over rows already in memory.
+//
+// The cursor is parked at the top of each new result set: after typing, the
+// first match is what the reader is looking at.
+func (m *Model) applyLiveQuery() {
+	q := strings.TrimSpace(m.searchBuf)
+	if q == m.query {
+		return
+	}
+	m.selUID = ""
+	m.scrollTop = 0
+	m.SetQuery(q)
+}
+
+// pageStep is how far pgup/pgdown move: one visible window minus a line of
+// overlap, so the reader keeps a row of context across the jump.
+func (m *Model) pageStep() int {
+	n := m.winEnd - m.winStart
+	if n <= 1 {
+		return 1
+	}
+	return n - 1
+}
+
+// moveTo selects the row at index i (clamped). g and G use it to jump to the
+// first and last row.
+func (m *Model) moveTo(i int) {
+	if len(m.rows) == 0 {
+		m.selUID = ""
+		return
+	}
+	if i < 0 {
+		i = 0
+	}
+	if i >= len(m.rows) {
+		i = len(m.rows) - 1
+	}
+	m.selUID = m.rows[i].Ref.UID
 }
 
 // isControlRune reports whether r is a control character (never inserted

@@ -48,16 +48,43 @@ func (k SortKey) Next() SortKey {
 // and by the local phase bucketing; unknown phases rank last.
 func phaseRank(p string) int {
 	switch p {
+	case "Suspended":
+		return 0 // waiting on a person: nothing moves until someone acts
 	case "Failed", "Error":
-		return 0 // failures first: they are what a user triages
+		return 1 // failures next: they are what a user triages
 	case "Running":
-		return 1
-	case "Pending":
 		return 2
-	case "Succeeded":
+	case "Pending":
 		return 3
+	case "Succeeded":
+		return 4
 	default:
-		return 4 // unknown/empty phases (LIST-11)
+		return 5 // unknown/empty phases (LIST-11)
+	}
+}
+
+// summaryRank ranks a summary, treating an open manual gate as its own
+// phase so those rows sort to the top of the list.
+func summaryRank(s core.Summary) int { return phaseRank(DisplayPhase(s)) }
+
+// newerFirst compares two summaries by age, newest first, with missing
+// timestamps last. It returns 0 when neither is newer, so callers can fall
+// through to a name tiebreak and keep the order total.
+func newerFirst(a, b core.Summary) int {
+	ta, tb := ageKey(a), ageKey(b)
+	switch {
+	case ta.IsZero() && tb.IsZero():
+		return 0
+	case ta.IsZero():
+		return 1 // missing timestamps last
+	case tb.IsZero():
+		return -1
+	case ta.Equal(tb):
+		return 0
+	case ta.After(tb):
+		return -1
+	default:
+		return 1
 	}
 }
 
@@ -91,9 +118,15 @@ func Sort(items []core.Summary, key SortKey) []core.Summary {
 				return a.Ref.Name < b.Ref.Name
 			}
 		default: // SortPhaseName
-			ra, rb := phaseRank(a.Phase), phaseRank(b.Phase)
+			// Phase groups first, then newest within the group. Reading a
+			// group of running workflows is a chronological job: the newest
+			// run is the one an operator just triggered and wants to see.
+			ra, rb := summaryRank(a), summaryRank(b)
 			if ra != rb {
 				return ra < rb
+			}
+			if c := newerFirst(a, b); c != 0 {
+				return c < 0
 			}
 			if c := cmp.Compare(toLower(a.Ref.Name), toLower(b.Ref.Name)); c != 0 {
 				return c < 0

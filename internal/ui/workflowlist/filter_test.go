@@ -26,9 +26,31 @@ func TestPhaseFilterBuckets(t *testing.T) {
 		{PhaseOther, "", true}, // missing phase = not canonical = Other
 	}
 	for _, tc := range cases {
-		if got := tc.filter.Matches(tc.phase); got != tc.want {
+		if got := tc.filter.Matches(core.Summary{Phase: tc.phase}); got != tc.want {
 			t.Errorf("%q.Matches(%q) = %v, want %v", tc.filter, tc.phase, got, tc.want)
 		}
+	}
+}
+
+// A suspended workflow reports Running to the server, so the bucket must key
+// on the Suspended flag rather than the phase word.
+func TestPhaseFilterSuspendedBucket(t *testing.T) {
+	gated := core.Summary{Phase: "Running", Suspended: true}
+	plain := core.Summary{Phase: "Running"}
+	if !PhaseSuspended.Matches(gated) {
+		t.Error("suspended bucket rejected a gated workflow")
+	}
+	if PhaseSuspended.Matches(plain) {
+		t.Error("suspended bucket accepted a plain running workflow")
+	}
+	if !PhaseRunning.Matches(gated) {
+		t.Error("Running bucket must still contain a gated workflow: the server phase is Running")
+	}
+	if got := DisplayPhase(gated); got != "Suspended" {
+		t.Errorf("DisplayPhase = %q, want Suspended", got)
+	}
+	if got := DisplayPhase(plain); got != "Running" {
+		t.Errorf("DisplayPhase = %q, want Running", got)
 	}
 }
 
