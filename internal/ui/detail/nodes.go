@@ -30,6 +30,11 @@ type OutlineRow struct {
 	// (docs/protocol.md §8: Pod/ContainerSet/HTTP/Plugin plus container-set
 	// children). It does NOT imply a known pod name.
 	HasPod bool
+	// PodName is the pod backing this node. It is filled in only when the
+	// server stated its pod-naming scheme on the workflow; empty means
+	// "unknown", and the pane then offers no node-scoped logs rather than
+	// guessing a pod that may belong to another workflow (DET-11).
+	PodName string
 	// StartedAt/FinishedAt pass through for the selected-node pane; nil
 	// means "not yet started" (protocol §2: absent phase/timestamps are
 	// meaningful, never rendered as empty success).
@@ -295,8 +300,9 @@ func containsNode(ids []string, id string) bool {
 }
 
 // outlineRowOf maps a core.Node to an OutlineRow. HasPod follows the pinned
-// node-type list; PodName is intentionally not surfaced here (DET-11: node
-// ID is never a pod-name assumption).
+// node-type list. PodName is carried through exactly as the adapter resolved
+// it: empty unless the server declared the workflow's pod-name format, so a
+// node ID is still never treated as a pod name (DET-11).
 func outlineRowOf(n core.Node) OutlineRow {
 	name := n.Name
 	if name == "" {
@@ -320,6 +326,7 @@ func outlineRowOf(n core.Node) OutlineRow {
 		Phase:       n.Phase,
 		Message:     msg,
 		HasPod:      nodeTypeHasPod(n.Type),
+		PodName:     n.PodName,
 		StartedAt:   n.StartedAt,
 		FinishedAt:  n.FinishedAt,
 	}
