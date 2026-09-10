@@ -136,7 +136,7 @@ func (m *Root) rawView() tea.View {
 	for len(out) < h-1 {
 		out = append(out, "")
 	}
-	hint := "RAW — f or esc leaves  j/k scroll  gg/G ends  y copy  q quit"
+	hint := "RAW — f or esc leaves  y copy  q quit"
 	if m.flash != "" {
 		hint = m.flash + "   " + hint
 	}

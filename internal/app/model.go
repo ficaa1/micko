@@ -92,6 +92,12 @@ type Root struct {
 	// bands, so a terminal mouse selection copies clean text. rawTop is its
 	// scroll anchor.
 	rawMode bool
+
+	// tickArmed guards the single poll chain. The tick used to be dropped
+	// whenever it fired off the list route, so opening a workflow stopped
+	// every refresh until the reader pressed r. Exactly one chain may be
+	// alive: two of them double the poll rate on every route change.
+	tickArmed bool
 	rawTop  int
 	// gPending is the armed half of vim's gg while the raw view is up.
 	gPending bool
@@ -226,6 +232,16 @@ func (m *Root) Init() tea.Cmd {
 	return m.startListGeneration()
 }
 
+// armTick schedules the next poll unless one is already scheduled. Every
+// caller goes through it so the chain can never fork.
+func (m *Root) armTick() tea.Cmd {
+	if m.tickArmed {
+		return nil
+	}
+	m.tickArmed = true
+	return m.deps.tickCmd()
+}
+
 // textEntryActive reports whether the active route owns printable keys.
 func (m *Root) textEntryActive() bool {
 	switch m.route {
@@ -300,18 +316,20 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "f", "ctrl+f":
 				// The bordered pane wraps every line, so a mouse selection
 				// picks up the border columns too. The raw view drops all
-				// chrome for exactly that reason. On the logs route `f`
-				// already means follow, so there ctrl+f is the way in.
-				if key == "ctrl+f" || m.route != RouteLogs {
-					m.enterRaw()
-					return m, nil
-				}
+				// chrome for exactly that reason. `f` is full screen on
+				// every route, logs included; there `t` (tail) follows.
+				// ctrl+f stays as a second way in.
+				m.enterRaw()
+				return m, nil
 			case "y":
 				m.flash = m.copyLabel()
 				return m, tea.SetClipboard(m.copyText())
 			case "o":
 				return m, m.openInBrowser()
 			}
+		}
+		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
+			return m, m.startDetailFetch()
 		}
 		if m.route == RouteDetail && key == "a" {
 			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
@@ -345,10 +363,25 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Only restart a poll when one is not already in flight for this
 		// generation (plan §5: exactly one list op per generation).
-		if m.route == RouteList && !m.listState.loading && !terminalWatchMode(m.watchMode) {
+		m.tickArmed = false
+		if terminalWatchMode(m.watchMode) {
+			return m, nil
+		}
+		if m.route == RouteList {
+			if m.listState.loading {
+				return m, m.armTick()
+			}
+			// The poll re-arms the tick when it completes.
 			return m, m.startListGeneration()
 		}
-		return m, nil
+		// Off the list route the tick still has to be re-armed, or the
+		// refresh stops for the rest of the session. The detail route also
+		// refetches, so an open workflow tracks its own phase.
+		var cmds []tea.Cmd
+		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" {
+			cmds = append(cmds, m.startDetailFetch())
+		}
+		return m, tea.Batch(append(cmds, m.armTick())...)
 
 	case listLoadedMsg:
 		return m, m.handleListLoaded(msg)
@@ -731,6 +764,12 @@ func (m *Root) back() tea.Cmd {
 		m.cancelInflight("detail")
 		m.detailState.loading = false
 		m.route = RouteList
+		// A Resume or a Stop changes the row the reader is about to look
+		// at. Waiting for the next poll shows the old phase first, which
+		// reads as "the action did nothing".
+		if !m.listState.loading && !terminalWatchMode(m.watchMode) {
+			return m.startListGeneration()
+		}
 		return nil
 	default:
 		return nil
@@ -845,7 +884,7 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 			m.watchMode = "rate limited; refresh required"
 			return nil
 		}
-		return m.deps.tickCmd()
+		return m.armTick()
 	}
 	st.items = msg.Page.Items
 	if m.connectionReady {
@@ -865,9 +904,9 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		return nil
 	}
 	if m.deps.watcher != nil {
-		return tea.Batch(m.startWatch(), m.deps.tickCmd())
+		return tea.Batch(m.startWatch(), m.armTick())
 	}
-	return m.deps.tickCmd()
+	return m.armTick()
 }
 
 // handleDetailLoaded applies a detail result honoring staleness + UID
