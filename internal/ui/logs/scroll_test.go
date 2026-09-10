@@ -88,3 +88,27 @@ func TestGGJumpsToTheOldestRetainedLine(t *testing.T) {
 		t.Fatal("gg must show the oldest retained row first")
 	}
 }
+
+// pgup used to drive the stored bottom edge to 0 while the renderer still
+// drew a full pane. The screen and the state then disagreed by one page, so
+// arrow-down moved the state and nothing else: the pane looked frozen until
+// the reader pressed down a whole page of times.
+func TestArrowDownWorksImmediatelyAfterPagingToTheTop(t *testing.T) {
+	m := scrollModel(t, 200)
+	for i := 0; i < 20; i++ {
+		m.scrollBy(-m.pageRows())
+	}
+	top := m.window()
+	if top[0].text != m.rows[0].text {
+		t.Fatalf("pgup did not reach the oldest line: %q", top[0].text)
+	}
+
+	m.scrollBy(1)
+	after := m.window()
+	if after[0].text == top[0].text {
+		t.Fatalf("one arrow-down after reaching the top moved nothing: still %q", after[0].text)
+	}
+	if after[0].text != m.rows[1].text {
+		t.Fatalf("arrow-down moved by more than one row: %q, want %q", after[0].text, m.rows[1].text)
+	}
+}

@@ -33,13 +33,14 @@ func TestSpacePausesFollow(t *testing.T) {
 	}
 }
 
-// TestFollowResumesWithF pins `f` = resume follow (LOG-08).
-func TestFollowResumesWithF(t *testing.T) {
+// TestFollowResumesWithT pins `t` (tail) = resume follow (LOG-08). It used
+// to be `f`, which now means the full-screen raw view on every route.
+func TestFollowResumesWithT(t *testing.T) {
 	m := testModel(t)
 	press(m, ' ')
-	press(m, 'f')
+	press(m, 't')
 	if !m.Following() || m.Paused() {
-		t.Fatalf("after f: paused=%v following=%v, want false/true", m.Paused(), m.Following())
+		t.Fatalf("after t: paused=%v following=%v, want false/true", m.Paused(), m.Following())
 	}
 }
 

@@ -59,21 +59,23 @@ func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 	}
 }
 
-// On the logs route f already means follow, so the raw view needs its own way
-// in that does not break the log pane.
-func TestCtrlFEntersTheRawViewFromLogs(t *testing.T) {
+// f is the full-screen key on every route, logs included: one key, one
+// meaning. Follow moved to t (tail). ctrl+f stays as a second way in.
+func TestFEntersTheRawViewFromLogs(t *testing.T) {
 	m, wf := rawRoot(t)
 	m.Update(OpenLogsMsg{Ref: wf.Summary.Ref, Container: "main"})
 	if m.route != RouteLogs {
 		t.Fatalf("route = %v, want logs", m.route)
 	}
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
-	if m.rawMode {
-		t.Fatal("plain f on the logs route must stay the follow key")
+	if !m.rawMode {
+		t.Fatal("f must enter the raw view from the logs route")
 	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
+
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
 	if !m.rawMode {
-		t.Fatal("ctrl+f must enter the raw view from the logs route")
+		t.Fatal("ctrl+f must still enter the raw view")
 	}
 }
 
