@@ -3,4 +3,4 @@ Scope: pod: mypod-abc · container: sidecar · [FOLLOWING]
 retained: 1/10000 lines (0 evicted)
 ── mypod-abc:sidecar ── 1 line recorded
 sidecar says hi
-space pause  f follow  / search  c container  pgup/pgdn scroll
+space pause  f follow  j/k scroll  pgup/pgdn page  gg/G ends  / search  c container  y copy  esc back

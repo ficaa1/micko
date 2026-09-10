@@ -6,4 +6,4 @@ before disconnect
 ── reconnect: new stream; overlap/gap possible ──
 after reconnect
 after reconnect
-space pause  f follow  / search  c container  pgup/pgdn scroll
+space pause  f follow  j/k scroll  pgup/pgdn page  gg/G ends  / search  c container  y copy  esc back
