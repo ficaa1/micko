@@ -84,12 +84,13 @@ func TestSearchTextEntryKeyIsolation(t *testing.T) {
 		t.Fatal("/ did not focus search")
 	}
 
-	// While in text entry: 'q' must TYPE a letter, never quit; 'j' must
-	// not move the selection (UI-04).
-	sel := m.SelectedRef()
+	// While in text entry: 'q' must TYPE a letter, never quit; 'j' must be
+	// typed too, never interpreted as a move (UI-04). The filter narrows as
+	// the letters arrive, so the visible rows legitimately change; what must
+	// NOT happen is a navigation command.
 	m.Update(runeKey('j'))
-	if got := m.SelectedRef(); got.Name != sel.Name {
-		t.Fatal("j moved selection during text entry")
+	if m.SearchValue() != "j" {
+		t.Fatalf("j was interpreted as a command, not typed: buffer = %q", m.SearchValue())
 	}
 	m.Update(runeKey('q'))
 	if m.SearchValue() != "jq" {
@@ -109,15 +110,29 @@ func TestSearchTextEntryKeyIsolation(t *testing.T) {
 		t.Fatalf("visible = %d, want 3 (all names contain the substring)", m.VisibleCount())
 	}
 
-	// Cancel via esc restores the unfiltered view.
+	// Esc inside the input cancels the typing and restores the filter that
+	// was applied when the input opened. Typing now filters live, so
+	// "cancel" has to mean "undo what I just typed", not "drop the filter I
+	// already had".
 	m.Update(runeKey('/'))
-	m.SearchSetValue("zzz-no-match")
+	for _, r := range "zzz-no-match" {
+		m.Update(runeKey(r))
+	}
+	if m.VisibleCount() != 0 {
+		t.Fatalf("live filter did not narrow while typing: visible = %d", m.VisibleCount())
+	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.Query() != "" {
-		t.Fatalf("esc must cancel search, query = %q", m.Query())
+	if m.Query() != "fixture-wf-00" {
+		t.Fatalf("esc must restore the previous filter, query = %q", m.Query())
 	}
 	if m.VisibleCount() != 3 {
 		t.Fatalf("visible after cancel = %d, want 3", m.VisibleCount())
+	}
+
+	// Esc again, now outside the input, drops the filter entirely.
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.Query() != "" {
+		t.Fatalf("esc outside the input must clear the filter, query = %q", m.Query())
 	}
 }
 
@@ -161,13 +176,15 @@ func TestDeterministicSorts(t *testing.T) {
 		mk("noplace", "Running", time.Time{}, nil), // missing CreatedAt
 	}
 
-	// Phase sort: Failed first, Running next, unknown last; names asc.
+	// Phase sort: Failed first, Running next, unknown last. Inside a phase
+	// group the newest run comes first, and a row with no timestamp at all
+	// sorts after the timestamped ones.
 	Sort(items, SortPhaseName)
 	got := []string{}
 	for _, it := range items {
 		got = append(got, it.Ref.Name)
 	}
-	want := []string{"mango", "banana", "noplace", "zebra", "apple"}
+	want := []string{"mango", "zebra", "banana", "noplace", "apple"}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("phase sort = %v, want %v", got, want)
 	}
@@ -429,13 +446,18 @@ func TestSearchBufferEditing(t *testing.T) {
 	if m.SearchValue() != "" {
 		t.Fatalf("buffer must clear after apply, got %q", m.SearchValue())
 	}
-	// Editing over a wide rune stays rune-correct (no byte slicing).
+	// Reopening the input prefills the applied query, so an existing filter
+	// can be edited instead of retyped.
 	m.Update(runeKey('/'))
+	if m.SearchValue() != "aXb" {
+		t.Fatalf("reopened buffer = %q, want the applied query aXb", m.SearchValue())
+	}
+	// Editing over a wide rune stays rune-correct (no byte slicing).
 	for _, r := range "日本" {
 		m.Update(runeKey(r))
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	if m.SearchValue() != "日" {
-		t.Fatalf("wide-rune backspace = %q, want 日", m.SearchValue())
+	if m.SearchValue() != "aXb日" {
+		t.Fatalf("wide-rune backspace = %q, want aXb日", m.SearchValue())
 	}
 }

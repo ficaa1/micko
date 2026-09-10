@@ -88,6 +88,8 @@ func plainTheme() Theme {
 // phases get PhaseOther and must remain displayable (LIST-11).
 func (t Theme) PhaseStyle(phase string) lipgloss.Style {
 	switch phase {
+	case "Suspended":
+		return t.Warning
 	case "Running":
 		return t.PhaseRunning
 	case "Succeeded":
@@ -114,6 +116,10 @@ func (t Theme) PhaseStyle(phase string) lipgloss.Style {
 // tells them apart.
 func PhaseSymbol(phase string) string {
 	switch phase {
+	case "Suspended":
+		// A workflow parked on a manual gate. It is running, but nothing
+		// moves until a person resumes it, so it gets its own glyph.
+		return "\u25d0" // half-filled circle: waiting on a person
 	case "Running":
 		return "\u25cf" // filled circle: work in progress
 	case "Succeeded":

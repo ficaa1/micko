@@ -67,6 +67,15 @@ type Model struct {
 	searchBuf string
 	searchCur int // rune-index cursor into searchBuf (grapheme-free is fine for names)
 	SearchOn  bool
+	// queryBefore is the applied query at the moment the search input took
+	// focus. Typing filters live, so Esc has to restore something; without
+	// this, cancelling a search would silently discard the filter the user
+	// already had.
+	queryBefore string
+
+	// gPending is the armed half of vim's gg. It is cleared by the next key
+	// press whatever that key is, so it can never leak into a later command.
+	gPending bool
 
 	// width/height are the last-known size (SetSize).
 	width, height int
@@ -113,6 +122,15 @@ func (m *Model) SetItems(items []core.Summary, now time.Time) {
 	m.applyView()
 }
 
+// Rows returns the currently displayed rows in display order. It is a read
+// of what the pane shows, so callers that export the view (raw text, copy)
+// export exactly what the reader sees.
+func (m *Model) Rows() []core.Summary {
+	out := make([]core.Summary, len(m.rows))
+	copy(out, m.rows)
+	return out
+}
+
 // SelectedRef returns the currently selected workflow's Ref, or zero.
 func (m *Model) SelectedRef() core.Ref {
 	for _, it := range m.rows {
@@ -151,10 +169,25 @@ func (m *Model) SetPhase(p PhaseFilter) { m.phase = p; m.applyView() }
 
 // CyclePhase advances the phase filter bucket (p key handling stays with
 // the root; the component exposes the intent).
-func (m *Model) CyclePhase() { m.phase = m.phase.Next(); m.applyView() }
+func (m *Model) CyclePhase() {
+	m.phase = m.phase.Next()
+	m.selUID = ""
+	m.scrollTop = 0
+	m.applyView()
+}
 
-// CycleSort advances the sort key.
-func (m *Model) CycleSort() { m.sort = m.sort.Next(); m.applyView() }
+// CycleSort advances the sort key and parks the cursor back at the top.
+//
+// Selection is by UID, so without this the cursor would ride its workflow
+// down into the new order: after sorting to newest-first the reader would be
+// left somewhere in the middle, scrolling up to reach the rows they asked
+// for. Sorting is a request to look at the top of a new order.
+func (m *Model) CycleSort() {
+	m.sort = m.sort.Next()
+	m.selUID = ""
+	m.scrollTop = 0
+	m.applyView()
+}
 
 // SetQuery applies the local search text (snapshot-scoped; LIST-05/09).
 func (m *Model) SetQuery(q string) { m.query = q; m.applyView() }
@@ -179,7 +212,7 @@ func (m *Model) TotalCount() int   { return m.total }
 func (m *Model) applyView() {
 	rows := make([]core.Summary, 0, len(m.items))
 	for _, it := range m.items {
-		if !m.phase.Matches(it.Phase) {
+		if !m.phase.Matches(it) {
 			continue
 		}
 		if !nameMatches(it.Ref.Name, m.query) {
