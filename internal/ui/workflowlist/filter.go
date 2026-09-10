@@ -14,7 +14,11 @@ import (
 type PhaseFilter string
 
 const (
-	PhaseAll       PhaseFilter = "All"
+	PhaseAll PhaseFilter = "All"
+	// PhaseSuspended selects only the workflows parked on a manual gate.
+	// They are Running to the server, but a person has to act on them, so
+	// they get their own bucket rather than hiding among the running ones.
+	PhaseSuspended PhaseFilter = "Suspended"
 	PhaseRunning   PhaseFilter = "Running"
 	PhasePending   PhaseFilter = "Pending"
 	PhaseSucceeded PhaseFilter = "Succeeded"
@@ -24,7 +28,7 @@ const (
 
 // phaseCycle is the deterministic rotation order for the phase key.
 var phaseCycle = []PhaseFilter{
-	PhaseAll, PhaseRunning, PhasePending, PhaseSucceeded, PhaseFailed, PhaseOther,
+	PhaseAll, PhaseSuspended, PhaseRunning, PhasePending, PhaseSucceeded, PhaseFailed, PhaseOther,
 }
 
 // Next returns the next phase filter in the rotation.
@@ -37,16 +41,30 @@ func (f PhaseFilter) Next() PhaseFilter {
 	return PhaseAll
 }
 
-// Matches reports whether a summary phase belongs to this bucket.
-func (f PhaseFilter) Matches(phase string) bool {
+// Matches reports whether a summary belongs to this bucket. It takes the
+// whole summary because "Suspended" is not a server phase: it is a running
+// workflow that also holds an open Suspend node.
+func (f PhaseFilter) Matches(s core.Summary) bool {
 	switch f {
 	case PhaseAll:
 		return true
+	case PhaseSuspended:
+		return s.Suspended
 	case PhaseOther:
-		return !isCanonicalPhase(phase)
+		return !isCanonicalPhase(s.Phase)
 	default:
-		return string(f) == phase
+		return string(f) == s.Phase
 	}
+}
+
+// DisplayPhase is the phase word the list shows for a summary. A suspended
+// workflow reports "Suspended" so a reader can tell at a glance which of the
+// running rows is actually waiting for them.
+func DisplayPhase(s core.Summary) string {
+	if s.Suspended {
+		return "Suspended"
+	}
+	return s.Phase
 }
 
 // isCanonicalPhase covers the phases the pinned upstream types define
@@ -70,5 +88,4 @@ func nameMatches(name, query string) bool {
 	return strings.Contains(strings.ToLower(name), strings.ToLower(query))
 }
 
-// unused core import guard removal: core is re-used by future filter work.
 var _ = core.Ref{}

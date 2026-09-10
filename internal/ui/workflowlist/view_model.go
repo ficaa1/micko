@@ -73,7 +73,7 @@ func (m *Model) WindowStatus() string {
 
 // Hints are the list key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	return "j/k move  enter open  l logs  / search  s sort  r refresh"
+	return "j/k move  pgup/pgdn page  gg/G ends  enter open  l logs  / search  s sort  p phase  r refresh"
 }
 
 // footerPosition is the window indicator appended to the standalone footer.
@@ -155,8 +155,11 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	wName, wPhase, wAge, wDur := m.colWidths()
 	name := sanitizeOne(r.Ref.Name)
 	// Symbol AND word AND color: a mono terminal, NO_COLOR and a color-blind
-	// reader all keep two of the three channels (UI-03/07).
-	phase := shared.PhaseSymbol(r.Phase) + " " + m.rowPhaseText(sanitizeOne(r.Phase))
+	// reader all keep two of the three channels (UI-03/07). A workflow parked
+	// on a manual gate reads "Suspended" rather than "Running", because
+	// "Running" would hide the one row that is waiting for the reader.
+	shown := DisplayPhase(r)
+	phase := shared.PhaseSymbol(shown) + " " + m.rowPhaseText(sanitizeOne(shown))
 	msg := sanitizeOne(r.Message)
 	line := padRight(truncateRight(name, wName), wName) + "  " +
 		padRight(truncateRight(phase, wPhase), wPhase) + "  " +
@@ -168,7 +171,7 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	if selected {
 		return m.theme.Selected.Render(line)
 	}
-	return m.theme.PhaseStyle(r.Phase).Render(line)
+	return m.theme.PhaseStyle(shown).Render(line)
 }
 
 // minUsableWidth below which the plan requires a resize notice (<60 cols).
@@ -216,7 +219,13 @@ func (m *Model) toolbarView() string {
 	}
 	parts = append(parts, searchCell+scope)
 
-	parts = append(parts, "Phase: "+string(m.phase))
+	phaseCell := "Phase: " + string(m.phase)
+	if n := m.suspendedCount(); n > 0 && m.phase != PhaseSuspended {
+		// The count is the whole point of the marker: an operator wants to
+		// know a gate is open without reading every row.
+		phaseCell += "  " + m.theme.Warning.Render(itoa(n)+" awaiting resume")
+	}
+	parts = append(parts, phaseCell)
 	parts = append(parts, "Sort: "+sortLabel(m.sort))
 
 	// Long, untrusted-derived error reasons (the stale / unauthenticated /
@@ -287,6 +296,18 @@ func (m *Model) toolbarPrefixParts() []string {
 	return []string{searchCell + scope, "Phase: " + string(m.phase), "Sort: " + sortLabel(m.sort)}
 }
 
+// suspendedCount counts the workflows in the whole snapshot that hold an
+// open manual gate, not only the ones the current filter shows.
+func (m *Model) suspendedCount() int {
+	n := 0
+	for _, it := range m.items {
+		if it.Suspended {
+			n++
+		}
+	}
+	return n
+}
+
 // sortLabel gives human names for the sort cycle.
 func sortLabel(k SortKey) string {
 	switch k {
@@ -295,7 +316,7 @@ func sortLabel(k SortKey) string {
 	case SortTime:
 		return "newest"
 	default:
-		return "phase"
+		return "phase, newest first"
 	}
 }
 

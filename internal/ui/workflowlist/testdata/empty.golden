@@ -1,6 +1,6 @@
 WORKFLOWS
-Search: (none)  / to filter by name  Phase: All  Sort: phase
+Search: (none)  / to filter by name  Phase: All  Sort: phase, newest first
 NAME                            PHASE              AGE  DURATION 
 no workflows in this namespace yet
 
-j/k move  enter open  l logs  / search  s sort  r refresh  ? help
+j/k move  pgup/pgdn page  gg/G ends  enter open  l logs  / search  s sort  p phase  r refresh  ? help
