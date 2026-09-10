@@ -191,3 +191,34 @@ func TestFrameTextIsSanitized(t *testing.T) {
 		t.Fatal("an embedded newline changed the frame height")
 	}
 }
+
+// A long right-hand status must be shortened, not dropped. During an outage
+// that status is the stale warning, and dropping it leaves the operator with
+// no sign that the data is old.
+func TestLongTitleRightIsTruncatedNotDropped(t *testing.T) {
+	f := Frame{
+		Width:      80,
+		Height:     6,
+		Title:      "Workflows",
+		TitleRight: "list: STALE (last good 19 workflows): dial tcp 127.0.0.1:50422: connect: connection refused",
+	}
+	got := f.topBorder(shared.NewTheme(false))
+	if !strings.Contains(got, "Workflows") {
+		t.Fatalf("title lost: %q", got)
+	}
+	if !strings.Contains(got, "STALE") {
+		t.Fatalf("stale status was dropped instead of shortened: %q", got)
+	}
+	if w := ansi.StringWidth(got); w != 80 {
+		t.Fatalf("border width = %d, want 80: %q", w, got)
+	}
+}
+
+// When the pane is too narrow for any useful status, the title wins.
+func TestVeryNarrowTitleKeepsTheTitle(t *testing.T) {
+	f := Frame{Width: 20, Height: 4, Title: "Workflows", TitleRight: "list: STALE (last good 19): connection refused"}
+	got := f.topBorder(shared.NewTheme(false))
+	if w := ansi.StringWidth(got); w != 20 {
+		t.Fatalf("border width = %d, want 20: %q", w, got)
+	}
+}

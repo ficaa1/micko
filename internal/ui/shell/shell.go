@@ -158,6 +158,10 @@ func (f Frame) bodyLines() []string {
 	return src
 }
 
+// minTitleRight is the smallest right-hand status worth keeping on the border.
+// Below it the text says nothing useful, so the title wins the space instead.
+const minTitleRight = 16
+
 // topBorder draws the title row: ┌ Title ──── TitleRight ─┐
 //
 // The title and the count ride the border so the pane says what it holds
@@ -178,10 +182,17 @@ func (f Frame) topBorder(t shared.Theme) string {
 
 	used := ansi.StringWidth(left) + ansi.StringWidth(tail)
 	if used > inner {
-		// No room for both: keep the title, drop the count.
-		tail = "─"
-		left = ansi.Truncate(left, inner-1, "…")
-		used = ansi.StringWidth(left) + 1
+		// No room for both. The right side carries the live state — during an
+		// outage it is the stale warning — so shorten it to fit instead of
+		// dropping it, and only drop it when even a short form has no room.
+		room := inner - ansi.StringWidth(left) - 3 // " " + " ─"
+		if room >= minTitleRight {
+			tail = " " + t.Dim.Render(ansi.Truncate(right, room, "…")) + " ─"
+		} else {
+			tail = "─"
+			left = ansi.Truncate(left, inner-1, "…")
+		}
+		used = ansi.StringWidth(left) + ansi.StringWidth(tail)
 	}
 	fill := inner - used
 	if fill < 0 {
