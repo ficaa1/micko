@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -262,5 +264,92 @@ profiles:
 	}
 	if strings.Contains(err.Error(), "hunter2") {
 		t.Fatalf("error leaks userinfo: %v", err)
+	}
+}
+
+// The Argo Server service usually runs in a different namespace from the
+// workflows. Forwarding to the workflow namespace would find no service.
+func TestServiceNamespaceIsIndependentOfWorkflowNamespace(t *testing.T) {
+	data := []byte(`
+currentProfile: work-test
+profiles:
+  work-test:
+    kubeContext: ctx
+    service: argo-workflows-server
+    serviceNamespace: argo-workflows-tst
+    remotePort: 2746
+    server: http://127.0.0.1:2746
+    namespace: nightly-backup-tst
+    tokenEnv: ARGO_TUI_TOKEN
+`)
+	cfg, err := Load(data, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Namespace != "nightly-backup-tst" {
+		t.Fatalf("workflow namespace = %q", cfg.Namespace)
+	}
+	if cfg.Target.Namespace != "argo-workflows-tst" {
+		t.Fatalf("forward target namespace = %q, want the service namespace", cfg.Target.Namespace)
+	}
+}
+
+// Without serviceNamespace the forward stays where it always was.
+func TestServiceNamespaceDefaultsToWorkflowNamespace(t *testing.T) {
+	data := []byte(`
+currentProfile: p
+profiles:
+  p:
+    kubeContext: ctx
+    service: argo-server
+    remotePort: 2746
+    server: http://127.0.0.1:2746
+    namespace: argo
+    tokenEnv: ARGO_TUI_TOKEN
+`)
+	cfg, err := Load(data, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Target.Namespace != "argo" {
+		t.Fatalf("forward target namespace = %q, want the workflow namespace", cfg.Target.Namespace)
+	}
+}
+
+// An existing config file must be found wherever it conventionally lives. On
+// macOS os.UserConfigDir points at ~/Library/Application Support, so looking
+// only there misses the ~/.config file people actually write.
+func TestDefaultConfigPathFindsAnExistingFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	want := filepath.Join(home, ".config", "argo-tui", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(want, []byte("currentProfile: p\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("DefaultConfigPath = %q, want the existing %q", got, want)
+	}
+}
+
+// XDG_CONFIG_HOME wins when it is set.
+func TestDefaultConfigPathPrefersXDG(t *testing.T) {
+	home := t.TempDir()
+	xdg := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	got, err := DefaultConfigPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(xdg, "argo-tui", "config.yaml"); got != want {
+		t.Fatalf("DefaultConfigPath = %q, want %q", got, want)
 	}
 }

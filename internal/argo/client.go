@@ -290,7 +290,10 @@ func (c *Client) do(ctx context.Context, req *http.Request) (*http.Response, err
 		// Distinguish TLS failures from other transport errors for guidance
 		// (CONN-03: name the problem class, not a raw dump).
 		msg := err.Error()
-		if isTLSFailure(msg) {
+		// Only an https request can fail a TLS handshake. Classifying a plain
+		// http failure as a certificate problem sends the operator after the
+		// wrong cause; a dead port-forward is the usual real reason.
+		if req.URL != nil && req.URL.Scheme == "https" && isTLSFailure(msg) {
 			return nil, core.ErrUnavailablef("TLS handshake with server failed: %s (check server certificate or configured caFile %s)", sanitizeLine(msg), c.caFileOr("none"))
 		}
 		return nil, core.ErrUnavailablef("server unreachable: %s", sanitizeLine(msg))
