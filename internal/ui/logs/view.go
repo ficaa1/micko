@@ -133,10 +133,26 @@ func (m *Model) bottomAt() int {
 	return m.clampBottomRaw(m.bottom)
 }
 
-// clampBottomRaw clamps an absolute bottom index into [0, maxBottom].
-func (m *Model) clampBottomRaw(b int) int {
-	if b < 0 {
+// minBottom is the lowest bottom index that still fills the pane. Scrolling
+// cannot go below it: rows[0] is already the first line on screen.
+func (m *Model) minBottom() int {
+	min := m.viewRows() - 1
+	if max := m.maxBottom(); min > max {
+		return max
+	}
+	if min < 0 {
 		return 0
+	}
+	return min
+}
+
+// clampBottomRaw clamps an absolute bottom index into [minBottom, maxBottom].
+// The floor matters: without it pgup drove bottom to 0 while the renderer
+// still drew a full pane, so the next arrow-down moved the state but not the
+// screen, and the pane looked frozen for a whole page of presses.
+func (m *Model) clampBottomRaw(b int) int {
+	if min := m.minBottom(); b < min {
+		return min
 	}
 	if max := m.maxBottom(); b > max {
 		return max
@@ -322,5 +338,5 @@ func (m *Model) countView() string {
 
 // footerView carries the key hints (q/n/p/? are root-owned).
 func (m *Model) footerView() string {
-	return "space pause  f follow  j/k scroll  pgup/pgdn page  gg/G ends  / search  c container  y copy  esc back"
+	return "t follow  space pause  / search  c container  f raw  y copy  esc back"
 }

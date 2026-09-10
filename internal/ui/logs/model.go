@@ -322,8 +322,10 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		m.bottom = m.bottomAt()
 		m.phase = PhasePaused
 		return nil
-	case "f":
-		// `f` returns to follow (LOG-08).
+	case "t":
+		// `t` (tail) returns to follow (LOG-08). `f` is the global
+		// full-screen raw key on every route, so it cannot mean follow
+		// here as well.
 		m.paused = false
 		m.follow = true
 		m.bottom = -1 // re-pin to tail on next render

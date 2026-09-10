@@ -3,4 +3,4 @@ Search: (none)  / to filter by name [within 6 collected]  Phase: Failed  Sort: p
 NAME                            PHASE              AGE  DURATION 
 fixture-wf-0003                 ✗ Failed            3m  -        
 
-j/k move  pgup/pgdn page  gg/G ends  enter open  l logs  / search  s sort  p phase  r refresh  ? help
+enter open  l logs  / search  s sort  p phase  r refresh  ? help

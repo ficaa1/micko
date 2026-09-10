@@ -60,7 +60,9 @@ func TestLogPaneScrollMatchesTheVisibleRows(t *testing.T) {
 func TestLogHintsAdvertiseTheDocumentedKeys(t *testing.T) {
 	m := testModel(t)
 	h := m.Hints()
-	for _, key := range []string{"space", "f", "/", "c", "pgup"} {
+	// Movement keys were deliberately dropped from the footer: they belong
+	// to the `?` overlay, and the footer has to name the keys unique to logs.
+	for _, key := range []string{"space", "t follow", "/", "c", "esc"} {
 		if !strings.Contains(h, key) {
 			t.Fatalf("hints %q omit key %q", h, key)
 		}

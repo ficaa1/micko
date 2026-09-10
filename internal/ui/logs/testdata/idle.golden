@@ -1,4 +1,4 @@
 logs: wf-1
 Scope: workflow-wide · container: main · [IDLE]
 retained: 0/10000 lines (0 evicted)
-space pause  f follow  j/k scroll  pgup/pgdn page  gg/G ends  / search  c container  y copy  esc back
+t follow  space pause  / search  c container  f raw  y copy  esc back

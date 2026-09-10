@@ -381,9 +381,9 @@ func (m *Model) PaneTitle() string {
 // Hints is the detail key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
 	if m.tab == "nodes" {
-		return "tab section  j/k move  h skipped  l logs  f raw  esc back"
+		return "tab section  h skipped  l logs  a actions  f raw  r refresh  esc back"
 	}
-	return "tab section  j/k scroll  v reveal  y copy  f raw  esc back"
+	return "tab section  v reveal  y copy  a actions  f raw  r refresh  esc back"
 }
 
 // PaneStatus is the right-aligned footer cell: the workflow phase, carried
