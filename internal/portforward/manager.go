@@ -20,15 +20,17 @@ type Target struct {
 	Namespace  string
 	Service    string
 	RemotePort string
-	LocalPort  string
+	// LocalPort may be empty; kubectl allocates an ephemeral loopback port.
+	LocalPort string
 }
 
 func (t Target) validate() error {
-	for name, value := range map[string]string{"context": t.Context, "namespace": t.Namespace, "service": t.Service, "remote port": t.RemotePort, "local port": t.LocalPort} {
+	for name, value := range map[string]string{"context": t.Context, "namespace": t.Namespace, "service": t.Service, "remote port": t.RemotePort} {
 		if value == "" || strings.ContainsAny(value, "\r\n\x00") {
 			return fmt.Errorf("invalid %s", name)
 		}
 	}
+
 	return nil
 }
 
@@ -58,15 +60,17 @@ type Process interface {
 type Command func(context.Context, string, ...string) Process
 
 type Manager struct {
-	target  Target
-	command Command
-	backoff []time.Duration
-	events  chan Event
-	done    chan struct{}
-	once    sync.Once
-	mu      sync.Mutex
-	proc    Process
-	started bool
+	target   Target
+	command  Command
+	backoff  []time.Duration
+	events   chan Event
+	done     chan struct{}
+	once     sync.Once
+	mu       sync.Mutex
+	proc     Process
+	started  bool
+	ready    chan struct{}
+	endpoint string
 }
 
 func New(target Target) (*Manager, error) {
@@ -81,9 +85,23 @@ func NewWithCommand(target Target, command Command) (*Manager, error) {
 	if command == nil {
 		return nil, errors.New("nil command")
 	}
-	return &Manager{target: target, command: command, backoff: []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second}, events: make(chan Event, 16), done: make(chan struct{})}, nil
+	return &Manager{target: target, command: command, backoff: []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second}, events: make(chan Event, 16), done: make(chan struct{}), ready: make(chan struct{})}, nil
 }
 func (m *Manager) Events() <-chan Event { return m.events }
+func (m *Manager) Ready(ctx context.Context) error {
+	m.mu.Lock()
+	ready := m.ready
+	m.mu.Unlock()
+	select {
+	case <-ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-m.done:
+		return errors.New("port-forward stopped")
+	}
+}
+func (m *Manager) Endpoint() string { m.mu.Lock(); defer m.mu.Unlock(); return m.endpoint }
 func (m *Manager) Start(ctx context.Context) {
 	m.mu.Lock()
 	if m.started {
@@ -119,8 +137,16 @@ func (m *Manager) run(ctx context.Context) {
 		default:
 		}
 		attempt++
+		m.mu.Lock()
+		m.ready = make(chan struct{})
+		m.endpoint = ""
+		m.mu.Unlock()
 		m.emit(Event{State: StateStarting, Attempt: attempt})
-		p := m.command(ctx, "kubectl", "--context", m.target.Context, "--namespace", m.target.Namespace, "port-forward", "service/"+m.target.Service, m.target.LocalPort+":"+m.target.RemotePort)
+		localPort := m.target.LocalPort
+		if localPort == "" {
+			localPort = "0"
+		}
+		p := m.command(ctx, "kubectl", "--context", m.target.Context, "--namespace", m.target.Namespace, "port-forward", "service/"+m.target.Service, localPort+":"+m.target.RemotePort)
 		out, err := p.StdoutPipe()
 		if err != nil {
 			m.fail(err, attempt)
@@ -185,7 +211,13 @@ func (m *Manager) run(ctx context.Context) {
 				if strings.Contains(line, "Forwarding from 127.0.0.1:") || strings.Contains(line, "Forwarding from [::1]:") {
 					if !stateReady {
 						stateReady = true
+						m.mu.Lock()
+						m.endpoint = parseEndpoint(line)
+						m.mu.Unlock()
 						m.emit(Event{State: StateReady, Message: line, Attempt: attempt})
+						m.mu.Lock()
+						close(m.ready)
+						m.mu.Unlock()
 						ready <- struct{}{}
 					}
 				} else if strings.Contains(strings.ToLower(line), "unable to listen") || strings.Contains(strings.ToLower(line), "error") {
@@ -221,6 +253,17 @@ func (m *Manager) run(ctx context.Context) {
 }
 func (m *Manager) fail(err error, attempt int) {
 	m.emit(Event{State: StateFailed, Message: sanitize(err.Error()), Attempt: attempt})
+}
+func parseEndpoint(line string) string {
+	for _, prefix := range []string{"127.0.0.1:", "[::1]:"} {
+		if i := strings.Index(line, prefix); i >= 0 {
+			v := strings.Fields(line[i+len(prefix):])
+			if len(v) > 0 {
+				return "http://" + prefix + v[0]
+			}
+		}
+	}
+	return ""
 }
 func (m *Manager) emit(e Event) {
 	select {

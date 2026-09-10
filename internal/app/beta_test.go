@@ -68,6 +68,27 @@ func TestActionExecutesOnceAndRequiresReadBack(t *testing.T) {
 	}
 }
 
+func TestConnectionLossDisablesActionsUntilFreshSnapshot(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	m.SetConnectionState(false, "http://127.0.0.1:43127")
+	if m.connectionReady || m.connectionFresh {
+		t.Fatal("loss left gate open")
+	}
+	if cmd := m.startAction(core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionResume, Confirmation: core.Confirmation{Confirmed: true}}); cmd != nil {
+		t.Fatal("action started while disconnected")
+	}
+	m.SetConnectionState(true, "http://127.0.0.1:43128")
+	if m.connectionFresh {
+		t.Fatal("reconnect enabled actions before fresh data")
+	}
+	m.handleListLoaded(listLoadedMsg{genStamp: genStamp{}, Page: core.Page{Items: []core.Summary{wf.Summary}}})
+	if !m.connectionFresh {
+		t.Fatal("fresh snapshot did not re-enable actions")
+	}
+}
+
 func TestAmbiguousActionNeverRetries(t *testing.T) {
 	wf := workflowFixture("wf")
 	b := &betaReader{

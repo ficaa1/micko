@@ -3,12 +3,14 @@
 # pipeline wiring; this Makefile covers local builds and tests only.
 
 GO ?= go
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
+LDFLAGS ?= -X main.mainCommit=$(COMMIT)
 
 .PHONY: build test test-race vet lint-fmt smoke clean
 
 # Build the binary into dist/.
 build:
-	$(GO) build -o dist/ ./cmd/argo-tui
+	$(GO) build -ldflags "$(LDFLAGS)" -o dist/ ./cmd/argo-tui
 
 # Focused developer test set.
 test:

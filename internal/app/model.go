@@ -83,6 +83,10 @@ type Root struct {
 	watchRetries  int
 	watchAttempt  uint64
 	actionAttempt uint64
+	// connectionReady gates mutations. Data remains rendered while false.
+	connectionReady  bool
+	connectionFresh  bool
+	connectionTarget string
 }
 
 // listState is the list route's data + status.
@@ -146,12 +150,30 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 			snapshotCap: 5000,
 			pageSize:    100,
 		},
-		inflight:   map[string]context.CancelFunc{},
-		theme:      shared.NewTheme(false),
-		listView:   workflowlist.New(shared.NewTheme(false), false),
-		detailView: detail.New(),
-		actionView: actions.NewWithOptions(core.Ref{}, opts),
-		actionOpts: opts,
+		inflight:        map[string]context.CancelFunc{},
+		theme:           shared.NewTheme(false),
+		listView:        workflowlist.New(shared.NewTheme(false), false),
+		detailView:      detail.New(),
+		actionView:      actions.NewWithOptions(core.Ref{}, opts),
+		actionOpts:      opts,
+		connectionReady: true,
+		connectionFresh: true,
+	}
+}
+
+// SetConnectionState is used by the transport lifecycle bridge. A lost
+// forward keeps the last-good snapshot visible but makes actions unavailable
+// until a fresh snapshot is accepted.
+func (m *Root) SetConnectionState(ready bool, target string) {
+	m.connectionReady = ready
+	if !ready {
+		m.connectionFresh = false
+	}
+	if target != "" {
+		m.connectionTarget = target
+	}
+	if !ready {
+		m.cancelInflight("action")
 	}
 }
 
@@ -217,7 +239,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key == "q" && !m.textEntryActive() {
 			return m, m.quit()
 		}
-		if m.route == RouteDetail && key == "a" {
+		if m.route == RouteDetail && key == "a" && m.connectionReady && m.connectionFresh {
 			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
 			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 			m.actionView.OpenMenu()
@@ -701,6 +723,9 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		return m.deps.tickCmd()
 	}
 	st.items = msg.Page.Items
+	if m.connectionReady {
+		m.connectionFresh = true
+	}
 	m.watchRV = msg.Page.ResourceVersion
 	st.incomplete = msg.Capped
 	st.lastErr = nil
