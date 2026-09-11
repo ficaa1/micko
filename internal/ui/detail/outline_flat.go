@@ -196,3 +196,71 @@ func truncCell(s string, n int) string {
 }
 
 var _ = core.Node{}
+
+// NodePhase is the nodes tab's phase bucket. A large workflow hides its one
+// failed step among forty successful ones, so the tab can narrow to a single
+// phase.
+type NodePhase string
+
+const (
+	NodePhaseAll       NodePhase = "All"
+	NodePhaseFailed    NodePhase = "Failed"
+	NodePhaseRunning   NodePhase = "Running"
+	NodePhasePending   NodePhase = "Pending"
+	NodePhaseSucceeded NodePhase = "Succeeded"
+	NodePhaseSkipped   NodePhase = "Skipped"
+)
+
+// nodePhaseCycle is the rotation order of the p key. Failed comes first
+// because it is the phase a reader opens the tab to find.
+var nodePhaseCycle = []NodePhase{
+	NodePhaseAll, NodePhaseFailed, NodePhaseRunning, NodePhasePending,
+	NodePhaseSucceeded, NodePhaseSkipped,
+}
+
+// Next advances the bucket.
+func (f NodePhase) Next() NodePhase {
+	for i, p := range nodePhaseCycle {
+		if p == f {
+			return nodePhaseCycle[(i+1)%len(nodePhaseCycle)]
+		}
+	}
+	return NodePhaseAll
+}
+
+// Matches reports whether a row belongs to this bucket. Failed also collects
+// Error and Omitted: all three mean the step did not deliver, and a reader
+// hunting a failure needs every one of them in the same list.
+func (f NodePhase) Matches(r FlatRow) bool {
+	phase := r.Row.Phase
+	switch f {
+	case NodePhaseAll:
+		return true
+	case NodePhaseFailed:
+		return phase == "Failed" || phase == "Error" || phase == "Omitted"
+	case NodePhaseSkipped:
+		return r.Skipped()
+	default:
+		return phase == string(f)
+	}
+}
+
+// FilterFlatRows keeps the rows of one phase and drops the tree drawing.
+//
+// The tree is a statement about structure. Once a filter removes the parents,
+// a connector would draw a branch to a row that is not on screen, so the
+// filtered list is flat and says so by its own shape.
+func FilterFlatRows(rows []FlatRow, f NodePhase) []FlatRow {
+	if f == NodePhaseAll {
+		return rows
+	}
+	out := make([]FlatRow, 0, len(rows))
+	for _, r := range rows {
+		if !f.Matches(r) {
+			continue
+		}
+		r.Prefix, r.Depth = "", 0
+		out = append(out, r)
+	}
+	return out
+}

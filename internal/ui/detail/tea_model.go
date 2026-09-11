@@ -46,11 +46,18 @@ type Model struct {
 	// large deployment workflow is mostly skipped branches, and they bury the
 	// handful of nodes that actually ran.
 	hideSkipped bool
+	// nodePhase narrows the tab to one phase. It is separate from
+	// hideSkipped: hiding skipped branches tidies the tree, while this
+	// replaces the tree with the matching nodes alone.
+	nodePhase NodePhase
 	// nodeCursor is the selected row of the nodes tab; nodeTop is the first
 	// visible row. resourceTop and summaryTop are the scroll anchors of the
 	// tabs that have no cursor.
-	nodeCursor  int
-	nodeTop     int
+	nodeCursor int
+	nodeTop    int
+	// totalNodes is how many rows the tab had before the phase filter, so
+	// the status line can say what it is holding back.
+	totalNodes  int
 	resourceTop int
 	summaryTop  int
 	// gPending is the armed half of vim's gg (see the list pane).
@@ -65,7 +72,7 @@ type Model struct {
 
 // New builds the detail child model.
 func New() *Model {
-	return &Model{tab: "summary", hideSkipped: true, theme: shared.NewTheme(false)}
+	return &Model{tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, theme: shared.NewTheme(false)}
 }
 
 // SetTheme injects the style set used for node rows.
@@ -175,6 +182,15 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		// Explicit, session-only reveal of redacted resource values.
 		m.revealResource = !m.revealResource
 		return nil
+	case "p":
+		// Narrow the nodes tab to one phase. It belongs to that tab only:
+		// the summary and the resource have no rows to filter.
+		if m.tab == "nodes" {
+			m.nodePhase = m.nodePhase.Next()
+			m.nodeCursor, m.nodeTop = 0, 0
+			m.rebuildNodes()
+		}
+		return nil
 	case "h":
 		// Toggle the skipped branches. A deployment workflow is mostly
 		// skipped nodes, so this is the difference between a readable tree
@@ -210,7 +226,13 @@ func (m *Model) handleKey(key string) tea.Cmd {
 // rebuildNodes re-flattens the outline and re-clamps the cursor, so the
 // cursor can never point past the rows the view will draw.
 func (m *Model) rebuildNodes() {
-	m.nodes, m.hiddenSkipped = FlattenOutline(m.state.Outline, m.hideSkipped)
+	// A phase filter searches the whole tree, so it starts from every row:
+	// hiding the skipped branches first would make the Skipped bucket empty
+	// and could drop a match under a hidden parent.
+	hide := m.hideSkipped && m.nodePhase == NodePhaseAll
+	m.nodes, m.hiddenSkipped = FlattenOutline(m.state.Outline, hide)
+	m.totalNodes = len(m.nodes)
+	m.nodes = FilterFlatRows(m.nodes, m.nodePhase)
 	if m.nodeCursor >= len(m.nodes) {
 		m.nodeCursor = len(m.nodes) - 1
 	}
@@ -381,7 +403,7 @@ func (m *Model) PaneTitle() string {
 // Hints is the detail key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
 	if m.tab == "nodes" {
-		return "tab section  h skipped  l logs  a actions  f raw  r refresh  esc back"
+		return "tab section  h skipped  p phase  l logs  a actions  f raw  r refresh  esc back"
 	}
 	return "tab section  v reveal  y copy  a actions  f raw  r refresh  esc back"
 }
@@ -460,10 +482,11 @@ func (m *Model) tabStatusLine() string {
 			return "node status unavailable"
 		}
 		s := itoaDetail(len(m.nodes)) + " nodes"
-		if m.hiddenSkipped > 0 {
-			s += " · " + itoaDetail(m.hiddenSkipped) + " skipped hidden (h shows them)"
-		} else if !m.hideSkipped {
-			s += " · skipped shown (h hides them)"
+		if m.nodePhase != NodePhaseAll {
+			s = itoaDetail(len(m.nodes)) + " of " + itoaDetail(m.totalNodes) +
+				" nodes · phase " + string(m.nodePhase)
+		} else if m.hiddenSkipped > 0 {
+			s += " · " + itoaDetail(m.hiddenSkipped) + " skipped hidden"
 		}
 		if len(m.nodes) > 0 {
 			s += " · " + itoaDetail(m.nodeCursor+1) + "/" + itoaDetail(len(m.nodes))
