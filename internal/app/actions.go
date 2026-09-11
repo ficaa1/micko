@@ -87,11 +87,18 @@ func unknownAction(req core.ActionRequest) core.ActionResult {
 // stopObservation bounds how long an accepted Stop is watched for a terminal
 // phase. A graceful Stop runs the workflow's exit handler first, so the phase
 // can lag the accepted request by many seconds.
+//
+// The budget is short on purpose. The action pane is modal, so every second
+// spent here is a second the reader stares at "waiting for the server" with
+// no way forward. Five seconds separates a quick stop from a slow one; past
+// that the outcome is reported as ACCEPTED and the detail pane, which
+// refetches on the same poll, shows the phase settle in place.
+//
 // They are variables, not constants, so a test can shorten the budget without
 // waiting out a real exit handler.
 var (
 	stopObservationInterval = time.Second
-	stopObservationAttempts = 30
+	stopObservationAttempts = 5
 )
 
 // readBack observes the state that follows an accepted mutation. settled
@@ -148,5 +155,20 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 		msg.Result.Outcome = core.ActionUnknown
 	}
 	m.actionView.SetOutcome(msg.Result)
+	// A finished action hands the screen back by itself. Waiting for an Esc
+	// left the reader one press away from the workflow they had just changed,
+	// which is what "confirm action doesn't return" meant. The one-line
+	// report moves to the footer of the route behind it.
+	//
+	// UNKNOWN is the exception: nobody knows whether the server applied it,
+	// and that is precisely the state a reader must see rather than dismiss.
+	if msg.Result.Outcome == core.ActionUnknown {
+		return nil
+	}
+	m.flash = m.actionView.OutcomeLine()
+	m.actionView.Close()
+	if m.route == RouteDetail && m.selection.UID != "" {
+		return m.startDetailFetch()
+	}
 	return nil
 }

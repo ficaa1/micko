@@ -115,6 +115,45 @@ func (m *Model) OpenUnavailable(reason string) {
 	m.reason = reason
 }
 
+// Close returns the pane to idle from any reporting state. The root calls it
+// when it has taken the outcome over: a pane that only closes on a key press
+// leaves the reader one press away from the workflow they just changed.
+func (m *Model) Close() {
+	m.state = StateIdle
+	m.typedName = ""
+}
+
+// OutcomeLine is the one-line report of the finished action, for the footer
+// of the route the root returns to. Empty when there is no outcome yet.
+func (m *Model) OutcomeLine() string {
+	if m.outcome == nil {
+		return ""
+	}
+	verb := strings.ToLower(string(m.outcome.Action))
+	switch m.outcome.Outcome {
+	case core.ActionConfirmed:
+		s := verb + " confirmed"
+		if wf := m.outcome.Workflow; wf != nil && wf.Summary.Phase != "" {
+			s += " — phase " + shared.Sanitize(wf.Summary.Phase)
+		}
+		if ref := m.outcome.Affected; ref != nil && ref.Name != "" && ref.Name != m.ref.Name {
+			s += " — new workflow " + shared.Sanitize(ref.Name)
+		}
+		return s
+	case core.ActionAccepted:
+		s := verb + " accepted — the server applied it, it has not finished"
+		if wf := m.outcome.Workflow; wf != nil && wf.Summary.Phase != "" {
+			s += " (phase " + shared.Sanitize(wf.Summary.Phase) + ")"
+		}
+		return s
+	default:
+		return verb + " outcome unknown"
+	}
+}
+
+// Outcome returns the recorded result, or nil before one arrives.
+func (m *Model) Outcome() *core.ActionResult { return m.outcome }
+
 func (m *Model) Cancel() {
 	if m.state == StateMenu || m.state == StateConfirm || m.state == StateTypedName {
 		m.state = StateIdle

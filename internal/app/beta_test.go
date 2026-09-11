@@ -116,7 +116,7 @@ func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 	m.detailState = detailState{ref: wf.Summary.Ref, workflow: wf}
 
 	_, _ = m.Update(tea.KeyPressMsg{Text: "a"})
-	_, _ = m.Update(tea.KeyPressMsg{Text: "r"})
+	_, _ = m.Update(tea.KeyPressMsg{Text: "u"}) // resume
 	_, cmd := m.Update(tea.KeyPressMsg{Text: "y"})
 	if cmd == nil {
 		t.Fatal("confirmation did not emit an action intent command")
@@ -134,8 +134,36 @@ func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 	if b.execCalls != 1 {
 		t.Fatalf("execute calls = %d, want 1", b.execCalls)
 	}
-	if !strings.Contains(m.View().Content, "outcome: confirmed") {
-		t.Fatalf("view did not render confirmed outcome: %s", m.View().Content)
+	// The pane hands the screen back by itself and reports on the footer of
+	// the route behind it. Waiting for an Esc left the reader one press away
+	// from the workflow they had just changed.
+	if m.actionView.State() != actions.StateIdle {
+		t.Fatalf("action pane stayed open: state=%v", m.actionView.State())
+	}
+	if m.route != RouteDetail {
+		t.Fatalf("route = %v, want the detail view back", m.route)
+	}
+	if !strings.Contains(m.View().Content, "resume confirmed") {
+		t.Fatalf("view did not report the outcome: %s", m.View().Content)
+	}
+}
+
+// An UNKNOWN outcome is the one a reader must see. It stays on the screen.
+func TestUnknownOutcomeKeepsThePaneOpen(t *testing.T) {
+	wf := workflowFixture("wf")
+	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
+	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
+	m.route = RouteDetail
+	m.selection = wf.Summary.Ref
+	m.actionView = actions.NewWithOptions(wf.Summary.Ref, actions.Options{AllowActions: true})
+	m.actionView.Open(core.ActionStop)
+	m.actionView.Confirm()
+	m.handleActionResult(actionResultMsg{
+		genStamp: genStamp{Attempt: m.actionAttempt},
+		Result:   core.ActionResult{Action: core.ActionStop, Outcome: core.ActionUnknown},
+	})
+	if m.actionView.State() != actions.StateOutcome {
+		t.Fatalf("unknown outcome was dismissed: state=%v", m.actionView.State())
 	}
 }
 
