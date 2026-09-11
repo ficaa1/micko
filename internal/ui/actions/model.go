@@ -227,9 +227,20 @@ func (m *Model) updateNonInput(key tea.KeyPressMsg) {
 		if m.state == StateConfirm {
 			m.Confirm()
 		}
-	case "r", "u":
+	case "u":
 		if m.state == StateMenu {
 			m.Open(core.ActionResume)
+		}
+	case "r":
+		// retry restarts this workflow from its failed nodes. It used to be
+		// a second key for resume, which left the restart the notes asked
+		// for with no key at all.
+		if m.state == StateMenu {
+			m.Open(core.ActionRetry)
+		}
+	case "b":
+		if m.state == StateMenu {
+			m.Open(core.ActionResubmit)
 		}
 	case "s":
 		if m.state == StateMenu {
