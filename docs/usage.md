@@ -42,7 +42,8 @@ profiles:
     tokenEnv: ARGO_TUI_TOKEN        # mutually exclusive with tokenFile
     # tokenFile: /absolute/path/to/token
     # caFile: /absolute/path/to/ca.pem
-    # namespaces: [workflows, batch]  # optional picker candidates
+    # namespaces: [workflows, batch]  # always offered by the `n` picker
+    # pipeCommand: lnav               # prefills the log pipe editor (`|`)
 ```
 
 Precedence: **explicit CLI flag > selected profile > config default**;
@@ -77,13 +78,18 @@ never literal tokens in config or on the command line. See
 | Enter | open selected workflow (detail) |
 | Esc | back out / cancel (logs → where it was opened from; detail → list) |
 | Tab | switch detail tabs |
-| `/` | focus local search (list); searches the collected snapshot only |
-| `n` | namespace input/picker (manual names allowed even if enumeration is forbidden) |
-| `p` | profile picker |
+| `/` | focus local search (list and logs); searches the collected snapshot only |
+| `n` (list) | namespace picker — typed names work even when the server will not enumerate |
+| `p` (list) | phase filter |
+| `p` (detail, Nodes) | narrow the node tree to one phase |
+| `h` (detail, Nodes) | show or hide skipped branches |
 | `r` | refresh (coalesced while in flight) |
 | `?` | help |
 | Space (logs) | pause autoscroll (collection continues, bounded) |
-| `f` (logs) | resume follow |
+| `t` (logs) | resume follow (tail) |
+| `n` / `N` (logs) | next / previous search match |
+| `\|` (logs) | pipe the retained lines to another program |
+| `f` | full-screen borderless view of the active pane |
 | `a` | open the guarded actions menu when `--allow-actions` is enabled |
 | `q` | quit — only outside text entry |
 | Ctrl-C | quit globally |
@@ -143,6 +149,9 @@ normative detail:
 
 - Actions remain disabled unless `--allow-actions` is supplied on that
   invocation, and the server's RBAC remains authoritative.
+- Argo has no endpoint that lists namespaces. The picker asks the server for
+  its managed namespace, and otherwise derives the list from the workflows the
+  token can read. A namespace with no workflows has to be typed or configured.
 - The Argo action API is name-addressed and has no UID precondition; the
   residual same-name replacement race is documented, not claimed solved.
 - Live compatibility is **BLOCKED**: no authorized disposable Argo v4.1.2
