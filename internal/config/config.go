@@ -54,6 +54,10 @@ type Profile struct {
 	// the forwarded loopback port is not reachable from a browser session
 	// that outlives the program.
 	WebURL string `yaml:"webURL,omitempty"`
+	// PipeCommand prefills the log pane's pipe editor (the `|` key). Empty
+	// falls back to lnav. The command is run by a shell with the retained log
+	// lines on its standard input; nothing from the server ever reaches it.
+	PipeCommand string `yaml:"pipeCommand,omitempty"`
 }
 
 // File mirrors the on-disk config (plan §3 example).
@@ -85,8 +89,10 @@ type Config struct {
 	Server      string
 	// WebURL is the Argo UI address for links; empty means the profile did
 	// not configure one.
-	WebURL          string
-	Namespace       string
+	WebURL    string
+	Namespace string
+	// PipeCommand prefills the log pipe editor.
+	PipeCommand     string
 	TokenEnv        string
 	TokenFile       string
 	CAFile          string
@@ -154,6 +160,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	// Merge: CLI > profile > config default > built-in default.
 	cfg.Server = firstNonEmpty(opts.Server, prof.Server)
 	cfg.WebURL = strings.TrimSuffix(prof.WebURL, "/")
+	cfg.PipeCommand = strings.TrimSpace(prof.PipeCommand)
 	cfg.Namespace = firstNonEmpty(opts.Namespace, prof.Namespace)
 	cfg.TokenEnv = prof.TokenEnv
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)

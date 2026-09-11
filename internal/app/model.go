@@ -98,7 +98,7 @@ type Root struct {
 	// every refresh until the reader pressed r. Exactly one chain may be
 	// alive: two of them double the poll rate on every route change.
 	tickArmed bool
-	rawTop  int
+	rawTop    int
 	// gPending is the armed half of vim's gg while the raw view is up.
 	gPending bool
 
@@ -114,10 +114,17 @@ type Root struct {
 	// openURL launches a browser. It is a field so tests can observe the
 	// call instead of opening a real window.
 	openURL func(string) error
+
+	// pipeCommand prefills the log pane's pipe editor.
+	pipeCommand string
 }
 
 // SetWebURL records the Argo UI address links are built from.
 func (m *Root) SetWebURL(u string) { m.webURL = u }
+
+// SetPipeCommand records the command the log pipe editor prefills with. The
+// log pane is rebuilt on every open, so the root holds it.
+func (m *Root) SetPipeCommand(cmd string) { m.pipeCommand = cmd }
 
 // listState is the list route's data + status.
 type listState struct {
@@ -426,6 +433,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)
+
+	case logs.PipeIntent:
+		return m, m.startPipe(msg)
+
+	case pipeDoneMsg:
+		return m, m.handlePipeDone(msg)
 
 	case shared.SwitchContextIntent:
 		return m, m.openLogs(OpenLogsMsg{Ref: msg.Ref, PodName: msg.PodName, Container: msg.Container})
@@ -810,6 +823,8 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	m.route = RouteLogs
 	m.logState = logState{ref: msg.Ref, container: msg.Container, running: true}
 	m.logsView = logs.NewModel(msg.Ref, msg.PodName, msg.Container)
+	m.logsView.SetTheme(m.theme)
+	m.logsView.SetPipeCommand(m.pipeCommand)
 	return m.startLogStream(msg)
 }
 

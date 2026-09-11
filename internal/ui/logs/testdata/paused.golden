@@ -4,4 +4,4 @@ retained: 2/10000 lines (0 evicted)
 ── (all pods):main ── 2 lines recorded
 line one
 line two
-t follow  space pause  / search  n next  c container  f raw  y copy  esc back
+t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back
