@@ -94,6 +94,7 @@ func run(args []string) int {
 	activeServer, activeProfile := "synthetic demo", "demo"
 	activeWebURL := ""
 	activePipe := ""
+	var activeNamespaces []string
 	if *demo {
 		reader = testkit.DemoReader(clock)
 		activeNS = "demo"
@@ -197,6 +198,7 @@ func run(args []string) int {
 		activeServer, activeProfile = cfg.Server, cfg.ProfileName
 		activeWebURL = cfg.WebURL
 		activePipe = cfg.PipeCommand
+		activeNamespaces = cfg.Namespaces
 		connStates = stateCh
 	}
 	root := app.NewRootWithOptions(reader, clock, activeNS, interval, actions.Options{
@@ -209,6 +211,7 @@ func run(args []string) int {
 	root.SetVersion(mainVersion + " @ " + mainCommit)
 	root.SetWebURL(activeWebURL)
 	root.SetPipeCommand(activePipe)
+	root.SetNamespaceSeed(activeNamespaces)
 	p := tea.NewProgram(root)
 	if connStates != nil {
 		// Bridge transport lifecycle into the update loop. Losing the forward

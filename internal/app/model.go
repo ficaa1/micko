@@ -12,6 +12,7 @@ import (
 	"argo-tui/internal/ui/actions"
 	"argo-tui/internal/ui/detail"
 	"argo-tui/internal/ui/logs"
+	"argo-tui/internal/ui/namespaces"
 	"argo-tui/internal/ui/shared"
 	"argo-tui/internal/ui/shell"
 	"argo-tui/internal/ui/workflowlist"
@@ -117,6 +118,11 @@ type Root struct {
 
 	// pipeCommand prefills the log pane's pipe editor.
 	pipeCommand string
+
+	// nsView is the namespace picker dialog; nsSeed is the namespace list the
+	// profile configured, offered alongside whatever the server reports.
+	nsView *namespaces.Model
+	nsSeed []string
 }
 
 // SetWebURL records the Argo UI address links are built from.
@@ -176,11 +182,16 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	if a, ok := r.(core.Actioner); ok {
 		actioner = a
 	}
+	var nsLister core.NamespaceLister
+	if n, ok := r.(core.NamespaceLister); ok {
+		nsLister = n
+	}
 	return &Root{
 		deps: deps{
 			reader:      r,
 			watcher:     watcher,
 			actioner:    actioner,
+			nsLister:    nsLister,
 			clock:       clock,
 			interval:    interval,
 			namespace:   namespace,
@@ -189,6 +200,7 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 		},
 		inflight:        map[string]context.CancelFunc{},
 		theme:           shared.NewTheme(false),
+		nsView:          namespaces.New(shared.NewTheme(false)),
 		listView:        workflowlist.New(shared.NewTheme(false), false),
 		detailView:      newDetailView(),
 		actionView:      actions.NewWithOptions(core.Ref{}, opts),
@@ -289,6 +301,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
+		// The namespace picker is a dialog too, and it owns printable keys:
+		// typing narrows the list. It therefore has to be tested before the
+		// global q and ? below, or neither letter could ever be typed.
+		if m.namespaceDialogOpen() {
+			return m, m.nsView.Update(msg)
+		}
 		// The help overlay is a dialog (shared.KeyCtxDialog): while it is
 		// open it owns every remaining key, so the view behind it cannot
 		// move. q closes it instead of quitting; only Ctrl-C, handled
@@ -334,6 +352,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "o":
 				return m, m.openInBrowser()
 			}
+		}
+		// `n` switches namespace. It is bound on the list because that is the
+		// route the namespace describes; in the logs pane `n` is the next
+		// search match, which is the vim meaning a reader expects there.
+		if m.route == RouteList && key == "n" && !m.textEntryActive() {
+			return m, m.openNamespacePicker()
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
 			return m, m.startDetailFetch()
@@ -434,6 +458,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)
 
+	case namespacesLoadedMsg:
+		return m, m.handleNamespacesLoaded(msg)
+
+	case namespaces.SwitchMsg:
+		return m, m.switchNamespace(msg.Namespace)
+
 	case logs.PipeIntent:
 		return m, m.startPipe(msg)
 
@@ -505,6 +535,15 @@ func (m *Root) View() tea.View {
 		f.Hints = "y confirm  n cancel  esc close"
 		f.Help = ""
 		f.Body = splitLines(m.actionView.View().Content)
+		return m.finishView(f)
+	}
+	if m.namespaceDialogOpen() {
+		f.Title = "Namespace"
+		f.Route = "namespace"
+		f.Hints = m.nsView.Hints()
+		f.Help = ""
+		m.nsView.SetSize(f.BodyWidth(), f.BodyHeight())
+		f.Body = m.nsView.BodyLines()
 		return m.finishView(f)
 	}
 	if m.help.IsOpen() {
@@ -746,9 +785,6 @@ func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "esc":
 		return m, m.back()
-	case "n":
-		// F1: namespace switching is I1 scope; stub does nothing yet.
-		return m, nil
 	default:
 		return m, nil
 	}

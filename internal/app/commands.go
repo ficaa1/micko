@@ -21,6 +21,9 @@ type deps struct {
 	reader   core.Reader
 	watcher  core.Watcher
 	actioner core.Actioner
+	// nsLister answers the namespace picker. It is optional: a Reader that
+	// cannot list namespaces simply does not implement it.
+	nsLister core.NamespaceLister
 	clock    Clock
 	interval time.Duration
 	// namespace is the active namespace; switching it bumps the connection
