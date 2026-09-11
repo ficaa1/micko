@@ -95,6 +95,9 @@ type Model struct {
 	curHit       int         // the hit n/N last moved to
 	searchScopeN int         // lines the search ran over (scope honesty)
 
+	pipeOn       bool   // pipe-command editor has focus
+	pipeBuf      string // editor keystroke buffer (the command)
+	pipeCmd      string // the command the editor prefills with
 	contextOn    bool   // pod/container editor has focus
 	podBuf       string // editor keystroke buffer (pod)
 	containerBuf string // editor keystroke buffer (container)
@@ -192,7 +195,23 @@ func (m *Model) Paused() bool { return m.paused }
 func (m *Model) Following() bool { return m.follow }
 
 // EscapeConsumed reports whether Esc currently belongs to a text editor.
-func (m *Model) EscapeConsumed() bool { return m.searchOn || m.contextOn }
+func (m *Model) EscapeConsumed() bool { return m.searchOn || m.contextOn || m.pipeOn }
+
+// SetPipeCommand records the command the pipe editor prefills with. The
+// profile configures it; an empty value falls back to lnav, which is what the
+// feature was asked for.
+func (m *Model) SetPipeCommand(cmd string) {
+	if cmd = strings.TrimSpace(cmd); cmd != "" {
+		m.pipeCmd = cmd
+	}
+}
+
+func (m *Model) pipeDefault() string {
+	if m.pipeCmd != "" {
+		return m.pipeCmd
+	}
+	return "lnav"
+}
 
 // SetPhase records the stream lifecycle (root calls per logRecordMsg:
 // running/done/canceled/err — plan §4 batched delivery).
@@ -304,6 +323,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return m.handleSearchKey(key)
 	case m.contextOn:
 		return m.handleContextKey(key)
+	case m.pipeOn:
+		return m.handlePipeKey(key)
 	}
 	// vim's gg: the first g arms, the second jumps to the oldest retained
 	// line. Any other key disarms and is then handled normally.
@@ -352,6 +373,13 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		// `/` focuses retained-buffer search (LOG-09).
 		m.searchOn = true
 		m.searchBuf = m.search.term // prefill with the active term
+		return nil
+	case "|":
+		// `|` hands the retained lines to another program. The command is
+		// editable every time: the reader knows what they want to look at
+		// with far better than argo-tui does.
+		m.pipeOn = true
+		m.pipeBuf = m.pipeDefault()
 		return nil
 	case "c":
 		// `c` opens the pod/container context editor (LOG-10). The
@@ -437,7 +465,7 @@ func (m *Model) scrollBy(delta int) {
 
 // printable turns a key name into the character it inserts into a text
 // editor. Space arrives as the name "space", so without this no search term
-// and no container name could ever contain one.
+// and no pipe command could ever contain one.
 func printable(key string) (string, bool) {
 	if key == "space" {
 		return " ", true
@@ -558,6 +586,46 @@ func (m *Model) ClearSearch() {
 	m.hitRows = nil
 	m.curHit = 0
 	m.searchScopeN = 0
+}
+
+// PipeIntent asks the root to run Command with the retained log lines on its
+// standard input. The component never starts a process: the root owns every
+// effect (plan §4), and this one takes the whole terminal.
+type PipeIntent struct {
+	Ref     core.Ref
+	Command string
+}
+
+// handlePipeKey routes keys while the pipe editor has focus. An empty command
+// is refused rather than defaulted: running something the reader did not type
+// with the whole screen is not a place for a guess.
+func (m *Model) handlePipeKey(key string) tea.Cmd {
+	switch key {
+	case "esc":
+		m.pipeOn = false
+		m.pipeBuf = ""
+		return nil
+	case "enter":
+		cmd := strings.TrimSpace(m.pipeBuf)
+		if cmd == "" {
+			return nil
+		}
+		m.pipeOn = false
+		m.pipeBuf = ""
+		ref := m.ref
+		return func() tea.Msg { return PipeIntent{Ref: ref, Command: cmd} }
+	case "backspace":
+		r := []rune(m.pipeBuf)
+		if len(r) > 0 {
+			m.pipeBuf = string(r[:len(r)-1])
+		}
+		return nil
+	default:
+		if ch, ok := printable(key); ok {
+			m.pipeBuf += ch
+		}
+		return nil
+	}
 }
 
 // handleContextKey routes keys while the pod/container editor has focus.

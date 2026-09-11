@@ -148,7 +148,7 @@ func (m *Model) viewRows() int {
 	if m.paneMode {
 		h += paneChromeSaved
 	}
-	if m.searchOn || m.contextOn {
+	if m.searchOn || m.contextOn || m.pipeOn {
 		h -= editorRows
 	}
 	if h < 1 {
@@ -327,6 +327,9 @@ func (m *Model) bodyLines() []string {
 	if m.searchOn {
 		b.WriteString("search: " + m.searchBuf + "_  (enter apply, esc cancel)")
 		b.WriteString("\n")
+	} else if m.pipeOn {
+		b.WriteString("pipe to: " + m.pipeBuf + "_  (enter runs it with the retained lines on stdin, esc cancels)")
+		b.WriteString("\n")
 	} else if m.contextOn {
 		b.WriteString("pod: [" + m.podBuf + "]  container: [" + m.containerBuf + "]  (enter apply, esc cancel)")
 		if m.contextErr != "" {
@@ -395,5 +398,5 @@ func (m *Model) countView() string {
 
 // footerView carries the key hints (q/n/p/? are root-owned).
 func (m *Model) footerView() string {
-	return "t follow  space pause  / search  n next  c container  f raw  y copy  esc back"
+	return "t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back"
 }

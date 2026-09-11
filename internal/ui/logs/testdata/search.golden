@@ -8,4 +8,4 @@ line-2
 line-3
 line-4
 line-5
-t follow  space pause  / search  n next  c container  f raw  y copy  esc back
+t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back

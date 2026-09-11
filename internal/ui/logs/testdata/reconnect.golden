@@ -6,4 +6,4 @@ before disconnect
 ── reconnect: new stream; overlap/gap possible ──
 after reconnect
 after reconnect
-t follow  space pause  / search  n next  c container  f raw  y copy  esc back
+t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back
