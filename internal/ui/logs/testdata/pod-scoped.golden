@@ -3,4 +3,4 @@ Scope: pod: mypod-abc · container: sidecar · [FOLLOWING]
 retained: 1/10000 lines (0 evicted)
 ── mypod-abc:sidecar ── 1 line recorded
 sidecar says hi
-t follow  space pause  / search  c container  f raw  y copy  esc back
+t follow  space pause  / search  n next  c container  f raw  y copy  esc back

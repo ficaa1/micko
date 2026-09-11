@@ -66,7 +66,7 @@ func TestViewGoldenFollow(t *testing.T) {
 		"── (all pods):main ── 2 lines recorded",
 		"one",
 		"two",
-		"t follow  space pause  / search  c container  f raw  y copy  esc back",
+		"t follow  space pause  / search  n next  c container  f raw  y copy  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden follow mismatch:\n got: %q\nwant: %q", got, want)
@@ -86,7 +86,7 @@ func TestViewGoldenPaused(t *testing.T) {
 		"retained: 1/10000 lines (0 evicted)",
 		"── (all pods):main ── 1 line recorded",
 		"one",
-		"t follow  space pause  / search  c container  f raw  y copy  esc back",
+		"t follow  space pause  / search  n next  c container  f raw  y copy  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden paused mismatch:\n got: %q\nwant: %q", got, want)
@@ -109,7 +109,7 @@ func TestViewGoldenReconnect(t *testing.T) {
 		"before",
 		"── reconnect: new stream; overlap/gap possible ──",
 		"after",
-		"t follow  space pause  / search  c container  f raw  y copy  esc back",
+		"t follow  space pause  / search  n next  c container  f raw  y copy  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden reconnect mismatch:\n got: %q\nwant: %q", got, want)
@@ -131,7 +131,7 @@ func TestViewGoldenEnded(t *testing.T) {
 		"── (all pods):main ── 1 line recorded",
 		"only",
 		"── stream ended ──",
-		"t follow  space pause  / search  c container  f raw  y copy  esc back",
+		"t follow  space pause  / search  n next  c container  f raw  y copy  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden ended mismatch:\n got: %q\nwant: %q", got, want)

@@ -115,8 +115,8 @@ func TestManualScrollDetachesFollow(t *testing.T) {
 }
 
 // TestSearchScopeIsRetainedBuffer pins LOG-09 UX: after applying a search,
-// matches are annotated and the count line states the retained-buffer
-// scope explicitly.
+// the count line states the retained-buffer scope explicitly and reports the
+// position within the matches.
 func TestSearchScopeIsRetainedBuffer(t *testing.T) {
 	m := testModel(t)
 	m.ApplyRecords(recs(6))
@@ -130,8 +130,61 @@ func TestSearchScopeIsRetainedBuffer(t *testing.T) {
 	if !strings.Contains(v, "search scope: retained buffer only") {
 		t.Fatalf("search scope not visible:\n%s", v)
 	}
-	if !strings.Contains(v, "[match 1] line-2") {
-		t.Fatalf("match annotation missing:\n%s", v)
+	if !strings.Contains(v, `search "line-2": 1/1`) {
+		t.Fatalf("match position missing:\n%s", v)
+	}
+	// The line itself is never edited. An annotation pushed the content right
+	// and travelled into every copy of the buffer.
+	if strings.Contains(v, "[match") {
+		t.Fatalf("search still rewrites the log line:\n%s", v)
+	}
+}
+
+// A search must show the reader the word they searched for. With the plain
+// theme there is nothing to see, so this pins the coloured one.
+func TestSearchHighlightsTheTermInPlace(t *testing.T) {
+	m := testModel(t)
+	m.SetTheme(shared.NewTheme(false))
+	m.ApplyRecords(recs(6))
+	m.applySearch("line-2")
+	v := m.View()
+	if !strings.Contains(v, "\x1b[") {
+		t.Fatalf("no highlight reached the screen:\n%q", v)
+	}
+	// The retained buffer itself stays clean: raw text is what a copy yanks.
+	for _, l := range m.RawLines() {
+		if strings.Contains(l, "\x1b[") {
+			t.Fatalf("styling leaked into the retained line %q", l)
+		}
+	}
+}
+
+// n and N walk the hits and wrap. Before this a search reported a count and
+// left the reader to scroll for the lines themselves.
+func TestNextAndPreviousMatchWalkTheHits(t *testing.T) {
+	m := testModel(t)
+	m.ApplyRecords(recs(6))
+	m.applySearch("line-") // every line matches
+	if len(m.hits) != 6 {
+		t.Fatalf("hits = %d, want 6", len(m.hits))
+	}
+	if m.curHit != 0 {
+		t.Fatalf("a fresh search must land on the first hit, got %d", m.curHit)
+	}
+	press(m, 'n')
+	if m.curHit != 1 {
+		t.Fatalf("n did not advance: %d", m.curHit)
+	}
+	press(m, 'N')
+	if m.curHit != 0 {
+		t.Fatalf("N did not go back: %d", m.curHit)
+	}
+	press(m, 'N')
+	if m.curHit != 5 {
+		t.Fatalf("N at the first hit must wrap to the last, got %d", m.curHit)
+	}
+	if m.follow {
+		t.Fatal("jumping to a match must detach follow, or the tail drags the reader off it")
 	}
 }
 

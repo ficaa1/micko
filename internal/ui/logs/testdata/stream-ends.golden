@@ -5,4 +5,4 @@ retained: 2/10000 lines (0 evicted)
 step: starting
 step: done
 ── stream ended ──
-t follow  space pause  / search  c container  f raw  y copy  esc back
+t follow  space pause  / search  n next  c container  f raw  y copy  esc back
