@@ -76,24 +76,65 @@ func (b *buffer) snapshot() []row {
 	return rows
 }
 
-// overlayMatches prefixes hit rows with a visible "[match N]" annotation
-// so the search scope is auditable (LOG-09). hitLogIdx maps scrollable-row
-// position → log-line index; hits are indices into the retained log lines.
-func overlayMatches(rows []row, hits []int, hitLogIdx []int) {
+// hitRowIndex maps each hit, in order, to the scrollable row that carries it.
+// hitLogIdx maps scrollable-row position → log-line index; hits are indices
+// into the retained log lines.
+//
+// This replaces the old "[match N]" text prefix. That prefix edited the line
+// itself, which pushed the content right, broke a copy of the buffer and made
+// the reader count captions instead of seeing the word they searched for.
+func hitRowIndex(hits []int, hitLogIdx []int) []int {
 	if len(hits) == 0 {
-		return
+		return nil
 	}
 	pos := make(map[int]int, len(hitLogIdx)) // log-line index → row index
 	for r, l := range hitLogIdx {
-		pos[l] = r
-	}
-	for n, h := range hits {
-		r, ok := pos[h]
-		if !ok || r < 0 || r >= len(rows) {
-			continue
+		if l >= 0 {
+			pos[l] = r
 		}
-		rows[r].text = "[match " + itoaView(n+1) + "] " + rows[r].text
 	}
+	out := make([]int, 0, len(hits))
+	for _, h := range hits {
+		r, ok := pos[h]
+		if !ok {
+			r = -1
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// highlight marks every occurrence of the search term inside one line.
+//
+// The current hit is reversed and the others are coloured, so the eye lands on
+// the line n or N just moved to without losing the others. Nothing is added to
+// the text: the styling is an overlay, and RawLines and the clipboard keep the
+// line exactly as the server sent it.
+func (m *Model) highlight(text string, current bool) string {
+	term := m.search.term
+	if term == "" || text == "" {
+		return text
+	}
+	style := m.theme.Warning
+	if current {
+		style = m.theme.Selected
+	}
+	hay, needle := text, term
+	if !m.search.caseSensitive {
+		hay, needle = strings.ToLower(text), strings.ToLower(term)
+	}
+	var b strings.Builder
+	for i := 0; ; {
+		j := strings.Index(hay[i:], needle)
+		if j < 0 {
+			b.WriteString(text[i:])
+			break
+		}
+		b.WriteString(text[i : i+j])
+		b.WriteString(style.Render(text[i+j : i+j+len(needle)]))
+		i += j + len(needle)
+	}
+	return b.String()
 }
 
 // viewRows is the scrollable window height (fixed chrome + footer + an
@@ -190,16 +231,23 @@ func (m *Model) ensureSnapshot() {
 			hitLogIdx = append(hitLogIdx, -1)
 		}
 	}
-	overlayMatches(m.rows, m.hits, hitLogIdx)
+	m.hitRows = hitRowIndex(m.hits, hitLogIdx)
 	m.rowsFor = len(m.buf.buf)
 }
 
 // window returns the rows visible at the current scroll position.
 func (m *Model) window() []row {
+	rows, _ := m.windowAt()
+	return rows
+}
+
+// windowAt returns the visible rows and the absolute index of the first one,
+// so the renderer can tell which row carries the current search hit.
+func (m *Model) windowAt() ([]row, int) {
 	m.ensureSnapshot()
 	h := m.viewRows()
 	if len(m.rows) == 0 {
-		return nil
+		return nil, 0
 	}
 	bottom := m.bottomAt()
 	// Scrolling up past the first line must not shrink the pane. Without
@@ -216,7 +264,7 @@ func (m *Model) window() []row {
 	if top < 0 {
 		top = 0
 	}
-	return m.rows[top : bottom+1]
+	return m.rows[top : bottom+1], top
 }
 
 // View renders the log pane (header, status, editors, count, window,
@@ -288,9 +336,14 @@ func (m *Model) bodyLines() []string {
 	}
 	b.WriteString(m.countView())
 	b.WriteString("\n")
-	rows := m.window()
+	rows, top := m.windowAt()
+	cur := m.currentHitRow()
 	for i, r := range rows {
-		b.WriteString(r.text)
+		text := r.text
+		if r.kind == rowLog {
+			text = m.highlight(text, top+i == cur)
+		}
+		b.WriteString(text)
 		if i < len(rows)-1 {
 			b.WriteString("\n")
 		}
@@ -329,14 +382,18 @@ func (m *Model) countView() string {
 	s := "retained: " + itoaView(lines) + "/" + itoaView(MaxLines) +
 		" lines (" + itoa64(evicted) + " evicted)"
 	if m.search.term != "" {
-		s += " · search: " + itoaView(len(m.hits)) + " match(es) for " +
-			"\"" + m.search.term + "\"" +
-			" · search scope: retained buffer only (" + itoaView(m.searchScopeN) + " lines searched)"
+		s += " · search \"" + m.search.term + "\": "
+		if len(m.hits) == 0 {
+			s += "no match"
+		} else {
+			s += itoaView(m.curHit+1) + "/" + itoaView(len(m.hits)) + " (n next, N previous)"
+		}
+		s += " · search scope: retained buffer only (" + itoaView(m.searchScopeN) + " lines searched)"
 	}
 	return s
 }
 
 // footerView carries the key hints (q/n/p/? are root-owned).
 func (m *Model) footerView() string {
-	return "t follow  space pause  / search  c container  f raw  y copy  esc back"
+	return "t follow  space pause  / search  n next  c container  f raw  y copy  esc back"
 }

@@ -91,6 +91,8 @@ type Model struct {
 	searchBuf    string      // keystroke buffer while focused
 	searchOn     bool        // search input has focus (UI-04 isolation)
 	hits         []int       // match indices over retained log lines
+	hitRows      []int       // hit → scrollable row index (-1 when off-buffer)
+	curHit       int         // the hit n/N last moved to
 	searchScopeN int         // lines the search ran over (scope honesty)
 
 	contextOn    bool   // pod/container editor has focus
@@ -100,6 +102,10 @@ type Model struct {
 
 	width, height int // last known terminal size (SetSize)
 	noColor       bool
+	// theme styles the search highlight. Nothing else in this pane is
+	// coloured, so it is the one channel that says "this is the word you
+	// searched for" without editing the line.
+	theme shared.Theme
 
 	// paneMode says a shell draws this pane's title and footer bands, so the
 	// pane renders content only and reclaims those two rows.
@@ -126,6 +132,7 @@ func NewModel(ref core.Ref, podName, container string) *Model {
 		ref:       ref,
 		podName:   podName,
 		container: container,
+		theme:     shared.NewTheme(false),
 		buf:       NewBuffer(MaxLines, MaxBytes),
 		follow:    true,
 		bottom:    -1, // pinned to tail
@@ -156,7 +163,15 @@ func (m *Model) ensureContextHeaderLocked() {
 }
 
 // SetNoColor forces the plain theme (golden determinism; NO_COLOR).
-func (m *Model) SetNoColor(v bool) { m.noColor = v }
+func (m *Model) SetNoColor(v bool) {
+	m.noColor = v
+	if v {
+		m.theme = shared.NewTheme(true)
+	}
+}
+
+// SetTheme injects the style set used for the search highlight.
+func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
 // Ref returns the workflow the viewer is attached to.
 func (m *Model) Ref() core.Ref { return m.ref }
@@ -240,6 +255,8 @@ func (m *Model) Clear() {
 	defer m.mu.Unlock()
 	m.buf = NewBuffer(MaxLines, MaxBytes)
 	m.hits = nil
+	m.hitRows = nil
+	m.curHit = 0
 	m.search = searchState{}
 	m.searchBuf = ""
 	m.searchOn = false
@@ -373,8 +390,16 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 	case "home":
 		m.jumpToTop()
 		return nil
+	case "n":
+		// vim's n/N over the search hits. Without them a search told you how
+		// many matches existed and then left you to scroll for them.
+		m.jumpToHit(1)
+		return nil
+	case "N":
+		m.jumpToHit(-1)
+		return nil
 	default:
-		// Everything else (q, n, p, ?, ...) belongs to the root (UI-04):
+		// Everything else (q, ?, ...) belongs to the root (UI-04):
 		// the child must not shadow global keys.
 		return nil
 	}
@@ -410,6 +435,19 @@ func (m *Model) scrollBy(delta int) {
 	}
 }
 
+// printable turns a key name into the character it inserts into a text
+// editor. Space arrives as the name "space", so without this no search term
+// and no container name could ever contain one.
+func printable(key string) (string, bool) {
+	if key == "space" {
+		return " ", true
+	}
+	if runes := []rune(key); len(runes) == 1 && runes[0] >= 0x20 {
+		return key, true
+	}
+	return "", false
+}
+
 // handleSearchKey routes keys while search has focus (UI-04: printable
 // insertion only; enter applies over the retained buffer; esc cancels).
 func (m *Model) handleSearchKey(key string) tea.Cmd {
@@ -433,8 +471,8 @@ func (m *Model) handleSearchKey(key string) tea.Cmd {
 		}
 		return nil
 	default:
-		if runes := []rune(key); len(runes) == 1 && runes[0] >= 0x20 {
-			m.searchBuf += key
+		if ch, ok := printable(key); ok {
+			m.searchBuf += ch
 		}
 		return nil
 	}
@@ -444,17 +482,72 @@ func (m *Model) handleSearchKey(key string) tea.Cmd {
 // buffer (LOG-09: scope is the retained lines only; the view states it).
 func (m *Model) applySearch(term string) {
 	m.search = searchState{term: term}
+	m.curHit = 0
 	if term == "" {
 		m.hits = nil
+		m.hitRows = nil
 		m.searchScopeN = 0
 	} else {
 		lines := m.buf.Lines()
 		m.searchScopeN = len(lines)
 		m.hits = matchIndices(lines, term, m.search.caseSensitive)
 	}
-	// Rebuild the snapshot so the [match N] overlay renders (the row set
-	// did not change, but its annotations did).
+	// The row set did not change, but the hit map did.
 	m.invalidateLocked()
+	if len(m.hits) > 0 {
+		// Land on the first hit: a search that reports 12 matches and shows
+		// none of them is the complaint this answers.
+		m.curHit = len(m.hits) - 1
+		m.jumpToHit(1)
+	}
+}
+
+// jumpToHit moves the viewport to the next (delta 1) or previous (delta -1)
+// search hit and makes it the current one. The list wraps, because a reader
+// pressing n at the last match wants the first one, not a dead key.
+//
+// Jumping detaches follow: the reader asked to look at a specific line, and a
+// live tail would drag them off it within a second.
+func (m *Model) jumpToHit(delta int) {
+	m.ensureSnapshot()
+	if len(m.hits) == 0 {
+		return
+	}
+	n := len(m.hits)
+	next := m.curHit
+	// Walk at most one full turn, so hits whose row fell out of the retained
+	// buffer are stepped over instead of freezing the key.
+	for i := 0; i < n; i++ {
+		next = ((next+delta)%n + n) % n
+		if row := m.hitRowAt(next); row >= 0 {
+			m.curHit = next
+			m.follow = false
+			m.paused = true
+			m.phase = PhasePaused
+			// Park the hit one line above the bottom edge where there is room,
+			// so the lines after it are visible too.
+			m.bottom = m.clampBottomRaw(row + 1)
+			return
+		}
+	}
+}
+
+// hitRowAt resolves one hit to its scrollable row, or -1.
+func (m *Model) hitRowAt(i int) int {
+	if i < 0 || i >= len(m.hitRows) {
+		return -1
+	}
+	return m.hitRows[i]
+}
+
+// currentHitRow is the row the current hit sits on, or -1.
+func (m *Model) currentHitRow() int { return m.hitRawRow() }
+
+func (m *Model) hitRawRow() int {
+	if len(m.hits) == 0 {
+		return -1
+	}
+	return m.hitRowAt(m.curHit)
 }
 
 // ClearSearch drops the active search (root/test entry point).
@@ -462,6 +555,8 @@ func (m *Model) ClearSearch() {
 	m.search = searchState{}
 	m.searchBuf = ""
 	m.hits = nil
+	m.hitRows = nil
+	m.curHit = 0
 	m.searchScopeN = 0
 }
 
@@ -508,10 +603,10 @@ func (m *Model) handleContextKey(key string) tea.Cmd {
 	case "right":
 		return m.podRight()
 	default:
-		if runes := []rune(key); len(runes) == 1 && runes[0] >= 0x20 {
+		if ch, ok := printable(key); ok {
 			// Backspace (visual) already handled for container; pod
 			// editing uses left/right + insert semantics below.
-			m.containerBuf += key
+			m.containerBuf += ch
 		}
 		return nil
 	}
