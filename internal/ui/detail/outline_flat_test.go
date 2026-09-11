@@ -168,7 +168,9 @@ func TestLogsKeyIsInertOnANodeWithoutAPod(t *testing.T) {
 }
 
 // h is the answer to "forty lines of skipped nodes"; the status line has to
-// say what is hidden, or the tree looks truncated instead of filtered.
+// say what is hidden, or the tree looks truncated instead of filtered. Once
+// nothing is hidden the line says nothing: the footer already carries the key,
+// and repeating it there was the "unnecessary words" the notes pointed at.
 func TestHideSkippedToggleIsReported(t *testing.T) {
 	m := New()
 	m.SetTheme(shared.NewTheme(true))
@@ -179,9 +181,44 @@ func TestHideSkippedToggleIsReported(t *testing.T) {
 	if !strings.Contains(m.tabStatusLine(), "skipped hidden") {
 		t.Fatalf("status line does not report hidden rows: %q", m.tabStatusLine())
 	}
+	if strings.Contains(m.tabStatusLine(), "(h ") {
+		t.Fatalf("status line repeats a key the footer already shows: %q", m.tabStatusLine())
+	}
 	m.handleKey("h")
-	if !strings.Contains(m.tabStatusLine(), "skipped shown") {
-		t.Fatalf("status line does not report the toggle: %q", m.tabStatusLine())
+	if strings.Contains(m.tabStatusLine(), "skipped") {
+		t.Fatalf("nothing is hidden, so the line must not mention skipped rows: %q", m.tabStatusLine())
+	}
+}
+
+// The phase filter is how a reader finds the one failed step in a workflow of
+// forty. It must narrow the rows and say what it is holding back.
+func TestNodePhaseFilterNarrowsTheTab(t *testing.T) {
+	m := New()
+	m.SetTheme(shared.NewTheme(true))
+	m.SetSize(120, 20)
+	m.SetWorkflow(gateWorkflow(), time.Now())
+	m.handleKey("tab")
+	all := len(m.nodes)
+
+	m.handleKey("p") // All -> Failed
+	if m.nodePhase != NodePhaseFailed {
+		t.Fatalf("phase = %q, want Failed first in the rotation", m.nodePhase)
+	}
+	for _, r := range m.nodes {
+		if !NodePhaseFailed.Matches(r) {
+			t.Fatalf("row %q survived the Failed filter with phase %q", r.Row.Name, r.Row.Phase)
+		}
+	}
+	if line := m.tabStatusLine(); !strings.Contains(line, "phase Failed") {
+		t.Fatalf("status line does not name the filter: %q", line)
+	}
+
+	// Round the rotation back to All and the tree comes back whole.
+	for i := 0; i < len(nodePhaseCycle)-1; i++ {
+		m.handleKey("p")
+	}
+	if m.nodePhase != NodePhaseAll || len(m.nodes) != all {
+		t.Fatalf("rotation did not return to the full tree: phase=%q rows=%d want %d", m.nodePhase, len(m.nodes), all)
 	}
 }
 
