@@ -89,8 +89,13 @@ type Config struct {
 	Server      string
 	// WebURL is the Argo UI address for links; empty means the profile did
 	// not configure one.
-	WebURL    string
+	WebURL string
+	// Namespace is the namespace the session starts in. It is a starting
+	// point, not a lock: the `n` key switches it while the program runs.
 	Namespace string
+	// Namespaces are the namespaces the profile names. The picker offers
+	// them alongside whatever the server reports.
+	Namespaces []string
 	// PipeCommand prefills the log pipe editor.
 	PipeCommand     string
 	TokenEnv        string
@@ -160,6 +165,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	// Merge: CLI > profile > config default > built-in default.
 	cfg.Server = firstNonEmpty(opts.Server, prof.Server)
 	cfg.WebURL = strings.TrimSuffix(prof.WebURL, "/")
+	cfg.Namespaces = append([]string(nil), prof.Namespaces...)
 	cfg.PipeCommand = strings.TrimSpace(prof.PipeCommand)
 	cfg.Namespace = firstNonEmpty(opts.Namespace, prof.Namespace)
 	cfg.TokenEnv = prof.TokenEnv

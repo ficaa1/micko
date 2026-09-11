@@ -3,4 +3,4 @@ Search: (none)  / to filter by name  Phase: All  Sort: phase, newest first
 NAME                            PHASE              AGE  DURATION 
 no workflows in this namespace yet
 
-enter open  l logs  / search  s sort  p phase  r refresh  ? help
+enter open  l logs  / search  s sort  p phase  n namespace  r refresh  ? help

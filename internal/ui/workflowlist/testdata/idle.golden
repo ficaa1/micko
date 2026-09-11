@@ -8,4 +8,4 @@ fixture-wf-0000                 ○ Pending           6m  -
 fixture-wf-0002                 ✓ Succeeded         4m  -        
 fixture-wf-0005                 • WeirdFutu…        1m  -        
 
-enter open  l logs  / search  s sort  p phase  r refresh  ? help
+enter open  l logs  / search  s sort  p phase  n namespace  r refresh  ? help

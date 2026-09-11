@@ -61,6 +61,12 @@ type FakeReader struct {
 	GetErr    error
 	StreamErr error
 
+	// Namespaces is the extra namespace list ListNamespaces reports, on top
+	// of the namespaces the stored workflows are in. NamespacesErr fails the
+	// call instead.
+	Namespaces    []string
+	NamespacesErr error
+
 	// ListDelay/GetDelay/StreamDelay are injected delays, applied with
 	// context awareness (canceled context aborts the wait).
 	ListDelay   time.Duration
@@ -323,3 +329,40 @@ func DemoReader(clock *FakeClock) *FakeReader {
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+// Namespaces, when set, is what ListNamespaces answers. It lets the namespace
+// picker be exercised without a server.
+//
+// FakeReader always implements core.NamespaceLister: a Reader that cannot
+// answer returns an empty list, which is a state the picker has to render
+// honestly anyway.
+func (f *FakeReader) ListNamespaces(ctx context.Context) ([]string, string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.NamespacesErr != nil {
+		return nil, "", f.NamespacesErr
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(f.Namespaces))
+	for _, n := range append(append([]string(nil), f.Namespaces...), namespacesOf(f.Workflows)...) {
+		if n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out, "fake reader", nil
+}
+
+func namespacesOf(wfs map[core.Ref]core.Workflow) []string {
+	out := make([]string, 0, len(wfs))
+	for ref := range wfs {
+		out = append(out, ref.Namespace)
+	}
+	return out
+}
+
+var _ core.NamespaceLister = (*FakeReader)(nil)
