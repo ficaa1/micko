@@ -19,7 +19,7 @@ argo-tui 0.2.0 @ a1b2c3d   server: http://127.0.0.1:2746   ns: batch-cd-prd     
 │ pr-diff-vertex-endpoints-skl62    ✗ Failed      1h55m  4m                          │
 │ web-users-full-deploy-6gq4k       ✓ Succeeded   1h17m  4m                          │
 └────────────────────────────────────────────────────────────────────────────────────┘
-list   enter open  l logs  / search  s sort  p phase  r refresh    ? help   1-39/100
+list   enter open  l logs  / search  s sort  p phase  n namespace  r refresh    ? help   1-39/100
 ```
 
 ## Build
@@ -74,10 +74,17 @@ profiles:
     # Only the scheme and any path prefix are read from this URL. The host
     # and port always come from the forward argo-tui owns.
     server: http://127.0.0.1:2746
-    # The namespace whose workflows are listed.
+    # The namespace the session starts in. `n` switches it while it runs.
     namespace: reports-prd
+    # Optional. Namespaces the picker always offers, on top of the ones the
+    # server reports. Use it for a namespace that is often empty.
+    namespaces:
+      - reports-prd
+      - workflows-tst
     # Optional. The browser address of this cluster's Argo UI, used by `o`.
     webURL: https://workflows.prd.example.com
+    # Optional. What the log pipe editor (`|`) prefills with. Default: lnav.
+    pipeCommand: lnav
 ```
 
 Then start it:
@@ -97,7 +104,7 @@ never written to the config.
 
 ### 3. Turn on actions
 
-Resume and Stop are off unless you ask for them:
+Resume, Retry, Resubmit and Stop are off unless you ask for them:
 
 ```sh
 ./dist/argo-tui --profile team-prod --allow-actions
@@ -124,6 +131,10 @@ Press `?` in the program for the full list. The ones you will use first:
 | `h` | show or hide skipped nodes |
 | `/` | filter the list; it narrows as you type |
 | `s` `p` | change the sort, change the phase filter |
+| `p` | in the Nodes tab, narrow to one node phase |
+| `n` | switch namespace (list); next search match (logs) |
+| `N` | previous search match (logs) |
+| `\|` | pipe the retained log lines to another program |
 | `r` | refresh now |
 | `f` | full-screen view with no borders, so a mouse selection stays clean |
 | `y` | copy to the clipboard |
@@ -189,4 +200,9 @@ diff before you commit one.
   SSO browser login.
 - Starting with no profile uses `currentProfile`. There is no profile picker
   yet.
-- Resume and Stop are the only actions wired to the UI.
+- Resume, Retry, Resubmit and Stop are the actions wired to the UI. Terminate
+  exists in the transport but has no key.
+- Argo has no endpoint that lists namespaces. The picker derives them from the
+  workflows your token can read, so a namespace with no workflows does not
+  appear in the list. Type its name and press enter, or put it in
+  `namespaces:`.
