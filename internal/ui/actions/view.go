@@ -48,7 +48,7 @@ func render(m *Model) string {
 		b.WriteString(fmt.Sprintf("Type %s to confirm: %s\n", shared.Sanitize(m.ref.Name), shared.Sanitize(m.typedName)))
 		b.WriteString("[enter] Submit  [esc] Cancel\n")
 	case StateSubmitting:
-		b.WriteString("status: submitting one request; do not repeat\n")
+		b.WriteString("status: sent one request; waiting for the server\n")
 	case StateOutcome:
 		if m.outcome == nil {
 			b.WriteString("outcome: unknown\n")
@@ -57,12 +57,15 @@ func render(m *Model) string {
 			case core.ActionConfirmed:
 				b.WriteString("outcome: confirmed\n")
 			case core.ActionAccepted:
-				b.WriteString("outcome: ACCEPTED — the server applied the action; it has not finished yet. Do not repeat it.\n")
+				b.WriteString("outcome: ACCEPTED — the server applied the action; it has not finished yet.\n")
 				if m.outcome.Workflow != nil {
 					b.WriteString("phase: " + shared.Sanitize(m.outcome.Workflow.Summary.Phase) + " (watch the workflow for the final state)\n")
 				}
 			case core.ActionUnknown:
-				b.WriteString("outcome: UNKNOWN — the server may have applied the action; inspect before retrying\n")
+				b.WriteString("outcome: UNKNOWN — it is not known whether the server applied the action.\n")
+				if m.outcome.Workflow != nil {
+					b.WriteString("phase now: " + shared.Sanitize(m.outcome.Workflow.Summary.Phase) + "\n")
+				}
 			default:
 				b.WriteString("outcome: unknown\n")
 			}
