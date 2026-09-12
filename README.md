@@ -159,3 +159,6 @@ interactively; log piping currently requires `/bin/sh`.
 See [development and testing](docs/development.md) for the code map, test
 commands and opt-in cluster tests, and the [changelog](CHANGELOG.md) for
 release history.
+
+[Hands-on testing notes](docs/handson-testing.md) preserve operator feedback
+and the changes made during live use.
