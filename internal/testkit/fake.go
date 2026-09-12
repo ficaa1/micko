@@ -1,6 +1,6 @@
 // Package testkit provides the independent fake core.Reader, a fake clock
 // and explicitly synthetic fixtures for deterministic tests (plan §8 F1
-// slice 3; environments ET-1 in docs/test-environment.md §1).
+// slice 3; environments ET-1 in docs/development.md).
 //
 // Fixture policy: everything here is SYNTHETIC and named as such. Nothing in
 // this package is a captured production payload, and nothing may be

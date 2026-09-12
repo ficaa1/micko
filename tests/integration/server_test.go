@@ -2,19 +2,7 @@
 
 package integration
 
-// server_test.go — ET-2 conformance: the pinned v4.1.2 wire contract over
-// REAL HTTP, and the REAL internal/app root model driving the same
-// fixtures (E1 gate: "tests exercise real adapter/root paths, not only
-// fake DTOs").
-//
-// The root model is exercised through its public Tea surface (Update/View)
-// with a command pump that runs the async commands and feeds messages
-// back — the same loop tea.Program runs, without a terminal.
-//
-// Scope label (docs/testing.md): the production REST adapter
-// (internal/argo, A1) is not merged yet; the WireClient here mirrors its
-// transport responsibilities. Adapter-conformance re-runs against the
-// SAME fixture server are I1/Q1 work.
+// WireClient conformance tests use the synthetic Argo HTTP server.
 
 import (
 	"context"
@@ -283,7 +271,7 @@ func TestGetUIDFallbackAndMismatch(t *testing.T) {
 	ctx := context.Background()
 
 	// Detail GET with the OLD uid must return the ARCHIVED old object —
-	// never the live replacement (protocol.md §5).
+	// never the live replacement (docs/development.md).
 	wf, err := client.Get(ctx, core.Ref{Namespace: testNS, Name: "wf-a", UID: "uid-a"})
 	if err != nil {
 		t.Fatalf("get archived: %v", err)

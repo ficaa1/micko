@@ -2,22 +2,7 @@
 
 package integration
 
-// pty.go — ET-3 process/PTY lifecycle harness (docs/test-environment.md
-// §5): spawn the REAL argo-tui binary under a pseudo-terminal, script
-// input bytes, capture output, and assert exit/terminal-state behavior.
-//
-// Dependency note: no third-party PTY library is available (E1 may not
-// touch go.mod); this harness uses the raw syscall API (posix_openpt /
-// grantpt(unlockpt equivalent via TIOCSPTLCK ioctl) / ptsname via
-// TIOCGPTN) — the same mechanism github.com/creack/pty wraps. Linux-only,
-// which matches the documented host (ET-3 runs on the go1.25 linux/amd64
-// LXC; docs/test-environment.md §1).
-//
-// tea v2 raw mode: on this host the library leaves the TERMIO state in
-// its default (canonical echo) configuration for this flow, so output is
-// asserted against an ANSI-scrubbed copy (text-first) while the RAW
-// capture is used for restore-sequence checks. Anything the OS cannot
-// report here is recorded honestly, not claimed.
+// PTY helpers drive the compiled binary and capture terminal output.
 
 import (
 	"fmt"

@@ -1,5 +1,5 @@
 // Package argo implements the core.Reader transport adapter against Argo
-// Server's REST API, pinned to the v4.1.2 wire facts in docs/protocol.md.
+// Server's REST API, pinned to the v4.1.2 wire facts in docs/development.md.
 //
 // Scope and safety rules (plan §8 A1; ADR 0001):
 //   - Standard-library HTTP/JSON only; no official client, no Kubernetes
@@ -34,7 +34,7 @@ import (
 // Client is the production core.Reader. It is safe for concurrent use.
 type Client struct {
 	// base is the full server base URL (scheme://host[/prefix]); endpoint
-	// paths are appended verbatim (docs/protocol.md §3 base path rule).
+	// paths are appended verbatim (docs/development.md base path rule).
 	base *url.URL
 	// tokenFn reloads credential material per request (rotation support,
 	// plan §3). Never stored, never logged.
@@ -263,7 +263,7 @@ func (c *Client) newRequest(ctx context.Context, path string, query url.Values) 
 	}
 	setAuthorization(req, token)
 	req.Header.Set("User-Agent", "argo-tui/0.1")
-	// Deliberately NO Accept header at all: no SSE hint (docs/protocol.md
+	// Deliberately NO Accept header at all: no SSE hint (docs/development.md
 	// §6 v0.1 policy) and no content-negotiation surprises. The gateway
 	// marshaler ignores Accept.
 	return req, nil
@@ -333,7 +333,7 @@ func isTLSFailure(msg string) bool {
 // --- error mapping --------------------------------------------------------------
 
 // errorEnvelope mirrors the gateway unary error shape
-// ({"code":N,"message":"..."} — docs/protocol.md §5; "error"/"details"
+// ({"code":N,"message":"..."} — docs/development.md; "error"/"details"
 // tolerated).
 type errorEnvelope struct {
 	Code    int    `json:"code"`
@@ -343,7 +343,7 @@ type errorEnvelope struct {
 }
 
 // grpcHTTPStatus reconstructs the HTTP status the gateway would map a gRPC
-// code to (round-trip table pinned in docs/protocol.md §9). Used for
+// code to (round-trip table pinned in docs/development.md). Used for
 // in-band stream errors where no HTTP status applies.
 func grpcHTTPStatus(code int) int {
 	// Subset covering the codes the streams may emit (gateway v1.16.0
@@ -386,7 +386,7 @@ func classifyInBand(code int) (core.ErrorKind, int) {
 
 // mapHTTPError builds a typed APIError from a non-200 response. The server
 // body's message passes through (it may name the workflow/namespace — fine,
-// docs/protocol.md §9); no credential material is ever added by us, and
+// docs/development.md); no credential material is ever added by us, and
 // Retry-After is typed for 429s (plan slice 5; LIST-08). `now` injects the
 // clock for HTTP-date Retry-After parsing (nil ⇒ time.Now).
 func mapHTTPError(resp *http.Response, method, path string, body []byte, rawErr error, now func() time.Time) *core.APIError {
@@ -502,7 +502,7 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	query := url.Values{}
 	if q.Limit > 0 {
 		// v4.1.2 listOptions.limit is string-encoded integer on the wire
-		// (docs/protocol.md §4).
+		// (docs/development.md).
 		query.Set("listOptions.limit", fmt.Sprintf("%d", q.Limit))
 	}
 	if q.Continue != "" {
@@ -535,7 +535,7 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	}
 	page, err := decodeListPage(body)
 	if err != nil {
-		return core.Page{}, core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable response (protocol mismatch; see docs/protocol.md)", err)
+		return core.Page{}, core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable response (protocol mismatch; see docs/development.md)", err)
 	}
 	return page, nil
 }
@@ -553,7 +553,7 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	query := url.Values{}
 	if ref.UID != "" {
 		// Always pass UID so the server can fall back to the archive for
-		// same-name workflows (docs/protocol.md §5; DET-02 prequisite).
+		// same-name workflows (docs/development.md; DET-02 prequisite).
 		query.Set("uid", ref.UID)
 	}
 	req, err := c.newRequest(ctx, path, query)

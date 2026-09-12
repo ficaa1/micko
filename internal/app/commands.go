@@ -114,7 +114,7 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 
 // detailCmd fetches one workflow detail. The request carries the UID so the
 // server can fall back to the archive for same-name replacements
-// (docs/protocol.md §5; argo-tui always passes UID on detail GET).
+// (docs/development.md; argo-tui always passes UID on detail GET).
 func (d deps) detailCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref) func() tea.Msg {
 	return func() tea.Msg {
 		wf, err := d.reader.Get(ctx, ref)

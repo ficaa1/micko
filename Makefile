@@ -16,10 +16,7 @@ build:
 test:
 	$(GO) test ./internal/core ./internal/config ./internal/app ./internal/ui/shared ./internal/testkit
 
-# Race-enabled run over the same packages. Note (F1 recovery): the toolchain
-# here is a bare distribution without the race runtime, so `go test -race`
-# fails with "unable to find C runtime" unless a C toolchain is present;
-# record the environment gap for integration/QA instead of claiming a pass.
+# Race-enabled focused tests require a supported platform and C toolchain.
 test-race:
 	$(GO) test -race ./internal/core ./internal/config ./internal/app ./internal/ui/shared ./internal/testkit
 
