@@ -1,208 +1,161 @@
 # argo-tui
 
 A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/workflows/).
+Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
+resubmit or stop a run with explicit confirmation.
 
-It lists workflows, opens one, walks its node tree, streams the logs of a
-single node, and — only when you ask for it — resumes or stops a run. It
-reaches the Argo Server through a `kubectl port-forward` that it starts and
-stops itself, so nothing has to be exposed.
+## Build and try it
 
-Version `0.2.0`. Verified against a real Argo Workflows v4.1.2 server.
-
-```
-argo-tui 0.2.0 @ a1b2c3d   server: http://127.0.0.1:2746   ns: batch-cd-prd      READ ONLY
-┌─ Workflows ──────────────────────────────────── list: 100 workflows | mode: watch ─┐
-│ Search: (none)  / to filter by name  Phase: All  5 awaiting resume                 │
-│ NAME                              PHASE           AGE  DURATION                    │
-│ deploy-multi-layer-p4r8w          ◐ Suspended     39m  ongoing                     │
-│ deploy-all-regions-r5t9z          ◐ Suspended      1d  ongoing                     │
-│ pr-diff-vertex-endpoints-skl62    ✗ Failed      1h55m  4m                          │
-│ web-users-full-deploy-6gq4k       ✓ Succeeded   1h17m  4m                          │
-└────────────────────────────────────────────────────────────────────────────────────┘
-list   enter open  l logs  / search  s sort  p phase  n namespace  r refresh    ? help   1-39/100
-```
-
-## Build
-
-You need Go 1.25 or later. There is nothing else to install.
+Requires Go 1.25 or later; the module selects Go 1.25.4 as its toolchain.
 
 ```sh
-git clone <your-fork> argo-tui
+git clone https://github.com/ficaa1/argo-tui.git
 cd argo-tui
-make build            # or: go build -o dist/argo-tui ./cmd/argo-tui
-./dist/argo-tui --version
-```
-
-`make build` stamps the commit into the binary. `go build` alone does not, and
-the header then shows `unknown` where the commit goes.
-
-Cross-compile for another machine:
-
-```sh
-CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -o dist/argo-tui-linux  ./cmd/argo-tui
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/argo-tui-macos  ./cmd/argo-tui
-```
-
-## Quick start
-
-### 1. Look at it with no cluster
-
-The demo uses built-in data. It opens no socket and writes nothing.
-
-```sh
+make build
 ./dist/argo-tui --demo
 ```
 
-Press `?` for the keys and `q` to quit.
+Without Make, use `go build -o dist/argo-tui ./cmd/argo-tui`. `make build`
+also stamps the Git commit into the binary. `--version` prints both version
+and commit. The demo uses synthetic data without connecting to a cluster or
+reading credentials. Press `?` for help and `q` to quit.
 
-### 2. Point it at your own Argo
+## Connect
 
-Write `~/.config/argo-tui/config.yaml`. A full commented example is in
-[`docs/argo-tui.config.example.yaml`](docs/argo-tui.config.example.yaml).
+Copy [the example config](docs/argo-tui.config.example.yaml) to
+`~/.config/argo-tui/config.yaml` and edit it for your cluster. A minimal
+profile for managed forwarding is:
 
 ```yaml
-currentProfile: team-prod
-refreshInterval: 5s
-
+currentProfile: dev
 profiles:
-  team-prod:
-    # argo-tui runs `kubectl port-forward` against this context itself.
-    kubeContext: my-project__my-cluster
+  dev:
+    kubeContext: my-cluster
     service: argo-workflows-server
     serviceNamespace: argo
     remotePort: 2746
-    # Only the scheme and any path prefix are read from this URL. The host
-    # and port always come from the forward argo-tui owns.
     server: http://127.0.0.1:2746
-    # The namespace the session starts in. `n` switches it while it runs.
-    namespace: reports-prd
-    # Optional. Namespaces the picker always offers, on top of the ones the
-    # server reports. Use it for a namespace that is often empty.
-    namespaces:
-      - reports-prd
-      - workflows-tst
-    # Optional. The browser address of this cluster's Argo UI, used by `o`.
-    webURL: https://workflows.prd.example.com
-    # Optional. What the log pipe editor (`|`) prefills with. Default: lnav.
-    pipeCommand: lnav
+    namespace: workflows
+    tokenEnv: ARGO_TUI_TOKEN
 ```
-
-Then start it:
 
 ```sh
-./dist/argo-tui --profile team-prod
+./dist/argo-tui --profile dev
 ```
 
-You need `kubectl` on your PATH and a working context. argo-tui starts the
-forward on a free local port, and stops it when you quit.
+Managed forwarding requires `kubectl` on PATH and access through the named
+Kubernetes context. argo-tui starts its own forward on a free loopback port
+and closes it on exit. The profile's `server` supplies the scheme and path
+prefix; the forward supplies the host and port. Use HTTPS if the Argo Server
+expects TLS. For an already reachable endpoint, omit `kubeContext`, `service`,
+`serviceNamespace` and `remotePort`; `server` is then used directly.
 
-**Tokens.** An Argo Server started with `--auth-mode=server` needs no client
-token: leave the setting out and no `Authorization` header is sent. Otherwise
-name an environment variable with `tokenEnv`, or a file with `tokenFile`.
-Never put a token on the command line. The token is read per request and is
-never written to the config.
+Configuration lookup checks `$XDG_CONFIG_HOME/argo-tui/config.yaml`, then
+`~/.config/argo-tui/config.yaml`, then the OS user config directory, using
+the first existing file. `--config PATH` selects a file explicitly.
+`--profile` overrides `currentProfile`; there is no interactive profile picker.
 
-### 3. Turn on actions
+### Authentication and TLS
 
-Resume, Retry, Resubmit and Stop are off unless you ask for them:
+Configure exactly one of `tokenEnv` (an environment variable name) or
+`tokenFile` (an absolute file path). The source is read for each request.
+The current config validator requires a source even when no token is needed:
+for Argo's server auth mode, keep `tokenEnv: ARGO_TUI_TOKEN` and leave that
+variable unset or empty. An empty token sends no Authorization header.
+For client auth, supply an accepted bearer token through that source;
+the Kubernetes context does not provide an Argo token automatically.
+There is no interactive SSO login.
+
+HTTPS verifies certificates by default; `--ca-file` supplies a custom CA.
+`--insecure-skip-tls-verify` disables verification for that invocation and
+shows a warning. Plain HTTP is limited to loopback addresses. Redirects are
+rejected. Never put literal tokens in command arguments or committed config.
+
+### Actions
+
+Actions are disabled by default. Enable them for a session with:
 
 ```sh
-./dist/argo-tui --profile team-prod --allow-actions
+./dist/argo-tui --profile dev --allow-actions
 ```
 
-Even then, every action opens a pane that names the exact target, its UID and
-the server, and waits for a `y`. argo-tui sends the mutation once. If the
-result is ambiguous it says so and stops; it never retries a write.
+Open a workflow and press `a`, then `u` (resume), `r` (retry), `b` (resubmit)
+or `s` (stop). The confirmation identifies the target; only `y` confirms.
+Enter and Esc cancel. Stop is graceful and runs exit handlers.
 
-The header states which mode you are in: `READ ONLY` or `ACTIONS ENABLED`.
+The app checks identity before sending a mutation and never automatically
+retries a write. An `UNKNOWN` outcome means the server may have applied it;
+inspect the workflow before deciding what to do next. The server's permissions
+remain authoritative. Argo's action endpoints address workflows by name and
+have no UID precondition, so a same-name replacement between the identity
+check and the write remains possible.
 
-## Keys
+## Everyday keys
 
-Press `?` in the program for the full list. The ones you will use first:
-
-| Key | What it does |
+| View | Keys |
 | --- | --- |
-| `j` `k`, arrows | move |
-| `pgup` `pgdn`, `ctrl+u` `ctrl+d` | page |
-| `gg` `G`, `home` `end` | first / last row |
-| `enter` | open the selected workflow |
-| `tab` | next section: Summary, Nodes, Resource |
-| `l` | logs — for the selected **node** in the Nodes tab |
-| `h` | show or hide skipped nodes |
-| `/` | filter the list; it narrows as you type |
-| `s` `p` | change the sort, change the phase filter |
-| `p` | in the Nodes tab, narrow to one node phase |
-| `n` | switch namespace (list); next search match (logs) |
-| `N` | previous search match (logs) |
-| `\|` | pipe the retained log lines to another program |
-| `r` | refresh now |
-| `f` | full-screen view with no borders, so a mouse selection stays clean |
-| `y` | copy to the clipboard |
-| `o` | open the workflow in the Argo UI, and copy the link |
-| `t` | follow the log tail again (logs only) |
-| `a` | actions, with `--allow-actions` |
-| `esc` | back |
-| `q` | quit |
+| Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
+| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
+| Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
+| Resource | `v` reveal hidden parameter/output values |
+| Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
+| Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
+| General | `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
 
-## What it is for
+Suspended workflows sort first by default and their waiting nodes are marked
+`AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
+workflow's pod naming annotation and leaves the shortcut unavailable when
+it cannot resolve one safely.
 
-The job it was built around: a deployment stops at a manual approval gate,
-and you have to read the plan before you approve it.
+The namespace picker offers configured `namespaces` and discovered namespaces;
+you can also type a name. Discovery uses Argo's managed namespace or visible
+workflows, so empty namespaces may need to be configured or typed.
 
-1. Suspended runs sort to the top of the list and read `◐ Suspended`. The
-   toolbar counts them.
-2. Open one and press `tab`. Skipped branches are hidden, so the tree shows
-   what actually ran. The gate row is marked `AWAITING RESUME`.
-3. Move to the node you care about and press `l`. Argo does not publish pod
-   names, so argo-tui derives each one with Argo's own algorithm. When the
-   server records no naming scheme, the key stays inert rather than guessing.
-4. Press `f` to read the logs full screen, or `y` to copy them.
-5. Press `esc`, then `a`, then resume.
+Set `webURL` to the browser address of your Argo UI to use `o`. Clipboard
+copy uses OSC52 and depends on terminal support. Log piping sends retained
+lines to a command you enter, using `/bin/sh`; `pipeCommand` sets the initial
+command (default `lnav`). Install that program separately.
 
 ## Flags
 
-| Flag | Meaning |
+| Flag | Purpose |
 | --- | --- |
-| `--profile NAME` | the profile to use from the config |
-| `--config PATH` | a config file elsewhere |
-| `--demo` | built-in data, no network |
-| `--allow-actions` | arm Resume and Stop |
-| `--namespace`, `--server` | override the profile |
-| `--refresh-interval` | poll interval, default `5s` |
-| `--token-file`, `--ca-file` | token file, custom CA bundle |
-| `--insecure-skip-tls-verify` | disable TLS checks (unsafe) |
-| `--debug` | sanitized lifecycle diagnostics |
-| `--version` | print the version and exit |
+| `--config PATH`, `--profile NAME` | Select configuration and profile |
+| `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
+| `--token-file PATH`, `--ca-file PATH` | Override credential file or CA bundle |
+| `--refresh-interval DURATION` | Poll interval, default `5s`; accepted range `1s`–`10m` |
+| `--allow-actions` | Enable confirmed Resume, Retry, Resubmit and Stop |
+| `--insecure-skip-tls-verify` | Disable TLS certificate verification |
+| `--debug` | Emit sanitized lifecycle diagnostics |
+| `--demo` | Run the offline, read-only demo |
+| `--version` | Print version and exit |
 
-## Develop
+`--token-file` cannot be combined with a profile's `tokenEnv`; remove the
+environment source from that profile before switching to a file.
 
-```sh
-make test        # focused package set
-go test ./...    # everything
-make vet
-make lint-fmt
-```
+## Troubleshooting and limits
 
-Golden files are refreshed with `UPDATE_GOLDEN=1 go test ./...`. Check the
-diff before you commit one.
+- Startup errors name missing or invalid settings. Managed forwarding needs
+  a complete target; every real connection needs an endpoint, namespace and
+  configured token source.
+- Authentication and permission failures are distinct. Check the token and
+  Argo auth mode for 401; check access to the selected namespace for 403.
+- A stale banner retains the last successful data while the connection recovers.
+- Search and sorting apply to the collected workflow snapshot, capped at 5,000
+  entries. Logs retain at most 10,000 lines or 8 MiB; pausing stops scrolling,
+  not collection. Deleted pods or unavailable archived logs may prevent viewing logs.
+- Resource values are hidden until explicitly revealed. Log text, copied text
+  and pipe output may contain sensitive application data.
+- Terminate exists in the transport but has no UI shortcut. Workflow submission,
+  bulk actions and parameter editing are not exposed in the UI.
 
-## Documentation
+Project history records live testing of v0.2.0 on macOS arm64 against Argo
+Workflows v4.1.2 in server auth mode without TLS, including list/watch, node
+logs, Resume and Stop. This does not establish live coverage of other server
+versions, auth modes or all actions. Windows was cross-built, not validated
+interactively; log piping currently requires `/bin/sh`.
 
-- [`docs/usage.md`](docs/usage.md) — the longer command reference
-- [`docs/handson-testing.md`](docs/handson-testing.md) — testing notes against a real cluster, and what each one changed
-- [`docs/security.md`](docs/security.md) — token handling, sanitization, action safety
-- [`docs/protocol.md`](docs/protocol.md) — the Argo REST surface that is used
-- [`docs/contracts.md`](docs/contracts.md) — the internal data contract
-
-## Limits
-
-- Kubernetes access is through `kubectl`. There is no in-process client and no
-  SSO browser login.
-- Starting with no profile uses `currentProfile`. There is no profile picker
-  yet.
-- Resume, Retry, Resubmit and Stop are the actions wired to the UI. Terminate
-  exists in the transport but has no key.
-- Argo has no endpoint that lists namespaces. The picker derives them from the
-  workflows your token can read, so a namespace with no workflows does not
-  appear in the list. Type its name and press enter, or put it in
-  `namespaces:`.
+See [development and testing](docs/development.md) for the code map, test
+commands and opt-in cluster tests, and the [changelog](CHANGELOG.md) for
+release history.

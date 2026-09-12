@@ -349,7 +349,7 @@ func TestGlobalKeysNotShadowed(t *testing.T) {
 }
 
 // TestOpenIntentCarriesFrozenContract pins the fresh-open path against the
-// frozen shared contract (docs/contracts.md §4): OpenLogsMsg shape with
+// frozen shared contract (docs/development.md): OpenLogsMsg shape with
 // the explicit container default.
 func TestOpenIntentCarriesFrozenContract(t *testing.T) {
 	m := testModel(t)

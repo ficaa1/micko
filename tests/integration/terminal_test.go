@@ -2,17 +2,7 @@
 
 package integration
 
-// terminal_test.go — ET-3 PTY acceptance (docs/test-environment.md §5:
-// real process lifecycle, scripted keys, captured output, exit/restore).
-// Maps to acceptance matrix rows UI-01/03/04/05/06, CONN-22, SEC-03/06
-// (docs/acceptance-matrix.md §3.6/§3.3).
-//
-// Honest scope label (plan §8 E1 gate; docs/testing.md): the F1 baseline
-// binary is the F1 root model with placeholder views — the real alpha UI
-// (B1/C1/D1 views, I1 wiring) replaces it. These tests pin the PROCESS
-// contract (launch, render, scripted keys, clean exit, no egress, restore
-// bytes present in raw capture); I1/Q1 re-run the same harness against
-// the wired binary for the full UI-05 alpha journey.
+// Terminal tests build the current binary and check demo rendering, keys and exit.
 
 import (
 	"os"

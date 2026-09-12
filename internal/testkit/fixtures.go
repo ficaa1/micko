@@ -34,7 +34,7 @@ func FixtureWorkflowList(ns string, n int) []core.Workflow {
 }
 
 // FixtureDAGWorkflow builds a synthetic workflow exercising DAG semantics
-// from docs/protocol.md §8: a DAG boundary with task children, a retry
+// from docs/development.md: a DAG boundary with task children, a retry
 // node, a skipped node, and a suspend node. Children/boundary/outbound
 // fields follow pinned semantics (children are boundary grouping, NOT
 // dependency edges; outboundNodes connect templates to the next step).

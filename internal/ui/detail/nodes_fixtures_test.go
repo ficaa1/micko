@@ -132,7 +132,7 @@ func TestNodeOutlineContainerSetFixture(t *testing.T) {
 		t.Fatalf("container-set outline =\n%s", got)
 	}
 	if !out.Rows[0].Children[0].HasPod {
-		t.Error("ContainerSet must report pod potential (docs/protocol.md §8)")
+		t.Error("ContainerSet must report pod potential (docs/development.md)")
 	}
 }
 

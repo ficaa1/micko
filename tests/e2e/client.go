@@ -2,14 +2,7 @@
 
 package e2e
 
-// client.go — the ET-4 journey client.
-//
-// The submit/delete/wait helpers are REST calls against the pinned
-// v4.1.2 surface (POST /api/v1/workflows/{namespace}, DELETE
-// /api/v1/workflows/{namespace}/{name}, GET /api/v1/workflows/{ns}/{name})
-// implemented here with the standard library so no extra dependency is
-// needed (the harness never uses the production read-only adapter for
-// writes — it has none, by design, plan §6).
+// The E2E harness uses its own HTTP reader and submit/delete helpers.
 
 import (
 	"bytes"
@@ -27,9 +20,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// e2eClient carries the journey's collaborators. Reader is the production
-// core.Reader under test (nil until internal/argo is merged — see the
-// dependency label above).
+// e2eClient carries the harness reader, endpoint and credentials.
 type e2eClient struct {
 	reader core.Reader
 	base   string
@@ -37,9 +28,7 @@ type e2eClient struct {
 	http   *http.Client
 }
 
-// newE2EClient builds the journey client from the allowlist. It skips the
-// test when the production adapter is not merged yet (the honest
-// BLOCKED-DEPENDENCY state, recorded as the skip reason).
+// newE2EClient builds the harness reader from the validated allowlist.
 func newE2EClient(t *testing.T, cfg e2eConfig) *e2eClient {
 	t.Helper()
 	reader, err := buildProductionReader(cfg)
@@ -207,7 +196,7 @@ func (c *e2eClient) deleteWorkflow(ctx context.Context, ns, name string) error {
 }
 
 // waitForPhase polls the workflow until phase ∈ terminal or the timeout
-// hits (test-environment.md §4.4 wait discipline: bounded, never busy-loop
+// hits (docs/development.md wait discipline: bounded, never busy-loop
 // forever).
 func (c *e2eClient) waitForPhase(ctx context.Context, ns, name string, terminal []string, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)

@@ -1,4 +1,4 @@
-# SYNTHETIC FIXTURE (docs/test-environment.md §4.4): small steps shape for
+# SYNTHETIC FIXTURE (docs/development.md): small steps shape for
 # ET-4 outline/detail checks. Synthetic; never a production manifest.
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow

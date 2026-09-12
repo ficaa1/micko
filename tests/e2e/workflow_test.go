@@ -1,5 +1,5 @@
 // Package e2e hosts the REAL-cluster tier (ET-4/ET-5 in
-// docs/test-environment.md): tests that require an explicitly provisioned
+// docs/development.md): tests that require an explicitly provisioned
 // disposable Argo Workflows v4.1.2 environment (kind cluster or an
 // owner-authorized endpoint). Gate + fixtures live in gate.go; this file
 // implements the workflow journey against whatever endpoint the gate
@@ -30,7 +30,7 @@ type e2eWorkflowSpec struct {
 // runE2EWorkflowJourney is the shared ET-4 journey used by the test below.
 // It is deliberately sequential: submit → wait phase → list → detail →
 // version check → delete → verify deletion, with the timeout discipline
-// from test-environment.md §4.4 (poll, never busy-loop forever).
+// from docs/development.md (poll, never busy-loop forever).
 func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -101,7 +101,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 // TestE2EWorkflowJourney runs the hello-world fixture through the full
 // submit/list/detail/delete journey. REAL-class (matrix CMP-01/CMP-02).
 // Testdata: testdata/hello-world.yaml — synthetic, labeled, never a
-// production manifest (docs/test-environment.md §4.4).
+// production manifest (docs/development.md).
 func TestE2EWorkflowJourney(t *testing.T) {
 	cfg := requireGate(t)
 	client := newE2EClient(t, cfg)

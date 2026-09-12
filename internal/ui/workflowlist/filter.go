@@ -68,7 +68,7 @@ func DisplayPhase(s core.Summary) string {
 }
 
 // isCanonicalPhase covers the phases the pinned upstream types define
-// (docs/protocol.md §4). "Error" is canonical upstream even though the
+// (docs/development.md). "Error" is canonical upstream even though the
 // theme styles it like Failed.
 func isCanonicalPhase(p string) bool {
 	switch p {

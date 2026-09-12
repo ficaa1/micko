@@ -2,19 +2,7 @@
 
 package integration
 
-// wire.go — test-only wire client for the ET-2 fixture server.
-//
-// This client mirrors the transport layer the A1 adapter will implement
-// (docs/protocol.md §3–§6): stdlib HTTP against a full base URL, opaque
-// pass-back of continuation tokens, JSON-lines/SSE log parsing with
-// in-band error detection, and typed mapping of unary error envelopes.
-// It exists so E1's harness can exercise REAL HTTP + REAL JSON decoding
-// TODAY, and so the same fixtures verify the production adapter once I1
-// merges it (docs/testing.md records this state).
-//
-// It is NOT production code: no UI, no config package involvement, and
-// deliberately no credential handling beyond one explicit token string
-// (Authorization: Bearer), injected by tests.
+// WireClient is a test-only HTTP client for fixture-server and root-model tests.
 
 import (
 	"bufio"
@@ -169,7 +157,7 @@ func (c *WireClient) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 }
 
 // parseLogStream reads a framed log stream, tolerating chunk boundaries
-// mid-line (protocol.md §6.3 cases 1–3) and detecting in-band error
+// mid-line (docs/development.md cases 1–3) and detecting in-band error
 // envelopes. A final chunk without a trailing newline is parsed only if it
 // is complete JSON; a truncated stream surfaces context cancellation first
 // (distinguishable from failure) and otherwise a protocol error — never a
