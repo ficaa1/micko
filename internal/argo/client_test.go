@@ -105,13 +105,13 @@ func TestClientBasePathAndCredentials(t *testing.T) {
 	if want := "Bearer test-token-abcdef12345678901234"; gotAuth != want {
 		t.Errorf("Authorization = %q, want %q", gotAuth, want)
 	}
-	// Accept: text/event-stream must NOT be sent (docs/protocol.md §6).
+	// Accept: text/event-stream must NOT be sent (docs/development.md).
 	if gotAccept != "" {
 		t.Errorf("Accept header sent: %q (must not send SSE hint)", gotAccept)
 	}
 
 	// Detail: uid always passed so the server can fall back to the archive
-	// (docs/protocol.md §5).
+	// (docs/development.md).
 	gotPath, gotQuery, gotAuth = "", "", ""
 	if _, getErr := c.Get(context.Background(), core.Ref{Namespace: "ns-a", Name: "wf", UID: "u1"}); getErr != nil {
 		t.Fatalf("Get: %v", getErr)
@@ -689,7 +689,7 @@ func TestStreamLogsFixture(t *testing.T) {
 }
 
 // TestStreamLogsSSEFixture proves the same fixture through SSE framing is
-// accepted by the one parser choke point (docs/protocol.md §6 resolution).
+// accepted by the one parser choke point (docs/development.md resolution).
 func TestStreamLogsSSEFixture(t *testing.T) {
 	raw := loadFixture(t, "logs_sse.txt")
 	srv := streamingServer(t, [][]byte{raw}, 0, nil)
@@ -743,7 +743,7 @@ func TestStreamLogsFragmentation(t *testing.T) {
 
 // TestStreamLogsInBandError verifies the final {"error":{...}} chunk after
 // HTTP 200 becomes a typed error with the gRPC-derived kind and no HTTP
-// status (plan slice 4; STR-04, docs/protocol.md §6/§9).
+// status (plan slice 4; STR-04, docs/development.md).
 func TestStreamLogsInBandError(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -979,7 +979,7 @@ func TestAPIErrorRedaction(t *testing.T) {
 
 // TestErrorBodyNonJSON verifies a non-JSON error body (login HTML from an
 // SSO reverse proxy) maps to unauthenticated guidance with the content type
-// named, not a parse crash (CONN-14; docs/protocol.md §9).
+// named, not a parse crash (CONN-14; docs/development.md).
 func TestErrorBodyNonJSON(t *testing.T) {
 	srv := serveFixture(t, http.StatusOK,
 		[]byte("<html><body><form>Sign in to your identity provider</form></body></html>"),

@@ -1,22 +1,6 @@
-# CI pipeline for argo-tui (E1 slice: "CI format/vet/test/race/build jobs
-# and pinned tool versions").
-#
-# Toolchain pins (docs/test-environment.md §2):
-#   - Go:      1.25.4 (go.mod toolchain go1.25.4; exact patch pinned here)
-#   - Argo:    v4.1.2 (wire contract target; NOT installed in CI)
-#   - kind:    v0.33.0 (only in the opt-in e2e job; NOT provisioned yet)
-#   - kubectl: v1.37.0 (only in the opt-in e2e job)
-#
-# Job topology mirrors docs/test-environment.md tiers:
-#   fmt + vet + unit (ET-1)  → always
-#   integration (ET-2/ET-3)  → always; PTY tests self-skip without /dev/ptmx
-#   race                     → always (requires default CGO runner)
-#   build + smoke            → always
-#   e2e (ET-4)               → workflow_dispatch / label only; skips itself
-#                              unless the allowlist secret is present.
-# The e2e job must NEVER run against a production cluster: its allowlist
-# comes from an explicit repo secret written for the disposable
-# environment (plan §9; docs/test-environment.md §4).
+# Routine checks run on push and pull requests. The disposable-cluster
+# E2E job requires manual dispatch and E2E_ALLOWLIST_B64; it does not provision
+# an Argo environment. See docs/development.md.
 
 name: ci
 
@@ -30,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  # Pinned tool versions (single source: docs/test-environment.md §2).
+  # Tool versions used by this workflow.
   GO_VERSION: "1.25.4"
   KIND_VERSION: "v0.33.0"
   KUBECTL_VERSION: "v1.37.0"
@@ -92,9 +76,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "${{ env.GO_VERSION }}"
-      # CGO on the runner satisfies -race. (The dev LXC also gained a C
-      # toolchain on 2026-09-08 late — local race runs pass too; the CI
-      # job remains the canonical gate.)
+      # The race detector requires CGO and a C toolchain.
       - run: go test -race ./... -count=1
 
   build:

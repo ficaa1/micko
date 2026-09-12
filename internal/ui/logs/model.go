@@ -708,7 +708,7 @@ type SwitchContextIntent struct {
 
 // OpenIntent returns the frozen app intent to (re)open logs for the
 // current ref/context — the fresh-open path uses the shared contract
-// (docs/contracts.md §4). Nil when the context is degenerate.
+// (docs/development.md). Nil when the context is degenerate.
 func (m *Model) OpenIntent() tea.Msg {
 	if m.ref.Name == "" {
 		return nil

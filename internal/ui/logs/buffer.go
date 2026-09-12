@@ -24,7 +24,7 @@ import (
 // buffer is unexported: the model talks to it through
 // Push/PushMarker/ApplyMarker/Counts/Lines/Search.
 
-// Frozen caps (plan §5; docs/acceptance-matrix.md LOG-06).
+// Frozen caps (plan §5; docs/development.md LOG-06).
 const (
 	// MaxLines caps the number of retained entries (lines + markers).
 	MaxLines = 10_000

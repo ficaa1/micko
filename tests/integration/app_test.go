@@ -2,22 +2,7 @@
 
 package integration
 
-// app_test.go — E1 slice "alpha journey tests against the fake server" at
-// the app level (docs/test-environment.md §5 ET-2): the REAL internal/app
-// root model driven through its public Tea surface (Update/View) while the
-// ONLY backend is the ET-2 fixture server over real HTTP.
-//
-// server_test.go pins the wire contract; this file pins the ROOT-MODEL
-// acceptance behavior the E1 gate names: distinguishable error states,
-// poll discipline (one in-flight list per generation), log-stream
-// lifecycle (records before the sentinel), and the alpha write
-// prohibition across a full journey. It reuses the command-pump harness
-// defined in server_test.go (harness/send/pump/runLeaf).
-//
-// Scope label (honesty rule, plan §8 E1): the production adapter
-// (internal/argo, A1) is not merged on this branch; the WireClient here
-// mirrors its transport responsibilities against the SAME fixture server.
-// I1 re-runs these journeys with the wired production client.
+// Root-model journeys use the synthetic HTTP server through WireClient.
 
 import (
 	"reflect"

@@ -11,7 +11,7 @@ import (
 )
 
 // Model is the detail route's child Tea model (bubbletea v2 Model surface
-// frozen in docs/contracts.md §7). It renders the composed detail view and
+// frozen in docs/development.md). It renders the composed detail view and
 // emits intents only — the root alone converts them to network effects
 // (plan §4). It never starts goroutines and holds no Reader.
 type Model struct {

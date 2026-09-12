@@ -16,5 +16,5 @@ func jsonUnmarshal(b []byte, v any) error {
 
 // clampNote documents (not enforces) the detail-view timestamp rule:
 // startedAt/finishedAt are pointers — nil means "not yet started/finished"
-// and must never be materialized as zero times (docs/protocol.md §2/§8).
+// and must never be materialized as zero times (docs/development.md).
 var _ = time.Time{}

@@ -3,9 +3,9 @@
 package integration
 
 // fakeserver.go — ET-2: an in-process httptest server speaking the pinned
-// Argo Workflows v4.1.2 wire contract (docs/protocol.md §3–§6, §9).
+// Argo Workflows v4.1.2 wire contract (docs/development.md §9).
 //
-// Verified wire facts implemented here (pinned sources in docs/protocol.md):
+// Verified wire facts implemented here (pinned sources in docs/development.md):
 //   - GET /api/v1/workflows/{namespace}: listOptions.limit is a
 //     string-encoded integer; listOptions.continue is the next integer
 //     OFFSET as a decimal string (v4.1.2 offset pagination, §4); response
@@ -44,7 +44,7 @@ import (
 	"time"
 )
 
-// gRPC code numbers used by the gateway round-trip (protocol.md §10).
+// gRPC code numbers used by the gateway round-trip (docs/development.md).
 const (
 	grpcInvalid       = 3
 	grpcNotFound      = 5
@@ -85,7 +85,7 @@ type WireWorkflowStatus struct {
 	OffloadNodeStatusVersion string              `json:"offloadNodeStatusVersion,omitempty"`
 }
 
-// WireNode is one status.nodes entry (protocol.md §8 semantics).
+// WireNode is one status.nodes entry (docs/development.md semantics).
 type WireNode struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`
@@ -102,7 +102,7 @@ type WireNode struct {
 }
 
 // WireLogEntry is the LogEntry envelope payload: EXACTLY content+podName
-// (protocol.md §6.2 — no timestamp, no container field).
+// (docs/development.md — no timestamp, no container field).
 type WireLogEntry struct {
 	Content string `json:"content"`
 	PodName string `json:"podName"`
@@ -135,7 +135,7 @@ type Fault struct {
 // ServerConfig configures fixture-server behavior.
 type ServerConfig struct {
 	// SSELogs switches the log stream to SSE framing (data: prefix,
-	// blank-line separation) instead of bare JSON-lines (protocol.md §6).
+	// blank-line separation) instead of bare JSON-lines (docs/development.md).
 	SSELogs bool
 	// SlowLogDrip delays between log chunks (cancellation tests).
 	SlowLogDrip time.Duration
@@ -143,7 +143,7 @@ type ServerConfig struct {
 	// "deliberately broken API response makes a test fail").
 	BrokenJSONList bool
 	// TruncateLogNewline cuts the log body mid-final-line, simulating a
-	// connection severed mid-chunk (protocol.md §6.3 case 3: "mid-stream
+	// connection severed mid-chunk (docs/development.md case 3: "mid-stream
 	// cancellation may truncate"; the partial line is parseable only if it
 	// is complete JSON, otherwise it must surface as protocol error).
 	TruncateLogNewline bool
@@ -196,7 +196,7 @@ func (fs *FixtureServer) URL() string { return fs.srv.URL }
 
 // PutWorkflow seeds or replaces a workflow. Replacing an existing entry
 // moves the OLD object into the fake archive (same-name replacement with
-// UID fallback semantics, protocol.md §5).
+// UID fallback semantics, docs/development.md).
 func (fs *FixtureServer) PutWorkflow(wf WireWorkflow) {
 	key := wf.Metadata.Namespace + "/" + wf.Metadata.Name
 	fs.mu.Lock()
@@ -208,7 +208,7 @@ func (fs *FixtureServer) PutWorkflow(wf WireWorkflow) {
 }
 
 // PutArchiveOnly seeds an archived (deleted-live) workflow: visible via
-// uid-addressed detail GET only, never in the live list (protocol.md §5).
+// uid-addressed detail GET only, never in the live list (docs/development.md).
 func (fs *FixtureServer) PutArchiveOnly(wf WireWorkflow) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -223,7 +223,7 @@ func (fs *FixtureServer) SetLogs(entries []WireLogEntry) {
 }
 
 // SetLogError makes the log endpoint terminate streams with an in-band
-// error chunk after delivering any seeded entries (protocol.md §6).
+// error chunk after delivering any seeded entries (docs/development.md).
 func (fs *FixtureServer) SetLogError(f Fault) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -368,7 +368,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // writeUnaryError writes the gateway-style {"code","message"} envelope with
-// the mapped HTTP status (protocol.md §9/§10).
+// the mapped HTTP status (docs/development.md).
 func writeUnaryError(w http.ResponseWriter, status, code int, msg string) {
 	writeJSON(w, status, map[string]any{"code": code, "message": msg})
 }
@@ -484,7 +484,7 @@ func selectorMatches(selector string, labels map[string]string) bool {
 }
 
 // handleGet implements GET /api/v1/workflows/{ns}/{name} with the uid
-// fallback semantics (protocol.md §5): uid mismatch → archive lookup; both
+// fallback semantics (docs/development.md): uid mismatch → archive lookup; both
 // miss → 404 with the live error preserved.
 func (fs *FixtureServer) handleGet(w http.ResponseWriter, r *http.Request, ns, name string) {
 	wantUID := r.URL.Query().Get("uid")
@@ -515,7 +515,7 @@ func (fs *FixtureServer) handleGet(w http.ResponseWriter, r *http.Request, ns, n
 }
 
 // handleLogs implements GET /api/v1/workflows/{ns}/{name}/log with both
-// framings (protocol.md §6). Server behavior mirrored: fetch-then-validate
+// framings (docs/development.md). Server behavior mirrored: fetch-then-validate
 // the workflow first (§6.2); unknown workflow → 404 before any chunk.
 func (fs *FixtureServer) handleLogs(w http.ResponseWriter, r *http.Request, ns, name string) {
 	q := r.URL.Query()
