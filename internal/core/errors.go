@@ -9,7 +9,7 @@ import (
 )
 
 // ErrorKind classifies a server/transport failure for UI state selection
-// (plan §4; mapping table in docs/protocol.md §9).
+// (plan §4; mapping table in docs/development.md).
 type ErrorKind string
 
 const (
@@ -19,23 +19,23 @@ const (
 	// ErrForbidden: HTTP 403, authoritative; action availability is only
 	// advisory (plan §3).
 	ErrForbidden ErrorKind = "forbidden"
-	// ErrNotFound: live miss + archive miss (docs/protocol.md §5).
+	// ErrNotFound: live miss + archive miss (docs/development.md).
 	ErrNotFound ErrorKind = "not_found"
 	// ErrConflict: HTTP 409 (AlreadyExists); not expected on reads.
 	ErrConflict ErrorKind = "conflict"
 	// ErrRateLimited: HTTP 429. Also the watch EOF→429 quirk
-	// (docs/protocol.md §6.1) — context-dependent.
+	// (docs/development.md) — context-dependent.
 	ErrRateLimited ErrorKind = "rate_limited"
 	// ErrUnavailable: 503/504/408 or network-level failure; transient,
 	// bounded backoff ok (plan §5).
 	ErrUnavailable ErrorKind = "unavailable"
 	// ErrInvalid: HTTP 400, includes bad grep regex / bad timestamps
-	// (docs/protocol.md §6.2).
+	// (docs/development.md).
 	ErrInvalid ErrorKind = "invalid"
 	// ErrUnsupported: HTTP 501, feature disabled server-side.
 	ErrUnsupported ErrorKind = "unsupported"
 	// ErrProtocol: malformed/unparseable wire data on an otherwise-200
-	// response (docs/protocol.md §9).
+	// response (docs/development.md).
 	ErrProtocol ErrorKind = "protocol"
 )
 
@@ -48,7 +48,7 @@ type APIError struct {
 	Kind    ErrorKind
 	Message string
 	// Status is the HTTP status when one applied; 0 for in-band stream
-	// errors and pure transport failures (docs/protocol.md §9).
+	// errors and pure transport failures (docs/development.md).
 	Status int
 	// RetryAfter is the server-requested delay from a Retry-After header
 	// (seconds form or HTTP-date form); nil when absent.
@@ -81,7 +81,7 @@ func WrapAPIError(kind ErrorKind, status int, message string, cause error) *APIE
 }
 
 // KindOf maps an HTTP status to the frozen ErrorKind table
-// (docs/protocol.md §9; gateway round-trip is identity for our cases).
+// (docs/development.md; gateway round-trip is identity for our cases).
 func KindOf(status int) ErrorKind {
 	switch status {
 	case http.StatusUnauthorized:

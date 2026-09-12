@@ -1,4 +1,4 @@
-# SYNTHETIC FIXTURE (plan §8 F1 slice 3; docs/test-environment.md §4.4):
+# SYNTHETIC FIXTURE (plan §8 F1 slice 3; docs/development.md):
 # this manifest is written for argo-tui's ET-4 tests — it is NOT a capture
 # from any real cluster and must never be presented as one. Name is
 # namespaced to the e2e owner label so cleanup can select it.

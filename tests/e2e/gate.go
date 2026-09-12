@@ -1,19 +1,6 @@
-// Package e2e hosts the REAL-cluster tier (ET-4/ET-5 in
-// docs/test-environment.md): tests that require an explicitly provisioned
-// disposable Argo Workflows v4.1.2 environment (kind cluster or an
-// owner-authorized endpoint).
-//
-// Two gates are REQUIRED before any test here runs (plan §9; this card's
-// protocol):
-//
-//	ARGO_TUI_E2E=1                      — the environment flag
-//	config file named by ARGO_TUI_E2E_CONFIG (or ./e2e-config.yaml)
-//
-// The config must carry an explicit allowlist (see e2eConfig below).
-// The environment flag ALONE is not permission to touch a production
-// cluster. Pre-registered BLOCKED state: no Docker/kind on this host
-// (docs/acceptance-matrix.md §6) — provisioned tests are documented in
-// README.md and stay opt-in.
+// Package e2e contains opt-in disposable-cluster tests. The journey requires
+// ARGO_TUI_E2E=1 and an endpoint/namespace allowlist with allowActions=true.
+// See docs/development.md for invocation and cleanup limits.
 //go:build e2e
 
 package e2e
@@ -31,7 +18,7 @@ import (
 // flag alone is not permission to mutate a production cluster").
 type e2eConfig struct {
 	// Server is the base URL of the allowlisted Argo Server (loopback
-	// port-forward per test-environment.md §4.2).
+	// port-forward per docs/development.md).
 	Server string
 	// Namespace is the single allowlisted test namespace
 	// (argo-tui-e2e per §4.4).

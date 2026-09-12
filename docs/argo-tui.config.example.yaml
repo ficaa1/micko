@@ -1,47 +1,28 @@
-# Example argo-tui configuration. Copy to ~/.config/argo-tui/config.yaml.
-#
-# No token is stored here. tokenEnv names an environment variable and
-# tokenFile names a file; they are mutually exclusive and read per request.
-# An Argo Server run with --auth-mode=server needs no client token at all:
-# leave the variable unset and no Authorization header is sent.
-#
-# Actions are off unless --allow-actions is passed, and each one still needs
-# an explicit confirmation naming the exact target.
-
-currentProfile: work-test
+# Copy to ~/.config/argo-tui/config.yaml or select with --config.
+# Actions require --allow-actions and confirmation for each request.
+currentProfile: dev
 refreshInterval: 5s
 
 profiles:
-  work-test:
-    # The Kubernetes context. There is no implicit fallback.
-    kubeContext: my-testing-context
-    # The Argo Server service, reached through a managed kubectl port-forward.
+  dev:
+    # Omit these four fields to connect directly to server instead.
+    kubeContext: my-cluster
     service: argo-workflows-server
-    # Where that service runs. Defaults to namespace when omitted, but an
-    # Argo Server usually lives in its own namespace.
-    serviceNamespace: argo-workflows-tst
+    serviceNamespace: argo  # defaults to the workflow namespace below
     remotePort: 2746
-    # Only the scheme and any path prefix are taken from this URL. The host
-    # and port always come from the owned forward. Use https here when the
-    # server runs with --secure=true, and set caFile alongside it.
+    # With forwarding, only the scheme and path prefix are used.
+    # Use https when Argo expects TLS; caFile supplies a custom CA.
     server: http://127.0.0.1:2746
-    # The namespace the session starts in. It is a starting point, not a
-    # lock: `n` opens the namespace picker while the program runs.
-    namespace: my-team-tst
-    # Namespaces the picker always offers, on top of whatever the server
-    # reports. Argo has no endpoint that lists namespaces, so the picker
-    # derives them from the workflows your token can read; a namespace that
-    # is empty right now will not appear unless you name it here.
-    # namespaces:
-    #   - my-team-tst
-    #   - my-team-prd
+    namespace: workflows
+    # A source is required even for tokenless server auth: leave this
+    # variable unset/empty to send no Authorization header.
     tokenEnv: ARGO_TUI_TOKEN
-    # caFile: /absolute/path/to/company-ca.pem
-    # The browser address of this cluster's Argo UI. It is used only to build
-    # a link for the `o` (open) and `y` (copy) keys; argo-tui never sends a
-    # request to it. Leave it out and `o` says the profile has no web address
-    # rather than opening a guess.
-    webURL: https://argo.example.com
-    # What the log pipe editor (`|`) prefills with. The retained log lines
-    # arrive on the command's standard input. Default: lnav.
+    # Use tokenFile INSTEAD of tokenEnv; the path must be absolute.
+    # tokenFile: /absolute/path/to/token
+    # caFile: /absolute/path/to/ca.pem
+    # Include empty namespaces that discovery may not find.
+    # namespaces: [workflows, batch]
+    # Browser address for the o key, independent of the forwarded endpoint.
+    # webURL: https://argo.example.com
+    # Initial command in the log pipe editor; must be installed separately.
     # pipeCommand: lnav

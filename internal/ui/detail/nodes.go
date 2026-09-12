@@ -27,7 +27,7 @@ type OutlineRow struct {
 	Phase       string
 	Message     string
 	// HasPod reports pod/log potential per the pinned node-type list
-	// (docs/protocol.md §8: Pod/ContainerSet/HTTP/Plugin plus container-set
+	// (docs/development.md: Pod/ContainerSet/HTTP/Plugin plus container-set
 	// children). It does NOT imply a known pod name.
 	HasPod bool
 	// PodName is the pod backing this node. It is filled in only when the
@@ -314,7 +314,7 @@ func outlineRowOf(n core.Node) OutlineRow {
 	}
 	msg := n.Message
 	if msg == "" && n.Phase == "" {
-		// Absent phase ⇒ "not yet started" (docs/protocol.md §2); keep the
+		// Absent phase ⇒ "not yet started" (docs/development.md); keep the
 		// phase empty for the view to label, but never invent a message.
 		msg = ""
 	}
@@ -333,7 +333,7 @@ func outlineRowOf(n core.Node) OutlineRow {
 }
 
 // nodeTypeHasPod encodes the pinned log-capable node types
-// (docs/protocol.md §8): Pod, ContainerSet, HTTP, Plugin and container-set
+// (docs/development.md): Pod, ContainerSet, HTTP, Plugin and container-set
 // children. Everything else renders structurally.
 func nodeTypeHasPod(t string) bool {
 	switch t {

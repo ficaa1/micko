@@ -1,4 +1,4 @@
-# SYNTHETIC FIXTURE (docs/test-environment.md §4.4): failing container for
+# SYNTHETIC FIXTURE (docs/development.md): failing container for
 # ET-4 failed-node/log checks. Synthetic; never a production manifest.
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow

@@ -1,8 +1,8 @@
 // logs.go — the log streaming transport (GET /api/v1/workflows/{ns}/{name}/log,
-// docs/protocol.md §6/§6.2).
+// docs/development.md).
 //
 // Framing: the parser accepts BOTH candidate framings behind one choke
-// point (docs/protocol.md §6 resolution, gate G-1):
+// point (docs/development.md resolution, gate G-1):
 //
 //	(a) bare JSON-lines: {"result": {...}}\n   (gateway v1.16.0 source)
 //	(b) SSE: "data: {"result": {...}}\n\n"     (client + e2e expectations)
@@ -10,7 +10,7 @@
 // Each line is dispatched to the same record decoder; SSE `data: ` prefixes
 // are stripped and keepalive comment lines ignored.
 //
-// Edge cases covered (docs/protocol.md §6.3): chunk boundaries not aligned
+// Edge cases covered (docs/development.md): chunk boundaries not aligned
 // to records, records coalesced/split per read, final line without trailing
 // newline, in-band {"error": …} final chunk, single-record size bounds
 // (server caps lines at 1 MiB; client cap 2 MiB), malformed UTF-8 inside
@@ -35,7 +35,7 @@ import (
 
 // MaxLogRecordBytes bounds one decoded record (LogEntry.content) delivered
 // to the consumer. The server pipeline force-flushes single lines at
-// 1 MiB (maxTokenLength, docs/protocol.md §6.2); a misbehaving proxy could
+// 1 MiB (maxTokenLength, docs/development.md); a misbehaving proxy could
 // deliver more — anything past this cap is dropped with a visible marker
 // instead of growing memory unboundedly (STR-05/LOG-05).
 const MaxLogRecordBytes = 2 * 1024 * 1024
@@ -45,14 +45,14 @@ const MaxLogRecordBytes = 2 * 1024 * 1024
 const OversizeRecordMarker = "[log record dropped: exceeds client size cap]"
 
 // logStreamEnvelope is one stream chunk: either {"result": <LogEntry>} or a
-// final {"error": {...}} (docs/protocol.md §6).
+// final {"error": {...}} (docs/development.md).
 type logStreamEnvelope struct {
 	Result *logEntry   `json:"result"`
 	Error  *errorChunk `json:"error"`
 }
 
 // logEntry pins LogEntry exactly: content + podName, nothing else
-// (docs/protocol.md §6.2 — no timestamp, no container field).
+// (docs/development.md — no timestamp, no container field).
 type logEntry struct {
 	Content string `json:"content"`
 	PodName string `json:"podName"`
@@ -61,7 +61,7 @@ type logEntry struct {
 // errorChunk mirrors grpc-gateway v1.16.0 StreamError (field names
 // verified in pinned source internal/errors.pb.go) plus the plain
 // {"code":N,"message":"..."} shape the gateway emits for in-band stream
-// errors (docs/protocol.md §6: json.Marshal of map[string]any{"error":
+// errors (docs/development.md: json.Marshal of map[string]any{"error":
 // status.FromContextError(...)} — bare gRPC code). camelCase variants are
 // tolerated because deployments may marshal differently.
 type errorChunk struct {
@@ -80,7 +80,7 @@ type errorChunk struct {
 // the stream (distinguishable from network failure — plan §4; STR-01).
 func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(core.LogRecord) error) error {
 	// Workflow-wide or pod-scoped route per request.PodName; empty podName
-	// uses the non-deprecated WorkflowLogs route (docs/protocol.md §3).
+	// uses the non-deprecated WorkflowLogs route (docs/development.md).
 	var path string
 	if req.PodName == "" {
 		path = "/api/v1/workflows/" + url.PathEscape(req.Ref.Namespace) + "/" +
@@ -113,12 +113,12 @@ func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(co
 
 	if resp.StatusCode != http.StatusOK {
 		// Stream error before any chunk ⇒ unary-style HTTP error (gateway
-		// handler.go: wroteHeader=false path — docs/protocol.md §6).
+		// handler.go: wroteHeader=false path — docs/development.md).
 		return mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
 	}
 
 	// Headers arrive well before the first payload (server flushes early,
-	// docs/protocol.md §6 keepalive note). SSO/reverse-proxy interception
+	// docs/development.md keepalive note). SSO/reverse-proxy interception
 	// with HTTP 200 (CONN-14) is caught inside the parser: the first
 	// unparseable line that looks like HTML surfaces the login-page
 	// guidance instead of protocol-error noise.
@@ -164,7 +164,7 @@ func consumeLogStream(
 		}
 		if errors.Is(readErr, io.EOF) {
 			// Whole-frame parse must be forced at EOF: a final record may
-			// lack the trailing newline (docs/protocol.md §6.3.3). The
+			// lack the trailing newline (docs/development.md). The
 			// parser's line buffer holds a partial record; if it is
 			// complete JSON it is dispatched now, otherwise it is a
 			// protocol error surface.
@@ -271,7 +271,7 @@ func (p *logChunkParser) consume(line []byte, req core.LogRequest, contentType s
 	p.buf = append(p.buf, line...)
 	env := logStreamEnvelope{}
 	// Tolerant decode: json.Unmarshal replaces malformed UTF-8 bytes with
-	// U+FFFD (Go semantics accepted per docs/protocol.md §6.3.6).
+	// U+FFFD (Go semantics accepted per docs/development.md).
 	if err := json.Unmarshal(p.buf, &env); err != nil {
 		// Not complete JSON. Could be a split frame segment (keep
 		// buffering until the next line arrives) — or HTML interception
@@ -306,7 +306,7 @@ func (p *logChunkParser) resetAfterOversize() {
 // flushEnd-of-stream fragments: last chunk without trailing newline.
 // Complete JSON ⇒ final in-band error (error envelopes may end the stream
 // without a newline when the proxy truncates mid-flush); incomplete JSON ⇒
-// dropped with a protocol surface, per docs/protocol.md §6.3.3.
+// dropped with a protocol surface, per docs/development.md
 func (p *logChunkParser) flushEOF(req core.LogRequest, contentType string, now func() time.Time, cb func(core.LogRecord) error) error {
 	if len(p.buf) == 0 {
 		return nil
@@ -329,7 +329,7 @@ func (p *logChunkParser) flushEOF(req core.LogRequest, contentType string, now f
 			}
 			// Parse the partial line only if it is complete JSON;
 			// otherwise it is a protocol-error surface (dropped as
-			// incomplete, docs/protocol.md §6.3.3).
+			// incomplete, docs/development.md).
 			return core.ErrProtocalf("log stream: truncated final record dropped (stream cut mid-frame)")
 		}
 		switch {
@@ -343,7 +343,7 @@ func (p *logChunkParser) flushEOF(req core.LogRequest, contentType string, now f
 }
 
 // inBandError converts a stream error envelope into a typed APIError with no
-// HTTP status (none applies — docs/protocol.md §9).
+// HTTP status (none applies — docs/development.md).
 func inBandError(ec *errorChunk) error {
 	code := int(ec.Code)
 	if code == 0 {
