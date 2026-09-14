@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed the detail view never refreshing on its own: a superseded reply left
+  it marked as loading, so only `r` showed a new phase.
+- Fixed a late reply retiring the cancel function of the request that
+  replaced it, which left that request running with nothing able to stop it.
+- Fixed a real run reading the demo's frozen clock, which held every age and
+  stale timer at the moment of start.
+- Fixed an unbounded second copy of every log line held beside the bounded
+  buffer, and a watch that added workflows past the snapshot cap.
+- Fixed a data race on the watch request, and an unavailable managed endpoint
+  falling back to a port the operating system had already released.
+- Added a deadline to every non-streaming request, so a stalled response body
+  can no longer hold the refresh open. Log and watch streams keep none.
+- Fixed action outcomes claiming more than was observed: a check that failed
+  before anything was sent now reports REFUSED, and `confirmed` requires the
+  expected end state.
+- Added sorting to the nodes tab with `s`, and stopped hiding running nodes
+  under a skipped parent.
+- Fixed log tailing, which never asked the server to follow the stream.
+- Fixed the end-to-end and connected test suites, neither of which could fail.
+
 ## 0.2.0
 
 - Added managed `kubectl port-forward`, per-node logs and suspended-workflow
