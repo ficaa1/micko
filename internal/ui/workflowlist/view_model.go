@@ -230,7 +230,7 @@ func (m *Model) toolbarView() string {
 
 	// Long, untrusted-derived error reasons (the stale / unauthenticated /
 	// forbidden message) are word-wrapped to fit the remaining width instead
-	// of being clipped at the right edge (live-smoke defect 5). Short
+	// of being clipped at the right edge. Short
 	// reasons keep exactly one styled line (byte-identical to goldens);
 	// only genuinely long text gets wrapped.
 	// A long reason is emitted as its own block after the toolbar cells, so

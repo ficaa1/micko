@@ -46,8 +46,8 @@ func TestListFooterSurvivesShortTerminal(t *testing.T) {
 	}
 }
 
-// TestManyWorkflowsStillFit pins the live-smoke case directly: a namespace
-// with far more workflows than rows on screen.
+// TestManyWorkflowsStillFit pins a namespace with far more workflows than
+// there are rows on screen.
 func TestManyWorkflowsStillFit(t *testing.T) {
 	m := loadDemoList(t)
 	items := make([]core.Summary, 0, 60)

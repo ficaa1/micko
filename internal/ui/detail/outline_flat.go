@@ -46,9 +46,9 @@ func (r FlatRow) Skipped() bool {
 }
 
 // FlattenOutline walks the outline depth-first and returns one row per
-// visible node. hideSkipped drops skipped nodes AND their subtrees: a child
-// of a skipped node never ran either, so keeping it would restate the same
-// fact several times.
+// visible node. hideSkipped drops a skipped node and its subtree only when
+// nothing in that subtree ran. A skipped node can still hold a descendant
+// that ran, and hiding the parent would hide the running work with it.
 //
 // The returned count is the number of rows hideSkipped removed, so the pane
 // can say what it is not showing instead of quietly shortening the tree.
@@ -59,7 +59,7 @@ func FlattenOutline(out Outline, hideSkipped bool) (rows []FlatRow, hidden int) 
 		// sibling, so decide visibility for the whole sibling group first.
 		visible := make([]OutlineRow, 0, len(src))
 		for _, r := range src {
-			if hideSkipped && rowSkipped(r) {
+			if hideSkipped && subtreeAllSkipped(r) {
 				hidden += 1 + countRows(r.Children)
 				continue
 			}
@@ -100,6 +100,21 @@ func FlattenOutline(out Outline, hideSkipped bool) (rows []FlatRow, hidden int) 
 
 func rowSkipped(r OutlineRow) bool {
 	return r.Phase == "Skipped" || r.Type == "Skipped"
+}
+
+// subtreeAllSkipped reports whether r and every descendant is skipped. Only
+// such a subtree is safe to hide: it says nothing about the workflow's
+// progress, and nothing inside it ran.
+func subtreeAllSkipped(r OutlineRow) bool {
+	if !rowSkipped(r) {
+		return false
+	}
+	for _, c := range r.Children {
+		if !subtreeAllSkipped(c) {
+			return false
+		}
+	}
+	return true
 }
 
 func countRows(rows []OutlineRow) int {

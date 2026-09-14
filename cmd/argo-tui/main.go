@@ -18,6 +18,7 @@ import (
 
 	"argo-tui/internal/app"
 	"argo-tui/internal/argo"
+	"argo-tui/internal/buildinfo"
 	"argo-tui/internal/config"
 	"argo-tui/internal/core"
 	"argo-tui/internal/diagnostics"
@@ -26,12 +27,10 @@ import (
 	"argo-tui/internal/ui/actions"
 )
 
-const version = "0.2.0"
-
-// mainVersion exposes the build version to the smoke test without exporting
-// a mutable API surface.
-var mainVersion = version
-var mainCommit = "unknown"
+// mainVersion and mainCommit expose the build identity to the smoke test
+// without exporting a mutable API surface.
+var mainVersion = buildinfo.Version
+var mainCommit = buildinfo.Commit
 
 // forwardEndpoint combines the announced loopback address of the owned
 // port-forward with the scheme and path prefix of the configured server. The
@@ -189,7 +188,7 @@ func run(args []string) int {
 		if forwarder != nil {
 			resolveServer = func() string { return forwardEndpoint(cfg.Server, forwarder.Endpoint()) }
 		}
-		reader, err = argo.NewClient(argo.Options{Server: serverURL, TokenFn: tokenFn, TokenSource: "configured credential source", CAFile: cfg.CAFile, InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify, ResolveServer: resolveServer})
+		reader, err = argo.NewClient(argo.Options{Server: serverURL, TokenFn: tokenFn, TokenSource: "configured credential source", CAFile: cfg.CAFile, InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify, ResolveServer: resolveServer, UserAgent: buildinfo.UserAgent()})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "argo-tui:", err)
 			return 1
