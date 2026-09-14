@@ -163,10 +163,14 @@ type detailState struct {
 type logState struct {
 	ref       core.Ref
 	container string
-	records   []core.LogRecord
-	running   bool
-	lastErr   error
-	canceled  bool
+	// received counts the records this stream has delivered. The lines
+	// themselves live in the logs view, which bounds them by line count and
+	// by bytes; keeping a second unbounded copy here would grow the heap
+	// for as long as a chatty pod is followed, and nothing reads it.
+	received int
+	running  bool
+	lastErr  error
+	canceled bool
 }
 
 // NewRoot constructs the root model.
@@ -768,13 +772,13 @@ func (m *Root) logSummary() string {
 	st := m.logState
 	switch {
 	case st.running:
-		return "streaming " + st.ref.Name + " (" + plural(len(st.records), "record") + ")..."
+		return "streaming " + st.ref.Name + " (" + plural(st.received, "record") + ")..."
 	case st.canceled:
 		return "stream canceled"
 	case st.lastErr != nil:
 		return "stream error: " + st.lastErr.Error()
 	default:
-		return "stream ended (" + plural(len(st.records), "record") + ")"
+		return "stream ended (" + plural(st.received, "record") + ")"
 	}
 }
 
@@ -1022,7 +1026,7 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 		return nil // stale
 	}
 	st := &m.logState
-	st.records = append(st.records, msg.Records...)
+	st.received += len(msg.Records)
 	if m.logsView != nil && len(msg.Records) > 0 {
 		m.logsView.ApplyRecords(msg.Records)
 	}
