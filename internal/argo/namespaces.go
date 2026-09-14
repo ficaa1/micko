@@ -53,6 +53,8 @@ type namespaceEnvelope struct {
 
 // ListNamespaces implements core.NamespaceLister.
 func (c *Client) ListNamespaces(ctx context.Context) ([]string, string, error) {
+	ctx, cancel := c.withUnaryDeadline(ctx)
+	defer cancel()
 	if ns, err := c.managedNamespace(ctx); err == nil && ns != "" {
 		return []string{ns}, "the server manages this namespace only", nil
 	}
@@ -73,7 +75,10 @@ func (c *Client) ListNamespaces(ctx context.Context) ([]string, string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", mapHTTPError(resp, http.MethodGet, "/api/v1/workflows/", readBody(resp.Body), nil, c.now)
 	}
-	body := readAllBody(resp.Body)
+	body, err := readAllBody(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
 	if isHTMLBody(body, resp) {
 		return nil, "", mapHTTPError(resp, http.MethodGet, "/api/v1/workflows/", body, nil, c.now)
 	}
@@ -111,7 +116,10 @@ func (c *Client) managedNamespace(ctx context.Context) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", mapHTTPError(resp, http.MethodGet, "/api/v1/info", readBody(resp.Body), nil, c.now)
 	}
-	body := readAllBody(resp.Body)
+	body, err := readAllBody(resp.Body)
+	if err != nil {
+		return "", err
+	}
 	if isHTMLBody(body, resp) {
 		return "", mapHTTPError(resp, http.MethodGet, "/api/v1/info", body, nil, c.now)
 	}

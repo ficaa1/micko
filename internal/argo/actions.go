@@ -17,6 +17,8 @@ var _ core.Actioner = (*Client)(nil)
 // Execute sends exactly one action request. It deliberately has no retry
 // path: a transport failure after the server receives a PUT is ambiguous.
 func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.ActionResult, error) {
+	ctx, cancel := c.withUnaryDeadline(ctx)
+	defer cancel()
 	result := core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}
 	if req.Action != core.ActionResume && req.Action != core.ActionRetry && req.Action != core.ActionResubmit && req.Action != core.ActionStop && req.Action != core.ActionTerminate {
 		return result, fmt.Errorf("unsupported action %q", req.Action)
@@ -52,7 +54,10 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 	setAuthorization(httpReq, token)
 	httpReq.Header.Set("User-Agent", c.userAgent)
 	httpReq.Header.Set("Content-Type", "application/json")
-	resp, err := c.http.Do(httpReq)
+	// The same helper every read goes through: it rejects a redirect with a
+	// clear message instead of a raw transport error, and names a TLS
+	// failure as one.
+	resp, err := c.do(ctx, httpReq)
 	if err != nil {
 		if ctx.Err() != nil {
 			return result, ctx.Err()
@@ -60,10 +65,15 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 		return result, core.WrapAPIError(core.ErrUnavailable, 0, "action outcome unknown: connection failed after request was sent; inspect before retrying", err)
 	}
 	defer drainAndClose(resp.Body)
-	responseBody := readAllBody(resp.Body)
+	responseBody, readErr := readAllBody(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		result.Outcome = ""
 		return result, mapHTTPError(resp, http.MethodPut, path, responseBody, nil, c.now)
+	}
+	if readErr != nil {
+		// The request was sent and the server answered 2xx, so the mutation
+		// may well have been applied; only the answer was lost.
+		return result, core.WrapAPIError(core.ErrUnavailable, 0, "action outcome unknown: the server's answer could not be read; inspect before retrying", readErr)
 	}
 	if len(responseBody) == 0 {
 		return result, core.WrapAPIError(core.ErrProtocol, 0, "action outcome unknown: server returned an empty response; inspect before retrying", io.ErrUnexpectedEOF)
