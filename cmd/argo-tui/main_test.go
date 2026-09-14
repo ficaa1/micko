@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestSmokeVersionString pins the build identity so the smoke slice has a
@@ -37,5 +38,33 @@ func TestSmokeRunVersionFlag(t *testing.T) {
 func TestSmokeRunRejectsPositionalArgs(t *testing.T) {
 	if code := run([]string{"stray-argument"}); code != 2 {
 		t.Errorf("run(stray) exit = %d, want 2", code)
+	}
+}
+
+// A frozen clock belongs to the demo alone, whose dataset is built from the
+// same clock and whose sample ages have to stay put. A real run must read
+// the wall clock, or every age on screen freezes at the moment of start.
+func TestOnlyTheDemoGetsAFrozenClock(t *testing.T) {
+	real, demoClock := newClock(false)
+	if demoClock != nil {
+		t.Fatal("a real run was given the demo's frozen clock")
+	}
+	first := real.Now()
+	deadline := time.Now().Add(time.Second)
+	for real.Now().Equal(first) {
+		if time.Now().After(deadline) {
+			t.Fatal("the clock wired into a real run does not advance")
+		}
+	}
+
+	demo, frozen := newClock(true)
+	if frozen == nil {
+		t.Fatal("the demo needs its own clock to generate the dataset")
+	}
+	if !demo.Now().Equal(frozen.Now()) {
+		t.Fatal("the demo dataset and the views read different clocks")
+	}
+	if at := demo.Now(); !demo.Now().Equal(at) {
+		t.Fatal("the demo clock moved on its own")
 	}
 }

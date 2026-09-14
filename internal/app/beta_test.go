@@ -210,7 +210,7 @@ func TestActionLateResultCannotOverwriteLaterAttempt(t *testing.T) {
 	m.selection = wf.Summary.Ref
 	m.actionView = actions.NewWithOptions(wf.Summary.Ref, actions.Options{AllowActions: true})
 	firstMsg := m.startAction(core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionRetry, Confirmation: core.Confirmation{Confirmed: true}})().(actionResultMsg)
-	m.clearInflight("action")
+	m.clearInflight("action", uint64(firstMsg.Attempt))
 	m.actionView = actions.NewWithOptions(wf.Summary.Ref, actions.Options{AllowActions: true})
 	secondMsg := m.startAction(core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionRetry, Confirmation: core.Confirmation{Confirmed: true}})().(actionResultMsg)
 	if firstMsg.Attempt == 0 || firstMsg.Attempt == secondMsg.Attempt {
