@@ -61,6 +61,8 @@ func render(m *Model) string {
 				if m.outcome.Workflow != nil {
 					b.WriteString("phase: " + shared.Sanitize(m.outcome.Workflow.Summary.Phase) + " (watch the workflow for the final state)\n")
 				}
+			case core.ActionRefused:
+				b.WriteString("outcome: REFUSED — the request was not sent; nothing changed.\n")
 			case core.ActionUnknown:
 				b.WriteString("outcome: UNKNOWN — it is not known whether the server applied the action.\n")
 				if m.outcome.Workflow != nil {

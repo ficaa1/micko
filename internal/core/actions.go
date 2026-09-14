@@ -137,6 +137,10 @@ const (
 	ActionAccepted ActionOutcome = "accepted"
 	// ActionUnknown means it is not known whether the request was applied.
 	ActionUnknown ActionOutcome = "unknown"
+	// ActionRefused means no request was ever sent: it failed a check on
+	// this side. Nothing changed on the server, so there is nothing to
+	// inspect and the action can be corrected and repeated.
+	ActionRefused ActionOutcome = "refused"
 )
 
 // ActionResult contains the exact target and any affected/new identity read
