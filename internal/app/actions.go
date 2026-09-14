@@ -33,9 +33,11 @@ func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("action", cancel)
 	m.actionAttempt++
 	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.actionAttempt}
+	// The entry is tagged with the attempt the reply will carry, so a late
+	// reply from an earlier attempt cannot retire this one.
+	m.setInflight("action", uint64(m.actionAttempt), cancel)
 	return func() tea.Msg {
 		actual, err := m.deps.reader.Get(ctx, req.Ref)
 		if err != nil {
@@ -144,7 +146,7 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.actionAttempt {
 		return nil
 	}
-	m.clearInflight("action")
+	m.clearInflight("action", uint64(msg.Attempt))
 	if m.actionView == nil {
 		return nil
 	}

@@ -35,9 +35,13 @@ type Root struct {
 	// selection is the currently selected workflow (detail/logs scope).
 	selection core.Ref
 
-	// inflight cancels currently running commands, keyed by purpose.
+	// inflight holds the cancel function of the running command for each
+	// purpose, tagged with the request it belongs to. The tag is what makes
+	// a late reply harmless: a handler clears the entry only when the entry
+	// is still its own, so a reply that lost the race can never retire the
+	// request that replaced it.
 	mu       sync.Mutex
-	inflight map[string]context.CancelFunc
+	inflight map[string]inflightOp
 
 	// listState is the collected snapshot for the list route.
 	listState listState
@@ -197,7 +201,7 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 			snapshotCap: 5000,
 			pageSize:    100,
 		},
-		inflight:        map[string]context.CancelFunc{},
+		inflight:        map[string]inflightOp{},
 		theme:           shared.NewTheme(false),
 		nsView:          namespaces.New(shared.NewTheme(false)),
 		listView:        workflowlist.New(shared.NewTheme(false), false),
@@ -868,9 +872,9 @@ func (m *Root) startListGeneration() tea.Cmd {
 	m.cancelInflight("list")
 	m.listState.loading = true
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("list", cancel)
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
+	m.setInflight("list", id, cancel)
 	cmd := m.deps.listCmd(ctx, g, id)
 	return cmd
 }
@@ -879,9 +883,13 @@ func (m *Root) startListGeneration() tea.Cmd {
 func (m *Root) startDetailFetch() tea.Cmd {
 	m.cancelInflight("detail")
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("detail", cancel)
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
+	m.setInflight("detail", id, cancel)
+	// loading is what the poll tick reads to decide whether a refetch is
+	// due. Setting it here keeps it true for exactly as long as a fetch is
+	// running, whichever key or timer started it.
+	m.detailState.loading = true
 	return m.deps.detailCmd(ctx, g, id, m.selection)
 }
 
@@ -889,9 +897,9 @@ func (m *Root) startDetailFetch() tea.Cmd {
 func (m *Root) startLogStream(msg OpenLogsMsg) tea.Cmd {
 	m.cancelInflight("logs")
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("logs", cancel)
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
+	m.setInflight("logs", id, cancel)
 	req := core.LogRequest{
 		Ref:       msg.Ref,
 		PodName:   msg.PodName,
@@ -909,7 +917,7 @@ func (m *Root) startLogStream(msg OpenLogsMsg) tea.Cmd {
 // handleListLoaded applies a list result honoring generation/request
 // staleness (plan §4: ignore stale completions even after cancellation).
 func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
-	m.clearInflight("list")
+	m.clearInflight("list", msg.RequestID)
 	if msg.Canceled {
 		// Canceled collections are always stale by construction.
 		return nil
@@ -967,14 +975,19 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 // handleDetailLoaded applies a detail result honoring staleness + UID
 // validation (same-name replacement is a different workflow, LIST-12).
 func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
-	m.clearInflight("detail")
+	m.clearInflight("detail", msg.RequestID)
+	st := &m.detailState
+	// loading tracks the fetch, not this reply. A canceled or stale reply
+	// still ends a fetch, so leaving the flag set here would tell the poll
+	// tick that a fetch is running for the rest of the session and stop the
+	// detail view refreshing on its own.
+	st.loading = m.hasInflight("detail")
 	if msg.Canceled {
 		return nil
 	}
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
 		return nil // stale
 	}
-	st := &m.detailState
 	if msg.Err != nil {
 		if msg.Err.Kind == core.ErrNotFound {
 			st.notFound = true
@@ -1027,7 +1040,7 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 				m.logsView.SetPhase(logs.PhaseEnded)
 			}
 		}
-		m.clearInflight("logs")
+		m.clearInflight("logs", msg.RequestID)
 		return nil
 	}
 	// chain the next drain; the streamState rides in the closure
@@ -1079,38 +1092,58 @@ func (m *Root) quit() tea.Cmd {
 	return tea.Quit
 }
 
-func (m *Root) setInflight(purpose string, cancel context.CancelFunc) {
+// inflightOp is one running command: the request that owns it and the
+// function that cancels it.
+type inflightOp struct {
+	id     uint64
+	cancel context.CancelFunc
+}
+
+func (m *Root) setInflight(purpose string, id uint64, cancel context.CancelFunc) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if old, ok := m.inflight[purpose]; ok {
-		old()
+		old.cancel()
 	}
-	m.inflight[purpose] = cancel
+	m.inflight[purpose] = inflightOp{id: id, cancel: cancel}
 }
 
 func (m *Root) cancelInflight(purpose string) {
 	m.mu.Lock()
-	cancel, ok := m.inflight[purpose]
+	op, ok := m.inflight[purpose]
 	delete(m.inflight, purpose)
 	m.mu.Unlock()
 	if ok {
-		cancel()
+		op.cancel()
 	}
 }
 
-func (m *Root) clearInflight(purpose string) {
+// clearInflight retires the entry for purpose only when it still belongs to
+// request id. A reply from a request that has already been replaced leaves
+// the newer entry alone, which keeps the newer request cancelable.
+func (m *Root) clearInflight(purpose string, id uint64) {
 	m.mu.Lock()
-	delete(m.inflight, purpose)
+	if op, ok := m.inflight[purpose]; ok && op.id == id {
+		delete(m.inflight, purpose)
+	}
 	m.mu.Unlock()
+}
+
+// hasInflight reports whether a command is running for purpose.
+func (m *Root) hasInflight(purpose string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.inflight[purpose]
+	return ok
 }
 
 func (m *Root) cancelAll() {
 	m.mu.Lock()
 	cancels := make([]context.CancelFunc, 0, len(m.inflight))
-	for _, c := range m.inflight {
-		cancels = append(cancels, c)
+	for _, op := range m.inflight {
+		cancels = append(cancels, op.cancel)
 	}
-	m.inflight = map[string]context.CancelFunc{}
+	m.inflight = map[string]inflightOp{}
 	m.mu.Unlock()
 	for _, c := range cancels {
 		c()

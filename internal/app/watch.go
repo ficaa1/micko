@@ -33,8 +33,8 @@ func (m *Root) startWatch() tea.Cmd {
 	m.watchMode = "watch"
 	m.watchAttempt++
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("watch", cancel)
 	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.watchAttempt}
+	m.setInflight("watch", uint64(m.watchAttempt), cancel)
 	ch := make(chan any, watchQueueCap)
 	go func() {
 		err := m.deps.watcher.Watch(ctx, core.WatchRequest{
@@ -128,7 +128,7 @@ func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
 		return nil
 	}
-	m.clearInflight("watch")
+	m.clearInflight("watch", uint64(msg.Attempt))
 	if errors.Is(msg.Err, context.Canceled) {
 		return nil
 	}
