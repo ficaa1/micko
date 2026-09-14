@@ -1,6 +1,6 @@
-# Routine checks run on push and pull requests. The disposable-cluster
-# E2E job requires manual dispatch and E2E_ALLOWLIST_B64; it does not provision
-# an Argo environment. See docs/development.md.
+# Routine checks on push and pull requests. The disposable-cluster E2E job
+# needs manual dispatch and E2E_ALLOWLIST_B64; it does not provision an Argo
+# environment. See docs/development.md.
 
 name: ci
 
@@ -13,22 +13,26 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  # Tool versions used by this workflow.
   GO_VERSION: "1.25.4"
   KIND_VERSION: "v0.33.0"
   KUBECTL_VERSION: "v1.37.0"
 
 jobs:
-  fmt:
-    name: format (gofmt)
+  check:
+    name: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "${{ env.GO_VERSION }}"
-      - name: gofmt check (cmd internal tests)
+
+      - name: gofmt
         run: |
           out="$(gofmt -l cmd internal tests)"
           if [ -n "$out" ]; then
@@ -36,61 +40,27 @@ jobs:
             exit 1
           fi
 
-  vet:
-    name: vet
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: go vet ./...
+      - name: vet
+        run: go vet ./...
 
-  test:
-    name: unit tests (ET-1)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: go test ./... -count=1
+      - name: unit tests
+        run: go test ./... -count=1
 
-  test-integration:
-    name: integration + PTY (ET-2/ET-3)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GO_VERSION }}"
-      # ET-2: fixture-server conformance over real HTTP; ET-3: real PTY
-      # process lifecycle (ubuntu-latest provides /dev/ptmx — no skip).
-      - run: go test -tags=integration ./tests/integration/... -count=1
+      # The race detector needs CGO and a C toolchain.
+      - name: race detector
+        run: go test -race ./... -count=1
 
-  test-race:
-    name: race detector
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GO_VERSION }}"
-      # The race detector requires CGO and a C toolchain.
-      - run: go test -race ./... -count=1
+      # Fixture-server conformance over real HTTP, plus real PTY process
+      # lifecycle. ubuntu-latest provides /dev/ptmx, so nothing skips.
+      - name: integration and PTY
+        run: go test -tags=integration ./tests/integration/... -count=1
 
-  build:
-    name: build + smoke
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "${{ env.GO_VERSION }}"
-      - run: go build -o dist/argo-tui ./cmd/argo-tui
-      - run: ./dist/argo-tui --version
-      - name: non-demo start refuses (exit 1)
+      - name: build
+        run: go build -o dist/argo-tui ./cmd/argo-tui
+
+      - name: smoke
         run: |
+          ./dist/argo-tui --version
           set +e
           ./dist/argo-tui >/dev/null 2>&1
           status=$?
@@ -101,13 +71,13 @@ jobs:
           fi
 
   e2e:
-    name: e2e (ET-4, opt-in)
-    # REAL tier: only on explicit dispatch, never on plain push/PR.
+    name: e2e (opt-in)
+    # Real tier: explicit dispatch only, never on plain push or PR.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "${{ env.GO_VERSION }}"
       - name: Install pinned kind
