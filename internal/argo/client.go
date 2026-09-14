@@ -60,6 +60,8 @@ type Client struct {
 	// maxRetries stays 0 forever: this package performs no automatic
 	// retries; the app layer owns bounded backoff policy (plan §5/§6).
 	maxRetries int
+	// userAgent is the resolved User-Agent header value.
+	userAgent string
 }
 
 // assert the frozen read contract is satisfied at compile time (A1 gate).
@@ -89,7 +91,13 @@ type Options struct {
 	// port-forward recovers onto a new ephemeral local port. An empty or
 	// unparseable return keeps the last known good base.
 	ResolveServer func() string
+	// UserAgent is sent on every request; the caller owns the version
+	// string. Empty falls back to defaultUserAgent.
+	UserAgent string
 }
+
+// defaultUserAgent carries no version: a wrong version is worse than none.
+const defaultUserAgent = "argo-tui"
 
 // NewClient validates the URL contract and builds the transport.
 func NewClient(opts Options) (*Client, error) {
@@ -172,6 +180,10 @@ func NewClient(opts Options) (*Client, error) {
 	if now == nil {
 		now = time.Now
 	}
+	userAgent := opts.UserAgent
+	if userAgent == "" {
+		userAgent = defaultUserAgent
+	}
 	return &Client{
 		base:                  u,
 		tokenFn:               opts.TokenFn,
@@ -181,6 +193,7 @@ func NewClient(opts Options) (*Client, error) {
 		http:                  hc,
 		now:                   now,
 		resolveBase:           opts.ResolveServer,
+		userAgent:             userAgent,
 	}, nil
 }
 
@@ -262,7 +275,7 @@ func (c *Client) newRequest(ctx context.Context, path string, query url.Values) 
 		return nil, core.ErrProtocalf("building request: %v", err)
 	}
 	setAuthorization(req, token)
-	req.Header.Set("User-Agent", "argo-tui/0.1")
+	req.Header.Set("User-Agent", c.userAgent)
 	// Deliberately NO Accept header at all: no SSE hint (docs/development.md
 	// §6 v0.1 policy) and no content-negotiation surprises. The gateway
 	// marshaler ignores Accept.
