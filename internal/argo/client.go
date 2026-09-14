@@ -62,6 +62,8 @@ type Client struct {
 	maxRetries int
 	// userAgent is the resolved User-Agent header value.
 	userAgent string
+	// unaryTimeout bounds one non-streaming request end to end.
+	unaryTimeout time.Duration
 }
 
 // assert the frozen read contract is satisfied at compile time (A1 gate).
@@ -96,6 +98,10 @@ type Options struct {
 	// UserAgent is sent on every request; the caller owns the version
 	// string. Empty falls back to defaultUserAgent.
 	UserAgent string
+	// RequestTimeout bounds one non-streaming request end to end,
+	// including reading the body. Empty uses unaryTimeout. Streaming calls
+	// ignore it.
+	RequestTimeout time.Duration
 }
 
 // defaultUserAgent carries no version: a wrong version is worse than none.
@@ -195,6 +201,7 @@ func NewClient(opts Options) (*Client, error) {
 		http:                  hc,
 		now:                   now,
 		resolveBase:           opts.ResolveServer,
+		unaryTimeout:          opts.RequestTimeout,
 		userAgent:             userAgent,
 	}, nil
 }
@@ -525,6 +532,8 @@ func drainAndClose(body io.ReadCloser) {
 // --- Reader.List ----------------------------------------------------------------
 
 func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
+	ctx, cancel := c.withUnaryDeadline(ctx)
+	defer cancel()
 	path := "/api/v1/workflows/" + url.PathEscape(q.Namespace)
 	query := url.Values{}
 	if q.Limit > 0 {
@@ -551,8 +560,11 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if resp.StatusCode != http.StatusOK {
 		return core.Page{}, mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
 	}
-	body := readAllBody(resp.Body)
-	if body == nil || len(body) == 0 {
+	body, err := readAllBody(resp.Body)
+	if err != nil {
+		return core.Page{}, err
+	}
+	if len(body) == 0 {
 		return core.Page{}, core.ErrProtocalf("list: empty response body")
 	}
 	// SSO/reverse-proxy interception can answer 200 with a login page
@@ -567,15 +579,52 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	return page, nil
 }
 
-// readAllBody reads a bounded response body (list/get are unary and small).
-func readAllBody(r io.Reader) []byte {
-	b, _ := io.ReadAll(io.LimitReader(r, 16*1024*1024))
-	return b
+// maxBodyBytes bounds a unary response body. List and Get answers are small;
+// anything past this is not a workflow list.
+const maxBodyBytes = 16 * 1024 * 1024
+
+// readAllBody reads a bounded response body and reports what went wrong.
+//
+// It reads one byte past the limit so a body that is exactly the limit is
+// distinguishable from one that was cut short. A read error is returned
+// rather than dropped: a connection that dies mid-body leaves valid-looking
+// bytes, and reporting that as a parse failure sends the reader after a
+// protocol mismatch that never happened.
+func readAllBody(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, maxBodyBytes+1))
+	if err != nil {
+		return b, core.ErrUnavailablef("reading the response body failed: %s", sanitizeLine(err.Error()))
+	}
+	if len(b) > maxBodyBytes {
+		return b[:maxBodyBytes], core.ErrProtocalf("response body is larger than %d bytes", maxBodyBytes)
+	}
+	return b, nil
+}
+
+// unaryTimeout bounds a whole non-streaming request: connection, headers and
+// body. Only the header timeout was bounded, so a server that flushed
+// headers and then stalled the body held the refresh for the rest of the
+// session. Streaming calls (logs, watch) never use it.
+const unaryTimeout = 30 * time.Second
+
+// withUnaryDeadline bounds ctx for one non-streaming request. A caller that
+// set its own deadline keeps it.
+func (c *Client) withUnaryDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return context.WithCancel(ctx)
+	}
+	d := c.unaryTimeout
+	if d <= 0 {
+		d = unaryTimeout
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 // --- Reader.Get -----------------------------------------------------------------
 
 func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
+	ctx, cancel := c.withUnaryDeadline(ctx)
+	defer cancel()
 	path := "/api/v1/workflows/" + url.PathEscape(ref.Namespace) + "/" + url.PathEscape(ref.Name)
 	query := url.Values{}
 	if ref.UID != "" {
@@ -595,7 +644,10 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	if resp.StatusCode != http.StatusOK {
 		return core.Workflow{}, mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
 	}
-	body := readAllBody(resp.Body)
+	body, err := readAllBody(resp.Body)
+	if err != nil {
+		return core.Workflow{}, err
+	}
 	if len(body) == 0 {
 		return core.Workflow{}, core.ErrProtocalf("get %s/%s: empty response body", ref.Namespace, ref.Name)
 	}
