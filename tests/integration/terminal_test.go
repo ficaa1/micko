@@ -10,7 +10,21 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"argo-tui/internal/buildinfo"
 )
+
+// demoRows is the demo list in the order the default sort produces: phase
+// first (Failed, then Running, then Pending, then Succeeded), and newest
+// first inside a phase. Tests index into it instead of naming a workflow,
+// so a change to the sort is one edit here.
+var demoRows = []string{
+	"demo-nightly-report",
+	"demo-train-pipeline",
+	"demo-data-pull",
+	"demo-cleanup",
+	"demo-hello-world",
+}
 
 // buildBinary compiles the real cmd/argo-tui binary once per test binary.
 func buildBinary(t *testing.T) string {
@@ -124,7 +138,7 @@ func TestPTYVersionAndNonDemoRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
-	if code != 0 || !strings.Contains(p.Screen(), "argo-tui 0.2.0-beta.1") {
+	if code != 0 || !strings.Contains(p.Screen(), "argo-tui "+buildinfo.Version) {
 		t.Fatalf("--version: code=%d screen=%q", code, p.Screen())
 	}
 	p.Close()
@@ -133,7 +147,7 @@ func TestPTYVersionAndNonDemoRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start non-demo: %v", err)
 	}
-	code2, err := p2.Wait()
+	code2, err := p2.WaitFor(20 * time.Second)
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
@@ -316,7 +330,7 @@ func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
 		// the alternate-screen repaint overwrites it via C0 controls that the
 		// PTY harness's stripANSI discards, so the stream only carries the
 		// overwriting suffix).
-		return strings.Contains(s, "Detail demo-data-pull") && strings.Contains(s, "phase: Running")
+		return strings.Contains(s, "Detail "+demoRows[1]) && strings.Contains(s, "● Running")
 	})
 	if !ok {
 		t.Fatalf("j/enter did not open the second row's detail; screen=%q", p.Screen())
@@ -345,12 +359,12 @@ func TestPTYDemoEscFromListOpenedLogsReturnsToList(t *testing.T) {
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
-	// j selects demo-data-pull, l opens its logs (nil pod -> workflow-wide).
+	// j selects the second row, l opens its logs (nil pod -> workflow-wide).
 	if err := p.SendKeys(30*time.Millisecond, "j", "l"); err != nil {
 		t.Fatalf("send j/l: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "Logs demo-data-pull")
+		return strings.Contains(s, "Logs "+demoRows[1])
 	}) {
 		t.Fatalf("logs never rendered after l; screen=%q", p.Screen())
 	}
@@ -390,12 +404,13 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
-	// j Enter -> Detail demo-data-pull (A); Esc back to list; j l -> logs B.
+	// j Enter -> detail for row 1 (A); Esc back to list; j j l -> logs for
+	// row 2 (B).
 	if err := p.SendKeys(30*time.Millisecond, "j", "\r"); err != nil {
 		t.Fatalf("send j/enter: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "Detail demo-data-pull")
+		return strings.Contains(s, "Detail "+demoRows[1])
 	}) {
 		t.Fatalf("detail A never rendered; screen=%q", p.Screen())
 	}
@@ -408,13 +423,13 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	}) {
 		t.Fatalf("did not return to list; screen=%q", p.Screen())
 	}
-	// j selects demo-train-pipeline (B), l opens its logs.
+	// Esc keeps the cursor on row 1, so one more j reaches row 2.
 	p.ClearScreen()
 	if err := p.SendKeys(30*time.Millisecond, "j", "l"); err != nil {
 		t.Fatalf("send j/l: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "Logs demo-train-pipeline")
+		return strings.Contains(s, "Logs "+demoRows[2])
 	}) {
 		t.Fatalf("logs B never rendered; screen=%q", p.Screen())
 	}
@@ -427,7 +442,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
 		screen := s
 		return strings.Contains(screen, "list: 5 workflows") &&
-			!strings.Contains(screen, "Detail demo-data-pull")
+			!strings.Contains(screen, "Detail "+demoRows[1])
 	}) {
 		t.Fatalf("Esc from logs B did not return to the list without stale Detail demo-data-pull (A); screen=%q", p.Screen())
 	}
@@ -742,8 +757,8 @@ func TestPTYDemoDetailKeepsTheFrame(t *testing.T) {
 		t.Fatalf("send enter: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "Detail demo-nightly-report") &&
-			strings.Contains(s, "tab next section") &&
+		return strings.Contains(s, "Detail "+demoRows[0]) &&
+			strings.Contains(s, "tab section") &&
 			strings.Contains(s, "? help")
 	}) {
 		t.Fatalf("detail lost the frame; screen=%q", p.Screen())
