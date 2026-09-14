@@ -45,7 +45,7 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 		return result, core.ErrProtocalf("building action request: %v", err)
 	}
 	setAuthorization(httpReq, token)
-	httpReq.Header.Set("User-Agent", "argo-tui/0.1")
+	httpReq.Header.Set("User-Agent", c.userAgent)
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
