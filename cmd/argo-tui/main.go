@@ -85,7 +85,6 @@ func run(args []string) int {
 		return 2
 	}
 
-	clock := testkit.NewFakeClock(time.Now().UTC())
 	var reader core.Reader
 	var connStates chan app.ConnectionStateMsg
 	activeNS := ""
@@ -94,8 +93,9 @@ func run(args []string) int {
 	activeWebURL := ""
 	activePipe := ""
 	var activeNamespaces []string
+	clock, demoClock := newClock(*demo)
 	if *demo {
-		reader = testkit.DemoReader(clock)
+		reader = testkit.DemoReader(demoClock)
 		activeNS = "demo"
 	} else {
 		path := *configPath
@@ -227,4 +227,20 @@ func run(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// newClock picks the clock for this run. Every relative time on screen is
+// measured against it: a workflow's age, and how long the snapshot has been
+// stale. A real run therefore reads the wall clock, or all of them freeze at
+// the moment the program started.
+//
+// The demo is the one exception. Its dataset is generated from the same
+// clock, so a frozen clock is what keeps its sample ages put. The second
+// return value is that clock, and is nil for a real run.
+func newClock(demo bool) (app.Clock, *testkit.FakeClock) {
+	if demo {
+		c := testkit.NewFakeClock(time.Now().UTC())
+		return c, c
+	}
+	return app.SystemClock{}, nil
 }
