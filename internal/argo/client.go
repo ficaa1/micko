@@ -62,6 +62,8 @@ type Client struct {
 	maxRetries int
 	// userAgent is the resolved User-Agent header value.
 	userAgent string
+	// unaryTimeout bounds one non-streaming request end to end.
+	unaryTimeout time.Duration
 }
 
 // assert the frozen read contract is satisfied at compile time (A1 gate).
@@ -89,11 +91,17 @@ type Options struct {
 	// must return an endpoint equivalent to Server (same scheme and path
 	// prefix); only the host and port may change, as they do when a managed
 	// port-forward recovers onto a new ephemeral local port. An empty or
-	// unparseable return keeps the last known good base.
+	// unparseable return fails the request: the previous port is released
+	// when the forward drops, so reusing it would send the request, and the
+	// credential with it, to whatever now listens there.
 	ResolveServer func() string
 	// UserAgent is sent on every request; the caller owns the version
 	// string. Empty falls back to defaultUserAgent.
 	UserAgent string
+	// RequestTimeout bounds one non-streaming request end to end,
+	// including reading the body. Empty uses unaryTimeout. Streaming calls
+	// ignore it.
+	RequestTimeout time.Duration
 }
 
 // defaultUserAgent carries no version: a wrong version is worse than none.
@@ -193,6 +201,7 @@ func NewClient(opts Options) (*Client, error) {
 		http:                  hc,
 		now:                   now,
 		resolveBase:           opts.ResolveServer,
+		unaryTimeout:          opts.RequestTimeout,
 		userAgent:             userAgent,
 	}, nil
 }
@@ -225,24 +234,33 @@ func isLoopback(host string) bool {
 // configured scheme, path prefix and userinfo-free contract: only host and
 // port are adopted from the resolver, and only when they parse and pass the
 // same plain-HTTP loopback rule enforced at construction.
-func (c *Client) baseURL() *url.URL {
+//
+// A resolver that cannot name an endpoint fails the request. The endpoint it
+// resolves is a local forwarded port, and the previous one is released as
+// soon as the forward drops: the operating system is free to hand that port
+// to any other program. Falling back to it would send a request, and with
+// it a bearer token, to whatever now listens there.
+func (c *Client) baseURL() (*url.URL, error) {
 	if c.resolveBase == nil {
-		return c.base
+		return c.base, nil
 	}
 	raw := c.resolveBase()
 	if raw == "" {
-		return c.base
+		return nil, core.NewAPIError(core.ErrUnavailable, 0,
+			"server endpoint is not available (the connection is being re-established)")
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || u.User != nil {
-		return c.base
+		return nil, core.NewAPIError(core.ErrUnavailable, 0,
+			"server endpoint is not usable")
 	}
 	next := *c.base
 	next.Host = u.Host
 	if next.Scheme == "http" && !isLoopback(next.Hostname()) {
-		return c.base
+		return nil, core.NewAPIError(core.ErrUnavailable, 0,
+			"server endpoint is plain HTTP off loopback")
 	}
-	return &next
+	return &next, nil
 }
 
 // setAuthorization attaches the bearer credential. An empty token means the
@@ -258,7 +276,10 @@ func setAuthorization(req *http.Request, token string) {
 
 // newRequest builds an authenticated GET to the appended path.
 func (c *Client) newRequest(ctx context.Context, path string, query url.Values) (*http.Request, error) {
-	base := c.baseURL()
+	base, err := c.baseURL()
+	if err != nil {
+		return nil, err
+	}
 	target := *base
 	target.Path = strings.TrimSuffix(base.Path, "/") + path
 	target.RawQuery = query.Encode()
@@ -511,6 +532,8 @@ func drainAndClose(body io.ReadCloser) {
 // --- Reader.List ----------------------------------------------------------------
 
 func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
+	ctx, cancel := c.withUnaryDeadline(ctx)
+	defer cancel()
 	path := "/api/v1/workflows/" + url.PathEscape(q.Namespace)
 	query := url.Values{}
 	if q.Limit > 0 {
@@ -537,8 +560,11 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if resp.StatusCode != http.StatusOK {
 		return core.Page{}, mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
 	}
-	body := readAllBody(resp.Body)
-	if body == nil || len(body) == 0 {
+	body, err := readAllBody(resp.Body)
+	if err != nil {
+		return core.Page{}, err
+	}
+	if len(body) == 0 {
 		return core.Page{}, core.ErrProtocalf("list: empty response body")
 	}
 	// SSO/reverse-proxy interception can answer 200 with a login page
@@ -553,15 +579,52 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	return page, nil
 }
 
-// readAllBody reads a bounded response body (list/get are unary and small).
-func readAllBody(r io.Reader) []byte {
-	b, _ := io.ReadAll(io.LimitReader(r, 16*1024*1024))
-	return b
+// maxBodyBytes bounds a unary response body. List and Get answers are small;
+// anything past this is not a workflow list.
+const maxBodyBytes = 16 * 1024 * 1024
+
+// readAllBody reads a bounded response body and reports what went wrong.
+//
+// It reads one byte past the limit so a body that is exactly the limit is
+// distinguishable from one that was cut short. A read error is returned
+// rather than dropped: a connection that dies mid-body leaves valid-looking
+// bytes, and reporting that as a parse failure sends the reader after a
+// protocol mismatch that never happened.
+func readAllBody(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, maxBodyBytes+1))
+	if err != nil {
+		return b, core.ErrUnavailablef("reading the response body failed: %s", sanitizeLine(err.Error()))
+	}
+	if len(b) > maxBodyBytes {
+		return b[:maxBodyBytes], core.ErrProtocalf("response body is larger than %d bytes", maxBodyBytes)
+	}
+	return b, nil
+}
+
+// unaryTimeout bounds a whole non-streaming request: connection, headers and
+// body. Only the header timeout was bounded, so a server that flushed
+// headers and then stalled the body held the refresh for the rest of the
+// session. Streaming calls (logs, watch) never use it.
+const unaryTimeout = 30 * time.Second
+
+// withUnaryDeadline bounds ctx for one non-streaming request. A caller that
+// set its own deadline keeps it.
+func (c *Client) withUnaryDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return context.WithCancel(ctx)
+	}
+	d := c.unaryTimeout
+	if d <= 0 {
+		d = unaryTimeout
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 // --- Reader.Get -----------------------------------------------------------------
 
 func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
+	ctx, cancel := c.withUnaryDeadline(ctx)
+	defer cancel()
 	path := "/api/v1/workflows/" + url.PathEscape(ref.Namespace) + "/" + url.PathEscape(ref.Name)
 	query := url.Values{}
 	if ref.UID != "" {
@@ -581,7 +644,10 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	if resp.StatusCode != http.StatusOK {
 		return core.Workflow{}, mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
 	}
-	body := readAllBody(resp.Body)
+	body, err := readAllBody(resp.Body)
+	if err != nil {
+		return core.Workflow{}, err
+	}
 	if len(body) == 0 {
 		return core.Workflow{}, core.ErrProtocalf("get %s/%s: empty response body", ref.Namespace, ref.Name)
 	}

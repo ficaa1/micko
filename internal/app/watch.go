@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbletea/v2"
 
 	"argo-tui/internal/core"
+	"argo-tui/internal/ui/workflowlist"
 )
 
 const watchQueueCap = 128
@@ -33,14 +34,20 @@ func (m *Root) startWatch() tea.Cmd {
 	m.watchMode = "watch"
 	m.watchAttempt++
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("watch", cancel)
 	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.watchAttempt}
+	m.setInflight("watch", uint64(m.watchAttempt), cancel)
 	ch := make(chan any, watchQueueCap)
+	// The request is built here, on the update loop, not inside the
+	// goroutine. A namespace switch writes both fields from the loop, so
+	// reading them in the goroutine is a data race and can open the watch
+	// against the namespace the reader just left.
+	req := core.WatchRequest{
+		Namespace:       m.deps.namespace,
+		ResourceVersion: m.watchRV,
+	}
+	watcher := m.deps.watcher
 	go func() {
-		err := m.deps.watcher.Watch(ctx, core.WatchRequest{
-			Namespace:       m.deps.namespace,
-			ResourceVersion: m.watchRV,
-		}, func(event core.WatchEvent) error {
+		err := watcher.Watch(ctx, req, func(event core.WatchEvent) error {
 			select {
 			case ch <- event:
 				return nil
@@ -114,6 +121,15 @@ func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
 		if found >= 0 {
 			m.listState.items[found] = e.Summary
 		} else if e.Summary.Ref.UID != "" {
+			// The snapshot cap bounds the collected list. A watch that adds
+			// past it would grow the snapshot without limit while the view
+			// still claimed to hold the whole namespace, so the addition is
+			// dropped and the snapshot says it is incomplete instead.
+			if cap := m.deps.snapshotCap; cap > 0 && len(m.listState.items) >= cap {
+				m.listState.incomplete = true
+				m.listView.SetStatus(workflowlist.StatusIncomplete, "", 0)
+				return nil
+			}
 			m.listState.items = append(m.listState.items, e.Summary)
 		}
 	}
@@ -128,7 +144,7 @@ func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
 		return nil
 	}
-	m.clearInflight("watch")
+	m.clearInflight("watch", uint64(msg.Attempt))
 	if errors.Is(msg.Err, context.Canceled) {
 		return nil
 	}

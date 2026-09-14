@@ -245,6 +245,13 @@ func (m *Manager) run(ctx context.Context) {
 			case err := <-wait:
 				attemptOver()
 				m.clearProc(p)
+				// The forwarded port is gone the moment the process exits.
+				// The operating system is free to hand it to any other
+				// program, so the endpoint is dropped here rather than at
+				// the start of the next attempt.
+				m.mu.Lock()
+				m.endpoint = ""
+				m.mu.Unlock()
 				if stateReady {
 					m.emit(Event{State: StateLost, Message: exitMessage(err), Attempt: attempt})
 				} else {
@@ -256,6 +263,9 @@ func (m *Manager) run(ctx context.Context) {
 				<-wait
 				attemptOver()
 				m.clearProc(p)
+				m.mu.Lock()
+				m.endpoint = ""
+				m.mu.Unlock()
 				m.emit(Event{State: StateStopped, Message: "canceled", Attempt: attempt})
 				return
 			case <-m.done:

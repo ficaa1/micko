@@ -15,6 +15,14 @@ type Clock interface {
 	Now() time.Time
 }
 
+// SystemClock reads the wall clock. Every relative time on screen — a
+// workflow's age, how long a snapshot has been stale — is measured from
+// Now, so a clock that does not move freezes all of them at start.
+type SystemClock struct{}
+
+// Now returns the current UTC time.
+func (SystemClock) Now() time.Time { return time.Now().UTC() }
+
 // deps carries the root model's injected collaborators. The Reader is the
 // frozen core contract; the root model never knows about transport.
 type deps struct {
@@ -43,6 +51,9 @@ func (p *requestIDProvider) newID() uint64 {
 	p.next++
 	return p.next
 }
+
+// last returns the most recently handed out id without consuming one.
+func (p *requestIDProvider) last() uint64 { return p.next }
 
 // command constructors -------------------------------------------------------
 //

@@ -482,11 +482,16 @@ func TestPTYDemoResizeReacts(t *testing.T) {
 	if err := p.Resize(120, 40); err != nil {
 		t.Fatalf("resize up: %v", err)
 	}
-	// Drop the buffered 40x10 "too small" frame so the restore assertion
-	// reflects only the re-laid-out render at the new size.
+	// Drop the frames rendered at the old size. One more can still arrive
+	// after the clear, because the program was already writing it when the
+	// resize landed, so the assertion asks for order rather than absence:
+	// the full layout has to render after the last resize notice.
 	p.ClearScreen()
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return !strings.Contains(s, "too small") && strings.Contains(s, "list: 5 workflows")
+		if last := strings.LastIndex(s, "too small"); last >= 0 {
+			s = s[last:]
+		}
+		return strings.Contains(s, "list: 5 workflows") && !strings.Contains(s, "Resize to at least")
 	}) {
 		t.Fatalf("120x40 did not restore the full layout; screen=%q", p.Screen())
 	}

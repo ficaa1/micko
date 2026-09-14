@@ -138,37 +138,57 @@ func (r *productionReader) auth(req *http.Request) {
 }
 
 // submitWorkflow POSTs the testdata manifest (Argo v4.1.2: POST
-// /api/v1/workflows/{namespace} with the workflow in the request body).
-func (c *e2eClient) submitWorkflow(ctx context.Context, ns, manifestPath string) error {
+// /api/v1/workflows/{namespace} with the workflow inside a create request)
+// and returns the name the server assigned.
+//
+// The fixture uses generateName, so the name is not known until the server
+// answers. Every later step addresses the workflow by that name, including
+// the cleanup delete: a guessed name waits for a workflow that does not
+// exist and leaves the created one behind.
+func (c *e2eClient) submitWorkflow(ctx context.Context, ns, manifestPath string) (string, error) {
 	manifest, err := os.ReadFile(manifestPath)
 	if err != nil {
-		return fmt.Errorf("read fixture: %w", err)
+		return "", fmt.Errorf("read fixture: %w", err)
 	}
 	var document any
 	if err := yaml.Unmarshal(manifest, &document); err != nil {
-		return fmt.Errorf("parse fixture YAML: %w", err)
+		return "", fmt.Errorf("parse fixture YAML: %w", err)
 	}
-	body, err := json.Marshal(document)
+	body, err := json.Marshal(map[string]any{"namespace": ns, "workflow": document})
 	if err != nil {
-		return fmt.Errorf("encode fixture JSON: %w", err)
+		return "", fmt.Errorf("encode fixture JSON: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.base+"/api/v1/workflows/"+ns, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	c.auth(req)
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
+	created, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("submit: HTTP %d: %s", resp.StatusCode, truncate(b))
+		return "", fmt.Errorf("submit: HTTP %d: %s", resp.StatusCode, truncate(created))
 	}
-	return nil
+	if readErr != nil {
+		return "", fmt.Errorf("submit: reading the response failed: %w", readErr)
+	}
+	var answer struct {
+		Metadata struct {
+			Name string `json:"name"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(created, &answer); err != nil {
+		return "", fmt.Errorf("submit: unparseable response: %w", err)
+	}
+	if answer.Metadata.Name == "" {
+		return "", fmt.Errorf("submit: the server named no workflow: %s", truncate(created))
+	}
+	return answer.Metadata.Name, nil
 }
 
 // deleteWorkflow issues DELETE /api/v1/workflows/{ns}/{name} (404 tolerated:

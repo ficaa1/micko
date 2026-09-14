@@ -33,16 +33,21 @@ func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("action", cancel)
 	m.actionAttempt++
 	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.actionAttempt}
+	// The entry is tagged with the attempt the reply will carry, so a late
+	// reply from an earlier attempt cannot retire this one.
+	m.setInflight("action", uint64(m.actionAttempt), cancel)
 	return func() tea.Msg {
+		// Both checks run before anything is sent. A failure here changed
+		// nothing on the server, so the outcome is refused rather than
+		// unknown: there is nothing to go and inspect.
 		actual, err := m.deps.reader.Get(ctx, req.Ref)
 		if err != nil {
-			return actionResultMsg{genStamp: g, Result: unknownAction(req), Err: err}
+			return actionResultMsg{genStamp: g, Result: refusedAction(req), Err: err}
 		}
 		if err := req.Validate(actual.Summary.Ref); err != nil {
-			return actionResultMsg{genStamp: g, Result: unknownAction(req), Err: err}
+			return actionResultMsg{genStamp: g, Result: refusedAction(req), Err: err}
 		}
 		result, err := m.deps.actioner.Execute(ctx, req) // exactly one call
 		if err != nil || result.Outcome == core.ActionUnknown {
@@ -84,6 +89,11 @@ func unknownAction(req core.ActionRequest) core.ActionResult {
 	return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}
 }
 
+// refusedAction reports an action that never left this process.
+func refusedAction(req core.ActionRequest) core.ActionResult {
+	return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionRefused}
+}
+
 // stopObservation bounds how long an accepted Stop is watched for a terminal
 // phase. A graceful Stop runs the workflow's exit handler first, so the phase
 // can lag the accepted request by many seconds.
@@ -109,7 +119,18 @@ func readBack(ctx context.Context, reader core.Reader, ref core.Ref, action core
 	if err != nil {
 		return core.Workflow{}, false, err
 	}
-	if action != core.ActionStop && action != core.ActionTerminate {
+	switch action {
+	case core.ActionStop, core.ActionTerminate:
+		// Handled by the observation loop below.
+	case core.ActionResume:
+		// A resumed workflow is one that no longer holds an open gate.
+		return wf, !wf.Summary.Suspended, nil
+	case core.ActionRetry:
+		// A retried workflow has left its terminal phase.
+		return wf, !terminalPhase(wf.Summary.Phase), nil
+	default:
+		// Resubmit is read back under the new name, so the workflow
+		// existing is the observation.
 		return wf, true, nil
 	}
 	for i := 0; i < stopObservationAttempts && !terminalPhase(wf.Summary.Phase); i++ {
@@ -144,14 +165,15 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.actionAttempt {
 		return nil
 	}
-	m.clearInflight("action")
+	m.clearInflight("action", uint64(msg.Attempt))
 	if m.actionView == nil {
 		return nil
 	}
 	// An error alongside an accepted result describes a failed observation,
 	// not a failed mutation, so the accepted outcome stands. Only a result
 	// that is neither confirmed nor accepted degrades to unknown.
-	if msg.Err != nil && msg.Result.Outcome != core.ActionAccepted && msg.Result.Outcome != core.ActionUnknown {
+	if msg.Err != nil && msg.Result.Outcome != core.ActionAccepted &&
+		msg.Result.Outcome != core.ActionUnknown && msg.Result.Outcome != core.ActionRefused {
 		msg.Result.Outcome = core.ActionUnknown
 	}
 	m.actionView.SetOutcome(msg.Result)
