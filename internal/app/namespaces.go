@@ -19,10 +19,13 @@ import (
 
 // namespacesLoadedMsg carries the candidate names into the update loop.
 type namespacesLoadedMsg struct {
-	Conn  int
-	Names []string
-	Note  string
-	Err   error
+	Conn int
+	// RequestID names the fetch this reply belongs to, so a reply that lost
+	// the race cannot retire the fetch that replaced it.
+	RequestID uint64
+	Names     []string
+	Note      string
+	Err       error
 }
 
 // SetNamespaceSeed records the namespaces the profile names. They are offered
@@ -45,12 +48,13 @@ func (m *Root) openNamespacePicker() tea.Cmd {
 	m.nsView.SetLoading()
 	m.cancelInflight("namespaces")
 	ctx, cancel := context.WithCancel(context.Background())
-	m.setInflight("namespaces", cancel)
+	id := m.ids.newID()
+	m.setInflight("namespaces", id, cancel)
 	lister := m.deps.nsLister
 	gen := m.connGen
 	return func() tea.Msg {
 		names, note, err := lister.ListNamespaces(ctx)
-		return namespacesLoadedMsg{Conn: gen, Names: names, Note: note, Err: err}
+		return namespacesLoadedMsg{Conn: gen, RequestID: id, Names: names, Note: note, Err: err}
 	}
 }
 
@@ -58,7 +62,7 @@ func (m *Root) openNamespacePicker() tea.Cmd {
 // the dialog rather than closing it: the typed entry still works, and closing
 // the dialog would look like the key had failed.
 func (m *Root) handleNamespacesLoaded(msg namespacesLoadedMsg) tea.Cmd {
-	m.clearInflight("namespaces")
+	m.clearInflight("namespaces", msg.RequestID)
 	if msg.Conn != m.connGen || m.nsView == nil {
 		return nil
 	}
