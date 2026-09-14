@@ -21,7 +21,8 @@ import (
 type e2eWorkflowSpec struct {
 	// File is the testdata YAML name (also the submitted manifest).
 	File string
-	// Name is the expected workflow name after submission.
+	// Name is the generateName prefix in the fixture. The server appends a
+	// suffix, so it is a prefix to check, never the name to address.
 	Name string
 	// Namespace is the allowlisted test namespace.
 	Namespace string
@@ -36,23 +37,29 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// 1. Submit the pinned synthetic fixture.
-	if err := client.submitWorkflow(ctx, spec.Namespace, spec.File); err != nil {
+	// 1. Submit the pinned synthetic fixture. The fixture uses
+	// generateName, so the server names the workflow and every later step
+	// addresses it by the name it answers with.
+	name, err := client.submitWorkflow(ctx, spec.Namespace, spec.File)
+	if err != nil {
 		t.Fatalf("submit %s: %v", spec.File, err)
+	}
+	if !strings.HasPrefix(name, spec.Name) {
+		t.Fatalf("the server named the workflow %q, which does not start with %q", name, spec.Name)
 	}
 	t.Cleanup(func() {
 		cctx, ccancel := context.WithTimeout(context.Background(), time.Minute)
 		defer ccancel()
-		_ = client.deleteWorkflow(cctx, spec.Namespace, spec.Name)
+		_ = client.deleteWorkflow(cctx, spec.Namespace, name)
 	})
 
 	// 2. Wait (bounded) for a terminal phase — CMP-01 precondition.
-	phase, err := client.waitForPhase(ctx, spec.Namespace, spec.Name,
+	phase, err := client.waitForPhase(ctx, spec.Namespace, name,
 		[]string{"Succeeded", "Failed", "Error"}, 3*time.Minute)
 	if err != nil {
-		t.Fatalf("workflow %s never reached a terminal phase: %v", spec.Name, err)
+		t.Fatalf("workflow %s never reached a terminal phase: %v", name, err)
 	}
-	t.Logf("workflow %s reached phase %s", spec.Name, phase)
+	t.Logf("workflow %s reached phase %s", name, phase)
 
 	// 3. List via the production Reader (CMP-01 list leg).
 	page, err := client.reader.List(ctx, core.Query{Namespace: spec.Namespace, Limit: 50})
@@ -61,7 +68,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 	}
 	var listed bool
 	for _, it := range page.Items {
-		if it.Ref.Name == spec.Name {
+		if it.Ref.Name == name {
 			listed = true
 			if it.Phase != phase {
 				t.Errorf("listed phase %q != observed %q", it.Phase, phase)
@@ -69,11 +76,11 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 		}
 	}
 	if !listed {
-		t.Errorf("workflow %s missing from list of %d items", spec.Name, len(page.Items))
+		t.Errorf("workflow %s missing from list of %d items", name, len(page.Items))
 	}
 
 	// 4. Detail via the production Reader (CMP-01 detail leg).
-	wf, err := client.reader.Get(ctx, core.Ref{Namespace: spec.Namespace, Name: spec.Name})
+	wf, err := client.reader.Get(ctx, core.Ref{Namespace: spec.Namespace, Name: name})
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -90,11 +97,11 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 	}
 
 	// 6. Delete + verify gone (cleanup contract, test-environment §4.5).
-	if err := client.deleteWorkflow(ctx, spec.Namespace, spec.Name); err != nil {
+	if err := client.deleteWorkflow(ctx, spec.Namespace, name); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if err := client.waitForDeletion(ctx, spec.Namespace, spec.Name, time.Minute); err != nil {
-		t.Errorf("workflow %s still present after delete: %v", spec.Name, err)
+	if err := client.waitForDeletion(ctx, spec.Namespace, name, time.Minute); err != nil {
+		t.Errorf("workflow %s still present after delete: %v", name, err)
 	}
 }
 

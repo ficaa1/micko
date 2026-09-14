@@ -18,35 +18,40 @@ import (
 
 // fakeKubectl installs an executable named kubectl on PATH for one test. The
 // script emits the supplied lines in order, one per invocation, so a test can
-// stage a failed first attempt followed by a successful one. The owner's shell is
-// fish, so scripts written to disk are fish.
+// stage a failed first attempt followed by a successful one.
+//
+// The script is POSIX sh, which every machine that runs this suite has. It
+// used to be fish, and skipped the whole suite where fish was absent: this
+// is the one suite that exercises the port-forward recovery, the production
+// adapter and the action gates together, and on CI it ran nowhere.
 //
 // Each element of scripts is the body for one invocation. A body that does not
 // exit keeps the fake process alive, which is what a healthy forward looks
 // like; the manager kills it on Close.
 func fakeKubectl(t *testing.T, scripts ...string) (dir string, argsFile string) {
 	t.Helper()
-	if _, err := os.Stat("/opt/homebrew/bin/fish"); err != nil {
-		t.Skip("fish is not installed; the fake kubectl needs it")
-	}
 	dir = t.TempDir()
 	argsFile = filepath.Join(dir, "args.log")
 	counter := filepath.Join(dir, "count")
 	var cases strings.Builder
 	for i, body := range scripts {
-		cases.WriteString(fmt.Sprintf("case %d\n%s\n", i+1, body))
+		// The last staged body repeats for any further attempt, so a
+		// recovery loop does not fall off the end of the script.
+		pattern := fmt.Sprintf("%d", i+1)
+		if i == len(scripts)-1 {
+			pattern = "*"
+		}
+		cases.WriteString(fmt.Sprintf("%s)\n%s\n;;\n", pattern, body))
 	}
-	// The last staged body repeats for any further attempt, so a recovery loop
-	// does not fall off the end of the script.
-	script := fmt.Sprintf(`#!/usr/bin/env fish
-echo $argv >> %q
-set -l n 1
-if test -f %q
-    set n (math (cat %q) + 1)
-end
+	script := fmt.Sprintf(`#!/bin/sh
+echo "$@" >> %q
+n=1
+if [ -f %q ]; then
+    n=$(( $(cat %q) + 1 ))
+fi
 echo $n > %q
-switch $n
-%send
+case $n in
+%sesac
 `, argsFile, counter, counter, counter, cases.String())
 	path := filepath.Join(dir, "kubectl")
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
@@ -56,10 +61,10 @@ switch $n
 	return dir, argsFile
 }
 
-// announce is a fish body that prints a kubectl readiness line for port and
+// announce is a shell body that prints a kubectl readiness line for port and
 // then blocks, imitating a healthy forward.
 func announce(port string) string {
-	return fmt.Sprintf("echo \"Forwarding from 127.0.0.1:%s -> 2746\"\nwhile true\nsleep 0.05\nend", port)
+	return fmt.Sprintf("echo \"Forwarding from 127.0.0.1:%s -> 2746\"\nwhile true; do sleep 0.05; done", port)
 }
 
 // syntheticArgo is a loopback Argo Workflows server good enough for the read
