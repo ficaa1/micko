@@ -9,8 +9,8 @@ import (
 // Wrap word-wraps s to a maximum width of width visible terminal columns,
 // breaking at word boundaries. It is the anti-clipping choke point for long
 // untrusted-derived text (error messages, server reasons) that would
-// otherwise run past the right edge of the terminal and get cut off mid-word
-// (live-smoke defect 5).
+// otherwise run past the right edge of the terminal and get cut off
+// mid-word.
 //
 // Rules:
 //   - width <= 0 means "no known width" (the value passed by the test harness

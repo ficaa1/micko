@@ -6,9 +6,9 @@ import (
 	"argo-tui/internal/core"
 )
 
-// runningUnderSkippedWorkflow is the shape from the hands-on notes: a
-// Skipped step whose subtree still holds an approval that ran and a pod
-// that is Running. Argo skips the step itself while its children proceed.
+// runningUnderSkippedWorkflow has a Skipped step whose subtree still holds
+// an approval that ran and a pod that is Running. Argo skips the step itself
+// while its children proceed.
 func runningUnderSkippedWorkflow() core.Workflow {
 	node := func(id, name, typ, phase, boundary string, children ...string) core.Node {
 		return core.Node{
@@ -31,9 +31,9 @@ func runningUnderSkippedWorkflow() core.Workflow {
 	}
 }
 
-// A node that ran must never disappear because an ancestor was skipped.
-// Hiding the skipped parent used to hide the Running pod with it, so the
-// only way to see running work was to press h.
+// A node that ran must never disappear because an ancestor was skipped:
+// hiding the parent would take the running pod with it, leaving h as the
+// only way to see running work.
 func TestFlattenKeepsRunningWorkUnderASkippedParent(t *testing.T) {
 	out := BuildNodeOutline(runningUnderSkippedWorkflow(), OutlineOptions{})
 

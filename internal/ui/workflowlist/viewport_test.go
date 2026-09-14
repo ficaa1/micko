@@ -14,10 +14,10 @@ func lineCount(s string) int {
 	return len(strings.Split(strings.TrimRight(s, "\n"), "\n"))
 }
 
-// TestViewFitsHeightBudget pins the live-smoke defect that motivated this
-// slice: with more rows than the terminal can show, the list rendered every
-// row and pushed the footer (and its key hints) off the screen. The view
-// must never emit more lines than the height it was given.
+// TestViewFitsHeightBudget pins the height budget: with more rows than the
+// terminal can show, rendering every row would push the footer and its key
+// hints off the screen. The view must never emit more lines than the height
+// it was given.
 func TestViewFitsHeightBudget(t *testing.T) {
 	m := tl(t)
 	m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 40)), testkit.FixtureEpoch)

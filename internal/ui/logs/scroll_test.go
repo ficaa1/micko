@@ -21,9 +21,9 @@ func scrollModel(t *testing.T, lines int) *Model {
 	return m
 }
 
-// Scrolling up past the oldest line used to eat rows off the BOTTOM of the
-// pane: the window became rows[0:bottom+1], so each further press showed one
-// line less. The pane must stay full instead.
+// Scrolling up past the oldest line must keep the pane full. Clamping the
+// window to rows[0:bottom+1] instead would eat rows off the BOTTOM, showing
+// one line less on each further press.
 func TestScrollingAboveTheFirstLineKeepsThePaneFull(t *testing.T) {
 	m := scrollModel(t, 60)
 	full := len(m.window())
@@ -89,10 +89,10 @@ func TestGGJumpsToTheOldestRetainedLine(t *testing.T) {
 	}
 }
 
-// pgup used to drive the stored bottom edge to 0 while the renderer still
-// drew a full pane. The screen and the state then disagreed by one page, so
-// arrow-down moved the state and nothing else: the pane looked frozen until
-// the reader pressed down a whole page of times.
+// pgup must not drive the stored bottom edge below what the renderer draws.
+// A full pane on screen against a bottom edge of 0 disagree by one page, and
+// arrow-down then moves the state and nothing else: the pane looks frozen
+// until the reader presses down a whole page of times.
 func TestArrowDownWorksImmediatelyAfterPagingToTheTop(t *testing.T) {
 	m := scrollModel(t, 200)
 	for i := 0; i < 20; i++ {

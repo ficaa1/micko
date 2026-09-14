@@ -254,15 +254,14 @@ func procTCPEstablished(pid int) []string {
 	return out
 }
 
-// --- F: live-smoke integration defect regressions (compiled demo) ------------
+// --- F: compiled-demo behaviour through a PTY --------------------------------
 //
-// These drive the REAL compiled binary through a PTY in --demo mode and pin
-// the behaviours the live smoke test found broken (AGE, list key routing,
-// resize, alternate screen). They fail on the baseline binary and pass once
-// the integrated slice lands (TDD: regressions written before the fix).
+// These drive the REAL compiled binary in --demo mode and pin the behaviours
+// a terminal can break: AGE rendering, list key routing, resize, and the
+// alternate screen.
 
-// Defect 1: AGE must render from the injected clock (not time.Time{} which
-// renders "-" on every row). demo-data-pull started 40m ago → "40m".
+// AGE must render from the injected clock; time.Time{} renders "-" on every
+// row. demo-data-pull started 40m ago → "40m".
 func TestPTYDemoAgeColumnNotEmpty(t *testing.T) {
 	bin := buildBinary(t)
 	p, err := StartPTY(bin, "--demo")
@@ -285,7 +284,7 @@ func TestPTYDemoAgeColumnNotEmpty(t *testing.T) {
 	_, _ = p.Wait()
 }
 
-// Defect 2: list keys must route. "j" moves the selection down and Enter
+// List keys must route. "j" moves the selection down and Enter
 // opens detail for the moved row. Demo default sort (SortPhaseName) puts the
 // single Failed workflow first (nightly-report); "j" moves to row 1
 // (data-pull, the first Running by name).
@@ -326,10 +325,9 @@ func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
 	_, _ = p.Wait()
 }
 
-// Defect item 8 (partial): 'l' opens logs straight from the list, and a single
-// Esc must return to the LIST — never to a never-loaded detail pane ("(no
-// workflow loaded)") or a stale previously-viewed workflow (Q finding
-// t_fa36e201). Repro 1: --demo → j → l → Esc should land back on the list.
+// 'l' opens logs straight from the list, and a single Esc must return to the
+// LIST — never to a never-loaded detail pane ("(no workflow loaded)") or a
+// stale previously-viewed workflow. Path: --demo → j → l → Esc.
 func TestPTYDemoEscFromListOpenedLogsReturnsToList(t *testing.T) {
 	bin := buildBinary(t)
 	p, err := StartPTY(bin, "--demo")
@@ -437,7 +435,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	_, _ = p.Wait()
 }
 
-// Defect 4(a): resize must re-layout. Shrinking to 40x10 shows the resize
+// Resize must re-layout. Shrinking to 40x10 shows the resize
 // notice; growing back to 120x40 clears it (WindowSizeMsg reaches the child).
 func TestPTYDemoResizeReacts(t *testing.T) {
 	bin := buildBinary(t)
@@ -481,7 +479,7 @@ func TestPTYDemoResizeReacts(t *testing.T) {
 	_, _ = p.Wait()
 }
 
-// Defect 4(b): the program must use the alternate screen buffer (enter
+// The program must use the alternate screen buffer (enter
 // sequence \x1b[?1049h in the raw capture) so the layout is stable, and must
 // exit it (\x1b[?1049l) on quit so the terminal is restored.
 func TestPTYDemoUsesAltScreenAndRestores(t *testing.T) {
@@ -534,9 +532,9 @@ func startDemo(t *testing.T, cols, rows int) *PTYProcess {
 	return p
 }
 
-// Defect G1: on a terminal too short for every row, the frame overflowed and
-// the footer — the only place the key hints appear — was pushed off screen.
-// The alternate screen has no scrollback, so those lines were simply gone.
+// On a terminal too short for every row, an overflowing frame pushes the
+// footer — the only place the key hints appear — off screen. The alternate
+// screen has no scrollback, so those lines would simply be gone.
 func TestPTYDemoFooterSurvivesShortTerminal(t *testing.T) {
 	for _, rows := range []int{9, 11, 14} {
 		p := startDemo(t, 100, rows)
@@ -550,8 +548,8 @@ func TestPTYDemoFooterSurvivesShortTerminal(t *testing.T) {
 	}
 }
 
-// Defect G1 (continued): shrinking the terminal while running must re-lay out
-// rather than lose the footer.
+// Shrinking the terminal while running must re-lay out rather than lose the
+// footer.
 func TestPTYDemoShrinkKeepsFooter(t *testing.T) {
 	p := startDemo(t, 120, 40)
 	if err := p.Resize(100, 10); err != nil {
@@ -567,8 +565,8 @@ func TestPTYDemoShrinkKeepsFooter(t *testing.T) {
 	_, _ = p.Wait()
 }
 
-// Defect G2: the footer advertised `? help` on every route while no `?`
-// handler existed anywhere in the binary — the key was inert.
+// The footer advertises `? help` on every route, so a `?` handler has to
+// exist or the key is inert.
 func TestPTYDemoHelpOverlayOpensAndCloses(t *testing.T) {
 	p := startDemo(t, 100, 30)
 	if strings.Contains(p.Screen(), "KEYS") {
@@ -623,7 +621,7 @@ func TestPTYDemoHelpOverlayQClosesWithoutQuitting(t *testing.T) {
 	_, _ = p.Wait()
 }
 
-// Defect G3: a filter matching nothing renders exactly like an empty
+// A filter matching nothing renders exactly like an empty
 // namespace. Esc must clear it and restore the list.
 func TestPTYDemoEscClearsAppliedFilter(t *testing.T) {
 	p := startDemo(t, 100, 30)

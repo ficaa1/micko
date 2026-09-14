@@ -7,10 +7,10 @@ import (
 	"argo-tui/internal/testkit"
 )
 
-// The tick used to be dropped whenever it fired off the list route, which
-// killed the only poll chain. Opening a workflow therefore stopped every
-// refresh for the rest of the session: the reader came back to the list and
-// saw a phase from minutes ago, or an age frozen at the moment they left.
+// The tick carries the only poll chain, so dropping it off the list route
+// would stop every refresh for the rest of the session: the reader returns
+// to the list and sees a phase from minutes ago, or an age frozen at the
+// moment they left.
 func TestTheTickSurvivesLeavingTheListRoute(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}

@@ -271,9 +271,9 @@ func (m *Model) updateNonInput(key tea.KeyPressMsg) {
 			m.Open(core.ActionResume)
 		}
 	case "r":
-		// retry restarts this workflow from its failed nodes. It used to be
-		// a second key for resume, which left the restart the notes asked
-		// for with no key at all.
+		// retry restarts this workflow from its failed nodes. It needs its
+		// own key: resume already has u, and sharing one would leave the
+		// restart unreachable.
 		if m.state == StateMenu {
 			m.Open(core.ActionRetry)
 		}

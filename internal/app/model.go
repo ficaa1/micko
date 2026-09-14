@@ -50,9 +50,8 @@ type Root struct {
 
 	// logsFrom records the route the logs pane was opened from (list via
 	// the 'l' key, or detail), so a single Esc returns to that route
-	// instead of dumping the user onto a never-loaded/stale detail pane
-	// (Q finding t_fa36e201). Zero value beats RouteList, which is the
-	// common origin.
+	// instead of dumping the user onto a never-loaded/stale detail pane.
+	// Zero value beats RouteList, which is the common origin.
 	logsFrom Route
 
 	// size is the last known terminal size.
@@ -94,10 +93,10 @@ type Root struct {
 	// scroll anchor.
 	rawMode bool
 
-	// tickArmed guards the single poll chain. The tick used to be dropped
-	// whenever it fired off the list route, so opening a workflow stopped
-	// every refresh until the reader pressed r. Exactly one chain may be
-	// alive: two of them double the poll rate on every route change.
+	// tickArmed guards the single poll chain. The tick has to be re-armed
+	// on every route, or opening a workflow stops every refresh until the
+	// reader presses r. Exactly one chain may be alive: two of them double
+	// the poll rate on every route change.
 	tickArmed bool
 	rawTop    int
 	// gPending is the armed half of vim's gg while the raw view is up.
@@ -324,8 +323,8 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.Toggle()
 			return m, nil
 		}
-		// q quits globally on every route (live-smoke: global q preserved),
-		// except while the active child owns printable text entry.
+		// q quits globally on every route, except while the active child
+		// owns printable text entry.
 		if key == "q" && !m.textEntryActive() {
 			return m, m.quit()
 		}
@@ -662,9 +661,9 @@ func (m *Root) finishView(f shell.Frame) tea.View {
 		content = strings.Join(shared.ClampLines(lines, m.height), "\n")
 	}
 	v := tea.NewView(content)
-	// Full-window alternate screen (live-smoke defect 4b): the layout is
-	// stable in the alternate buffer, and bubbletea restores the terminal on
-	// every exit/error path (q, Ctrl-C, and any program teardown).
+	// Full-window alternate screen: the layout is stable in the alternate
+	// buffer, and bubbletea restores the terminal on every exit/error path
+	// (q, Ctrl-C, and any program teardown).
 	v.AltScreen = true
 	return v
 }
@@ -793,8 +792,7 @@ func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // back implements Esc semantics: logs -> (origin) -> list. The logs pane
 // returns to the route it was opened from — the list when 'l' was pressed
 // on the list, or the loaded detail when logs were entered from detail —
-// so a single Esc never lands on a never-loaded or stale detail pane
-// (Q finding t_fa36e201).
+// so a single Esc never lands on a never-loaded or stale detail pane.
 func (m *Root) back() tea.Cmd {
 	switch m.route {
 	case RouteLogs:
@@ -1056,9 +1054,9 @@ func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
 }
 
 // resizeChildren propagates a terminal resize to every child view model so
-// the active route and the ones the user can switch to all re-lay out (live-
-// smoke defect 4). The Tea event loop re-renders View after every Update, so
-// mutating child sizes here is sufficient to trigger a responsive redraw.
+// the active route and the ones the user can switch to all re-lay out. The
+// Tea event loop re-renders View after every Update, so mutating child sizes
+// here is sufficient to trigger a responsive redraw.
 func (m *Root) resizeChildren(msg tea.WindowSizeMsg) {
 	m.listView.Update(msg)
 	if m.detailView != nil {
