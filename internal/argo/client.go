@@ -89,7 +89,9 @@ type Options struct {
 	// must return an endpoint equivalent to Server (same scheme and path
 	// prefix); only the host and port may change, as they do when a managed
 	// port-forward recovers onto a new ephemeral local port. An empty or
-	// unparseable return keeps the last known good base.
+	// unparseable return fails the request: the previous port is released
+	// when the forward drops, so reusing it would send the request, and the
+	// credential with it, to whatever now listens there.
 	ResolveServer func() string
 	// UserAgent is sent on every request; the caller owns the version
 	// string. Empty falls back to defaultUserAgent.
@@ -225,24 +227,33 @@ func isLoopback(host string) bool {
 // configured scheme, path prefix and userinfo-free contract: only host and
 // port are adopted from the resolver, and only when they parse and pass the
 // same plain-HTTP loopback rule enforced at construction.
-func (c *Client) baseURL() *url.URL {
+//
+// A resolver that cannot name an endpoint fails the request. The endpoint it
+// resolves is a local forwarded port, and the previous one is released as
+// soon as the forward drops: the operating system is free to hand that port
+// to any other program. Falling back to it would send a request, and with
+// it a bearer token, to whatever now listens there.
+func (c *Client) baseURL() (*url.URL, error) {
 	if c.resolveBase == nil {
-		return c.base
+		return c.base, nil
 	}
 	raw := c.resolveBase()
 	if raw == "" {
-		return c.base
+		return nil, core.NewAPIError(core.ErrUnavailable, 0,
+			"server endpoint is not available (the connection is being re-established)")
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || u.User != nil {
-		return c.base
+		return nil, core.NewAPIError(core.ErrUnavailable, 0,
+			"server endpoint is not usable")
 	}
 	next := *c.base
 	next.Host = u.Host
 	if next.Scheme == "http" && !isLoopback(next.Hostname()) {
-		return c.base
+		return nil, core.NewAPIError(core.ErrUnavailable, 0,
+			"server endpoint is plain HTTP off loopback")
 	}
-	return &next
+	return &next, nil
 }
 
 // setAuthorization attaches the bearer credential. An empty token means the
@@ -258,7 +269,10 @@ func setAuthorization(req *http.Request, token string) {
 
 // newRequest builds an authenticated GET to the appended path.
 func (c *Client) newRequest(ctx context.Context, path string, query url.Values) (*http.Request, error) {
-	base := c.baseURL()
+	base, err := c.baseURL()
+	if err != nil {
+		return nil, err
+	}
 	target := *base
 	target.Path = strings.TrimSuffix(base.Path, "/") + path
 	target.RawQuery = query.Encode()
