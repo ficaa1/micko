@@ -32,7 +32,12 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 		return result, fmt.Errorf("marshal %s action: %w", req.Action, err)
 	}
 	path := "/api/v1/workflows/" + url.PathEscape(req.Ref.Namespace) + "/" + url.PathEscape(req.Ref.Name) + "/" + string(req.Action)
-	base := c.baseURL()
+	base, err := c.baseURL()
+	if err != nil {
+		// Nothing was sent, so the outcome is not unknown: the request was
+		// refused before it left this process.
+		return result, err
+	}
 	target := *base
 	target.Path = stringsTrimSlash(base.Path) + path
 	target.RawQuery = ""
