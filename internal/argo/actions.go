@@ -82,7 +82,11 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 	if err != nil {
 		return result, core.WrapAPIError(core.ErrProtocol, 0, "action outcome unknown: server returned an invalid workflow response; inspect before retrying", err)
 	}
-	result.Outcome = core.ActionConfirmed
+	// The server returned success, so the mutation is applied. Confirmed
+	// means more than that: it means the expected end state was observed.
+	// The transport observes nothing, so the caller's read-back promotes
+	// this.
+	result.Outcome = core.ActionAccepted
 	result.Workflow = &wf
 	result.Response = append(json.RawMessage(nil), responseBody...)
 	ref := wf.Summary.Ref

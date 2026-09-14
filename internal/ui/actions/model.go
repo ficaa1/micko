@@ -146,6 +146,8 @@ func (m *Model) OutcomeLine() string {
 			s += " (phase " + shared.Sanitize(wf.Summary.Phase) + ")"
 		}
 		return s
+	case core.ActionRefused:
+		return verb + " refused — nothing was sent"
 	default:
 		return verb + " outcome unknown"
 	}
