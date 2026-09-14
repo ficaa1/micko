@@ -70,6 +70,7 @@ func helpLines() []string {
 		"",
 		"Detail    tab next section  shift+tab previous",
 		"          h show / hide skipped nodes",
+		"          s sort the nodes tab (started / name / phase)",
 		"          p filter the nodes tab by phase",
 		"          l logs for the selected node",
 		"          v reveal redacted resource values",

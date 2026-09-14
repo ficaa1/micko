@@ -50,6 +50,8 @@ type Model struct {
 	// hideSkipped: hiding skipped branches tidies the tree, while this
 	// replaces the tree with the matching nodes alone.
 	nodePhase NodePhase
+	// nodeSort is the sibling order in the nodes tree, cycled by s.
+	nodeSort NodeSort
 	// nodeCursor is the selected row of the nodes tab; nodeTop is the first
 	// visible row. resourceTop and summaryTop are the scroll anchors of the
 	// tabs that have no cursor.
@@ -72,7 +74,7 @@ type Model struct {
 
 // New builds the detail child model.
 func New() *Model {
-	return &Model{tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, theme: shared.NewTheme(false)}
+	return &Model{tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortStarted, theme: shared.NewTheme(false)}
 }
 
 // SetTheme injects the style set used for node rows.
@@ -191,6 +193,15 @@ func (m *Model) handleKey(key string) tea.Cmd {
 			m.rebuildNodes()
 		}
 		return nil
+	case "s":
+		// Cycle the sibling order in the nodes tree. Like p, it belongs to
+		// that tab only: the summary and the resource have no rows to order.
+		if m.tab == "nodes" {
+			m.nodeSort = m.nodeSort.Next()
+			m.nodeCursor, m.nodeTop = 0, 0
+			m.rebuildNodes()
+		}
+		return nil
 	case "h":
 		// Toggle the skipped branches. A deployment workflow is mostly
 		// skipped nodes, so this is the difference between a readable tree
@@ -230,6 +241,7 @@ func (m *Model) rebuildNodes() {
 	// hiding the skipped branches first would make the Skipped bucket empty
 	// and could drop a match under a hidden parent.
 	hide := m.hideSkipped && m.nodePhase == NodePhaseAll
+	SortOutline(&m.state.Outline, m.nodeSort)
 	m.nodes, m.hiddenSkipped = FlattenOutline(m.state.Outline, hide)
 	m.totalNodes = len(m.nodes)
 	m.nodes = FilterFlatRows(m.nodes, m.nodePhase)
@@ -403,7 +415,7 @@ func (m *Model) PaneTitle() string {
 // Hints is the detail key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
 	if m.tab == "nodes" {
-		return "tab section  h skipped  p phase  l logs  a actions  f raw  r refresh  esc back"
+		return "tab section  h skipped  s sort  p phase  l logs  a actions  f raw  r refresh  esc back"
 	}
 	return "tab section  v reveal  y copy  a actions  f raw  r refresh  esc back"
 }
@@ -488,6 +500,7 @@ func (m *Model) tabStatusLine() string {
 		} else if m.hiddenSkipped > 0 {
 			s += " · " + itoaDetail(m.hiddenSkipped) + " skipped hidden"
 		}
+		s += " · sort " + string(m.nodeSort)
 		if len(m.nodes) > 0 {
 			s += " · " + itoaDetail(m.nodeCursor+1) + "/" + itoaDetail(len(m.nodes))
 		}
