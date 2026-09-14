@@ -898,6 +898,12 @@ func (m *Root) startLogStream(msg OpenLogsMsg) tea.Cmd {
 		Ref:       msg.Ref,
 		PodName:   msg.PodName,
 		Container: msg.Container,
+		// Follow keeps the stream open so a running workflow keeps
+		// delivering. Without it the server closes at the current end of
+		// the log and the reader has to leave and re-enter the view. The
+		// server ends the stream itself once the pod finishes, and back()
+		// cancels it on exit.
+		Follow: true,
 	}
 	return m.deps.streamLogsCmd(ctx, g, id, req)
 }
