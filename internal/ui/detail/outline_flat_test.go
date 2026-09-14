@@ -11,9 +11,8 @@ import (
 	"argo-tui/internal/ui/shared"
 )
 
-// gateWorkflow is the shape the hands-on notes complained about: a handful of
-// nodes that ran, buried under a pile of skipped branches, with one Suspend
-// node holding everything up.
+// gateWorkflow has a handful of nodes that ran, buried under a pile of
+// skipped branches, with one Suspend node holding everything up.
 func gateWorkflow() core.Workflow {
 	node := func(id, name, typ, phase, boundary string, children ...string) core.Node {
 		return core.Node{
@@ -167,10 +166,9 @@ func TestLogsKeyIsInertOnANodeWithoutAPod(t *testing.T) {
 	t.Fatal("never reached the Suspend node")
 }
 
-// h is the answer to "forty lines of skipped nodes"; the status line has to
-// say what is hidden, or the tree looks truncated instead of filtered. Once
-// nothing is hidden the line says nothing: the footer already carries the key,
-// and repeating it there was the "unnecessary words" the notes pointed at.
+// h answers "forty lines of skipped nodes"; the status line has to say what
+// is hidden, or the tree looks truncated instead of filtered. Once nothing is
+// hidden the line says nothing, because the footer already carries the key.
 func TestHideSkippedToggleIsReported(t *testing.T) {
 	m := New()
 	m.SetTheme(shared.NewTheme(true))
