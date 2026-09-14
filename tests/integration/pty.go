@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -80,8 +81,24 @@ func StartPTYSize(cols, rows int, binPath string, args ...string) (*PTYProcess, 
 	// Deterministic terminal environment: TERM with a color-capable value
 	// (probe-verified rendering path), NO_COLOR empty for color assertions,
 	// and the pty as controlling terminal of a fresh session.
-	env := os.Environ()
-	env = append(env, "TERM=xterm-256color", "NO_COLOR=", "COLORTERM=")
+	// Point every config candidate at an empty directory. DefaultConfigPath
+	// tries $XDG_CONFIG_HOME, then $HOME/.config, then os.UserConfigDir,
+	// so both variables have to move. A developer's real config would
+	// otherwise make a no-argument start connect to their live Argo server
+	// and wait for keys, instead of refusing as the test expects.
+	noConfig := emptyConfigHome()
+	env := make([]string, 0, len(os.Environ())+5)
+	for _, kv := range os.Environ() {
+		switch {
+		case strings.HasPrefix(kv, "HOME="),
+			strings.HasPrefix(kv, "XDG_CONFIG_HOME="):
+			continue
+		}
+		env = append(env, kv)
+	}
+	env = append(env,
+		"TERM=xterm-256color", "NO_COLOR=", "COLORTERM=",
+		"HOME="+noConfig, "XDG_CONFIG_HOME="+noConfig)
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
 	if err := cmd.Start(); err != nil {
@@ -109,6 +126,25 @@ func StartPTYSize(cols, rows int, binPath string, args ...string) (*PTYProcess, 
 	go p.readLoop()
 	return p, nil
 }
+
+// emptyConfigHome returns a directory that holds no argo-tui config, created
+// once per test binary.
+func emptyConfigHome() string {
+	configHomeOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "argo-tui-noconfig-")
+		if err != nil {
+			// Fall back to a path that cannot hold a config either.
+			dir = filepath.Join(os.TempDir(), "argo-tui-noconfig-missing")
+		}
+		configHome = dir
+	})
+	return configHome
+}
+
+var (
+	configHomeOnce sync.Once
+	configHome     string
+)
 
 // readLoop accumulates output until EOF (process exit).
 func (p *PTYProcess) readLoop() {
@@ -195,6 +231,18 @@ func (p *PTYProcess) Wait() (int, error) {
 		return -1, err
 	}
 	return 0, nil
+}
+
+// WaitFor is Wait with a deadline. A process that never exits fails the test
+// in seconds instead of holding the whole package until the go test timeout.
+func (p *PTYProcess) WaitFor(d time.Duration) (int, error) {
+	select {
+	case <-p.done:
+		return p.Wait()
+	case <-time.After(d):
+		p.Kill()
+		return -1, fmt.Errorf("process did not exit within %s", d)
+	}
 }
 
 // Exited reports whether the process has exited (non-blocking).

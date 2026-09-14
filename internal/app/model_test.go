@@ -293,7 +293,7 @@ func TestBackRouteCancelsStreamAndDetail(t *testing.T) {
 	t.Log("stream cancel signal observed asynchronously; asserting not-running state only")
 }
 
-// --- X: Esc-from-logs origin tracking (Q finding t_fa36e201) -------------------
+// --- X: Esc-from-logs origin tracking ----------------------------------------
 
 // Back from logs opened directly from the list route (the real 'l' key flow)
 // must return to the LIST, not to a never-loaded detail pane.
@@ -486,7 +486,7 @@ func TestStreamContextCancellationDistinguished(t *testing.T) {
 	}
 }
 
-// --- F: live-smoke integration defects (RED-GREEN) ---------------------------
+// --- F: full-terminal layout and routing -------------------------------------
 
 // loadDemoList runs the demo list collection and applies the result so the
 // root's list route is populated and ready for key/size/render assertions.
@@ -504,7 +504,7 @@ func loadDemoList(t *testing.T) *Root {
 	return m
 }
 
-// Defect 2: list-route keys (j/k/arrows/Enter/l//s) must reach the list child
+// List-route keys (j/k/arrows/Enter/l//s) must reach the list child
 // while q/ctrl+c keep quitting globally.
 func TestListKeysMoveSelectionAndEnterOpensDetail(t *testing.T) {
 	m := loadDemoList(t)
@@ -543,7 +543,7 @@ func TestListKeysMoveSelectionAndEnterOpensDetail(t *testing.T) {
 	}
 }
 
-// Defect 2: q must still quit globally on the list route (browsing context).
+// q must still quit globally on the list route (browsing context).
 func TestListQStillQuitsAfterRouting(t *testing.T) {
 	m := loadDemoList(t)
 	next, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
@@ -553,9 +553,9 @@ func TestListQStillQuitsAfterRouting(t *testing.T) {
 	}
 }
 
-// Defect 2: q must quit globally even after routing into a child route
-// (detail), not just on the list — the live operator expects q to quit from
-// anywhere and the child must not swallow it.
+// q must quit globally even after routing into a child route (detail), not
+// just on the list: the operator expects q to quit from anywhere, and the
+// child must not swallow it.
 func TestGlobalQQuitsOnDetailRoute(t *testing.T) {
 	m := loadDemoList(t)
 	// Open detail for the selected row (enter → intent message round-trip).
@@ -575,7 +575,7 @@ func TestGlobalQQuitsOnDetailRoute(t *testing.T) {
 	}
 }
 
-// Defect 4(a): WindowSizeMsg must propagate to the list child so it re-lays
+// WindowSizeMsg must propagate to the list child so it re-lays
 // out (resize notice, wider columns) instead of keeping the initial size.
 func TestListResizePropagatesToChild(t *testing.T) {
 	m := loadDemoList(t)
@@ -593,7 +593,7 @@ func TestListResizePropagatesToChild(t *testing.T) {
 	}
 }
 
-// Defect 1: AGE must render from the injected clock, not time.Time{} (which
+// AGE must render from the injected clock, not time.Time{} (which
 // makes every AGE a "-").
 func TestListAgeRendersUsingInjectedClock(t *testing.T) {
 	m := loadDemoList(t)
@@ -603,7 +603,7 @@ func TestListAgeRendersUsingInjectedClock(t *testing.T) {
 	}
 }
 
-// Defect 2 (manual refresh): the root must convert the list child's refresh
+// Manual refresh: the root must convert the list child's refresh
 // intent (r) into a new collection and clear any terminal watch state — the
 // child emits workflowlist.RefreshListMsg; the root alone turns intents into
 // effects (plan §4), same as it does OpenWorkflowMsg/OpenLogsMsg.
@@ -627,7 +627,7 @@ func TestRefreshIntentStartsNewListAndClearsWatchState(t *testing.T) {
 	}
 }
 
-// Defect 2 (text-entry isolation): while the list search input is focused,
+// Text-entry isolation: while the list search input is focused,
 // printable keys must reach the search buffer — including "r", which outside
 // search means "manual refresh". The root's r intercept must be gated on
 // SearchOn or typing a query containing "r" would fire a refresh instead.
@@ -662,7 +662,7 @@ func TestSearchEntryIsolatesRLetter(t *testing.T) {
 	}
 }
 
-// Defect 2 (text-entry + global keys): 'q' and Ctrl-C must still quit from
+// Text entry and global keys: 'q' and Ctrl-C must still quit from
 // inside search editing (they are global), while every other letter stays in
 // the search buffer.
 func TestSearchEntryKeepsGlobalQuitKeys(t *testing.T) {
@@ -687,7 +687,7 @@ func TestSearchEntryKeepsGlobalQuitKeys(t *testing.T) {
 	}
 }
 
-// Defect 5: a long list error must wrap at the terminal width instead of
+// A long list error must wrap at the terminal width instead of
 // being clipped on a single line.
 func TestListErrorTextWrapsAtWidth(t *testing.T) {
 	m := loadDemoList(t)

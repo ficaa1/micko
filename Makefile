@@ -1,10 +1,10 @@
-# argo-tui developer commands (v0.2.0).
+# argo-tui developer commands.
 # Go toolchain: pinned go 1.25.x (go.mod toolchain go1.25.4). This Makefile
 # covers local builds and tests only.
 
 GO ?= go
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
-LDFLAGS ?= -X main.mainCommit=$(COMMIT)
+LDFLAGS ?= -X argo-tui/internal/buildinfo.Commit=$(COMMIT)
 
 .PHONY: build test test-race vet lint-fmt smoke clean
 

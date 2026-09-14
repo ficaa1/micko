@@ -1,0 +1,74 @@
+# Builds and publishes a GitHub release when a v* tag is pushed.
+#
+# The tag must match the version the binary reports, or the job stops before
+# it publishes: the tag and the binary must never announce different
+# versions. internal/buildinfo.Version is the source of that number.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.25.4"
+
+jobs:
+  release:
+    name: build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+
+      - name: Check
+        run: |
+          gofmt -l cmd internal tests | tee /tmp/unformatted
+          test ! -s /tmp/unformatted
+          go vet ./...
+          go test ./... -count=1
+
+      - name: Tag must match the version the binary reports
+        id: version
+        run: |
+          go build -o /tmp/argo-tui ./cmd/argo-tui
+          built="$(/tmp/argo-tui --version | awk '{print $2}')"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$built" ]; then
+            echo "::error::tag $GITHUB_REF_NAME says $tag, the binary says $built (set internal/buildinfo.Version)"
+            exit 1
+          fi
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          commit="$(git rev-parse --short HEAD)"
+          for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
+              -ldflags "-s -w -X argo-tui/internal/buildinfo.Commit=$commit" \
+              -o dist/argo-tui ./cmd/argo-tui
+            tar -czf "dist/argo-tui_${VERSION}_${os}_${arch}.tar.gz" \
+              -C dist argo-tui \
+              -C "$GITHUB_WORKSPACE" README.md CHANGELOG.md
+            rm dist/argo-tui
+          done
+          cd dist && sha256sum ./*.tar.gz > checksums.txt && cat checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*.tar.gz dist/checksums.txt
