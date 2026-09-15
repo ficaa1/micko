@@ -55,8 +55,14 @@ jobs:
             https://github.com/tsl0922/ttyd/releases/download/1.7.4/ttyd.x86_64
           sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
           ttyd --version
-          go install github.com/charmbracelet/vhs@v0.12.0
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          # The released binary, not `go install`: vhs 0.12.0 needs a newer Go
+          # than the one this repository builds with, and the version of Go
+          # that compiles the recorder has nothing to do with argo-tui.
+          curl -fsSL -o /tmp/vhs.tar.gz \
+            https://github.com/charmbracelet/vhs/releases/download/v0.12.0/vhs_0.12.0_Linux_x86_64.tar.gz
+          tar -xzf /tmp/vhs.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/vhs_0.12.0_Linux_x86_64/vhs /usr/local/bin/vhs
+          vhs --version
 
       - name: Record
         run: |
