@@ -5,8 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
 // testRef is the synthetic workflow every model test attaches to.

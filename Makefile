@@ -4,9 +4,9 @@
 
 GO ?= go
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
-LDFLAGS ?= -X argo-tui/internal/buildinfo.Commit=$(COMMIT)
+LDFLAGS ?= -X github.com/ficaa1/argo-tui/internal/buildinfo.Commit=$(COMMIT)
 
-.PHONY: build test test-race vet lint-fmt smoke clean
+.PHONY: build test test-race vet lint-fmt smoke demo clean
 
 # Build the binary into dist/.
 build:
@@ -35,6 +35,16 @@ smoke: build
 	./dist/argo-tui --config /dev/null --profile no-such-profile >/dev/null 2>&1; \
 	if [ $$? -ne 1 ]; then echo "expected exit 1 for an unknown profile"; exit 1; fi; \
 	echo "smoke OK"
+
+# Re-record the README GIF from docs/demo.tape. Needs vhs on PATH with a ttyd
+# and ffmpeg it agrees with, and on macOS the terminal running it needs Screen
+# Recording permission: vhs takes its frames through a headless browser, and
+# without that permission every frame comes back empty and no file is written.
+#
+# The demo workflow records the same tape on a runner with a pinned toolchain,
+# which is the path that does not depend on any of that.
+demo: build
+	vhs docs/demo.tape
 
 clean:
 	rm -rf dist

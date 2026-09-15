@@ -1,6 +1,6 @@
 package actions
 
-import "argo-tui/internal/core"
+import "github.com/ficaa1/argo-tui/internal/core"
 
 // Options makes the safety posture explicit for struct-based callers.
 type Options struct {

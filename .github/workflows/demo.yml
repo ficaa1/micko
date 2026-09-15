@@ -1,0 +1,93 @@
+# Records the README GIF from docs/demo.tape and commits it.
+#
+# Recording runs here rather than on a laptop because vhs needs a matching
+# ttyd and ffmpeg and, on macOS, Screen Recording permission for the terminal:
+# it takes its frames through a headless browser. This runner has a pinned
+# toolchain and no such permission to grant, so the recording is reproducible.
+#
+# It runs when the tape changes, and on demand. The tape plays the demo
+# dataset, so it needs no cluster. Every run produces new frames and therefore
+# a new commit; it commits only the GIF, so it cannot trigger itself.
+
+name: demo
+
+on:
+  push:
+    paths:
+      - docs/demo.tape
+      - .github/workflows/demo.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.25.4"
+  # 0.12.0 captures no frames at all on two unrelated machines: it reports
+  # success, never calls ffmpeg, and writes nothing.
+  VHS_VERSION: "0.10.0"
+  TTYD_VERSION: "1.7.4"
+
+jobs:
+  record:
+    name: record docs/demo.gif
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+
+      # The tape runs ./dist/argo-tui, which is what `make build` produces.
+      - name: Build
+        run: go build -o dist/argo-tui ./cmd/argo-tui
+
+      # The toolchain is installed by hand rather than through vhs-action,
+      # because that action fetches the newest ffmpeg. vhs 0.12.0 writes no
+      # file at all with a very new ffmpeg, and it reports success while doing
+      # it. The distribution's ffmpeg is a version it agrees with.
+      #
+      # ttyd is pinned for the same reason: vhs drives the terminal through
+      # it, and a newer ttyd drops the connection on the first key.
+      - name: Install the recording toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-jetbrains-mono
+          ffmpeg -version | head -1
+          curl -fsSL -o /tmp/ttyd \
+            "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64"
+          sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
+          ttyd --version
+          # The released binary, not `go install`: vhs 0.12.0 needs a newer Go
+          # than the one this repository builds with, and the version of Go
+          # that compiles the recorder has nothing to do with argo-tui.
+          curl -fsSL -o /tmp/vhs.tar.gz \
+            https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/vhs_${VHS_VERSION}_Linux_x86_64.tar.gz
+          tar -xzf /tmp/vhs.tar.gz -C /tmp
+          sudo install -m 0755 "/tmp/vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
+          vhs --version
+
+      # VHS_NO_SANDBOX: vhs takes its frames by screenshotting the terminal
+      # through a headless chromium, and that browser cannot use its sandbox
+      # here. Without it vhs captures nothing, reports success and writes no
+      # file — the same silent failure as a version it cannot drive.
+      - name: Record
+        run: |
+          set -euo pipefail
+          VHS_NO_SANDBOX=true vhs docs/demo.tape
+          ls -l docs/demo.gif
+
+      - name: Commit the recording
+        run: |
+          set -euo pipefail
+          test -s docs/demo.gif
+          git add docs/demo.gif
+          if git diff --cached --quiet; then
+            echo "the recording is unchanged"
+            exit 0
+          fi
+          git config user.name "argo-tui demo"
+          git config user.email "noreply@github.com"
+          git commit -m "docs: re-record the demo GIF"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

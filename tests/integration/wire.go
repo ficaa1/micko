@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // WireClientConfig configures the test wire client.

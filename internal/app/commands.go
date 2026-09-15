@@ -7,7 +7,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // Clock abstracts time for deterministic tests (fake clock injection).

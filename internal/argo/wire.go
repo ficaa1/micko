@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // listEnvelope mirrors GET /api/v1/workflows/{namespace}. metadata.continue

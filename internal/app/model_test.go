@@ -10,9 +10,9 @@ import (
 	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
-	"argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
 )
 
 // testRoot builds a root model against a fake reader + fake clock.

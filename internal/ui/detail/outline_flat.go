@@ -5,8 +5,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // cellWidth measures a string in terminal cells, so a wide rune in a node

@@ -1,6 +1,6 @@
 package shared
 
-import "argo-tui/internal/core"
+import "github.com/ficaa1/argo-tui/internal/core"
 
 // OpenWorkflowMsg asks the root to load a workflow detail.
 type OpenWorkflowMsg struct{ Ref core.Ref }

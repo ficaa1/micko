@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // View renders the full list pane. Layout (plan §2):
