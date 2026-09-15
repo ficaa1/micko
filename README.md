@@ -24,25 +24,20 @@ reading credentials. Press `?` for help and `q` to quit.
 
 ## Install
 
-Homebrew:
+The repository is private, so `go install` and Homebrew cannot fetch it: both
+need anonymous access. The release job still builds the binaries, the
+checksums and the tap formula, so both paths start working on the day the
+repository becomes public.
+
+Until then, download a binary from
+[the releases page](https://github.com/ficaa1/argo-tui/releases) while signed
+in, verify it and put it on your PATH:
 
 ```sh
-brew install ficaa1/tap/argo-tui
-```
-
-Go:
-
-```sh
-go install github.com/ficaa1/argo-tui/cmd/argo-tui@latest
-```
-
-Or download a binary and its checksum from
-[the releases page](https://github.com/ficaa1/argo-tui/releases), verify it and
-put it on your PATH:
-
-```sh
-sha256sum -c checksums.txt --ignore-missing
-tar -xzf argo-tui_<version>_<os>_<arch>.tar.gz
+gh release download v0.3.1 --repo ficaa1/argo-tui \
+  --pattern '*_darwin_arm64.tar.gz' --pattern checksums.txt
+shasum -a 256 -c checksums.txt --ignore-missing   # sha256sum -c on Linux
+tar -xzf argo-tui_0.3.1_darwin_arm64.tar.gz
 ```
 
 ## Connect
