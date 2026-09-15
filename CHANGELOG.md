@@ -21,7 +21,9 @@
   "unknown", because it matches no commit.
 - Releases now update the `ficaa1/homebrew-tap` formula from the checksums the
   release job produced, so `brew install ficaa1/tap/argo-tui` works.
-- Added `docs/demo.tape` and the README recording it produces (`make demo`).
+- Added `docs/demo.tape` and the README recording it produces. `make demo`
+  records it locally; the `demo` workflow records it on a runner with a pinned
+  vhs toolchain, which is the path that needs nothing installed.
 
 ## 0.2.1
 
