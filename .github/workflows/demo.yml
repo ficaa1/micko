@@ -38,9 +38,31 @@ jobs:
       - name: Build
         run: go build -o dist/argo-tui ./cmd/argo-tui
 
-      - uses: charmbracelet/vhs-action@v2
-        with:
-          path: docs/demo.tape
+      # vhs is installed by hand rather than through vhs-action, because that
+      # action installs the newest ffmpeg over the one the image ships. vhs
+      # 0.12.0 writes no file at all with a very new ffmpeg, and it reports
+      # success while doing it. The image's own ffmpeg is a version it agrees
+      # with, so it is left alone.
+      #
+      # ttyd is pinned for the same reason: vhs drives the terminal through
+      # it, and a newer ttyd drops the connection on the first key.
+      - name: Install ttyd and vhs
+        run: |
+          set -euo pipefail
+          ffmpeg -version | head -1
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-jetbrains-mono
+          curl -fsSL -o /tmp/ttyd \
+            https://github.com/tsl0922/ttyd/releases/download/1.7.4/ttyd.x86_64
+          sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
+          ttyd --version
+          go install github.com/charmbracelet/vhs@v0.12.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Record
+        run: |
+          vhs docs/demo.tape
+          ls -l docs/demo.gif
 
       - name: Commit the recording
         run: |
