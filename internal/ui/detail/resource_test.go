@@ -3,8 +3,8 @@ package detail
 import (
 	"testing"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
 // Resource-redaction tests (DET-12 ⛨): parameter/output values are

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 func consequence(action core.Action) string {

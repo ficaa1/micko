@@ -7,9 +7,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
-	"argo-tui/internal/ui/namespaces"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/ui/namespaces"
 )
 
 func nsRoot(t *testing.T, extra ...string) (*Root, *testkit.FakeReader) {

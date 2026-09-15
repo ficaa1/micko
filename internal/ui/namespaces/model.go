@@ -15,7 +15,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // SwitchMsg is the picker's only output: the namespace the reader chose.

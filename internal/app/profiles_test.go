@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
-	"argo-tui/internal/ui/profiles"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/ui/profiles"
 )
 
 // fakeConnector stands in for the real one, which starts a kubectl

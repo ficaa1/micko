@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
 // TestOpenLogsRequestsFollow asserts the log stream asks the server to keep

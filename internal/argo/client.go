@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // Client is the production core.Reader. It is safe for concurrent use.

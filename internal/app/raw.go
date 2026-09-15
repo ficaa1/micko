@@ -7,8 +7,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/ui/shared"
-	"argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
 )
 
 // raw.go holds the three commands that take content OUT of the program: the

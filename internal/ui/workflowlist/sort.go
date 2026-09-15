@@ -11,7 +11,7 @@ import (
 	"sort"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // SortKey selects the sort order. Sorting is always deterministic and

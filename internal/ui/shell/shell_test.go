@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // plain builds a frame with a no-color theme so tests compare visible cells

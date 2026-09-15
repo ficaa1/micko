@@ -15,7 +15,7 @@ import (
 	"sort"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // OutlineRow is one node row in the hierarchical outline.

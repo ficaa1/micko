@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // DetailViewState carries everything the detail renderer needs, derived

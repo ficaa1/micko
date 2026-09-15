@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"sort"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 var _ core.NamespaceLister = (*Client)(nil)

@@ -12,8 +12,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/app"
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/app"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // --- distinguishable list states (LIST-08, UI-07) -------------------------------
