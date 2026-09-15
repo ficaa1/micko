@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -361,4 +362,41 @@ func DefaultConfigPath() (string, error) {
 		}
 	}
 	return candidates[0], nil
+}
+
+// ProfileSummary is one row of the profile picker: the name to connect by,
+// and enough of the profile to tell two clusters apart on screen. It carries
+// no token material, because the picker is rendered.
+type ProfileSummary struct {
+	Name      string
+	Server    string
+	Namespace string
+}
+
+// ListProfiles reports the profiles a config file declares, sorted by name,
+// and the profile named by currentProfile.
+//
+// It parses the file without validating it. The picker has to list a broken
+// profile too: the reader needs to see the name to learn that choosing it
+// fails, and a file with one bad profile must not hide the good ones. Load
+// does the validation, when a profile is actually chosen.
+func ListProfiles(cfgData []byte) (profiles []ProfileSummary, current string, err error) {
+	if len(cfgData) == 0 {
+		return nil, "", nil
+	}
+	var f File
+	if err := yaml.Unmarshal(cfgData, &f); err != nil {
+		return nil, "", fmt.Errorf("config: parse: %w", err)
+	}
+	names := make([]string, 0, len(f.Profiles))
+	for name := range f.Profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]ProfileSummary, 0, len(names))
+	for _, name := range names {
+		p := f.Profiles[name]
+		out = append(out, ProfileSummary{Name: name, Server: p.Server, Namespace: p.Namespace})
+	}
+	return out, f.CurrentProfile, nil
 }

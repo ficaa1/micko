@@ -91,11 +91,17 @@ func (m *Model) footerPosition() string {
 func (m *Model) frameLines(now time.Time, reserve int) []string {
 	lines := strings.Split(m.toolbarView(), "\n")
 
-	wName, wPhase, wAge, wDur := m.colWidths()
+	wName, wPhase, wAge, wDur, wMsg := m.colWidths()
 	head := padRight("NAME", wName) + "  " +
 		padRight("PHASE", wPhase) + "  " +
 		padLeft("AGE", wAge) + "  " +
 		padRight("DURATION", wDur)
+	if wMsg > 0 {
+		// The last column is not padded out. The rows do not pad it either,
+		// so padding only the head would put a run of trailing spaces on one
+		// line of every screen, which a mouse selection then copies.
+		head += "  " + truncateRight("MESSAGE", wMsg)
+	}
 	lines = append(lines, m.theme.Header.Render(head))
 
 	if len(m.rows) == 0 {
@@ -152,7 +158,7 @@ func (m *Model) window(chromeLines int) (start, end int) {
 // rowLine renders one table row with its phase styling (or the selection
 // highlight, which must win so the selected row is never ambiguous).
 func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
-	wName, wPhase, wAge, wDur := m.colWidths()
+	wName, wPhase, wAge, wDur, wMsg := m.colWidths()
 	name := sanitizeOne(r.Ref.Name)
 	// Symbol AND word AND color: a mono terminal, NO_COLOR and a color-blind
 	// reader all keep two of the three channels (UI-03/07). A workflow parked
@@ -165,8 +171,8 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 		padRight(truncateRight(phase, wPhase), wPhase) + "  " +
 		padLeft(ageText(r, now), wAge) + "  " +
 		padRight(durationText(r), wDur)
-	if m.width >= 100 && msg != "" {
-		line += "  " + truncateRight(msg, maxString(10, m.width-wName-wPhase-wAge-wDur-14))
+	if wMsg > 0 && msg != "" {
+		line += "  " + truncateRight(msg, wMsg)
 	}
 	if selected {
 		return m.theme.Selected.Render(line)
@@ -344,8 +350,18 @@ func (m *Model) searchLineView() string {
 	return b.String()
 }
 
-// colWidths computes column widths from the terminal size.
-func (m *Model) colWidths() (name, phase, age, dur int) {
+// colWidths computes the column widths for the current pane width.
+//
+// The first four are fixed: each one holds a value whose longest form is
+// known, so widening the pane cannot make them more useful. msg is what is
+// left after them, and it is the only column that grows. A failure message is
+// the one cell with no natural length, and the reader is usually reading the
+// list to find out why something failed.
+//
+// msg of zero means the pane is too narrow to carry the column at all. A
+// message clipped to a few cells shows no more than the fact that a message
+// exists, and costs the NAME column the width that does show something.
+func (m *Model) colWidths() (name, phase, age, dur, msg int) {
 	name = 30
 	// The PHASE cell holds "symbol space word"; the longest phase word is
 	// "Succeeded" (9), so 11 is the narrowest width that never truncates a
@@ -362,8 +378,23 @@ func (m *Model) colWidths() (name, phase, age, dur int) {
 		age = 6
 		dur = 8
 	}
+	// Three two-cell gaps separate the four fixed columns, and a fourth
+	// separates the message from them.
+	msg = m.width - (name + phase + age + dur + colGap*3) - colGap
+	// Under 80 columns the fixed columns are already clipping names and
+	// durations. Spending what is left on a fifth column would clip them
+	// further to show a fragment of a sentence.
+	if m.width < 80 || msg < minMessageWidth {
+		msg = 0
+	}
 	return
 }
+
+// colGap is the run of spaces between two columns.
+const colGap = 2
+
+// minMessageWidth is the narrowest message column worth rendering.
+const minMessageWidth = 12
 
 func maxString(a, b int) int {
 	if a > b {

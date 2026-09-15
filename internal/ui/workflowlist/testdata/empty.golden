@@ -1,6 +1,6 @@
 WORKFLOWS
 Search: (none)  / to filter by name  Phase: All  Sort: phase, newest first
-NAME                            PHASE              AGE  DURATION 
+NAME                            PHASE              AGE  DURATION   MESSAGE
 no workflows in this namespace yet
 
 enter open  l logs  / search  s sort  p phase  n namespace  r refresh  ? help

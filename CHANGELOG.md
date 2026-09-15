@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added the profile picker. Started with no `--profile` and no `--server`,
+  argo-tui opens it instead of connecting to whichever profile the config file
+  names last, and `P` reopens it at any time. Switching profile is a full
+  reconnection: every in-flight request is canceled, the snapshot is dropped
+  and the port-forward is closed before the next one starts.
+- Added an empty state to the profile picker: with no config file it shows the
+  path to write, a profile that connects, and `--demo`.
+- The workflow list's MESSAGE column now takes all the width the fixed columns
+  leave, instead of a fixed share that stopped short of the pane edge.
+
 ## 0.2.1
 
 - Fixed the detail view never refreshing on its own: a superseded reply left
