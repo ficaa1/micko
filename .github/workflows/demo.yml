@@ -77,9 +77,12 @@ jobs:
           exit $st
           SH
           chmod +x /tmp/wrap/ffmpeg
-          PATH=/tmp/wrap:$PATH vhs docs/demo.tape
+          echo "--- browsers vhs could drive ---"
+          which google-chrome google-chrome-stable chromium chromium-browser || true
+          ls -l "$HOME/.cache/rod/browser" 2>/dev/null || echo "no rod browser cache"
+          VHS_NO_SANDBOX=true PATH=/tmp/wrap:$PATH vhs docs/demo.tape
           echo "--- what vhs asked ffmpeg to do ---"
-          cat /tmp/ffmpeg.log 2>/dev/null || echo "vhs never called ffmpeg"
+          head -40 /tmp/ffmpeg.log 2>/dev/null || echo "vhs never called ffmpeg"
           echo "--- docs ---"
           ls -l docs/
           test -s docs/demo.gif
