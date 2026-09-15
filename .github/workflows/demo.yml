@@ -1,0 +1,52 @@
+# Records the README GIF from docs/demo.tape and commits it.
+#
+# Recording runs here rather than on a laptop because vhs needs a matching
+# ttyd and ffmpeg and, on macOS, Screen Recording permission for the terminal:
+# it takes its frames through a headless browser. This runner has a pinned
+# toolchain and no such permission to grant, so the recording is reproducible.
+#
+# Manual dispatch only. The tape plays the demo dataset, so it needs no
+# cluster, but every run produces new frames and therefore a new commit.
+
+name: demo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.25.4"
+
+jobs:
+  record:
+    name: record docs/demo.gif
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+
+      # The tape runs ./dist/argo-tui, which is what `make build` produces.
+      - name: Build
+        run: go build -o dist/argo-tui ./cmd/argo-tui
+
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/demo.tape
+
+      - name: Commit the recording
+        run: |
+          set -euo pipefail
+          test -s docs/demo.gif
+          git add docs/demo.gif
+          if git diff --cached --quiet; then
+            echo "the recording is unchanged"
+            exit 0
+          fi
+          git config user.name "argo-tui demo"
+          git config user.email "noreply@github.com"
+          git commit -m "docs: re-record the demo GIF"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
