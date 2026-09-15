@@ -23,6 +23,10 @@ permissions:
 
 env:
   GO_VERSION: "1.25.4"
+  # 0.12.0 captures no frames at all on two unrelated machines: it reports
+  # success, never calls ffmpeg, and writes nothing.
+  VHS_VERSION: "0.10.0"
+  TTYD_VERSION: "1.7.4"
 
 jobs:
   record:
@@ -52,16 +56,16 @@ jobs:
           sudo apt-get install -y -qq ffmpeg fonts-jetbrains-mono
           ffmpeg -version | head -1
           curl -fsSL -o /tmp/ttyd \
-            https://github.com/tsl0922/ttyd/releases/download/1.7.4/ttyd.x86_64
+            "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64"
           sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
           ttyd --version
           # The released binary, not `go install`: vhs 0.12.0 needs a newer Go
           # than the one this repository builds with, and the version of Go
           # that compiles the recorder has nothing to do with argo-tui.
           curl -fsSL -o /tmp/vhs.tar.gz \
-            https://github.com/charmbracelet/vhs/releases/download/v0.12.0/vhs_0.12.0_Linux_x86_64.tar.gz
+            https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/vhs_${VHS_VERSION}_Linux_x86_64.tar.gz
           tar -xzf /tmp/vhs.tar.gz -C /tmp
-          sudo install -m 0755 /tmp/vhs_0.12.0_Linux_x86_64/vhs /usr/local/bin/vhs
+          sudo install -m 0755 "/tmp/vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
           vhs --version
 
       - name: Record
@@ -81,6 +85,7 @@ jobs:
           which google-chrome google-chrome-stable chromium chromium-browser || true
           ls -l "$HOME/.cache/rod/browser" 2>/dev/null || echo "no rod browser cache"
           VHS_NO_SANDBOX=true PATH=/tmp/wrap:$PATH vhs docs/demo.tape
+          echo "vhs exit=$?"
           echo "--- what vhs asked ffmpeg to do ---"
           head -40 /tmp/ffmpeg.log 2>/dev/null || echo "vhs never called ffmpeg"
           echo "--- docs ---"
