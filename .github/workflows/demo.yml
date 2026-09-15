@@ -38,20 +38,19 @@ jobs:
       - name: Build
         run: go build -o dist/argo-tui ./cmd/argo-tui
 
-      # vhs is installed by hand rather than through vhs-action, because that
-      # action installs the newest ffmpeg over the one the image ships. vhs
-      # 0.12.0 writes no file at all with a very new ffmpeg, and it reports
-      # success while doing it. The image's own ffmpeg is a version it agrees
-      # with, so it is left alone.
+      # The toolchain is installed by hand rather than through vhs-action,
+      # because that action fetches the newest ffmpeg. vhs 0.12.0 writes no
+      # file at all with a very new ffmpeg, and it reports success while doing
+      # it. The distribution's ffmpeg is a version it agrees with.
       #
       # ttyd is pinned for the same reason: vhs drives the terminal through
       # it, and a newer ttyd drops the connection on the first key.
-      - name: Install ttyd and vhs
+      - name: Install the recording toolchain
         run: |
           set -euo pipefail
-          ffmpeg -version | head -1
           sudo apt-get update -qq
-          sudo apt-get install -y -qq fonts-jetbrains-mono
+          sudo apt-get install -y -qq ffmpeg fonts-jetbrains-mono
+          ffmpeg -version | head -1
           curl -fsSL -o /tmp/ttyd \
             https://github.com/tsl0922/ttyd/releases/download/1.7.4/ttyd.x86_64
           sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
