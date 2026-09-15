@@ -58,15 +58,18 @@ jobs:
       - name: build
         run: go build -o dist/argo-tui ./cmd/argo-tui
 
+      # Starting with no arguments opens the profile picker, which needs a
+      # terminal. This runner has none, so the smoke check is the path that
+      # refuses before anything starts: a profile no config file names.
       - name: smoke
         run: |
           ./dist/argo-tui --version
           set +e
-          ./dist/argo-tui >/dev/null 2>&1
+          ./dist/argo-tui --config /dev/null --profile no-such-profile >/dev/null 2>&1
           status=$?
           set -e
           if [ "$status" -ne 1 ]; then
-            echo "::error::non-demo start exited with $status, want 1"
+            echo "::error::an unknown profile exited with $status, want 1"
             exit 1
           fi
 
