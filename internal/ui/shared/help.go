@@ -58,6 +58,7 @@ func helpLines() []string {
 		"",
 		"Global    q quit        ctrl+c quit        ? help",
 		"          esc back / close",
+		"          P switch profile (cluster)",
 		"          f raw full-screen view (no borders, easy to copy)",
 		"          y copy to clipboard              o open in Argo UI",
 		"",

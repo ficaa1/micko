@@ -9,6 +9,7 @@ import (
 
 	"argo-tui/internal/core"
 	"argo-tui/internal/testkit"
+	"argo-tui/internal/ui/shared"
 )
 
 // renderCells returns the column text for a summary (view formatting rules).
@@ -106,5 +107,54 @@ func TestWideUnicodeAlignment(t *testing.T) {
 	}
 	if offsets[0] != offsets[1] {
 		t.Fatalf("phase columns misaligned with wide unicode (cells): %v\n%s", offsets, v)
+	}
+}
+
+// The message column takes whatever the fixed columns leave. A failure message
+// is the one cell with no natural length, and a wider terminal should show
+// more of it rather than the same clipped fragment.
+func TestTheMessageColumnGrowsWithThePane(t *testing.T) {
+	m := New(shared.NewTheme(true), false)
+	prev := 0
+	for _, w := range []int{100, 140, 200} {
+		m.SetSize(w, 20)
+		_, _, _, _, msg := m.colWidths()
+		if msg <= prev {
+			t.Fatalf("width %d: message column = %d, want more than %d", w, msg, prev)
+		}
+		prev = msg
+	}
+}
+
+// The row must fit the pane. A line wider than the pane wraps inside the
+// border and pushes a second copy of every row onto the screen.
+func TestARowNeverOverflowsThePane(t *testing.T) {
+	row := core.Summary{
+		Ref:     core.Ref{Name: strings.Repeat("n", 120), Namespace: "argo", UID: "u1"},
+		Phase:   "Failed",
+		Message: strings.Repeat("m", 400),
+	}
+	m := New(shared.NewTheme(true), false)
+	for _, w := range []int{60, 80, 100, 120, 200} {
+		m.SetSize(w, 20)
+		m.SetItems([]core.Summary{row}, testkit.FixtureEpoch)
+		for _, line := range m.BodyLines(testkit.FixtureEpoch) {
+			if !strings.Contains(line, "NAME") && !strings.Contains(line, row.Ref.Name[:8]) {
+				continue // the toolbar and status lines are the shell's to fit
+			}
+			if got := ansi.StringWidth(line); got > w {
+				t.Errorf("width %d: a table line is %d cells wide:\n%q", w, got, line)
+			}
+		}
+	}
+}
+
+// A pane too narrow to carry a readable message drops the column instead of
+// spending the width on a fragment that only says a message exists.
+func TestANarrowPaneDropsTheMessageColumn(t *testing.T) {
+	m := New(shared.NewTheme(true), false)
+	m.SetSize(70, 20)
+	if _, _, _, _, msg := m.colWidths(); msg != 0 {
+		t.Errorf("message column = %d at width 70, want it dropped", msg)
 	}
 }
