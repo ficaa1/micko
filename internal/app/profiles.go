@@ -107,6 +107,13 @@ func (m *Root) openProfilePicker() tea.Cmd {
 	if m.profView == nil {
 		return nil
 	}
+	// Without a connector nothing could be connected to, so the dialog would
+	// open on an empty list and invite the reader to write a config file that
+	// this session would not read. The demo is the case that reaches here.
+	if m.connector == nil {
+		m.flash = "this session has no profiles to switch between"
+		return nil
+	}
 	cursor := m.profileCurrent
 	if cursor == "" {
 		cursor = m.profileCursor
