@@ -1,4 +1,4 @@
-module argo-tui
+module github.com/ficaa1/argo-tui
 
 go 1.25.0
 

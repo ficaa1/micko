@@ -7,7 +7,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/ui/logs"
+	"github.com/ficaa1/argo-tui/internal/ui/logs"
 )
 
 // pipe.go hands the retained log lines to another program.

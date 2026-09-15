@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
 // updateGolden regenerates golden files when -update is passed

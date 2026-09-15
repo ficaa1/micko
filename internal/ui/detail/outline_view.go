@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // renderOutlinePane renders the outline rows as an indented text pane.
