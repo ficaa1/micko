@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
 // View tests: the composed detail view (summary | nodes | resource tabs)

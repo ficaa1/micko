@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/buildinfo"
+	"github.com/ficaa1/argo-tui/internal/buildinfo"
 )
 
 // demoRows is the demo list in the order the default sort produces: phase
@@ -34,7 +34,7 @@ func buildBinary(t *testing.T) string {
 		t.Skipf("ET-3 unavailable: /dev/ptmx missing on this host (%v)", err)
 	}
 	bin := "/tmp/argo-tui-e1-" + strings.ReplaceAll(t.Name(), "/", "_")
-	cmd := exec.Command("go", "build", "-o", bin, "argo-tui/cmd/argo-tui")
+	cmd := exec.Command("go", "build", "-o", bin, "github.com/ficaa1/argo-tui/cmd/argo-tui")
 	cmd.Dir = projectRoot()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build argo-tui: %v\n%s", err, out)

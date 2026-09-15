@@ -18,7 +18,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // minBorderWidth is the narrowest terminal that still gets a border. Below

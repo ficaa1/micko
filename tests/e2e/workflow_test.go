@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // e2eWorkflowSpec identifies one testdata fixture for the journey.

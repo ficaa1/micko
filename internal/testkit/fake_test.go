@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 func TestFakeReaderListFilterAndOrder(t *testing.T) {

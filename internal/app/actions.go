@@ -8,7 +8,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 type actionResultMsg struct {

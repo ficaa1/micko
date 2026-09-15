@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 	"gopkg.in/yaml.v3"
 )
 
