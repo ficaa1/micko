@@ -14,13 +14,16 @@
 - Licensed under the GNU General Public License version 3.
 - CI now builds and tests on macOS as well as Linux, so the platform argo-tui
   is used on is the platform it is checked on.
-- The module is now `github.com/ficaa1/argo-tui`, so `go install` works. The
-  old path was not fetchable.
+- The module is now `github.com/ficaa1/argo-tui`, which is the path
+  `go install` needs. The old path could never be fetched. While the
+  repository is private no proxy can read either path.
 - A binary built without an injected commit now reports the revision Go
   recorded, instead of "unknown". A build from a dirty tree still says
   "unknown", because it matches no commit.
 - Releases now update the `ficaa1/homebrew-tap` formula from the checksums the
-  release job produced, so `brew install ficaa1/tap/argo-tui` works.
+  release job produced, so the formula can never name a build the job did not
+  verify. `brew install ficaa1/tap/argo-tui` downloads from the release, so it
+  starts working when the repository becomes public.
 - Added `docs/demo.tape` and the README recording it produces. `make demo`
   records it locally; the `demo` workflow records it on a runner with a pinned
   vhs toolchain, which is the path that needs nothing installed.
