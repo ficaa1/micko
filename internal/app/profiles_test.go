@@ -273,3 +273,17 @@ func mustConnect(t *testing.T, c *fakeConnector, name string) *Connection {
 	}
 	return conn
 }
+
+// A session with no connector — the demo — has nothing to switch to. Opening
+// the dialog there would invite the reader to write a config file this session
+// would never read.
+func TestPIsRefusedWithNothingToConnectTo(t *testing.T) {
+	m := NewRoot(&testkit.FakeReader{}, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Second)
+	m.Update(tea.KeyPressMsg{Code: 'P', Text: "P"})
+	if m.profileDialogOpen() {
+		t.Fatal("P opened a picker with nothing to connect to")
+	}
+	if m.flash == "" {
+		t.Error("P did nothing and said nothing")
+	}
+}
