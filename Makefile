@@ -26,10 +26,14 @@ vet:
 lint-fmt:
 	@out=$$($(GO)fmt -l .); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 
+# A profile that no config file names is refused before anything starts, so
+# this runs without a terminal. Starting with no arguments opens the profile
+# picker, which needs one.
 smoke: build
 	./dist/argo-tui --version
-	@printf 'argo-tui: non-demo start must refuse\n'; ./dist/argo-tui >/dev/null 2>&1; \
-	if [ $$? -ne 1 ]; then echo "expected exit 1 without --demo"; exit 1; fi; \
+	@printf 'argo-tui: an unknown profile must be refused\n'; \
+	./dist/argo-tui --config /dev/null --profile no-such-profile >/dev/null 2>&1; \
+	if [ $$? -ne 1 ]; then echo "expected exit 1 for an unknown profile"; exit 1; fi; \
 	echo "smoke OK"
 
 clean:
