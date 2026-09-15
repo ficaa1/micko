@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0
+## 0.3.1
 
 - Added the profile picker. Started with no `--profile` and no `--server`,
   argo-tui opens it instead of connecting to whichever profile the config file
