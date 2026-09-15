@@ -20,6 +20,29 @@ also stamps the Git commit into the binary. `--version` prints both version
 and commit. The demo uses synthetic data without connecting to a cluster or
 reading credentials. Press `?` for help and `q` to quit.
 
+## Install
+
+Homebrew:
+
+```sh
+brew install ficaa1/tap/argo-tui
+```
+
+Go:
+
+```sh
+go install github.com/ficaa1/argo-tui/cmd/argo-tui@latest
+```
+
+Or download a binary and its checksum from
+[the releases page](https://github.com/ficaa1/argo-tui/releases), verify it and
+put it on your PATH:
+
+```sh
+sha256sum -c checksums.txt --ignore-missing
+tar -xzf argo-tui_<version>_<os>_<arch>.tar.gz
+```
+
 ## Connect
 
 Copy [the example config](docs/argo-tui.config.example.yaml) to
@@ -181,3 +204,8 @@ release history.
 
 [Hands-on testing notes](docs/handson-testing.md) preserve operator feedback
 and the changes made during live use.
+
+## License
+
+argo-tui is free software under the GNU General Public License version 3; see
+[LICENSE](LICENSE). Copyright (C) 2026 Filip Biljic.

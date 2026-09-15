@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Added the profile picker. Started with no `--profile` and no `--server`,
   argo-tui opens it instead of connecting to whichever profile the config file
@@ -11,6 +11,17 @@
   path to write, a profile that connects, and `--demo`.
 - The workflow list's MESSAGE column now takes all the width the fixed columns
   leave, instead of a fixed share that stopped short of the pane edge.
+- Licensed under the GNU General Public License version 3.
+- CI now builds and tests on macOS as well as Linux, so the platform argo-tui
+  is used on is the platform it is checked on.
+- The module is now `github.com/ficaa1/argo-tui`, so `go install` works. The
+  old path was not fetchable.
+- A binary built without an injected commit now reports the revision Go
+  recorded, instead of "unknown". A build from a dirty tree still says
+  "unknown", because it matches no commit.
+- Releases now update the `ficaa1/homebrew-tap` formula from the checksums the
+  release job produced, so `brew install ficaa1/tap/argo-tui` works.
+- Added `docs/demo.tape` and the README recording it produces (`make demo`).
 
 ## 0.2.1
 
