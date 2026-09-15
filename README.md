@@ -4,6 +4,8 @@ A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/wor
 Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
 resubmit or stop a run with explicit confirmation.
 
+![argo-tui browsing the demo dataset](docs/demo.gif)
+
 ## Build and try it
 
 Requires Go 1.25 or later; the module selects Go 1.25.4 as its toolchain.
