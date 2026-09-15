@@ -5,12 +5,17 @@
 # it takes its frames through a headless browser. This runner has a pinned
 # toolchain and no such permission to grant, so the recording is reproducible.
 #
-# Manual dispatch only. The tape plays the demo dataset, so it needs no
-# cluster, but every run produces new frames and therefore a new commit.
+# It runs when the tape changes, and on demand. The tape plays the demo
+# dataset, so it needs no cluster. Every run produces new frames and therefore
+# a new commit; it commits only the GIF, so it cannot trigger itself.
 
 name: demo
 
 on:
+  push:
+    paths:
+      - docs/demo.tape
+      - .github/workflows/demo.yml
   workflow_dispatch:
 
 permissions:
