@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,12 +19,38 @@ func TestSmokeVersionString(t *testing.T) {
 	}
 }
 
-// TestSmokeRunRejectsNonDemo pins the slice-6 contract at the executable
-// level: without an explicit flag, the entrypoint never falls back to
-// network construction; it refuses to start the TUI (exit 1).
-func TestSmokeRunRejectsNonDemo(t *testing.T) {
-	if code := run([]string{}); code != 1 {
-		t.Errorf("run() exit = %d, want 1 (no implicit connection without --demo)", code)
+// A named profile is an instruction to connect, so the entrypoint connects
+// before it starts the TUI and reports a failure on stderr with exit 1. This
+// also pins that a profile that is not in the file is refused by name rather
+// than opening a session against nothing.
+func TestRunRejectsAnUnknownProfile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("profiles:\n  dev:\n    server: https://argo.example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"--config", path, "--profile", "missing"}); code != 1 {
+		t.Errorf("run(--profile missing) exit = %d, want 1", code)
+	}
+}
+
+// directConnect decides between connecting and opening the picker. Only the
+// two flags that name a destination connect; the rest change how a profile is
+// used, not which one, so they must leave the choice to the reader.
+func TestOnlyADestinationFlagSkipsThePicker(t *testing.T) {
+	cases := []struct {
+		name            string
+		profile, server string
+		want            bool
+	}{
+		{name: "no flags", want: false},
+		{name: "profile", profile: "dev", want: true},
+		{name: "server", server: "https://argo.example.com", want: true},
+		{name: "both", profile: "dev", server: "https://argo.example.com", want: true},
+	}
+	for _, c := range cases {
+		if got := directConnect(c.profile, c.server); got != c.want {
+			t.Errorf("%s: directConnect(%q, %q) = %v, want %v", c.name, c.profile, c.server, got, c.want)
+		}
 	}
 }
 

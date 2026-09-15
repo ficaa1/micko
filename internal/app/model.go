@@ -13,6 +13,7 @@ import (
 	"argo-tui/internal/ui/detail"
 	"argo-tui/internal/ui/logs"
 	"argo-tui/internal/ui/namespaces"
+	"argo-tui/internal/ui/profiles"
 	"argo-tui/internal/ui/shared"
 	"argo-tui/internal/ui/shell"
 	"argo-tui/internal/ui/workflowlist"
@@ -126,6 +127,18 @@ type Root struct {
 	// profile configured, offered alongside whatever the server reports.
 	nsView *namespaces.Model
 	nsSeed []string
+
+	// profView is the profile picker dialog (the P key). conn is the live
+	// connection behind it, held so a switch can close the old transport and
+	// so the lifecycle channel can be re-armed; connector builds the next one.
+	profView  *profiles.Model
+	conn      *Connection
+	connector Connector
+	// profileCurrent is the connected profile, empty before the first
+	// connection. profileCursor is the file's currentProfile, which places the
+	// cursor on the first open and selects nothing by itself.
+	profileCurrent string
+	profileCursor  string
 }
 
 // SetWebURL records the Argo UI address links are built from.
@@ -208,10 +221,12 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 		inflight:        map[string]inflightOp{},
 		theme:           shared.NewTheme(false),
 		nsView:          namespaces.New(shared.NewTheme(false)),
+		profView:        profiles.New(shared.NewTheme(false)),
 		listView:        workflowlist.New(shared.NewTheme(false), false),
 		detailView:      newDetailView(),
 		actionView:      actions.NewWithOptions(core.Ref{}, opts),
 		actionOpts:      opts,
+		profileCurrent:  opts.Profile,
 		connectionReady: true,
 		connectionFresh: true,
 	}
@@ -230,6 +245,10 @@ func newDetailView() *detail.Model {
 // SetConnectionState directly; it sends this message through the program
 // instead and the single-threaded update loop applies it.
 type ConnectionStateMsg struct {
+	// Conn is the connection generation the event belongs to. A profile
+	// switch bumps the generation, so an event from the forward that was just
+	// closed cannot mark the new connection lost.
+	Conn   int
 	Ready  bool
 	Target string
 }
@@ -253,9 +272,15 @@ func (m *Root) SetConnectionState(ready bool, target string) {
 // compile-time interface checks.
 var _ tea.Model = (*Root)(nil)
 
-// Init implements tea.Model. It starts the first list collection.
+// Init implements tea.Model. It starts the first list collection, or opens
+// the profile picker when no profile was chosen on the command line: with no
+// connection there is nothing to collect, and the first question a session
+// with a config file of several clusters has to answer is which one.
 func (m *Root) Init() tea.Cmd {
-	return m.startListGeneration()
+	if !m.connected() {
+		return m.openProfilePicker()
+	}
+	return tea.Batch(m.startListGeneration(), m.waitConnStates())
 }
 
 // armTick schedules the next poll unless one is already scheduled. Every
@@ -314,6 +339,15 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.namespaceDialogOpen() {
 			return m, m.nsView.Update(msg)
 		}
+		// The profile picker is the same kind of dialog, and it too owns
+		// printable keys. Esc closes it — except before the first connection,
+		// where there is no session behind it to return to, so esc quits.
+		if m.profileDialogOpen() {
+			if key == "esc" && !m.connected() && !m.profView.Connecting() {
+				return m, m.quit()
+			}
+			return m, m.profView.Update(msg)
+		}
 		// The help overlay is a dialog (shared.KeyCtxDialog): while it is
 		// open it owns every remaining key, so the view behind it cannot
 		// move. q closes it instead of quitting; only Ctrl-C, handled
@@ -365,6 +399,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// search match, which is the vim meaning a reader expects there.
 		if m.route == RouteList && key == "n" && !m.textEntryActive() {
 			return m, m.openNamespacePicker()
+		}
+		// P switches profile. Capital, because p is the phase filter on the
+		// list and on the nodes tab. It is bound on every route: a reader who
+		// has drilled into a workflow can still change cluster, and the switch
+		// returns them to the list anyway.
+		if key == "P" && !m.textEntryActive() {
+			return m, m.openProfilePicker()
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
 			return m, m.startDetailFetch()
@@ -437,8 +478,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startWatch()
 
 	case ConnectionStateMsg:
+		// An event stamped with an older generation belongs to a forward that
+		// has already been closed by a profile switch.
+		if msg.Conn != m.connGen {
+			return m, nil
+		}
 		m.SetConnectionState(msg.Ready, msg.Target)
-		return m, nil
+		return m, m.waitConnStates()
 
 	case actionResultMsg:
 		return m, m.handleActionResult(msg)
@@ -470,6 +516,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case namespaces.SwitchMsg:
 		return m, m.switchNamespace(msg.Namespace)
+
+	case profiles.SwitchMsg:
+		return m, m.switchProfile(msg.Profile)
+
+	case profileConnectedMsg:
+		return m, m.handleProfileConnected(msg)
 
 	case logs.PipeIntent:
 		return m, m.startPipe(msg)
@@ -542,6 +594,15 @@ func (m *Root) View() tea.View {
 		f.Hints = "y confirm  n cancel  esc close"
 		f.Help = ""
 		f.Body = splitLines(m.actionView.View().Content)
+		return m.finishView(f)
+	}
+	if m.profileDialogOpen() {
+		f.Title = "Profile"
+		f.Route = "profile"
+		f.Hints = m.profView.Hints()
+		f.Help = ""
+		m.profView.SetSize(f.BodyWidth(), f.BodyHeight())
+		f.Body = m.profView.BodyLines()
 		return m.finishView(f)
 	}
 	if m.namespaceDialogOpen() {
@@ -620,6 +681,9 @@ func (m *Root) serverLabel() string {
 	if m.actionOpts.Demo {
 		return "synthetic demo"
 	}
+	if !m.connected() {
+		return "no profile"
+	}
 	return m.actionOpts.Server
 }
 
@@ -697,6 +761,10 @@ func staleActionReason(connected bool) string {
 func (m *Root) listSummary() string {
 	st := m.listState
 	switch {
+	case !m.connected():
+		// The picker is on top of this pane. An "empty" list behind it would
+		// read as a cluster with no workflows.
+		return "list: no profile connected"
 	case st.loading && len(st.items) == 0:
 		return "list: loading..."
 	case st.lastErr != nil && len(st.items) == 0:
@@ -873,6 +941,11 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 // startListGeneration cancels any prior list, bumps nothing (list runs per
 // connection generation), and starts a fresh single-flight collection.
 func (m *Root) startListGeneration() tea.Cmd {
+	// Before a profile is chosen there is no reader to collect from. The
+	// picker is on screen; the list waits for it.
+	if !m.connected() {
+		return nil
+	}
 	m.cancelInflight("list")
 	m.listState.loading = true
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1092,6 +1165,12 @@ func (m *Root) resizeChildren(msg tea.WindowSizeMsg) {
 // renderer restores the terminal (alternate screen) on the way out.
 func (m *Root) quit() tea.Cmd {
 	m.cancelAll()
+	// The transport outlives the update loop unless it is released here: a
+	// kubectl port-forward is a child process, and quitting without closing it
+	// leaves it running against a terminal that is gone.
+	if m.conn != nil && m.conn.Close != nil {
+		m.conn.Close()
+	}
 	m.quitting = true
 	return tea.Quit
 }

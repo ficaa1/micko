@@ -353,3 +353,66 @@ func TestDefaultConfigPathPrefersXDG(t *testing.T) {
 		t.Fatalf("DefaultConfigPath = %q, want %q", got, want)
 	}
 }
+
+// The picker lists every profile the file names, sorted, so the order on
+// screen does not depend on Go's map iteration.
+func TestListProfilesIsSortedAndNamesCurrent(t *testing.T) {
+	y := `currentProfile: prod
+profiles:
+  prod:
+    server: https://prod.example.com
+    namespace: argo
+  dev:
+    server: https://dev.example.com
+    namespace: workflows
+`
+	got, current, err := ListProfiles([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != "prod" {
+		t.Errorf("current = %q, want prod", current)
+	}
+	if len(got) != 2 || got[0].Name != "dev" || got[1].Name != "prod" {
+		t.Fatalf("profiles = %+v, want dev then prod", got)
+	}
+	if got[0].Server != "https://dev.example.com" || got[0].Namespace != "workflows" {
+		t.Errorf("dev = %+v, want the server and namespace from the file", got[0])
+	}
+}
+
+// A profile that Load would reject is still listed. The reader needs to see
+// the name to learn that choosing it fails, and one broken profile must not
+// hide the good ones.
+func TestListProfilesKeepsAProfileLoadWouldReject(t *testing.T) {
+	y := `profiles:
+  broken:
+    namespace: argo
+  good:
+    server: https://argo.example.com
+    namespace: argo
+    tokenEnv: ARGO_TOKEN
+`
+	got, _, err := ListProfiles([]byte(y))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("profiles = %+v, want both listed", got)
+	}
+	if _, err := Load([]byte(y), Options{Profile: "broken"}); err == nil {
+		t.Error("Load accepted the profile the picker only lists")
+	}
+}
+
+// No config file is not an error. The picker opens empty and says where a file
+// should go, which is more use than a refusal to start.
+func TestListProfilesAcceptsAnEmptyFile(t *testing.T) {
+	got, current, err := ListProfiles(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 || current != "" {
+		t.Errorf("ListProfiles(nil) = %+v, %q; want nothing", got, current)
+	}
+}

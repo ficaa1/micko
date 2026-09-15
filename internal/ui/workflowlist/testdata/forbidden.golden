@@ -1,8 +1,8 @@
 WORKFLOWS
 Search: (none)  / to filter by name  Phase: All  Sort: phase, newest first  forbidden: workflows list forbidden
-NAME                            PHASE              AGE  DURATION 
+NAME                            PHASE              AGE  DURATION   MESSAGE
 fixture-wf-0004                 ✗ Error             2m  -        
-fixture-wf-0003                 ✗ Failed            3m  -        
+fixture-wf-0003                 ✗ Failed            3m  -          synthetic fa…
 fixture-wf-0001                 ● Running           5m  -        
 fixture-wf-0000                 ○ Pending           6m  -        
 fixture-wf-0002                 ✓ Succeeded         4m  -        
