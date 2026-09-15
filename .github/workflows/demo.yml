@@ -68,29 +68,15 @@ jobs:
           sudo install -m 0755 "/tmp/vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
           vhs --version
 
+      # VHS_NO_SANDBOX: vhs takes its frames by screenshotting the terminal
+      # through a headless chromium, and that browser cannot use its sandbox
+      # here. Without it vhs captures nothing, reports success and writes no
+      # file — the same silent failure as a version it cannot drive.
       - name: Record
         run: |
-          set -uo pipefail
-          mkdir -p /tmp/wrap
-          cat > /tmp/wrap/ffmpeg <<'SH'
-          #!/bin/sh
-          echo "=== ffmpeg $* ===" >> /tmp/ffmpeg.log
-          /usr/bin/ffmpeg "$@" 2>> /tmp/ffmpeg.log
-          st=$?
-          echo "=== exit $st ===" >> /tmp/ffmpeg.log
-          exit $st
-          SH
-          chmod +x /tmp/wrap/ffmpeg
-          echo "--- browsers vhs could drive ---"
-          which google-chrome google-chrome-stable chromium chromium-browser || true
-          ls -l "$HOME/.cache/rod/browser" 2>/dev/null || echo "no rod browser cache"
-          VHS_NO_SANDBOX=true PATH=/tmp/wrap:$PATH vhs docs/demo.tape
-          echo "vhs exit=$?"
-          echo "--- what vhs asked ffmpeg to do ---"
-          head -40 /tmp/ffmpeg.log 2>/dev/null || echo "vhs never called ffmpeg"
-          echo "--- docs ---"
-          ls -l docs/
-          test -s docs/demo.gif
+          set -euo pipefail
+          VHS_NO_SANDBOX=true vhs docs/demo.tape
+          ls -l docs/demo.gif
 
       - name: Commit the recording
         run: |
