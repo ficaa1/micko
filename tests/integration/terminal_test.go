@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/buildinfo"
+	"github.com/ficaa1/argo-tui/internal/buildinfo"
 )
 
 // demoRows is the demo list in the order the default sort produces: phase
@@ -34,7 +34,7 @@ func buildBinary(t *testing.T) string {
 		t.Skipf("ET-3 unavailable: /dev/ptmx missing on this host (%v)", err)
 	}
 	bin := "/tmp/argo-tui-e1-" + strings.ReplaceAll(t.Name(), "/", "_")
-	cmd := exec.Command("go", "build", "-o", bin, "argo-tui/cmd/argo-tui")
+	cmd := exec.Command("go", "build", "-o", bin, "github.com/ficaa1/argo-tui/cmd/argo-tui")
 	cmd.Dir = projectRoot()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build argo-tui: %v\n%s", err, out)
@@ -48,6 +48,17 @@ func buildBinary(t *testing.T) string {
 func projectRoot() string {
 	wd, _ := os.Getwd()
 	return wd + "/../.."
+}
+
+// detailShows reports whether the detail route for wf is on the screen.
+//
+// It looks for the workflow's uid in the summary body, not for the pane's
+// border title. The title shares its line with the pane's right-hand summary,
+// and the renderer repaints only the cells that changed, so a capture taken
+// between the loading frame and the loaded one can hold the two spliced
+// together with the title unreadable. The uid line is written whole.
+func detailShows(screen, wf string) bool {
+	return strings.Contains(screen, "synthetic-uid-"+wf)
 }
 
 // waitScreen polls the scrubbed screen until cond is true or timeout.
@@ -465,7 +476,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 		t.Fatalf("send j/enter: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "Detail "+demoRows[1])
+		return detailShows(s, demoRows[1])
 	}) {
 		t.Fatalf("detail A never rendered; screen=%q", p.Screen())
 	}
@@ -497,7 +508,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
 		screen := s
 		return strings.Contains(screen, "list: 5 workflows") &&
-			!strings.Contains(screen, "Detail "+demoRows[1])
+			!detailShows(screen, demoRows[1])
 	}) {
 		t.Fatalf("Esc from logs B did not return to the list without stale Detail demo-data-pull (A); screen=%q", p.Screen())
 	}

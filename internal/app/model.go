@@ -8,15 +8,15 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/actions"
-	"argo-tui/internal/ui/detail"
-	"argo-tui/internal/ui/logs"
-	"argo-tui/internal/ui/namespaces"
-	"argo-tui/internal/ui/profiles"
-	"argo-tui/internal/ui/shared"
-	"argo-tui/internal/ui/shell"
-	"argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/actions"
+	"github.com/ficaa1/argo-tui/internal/ui/detail"
+	"github.com/ficaa1/argo-tui/internal/ui/logs"
+	"github.com/ficaa1/argo-tui/internal/ui/namespaces"
+	"github.com/ficaa1/argo-tui/internal/ui/profiles"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/ui/shell"
+	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
 )
 
 // Root is the top-level Tea model: it owns routing, generations,

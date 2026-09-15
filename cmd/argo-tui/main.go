@@ -13,12 +13,12 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/app"
-	"argo-tui/internal/buildinfo"
-	"argo-tui/internal/config"
-	"argo-tui/internal/session"
-	"argo-tui/internal/testkit"
-	"argo-tui/internal/ui/actions"
+	"github.com/ficaa1/argo-tui/internal/app"
+	"github.com/ficaa1/argo-tui/internal/buildinfo"
+	"github.com/ficaa1/argo-tui/internal/config"
+	"github.com/ficaa1/argo-tui/internal/session"
+	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/ui/actions"
 )
 
 // mainVersion and mainCommit expose the build identity to the smoke test

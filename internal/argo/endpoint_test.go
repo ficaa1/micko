@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // A managed endpoint is a local forwarded port, and the port is released as

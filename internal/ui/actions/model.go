@@ -5,9 +5,9 @@ import (
 	"strings"
 	"unicode"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
 	tea "charm.land/bubbletea/v2"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 const maxTypedNameLength = 256

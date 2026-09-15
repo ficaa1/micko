@@ -4,6 +4,8 @@ A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/wor
 Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
 resubmit or stop a run with explicit confirmation.
 
+![argo-tui browsing the demo dataset](docs/demo.gif)
+
 ## Build and try it
 
 Requires Go 1.25 or later; the module selects Go 1.25.4 as its toolchain.
@@ -19,6 +21,29 @@ Without Make, use `go build -o dist/argo-tui ./cmd/argo-tui`. `make build`
 also stamps the Git commit into the binary. `--version` prints both version
 and commit. The demo uses synthetic data without connecting to a cluster or
 reading credentials. Press `?` for help and `q` to quit.
+
+## Install
+
+Homebrew:
+
+```sh
+brew install ficaa1/tap/argo-tui
+```
+
+Go:
+
+```sh
+go install github.com/ficaa1/argo-tui/cmd/argo-tui@latest
+```
+
+Or download a binary and its checksum from
+[the releases page](https://github.com/ficaa1/argo-tui/releases), verify it and
+put it on your PATH:
+
+```sh
+sha256sum -c checksums.txt --ignore-missing
+tar -xzf argo-tui_<version>_<os>_<arch>.tar.gz
+```
 
 ## Connect
 
@@ -181,3 +206,8 @@ release history.
 
 [Hands-on testing notes](docs/handson-testing.md) preserve operator feedback
 and the changes made during live use.
+
+## License
+
+argo-tui is free software under the GNU General Public License version 3; see
+[LICENSE](LICENSE). Copyright (C) 2026 Filip Biljic.

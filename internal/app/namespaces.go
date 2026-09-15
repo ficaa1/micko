@@ -5,9 +5,9 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/namespaces"
-	"argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/namespaces"
+	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
 )
 
 // namespaces.go owns the `n` key: the namespace the session is looking at.

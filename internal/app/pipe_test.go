@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
-	"argo-tui/internal/ui/logs"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/ui/logs"
 )
 
 // `|` opens the editor prefilled with the configured command, and enter hands

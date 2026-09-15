@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 func TestProductionReaderUsesConfiguredEndpoint(t *testing.T) {

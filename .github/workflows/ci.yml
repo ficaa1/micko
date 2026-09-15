@@ -24,8 +24,16 @@ env:
 
 jobs:
   check:
-    name: check
-    runs-on: ubuntu-latest
+    # argo-tui is a terminal program, and the two terminals it has to work in
+    # are Linux and macOS. Building only on Linux left every macOS-specific
+    # path — the config directory, the PTY, the clipboard write — untested
+    # until someone ran the binary.
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -51,7 +59,7 @@ jobs:
         run: go test -race ./... -count=1
 
       # Fixture-server conformance over real HTTP, plus real PTY process
-      # lifecycle. ubuntu-latest provides /dev/ptmx, so nothing skips.
+      # lifecycle. Both runners provide a PTY, so nothing skips on either.
       - name: integration and PTY
         run: go test -tags=integration ./tests/integration/... -count=1
 
