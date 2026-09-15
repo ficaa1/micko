@@ -66,8 +66,23 @@ jobs:
 
       - name: Record
         run: |
-          vhs docs/demo.tape
-          ls -l docs/demo.gif
+          set -uo pipefail
+          mkdir -p /tmp/wrap
+          cat > /tmp/wrap/ffmpeg <<'SH'
+          #!/bin/sh
+          echo "=== ffmpeg $* ===" >> /tmp/ffmpeg.log
+          /usr/bin/ffmpeg "$@" 2>> /tmp/ffmpeg.log
+          st=$?
+          echo "=== exit $st ===" >> /tmp/ffmpeg.log
+          exit $st
+          SH
+          chmod +x /tmp/wrap/ffmpeg
+          PATH=/tmp/wrap:$PATH vhs docs/demo.tape
+          echo "--- what vhs asked ffmpeg to do ---"
+          cat /tmp/ffmpeg.log 2>/dev/null || echo "vhs never called ffmpeg"
+          echo "--- docs ---"
+          ls -l docs/
+          test -s docs/demo.gif
 
       - name: Commit the recording
         run: |
