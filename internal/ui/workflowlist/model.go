@@ -22,8 +22,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // Status is the list-level state surfaced distinctly by the view (UI-07).

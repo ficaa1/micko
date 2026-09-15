@@ -20,13 +20,13 @@ import (
 	"sync"
 	"time"
 
-	"argo-tui/internal/app"
-	"argo-tui/internal/argo"
-	"argo-tui/internal/buildinfo"
-	"argo-tui/internal/config"
-	"argo-tui/internal/diagnostics"
-	"argo-tui/internal/portforward"
-	"argo-tui/internal/ui/profiles"
+	"github.com/ficaa1/argo-tui/internal/app"
+	"github.com/ficaa1/argo-tui/internal/argo"
+	"github.com/ficaa1/argo-tui/internal/buildinfo"
+	"github.com/ficaa1/argo-tui/internal/config"
+	"github.com/ficaa1/argo-tui/internal/diagnostics"
+	"github.com/ficaa1/argo-tui/internal/portforward"
+	"github.com/ficaa1/argo-tui/internal/ui/profiles"
 )
 
 // readyTimeout bounds the wait for a port-forward to announce its local port.

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 var _ core.Actioner = (*Client)(nil)

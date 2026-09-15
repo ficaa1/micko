@@ -8,8 +8,8 @@
 package app
 
 import (
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // Route identifies the active top-level route. F1 implements empty routes

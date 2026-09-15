@@ -5,7 +5,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
 // Tea child model tests: tab switching, session-only reveal lifecycle,

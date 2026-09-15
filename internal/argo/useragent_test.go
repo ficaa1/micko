@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 // TestUserAgentComesFromOptions asserts the header comes from
 // Options.UserAgent on both request paths, which build requests separately:
 // newRequest (reads) and Execute (mutations).
 func TestUserAgentComesFromOptions(t *testing.T) {
-	const want = "argo-tui/9.9.9"
+	const want = "github.com/ficaa1/argo-tui/9.9.9"
 
 	newServer := func(seen chan<- string, body string) *httptest.Server {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

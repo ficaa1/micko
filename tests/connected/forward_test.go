@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/argo"
-	"argo-tui/internal/core"
-	"argo-tui/internal/portforward"
+	"github.com/ficaa1/argo-tui/internal/argo"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/portforward"
 )
 
 func newManager(t *testing.T) *portforward.Manager {

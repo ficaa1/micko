@@ -7,8 +7,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
 )
 
 const watchQueueCap = 128

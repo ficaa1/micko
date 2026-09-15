@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"argo-tui/internal/core"
 	tea "charm.land/bubbletea/v2"
+	"github.com/ficaa1/argo-tui/internal/core"
 )
 
 func TestDisabledReadOnlyAndDemoCannotOpenAction(t *testing.T) {

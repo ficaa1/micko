@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/testkit"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
 // outlineFixture returns the F1 DAG fixture (retry, suspend, skipped-style

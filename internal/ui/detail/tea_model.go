@@ -6,8 +6,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"argo-tui/internal/core"
-	"argo-tui/internal/ui/shared"
+	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // Model is the detail route's child Tea model (bubbletea v2 Model surface
