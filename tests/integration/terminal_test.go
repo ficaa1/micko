@@ -7,6 +7,7 @@ package integration
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -124,16 +125,14 @@ func TestPTYDemoQuitViaCtrlC(t *testing.T) {
 	}
 }
 
-// TestPTYVersionAndNonDemoRefusal: --version prints and exits; non-demo
-// start refuses with guidance and exit 1 (CONN-22; the real-connection
-// refusal is honest F1 behavior — A1/I1 replace the message).
-func TestPTYVersionAndNonDemoRefusal(t *testing.T) {
+// --version prints the build identity and exits without starting the TUI.
+func TestPTYVersionFlag(t *testing.T) {
 	bin := buildBinary(t)
-
 	p, err := StartPTY(bin, "--version")
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
+	defer p.Close()
 	code, err := p.Wait()
 	if err != nil {
 		t.Fatalf("wait: %v", err)
@@ -141,23 +140,79 @@ func TestPTYVersionAndNonDemoRefusal(t *testing.T) {
 	if code != 0 || !strings.Contains(p.Screen(), "argo-tui "+buildinfo.Version) {
 		t.Fatalf("--version: code=%d screen=%q", code, p.Screen())
 	}
-	p.Close()
+}
 
-	p2, err := StartPTY(bin)
+// Started with no destination, argo-tui asks which profile to use instead of
+// guessing one. With no config file the picker names the path to write and
+// esc leaves, because there is no session behind the dialog to return to.
+//
+// --config points at a path that does not exist, so the run does not depend on
+// whatever config file the machine running the test happens to have.
+func TestPTYNoProfileOpensThePicker(t *testing.T) {
+	bin := buildBinary(t)
+	missing := filepath.Join(t.TempDir(), "config.yaml")
+	p, err := StartPTY(bin, "--config", missing)
 	if err != nil {
-		t.Fatalf("start non-demo: %v", err)
+		t.Fatalf("start: %v", err)
 	}
-	code2, err := p2.WaitFor(20 * time.Second)
+	defer func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	}()
+	waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "no profiles configured")
+	})
+	// The box clips a long temporary path to fit, so the assertion here is on
+	// the parts that always survive. The exact path is pinned by the unit
+	// test, which renders the dialog without a box around it.
+	for _, want := range []string{"write them to:", "currentProfile: dev", "tokenEnv: ARGO_TOKEN"} {
+		if s := p.Screen(); !strings.Contains(s, want) {
+			t.Fatalf("the empty picker does not mention %q: %q", want, s)
+		}
+	}
+	if err := p.Send("\x1b"); err != nil { // esc
+		t.Fatalf("send esc: %v", err)
+	}
+	code, err := p.WaitFor(20 * time.Second)
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
-	if code2 != 1 {
-		t.Fatalf("non-demo exit = %d, want 1", code2)
+	if code != 0 {
+		t.Fatalf("esc exit = %d, want 0", code)
 	}
-	if s := p2.Screen(); !strings.Contains(s, "server endpoint missing") {
-		t.Fatalf("non-demo guidance missing: %q", s)
+}
+
+// The picker lists the profiles the config file names, with the server that
+// tells two clusters apart. Nothing is connected until one is chosen, so this
+// runs against servers that do not exist.
+func TestPTYThePickerListsConfiguredProfiles(t *testing.T) {
+	bin := buildBinary(t)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	body := "currentProfile: prod\nprofiles:\n" +
+		"  dev:\n    server: https://dev.invalid\n    namespace: workflows\n    tokenEnv: ARGO_TUI_TEST\n" +
+		"  prod:\n    server: https://prod.invalid\n    namespace: argo\n    tokenEnv: ARGO_TUI_TEST\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	p2.Close()
+	p, err := StartPTY(bin, "--config", path)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() {
+		if !p.Exited() {
+			p.Kill()
+		}
+		p.Close()
+	}()
+	waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "dev") && strings.Contains(s, "prod")
+	})
+	if s := p.Screen(); !strings.Contains(s, "https://dev.invalid") {
+		t.Fatalf("the picker does not identify the cluster: %q", s)
+	}
+	p.Kill()
 }
 
 // TestPTYTerminalRestoreMarkers: the raw capture of a clean quit contains

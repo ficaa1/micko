@@ -39,6 +39,14 @@ profiles:
     tokenEnv: ARGO_TUI_TOKEN
 ```
 
+Start it with no arguments and it opens the profile picker:
+
+```sh
+./dist/argo-tui
+```
+
+Or name the profile to connect to it directly:
+
 ```sh
 ./dist/argo-tui --profile dev
 ```
@@ -53,7 +61,12 @@ expects TLS. For an already reachable endpoint, omit `kubeContext`, `service`,
 Configuration lookup checks `$XDG_CONFIG_HOME/argo-tui/config.yaml`, then
 `~/.config/argo-tui/config.yaml`, then the OS user config directory, using
 the first existing file. `--config PATH` selects a file explicitly.
-`--profile` overrides `currentProfile`; there is no interactive profile picker.
+With no `--profile` and no `--server`, argo-tui opens the profile picker and
+connects to nothing until you choose. `currentProfile` places the cursor on a
+row; it does not connect by itself. `P` reopens the picker at any time, and
+switching profile is a full reconnection: in-flight requests are canceled, the
+snapshot is dropped and the port-forward is closed before the next one starts.
+With no config file the picker shows the path to write and a sample profile.
 
 ### Authentication and TLS
 
@@ -101,12 +114,17 @@ check and the write remains possible.
 | Resource | `v` reveal hidden parameter/output values |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
-| General | `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
+| General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
 
 Suspended workflows sort first by default and their waiting nodes are marked
 `AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
 workflow's pod naming annotation and leaves the shortcut unavailable when
 it cannot resolve one safely.
+
+The profile picker (`P`, and the start screen) lists the profiles in your
+config file with their server and namespace. Type to narrow the list; only a
+configured profile can be chosen, because a name that is in no file names no
+server to connect to.
 
 The namespace picker offers configured `namespaces` and discovered namespaces;
 you can also type a name. Discovery uses Argo's managed namespace or visible
@@ -121,7 +139,8 @@ command (default `lnav`). Install that program separately.
 
 | Flag | Purpose |
 | --- | --- |
-| `--config PATH`, `--profile NAME` | Select configuration and profile |
+| `--config PATH` | Select the configuration file |
+| `--profile NAME` | Connect to this profile instead of opening the picker |
 | `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
 | `--token-file PATH`, `--ca-file PATH` | Override credential file or CA bundle |
 | `--refresh-interval DURATION` | Poll interval, default `5s`; accepted range `1s`–`10m` |
