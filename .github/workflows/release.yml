@@ -142,11 +142,17 @@ jobs:
           end
           FORMULA
           cd tap
-          if git diff --quiet; then
+          git add Formula/argo-tui.rb
+          # --cached, and after the add: a formula the tap does not have yet
+          # is untracked, and an unstaged diff does not see it. Checking the
+          # wrong one would skip the commit on the very first release.
+          if git diff --cached --quiet; then
             echo "formula already at ${VERSION}"
             exit 0
           fi
           git config user.name "argo-tui release"
           git config user.email "noreply@github.com"
-          git commit -am "argo-tui ${VERSION}"
-          git push
+          git commit -m "argo-tui ${VERSION}"
+          # HEAD rather than a branch name: a tap that has never been pushed
+          # to is cloned on an unborn branch with no upstream.
+          git push origin HEAD
