@@ -531,6 +531,54 @@ func drainAndClose(body io.ReadCloser) {
 
 // --- Reader.List ----------------------------------------------------------------
 
+// listFields is the projection the list request asks the server for.
+//
+// A workflow object carries its whole definition: spec, storedTemplates,
+// storedWorkflowTemplateSpec and the node map dwarf the fields a summary row
+// needs. A page of a hundred of them is megabytes, fetched again on every
+// poll, and over a port-forward that is the whole load time.
+//
+// The node map is left out here and fetched by the gate scan below for the
+// few workflows it can still say something about. It cannot be narrowed by
+// projection: its keys are node IDs, so a status.nodes.<field> path would
+// name one node called <field>.
+//
+// A server that does not honour the parameter answers with the full objects,
+// which decode exactly as before.
+var listFields = strings.Join([]string{
+	"metadata.continue",
+	"metadata.resourceVersion",
+	"items.metadata.name",
+	"items.metadata.namespace",
+	"items.metadata.uid",
+	"items.metadata.resourceVersion",
+	"items.metadata.labels",
+	"items.metadata.annotations",
+	"items.metadata.creationTimestamp",
+	"items.status.phase",
+	"items.status.message",
+	"items.status.startedAt",
+	"items.status.finishedAt",
+}, ",")
+
+// gateFields is the projection of the gate scan: an identity and the node
+// map the Suspend marker is read from.
+var gateFields = strings.Join([]string{
+	"items.metadata.uid",
+	"items.status.nodes",
+}, ",")
+
+// incompleteSelector selects the workflows that can still be waiting for a
+// human. Argo labels a workflow completed when it reaches a terminal phase,
+// and a finished workflow never holds a running Suspend node, so the node
+// maps of the history are never downloaded.
+const incompleteSelector = "workflows.argoproj.io/completed!=true"
+
+// gateScanLimit bounds the gate scan. It covers far more than the workflows
+// a namespace has in flight; past it a Suspend marker can be missed, which
+// the list shows as a plain Running row.
+const gateScanLimit = 500
+
 func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
@@ -548,6 +596,7 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if q.LabelSelector != "" {
 		query.Set("listOptions.labelSelector", q.LabelSelector)
 	}
+	query.Set("fields", listFields)
 	req, err := c.newRequest(ctx, path, query)
 	if err != nil {
 		return core.Page{}, err
@@ -576,7 +625,66 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if err != nil {
 		return core.Page{}, core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable response (protocol mismatch; see docs/development.md)", err)
 	}
+	if err := c.markSuspended(ctx, q, &page); err != nil {
+		return core.Page{}, err
+	}
 	return page, nil
+}
+
+// markSuspended fills Summary.Suspended for the page from a second, narrow
+// request.
+//
+// The page itself arrives without node data, so the marker has to come from
+// somewhere: this scan asks for the node maps of the incomplete workflows
+// alone. That is a small set against a namespace whose history is thousands
+// of workflows, and it is the only reason the main list can drop the node
+// map at all.
+//
+// A failed scan fails the list. Both requests go to the same server, and a
+// workflow parked on a gate that the list draws as plain Running is exactly
+// the row an operator must not miss; the list keeps its last good snapshot
+// and marks it stale instead.
+func (c *Client) markSuspended(ctx context.Context, q core.Query, page *core.Page) error {
+	if len(page.Items) == 0 {
+		return nil
+	}
+	selector := incompleteSelector
+	if q.LabelSelector != "" {
+		// A comma-separated selector is an AND of its requirements.
+		selector = q.LabelSelector + "," + incompleteSelector
+	}
+	path := "/api/v1/workflows/" + url.PathEscape(q.Namespace)
+	req, err := c.newRequest(ctx, path, url.Values{
+		"listOptions.limit":         []string{fmt.Sprintf("%d", gateScanLimit)},
+		"listOptions.labelSelector": []string{selector},
+		"fields":                    []string{gateFields},
+	})
+	if err != nil {
+		return err
+	}
+	resp, err := c.do(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer drainAndClose(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
+	}
+	body, err := readAllBody(resp.Body)
+	if err != nil {
+		return err
+	}
+	if isHTMLBody(body, resp) {
+		return mapHTTPError(resp, http.MethodGet, path, body, nil, c.now)
+	}
+	suspended, err := decodeSuspendedUIDs(body)
+	if err != nil {
+		return core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable gate scan (protocol mismatch; see docs/development.md)", err)
+	}
+	for i := range page.Items {
+		page.Items[i].Suspended = suspended[page.Items[i].Ref.UID]
+	}
+	return nil
 }
 
 // maxBodyBytes bounds a unary response body. List and Get answers are small;

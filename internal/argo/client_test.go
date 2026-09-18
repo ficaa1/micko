@@ -99,6 +99,7 @@ func TestClientBasePathAndCredentials(t *testing.T) {
 	q.Set("listOptions.continue", "5")
 	q.Set("listOptions.labelSelector", "workflows.argoproj.io/phase=Running")
 	q.Set("listOptions.limit", "3")
+	q.Set("fields", listFields)
 	if gotQuery != q.Encode() {
 		t.Errorf("list query = %q, want %q", gotQuery, q.Encode())
 	}
@@ -314,9 +315,27 @@ type fixtureServer struct {
 	hitQuery atomic.Value // string
 }
 
+// isGateScan reports whether a request is the narrow scan that fills the
+// Suspend marker rather than the list itself. It asks for node maps and only
+// for the workflows that have not completed.
+func isGateScan(r *http.Request) bool {
+	return strings.Contains(r.URL.Query().Get("fields"), "items.status.nodes")
+}
+
+// serveNoGates answers a gate scan with a list of no workflows, which is what
+// a namespace with nothing in flight returns. A test that does not care about
+// the Suspend marker uses it so the scan neither fails nor counts as a page.
+func serveNoGates(w http.ResponseWriter) {
+	w.Write([]byte(`{"metadata":{},"items":[]}`))
+}
+
 func serveFixture(t *testing.T, status int, body []byte, check func(r *http.Request) error) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isGateScan(r) {
+			serveNoGates(w)
+			return
+		}
 		if check != nil {
 			if err := check(r); err != nil {
 				t.Errorf("request check: %v", err)
@@ -404,6 +423,10 @@ func TestListEmptyContinuedPage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/workflows/team-a" {
 			t.Errorf("path = %q", r.URL.Path)
+		}
+		if isGateScan(r) {
+			serveNoGates(w)
+			return
 		}
 		n := atomic.AddInt32(&calls, 1)
 		if n == 1 {
@@ -1099,5 +1122,126 @@ func TestPlainHTTPFailureIsNotReportedAsTLS(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "server unreachable") {
 		t.Fatalf("want an unreachable-server error, got: %v", err)
+	}
+}
+
+// The list projection is what keeps a poll cheap, and it is also the one
+// place where a summary field can be lost without any error: the server
+// simply omits what the projection does not name.
+func TestListProjectionNamesEverySummaryField(t *testing.T) {
+	want := []string{
+		"metadata.continue",
+		"metadata.resourceVersion",
+		"items.metadata.name",
+		"items.metadata.namespace",
+		"items.metadata.uid",
+		"items.metadata.creationTimestamp",
+		"items.status.phase",
+		"items.status.startedAt",
+		"items.status.finishedAt",
+	}
+	have := map[string]bool{}
+	for _, f := range strings.Split(listFields, ",") {
+		have[f] = true
+	}
+	for _, f := range want {
+		if !have[f] {
+			t.Errorf("list projection drops %s", f)
+		}
+	}
+	// The node map is the bulk of a workflow object and belongs to the gate
+	// scan alone. In the list projection it would undo the saving.
+	if have["items.status.nodes"] {
+		t.Error("list projection carries items.status.nodes")
+	}
+}
+
+// The list page carries no node data, so the Suspend marker can only come
+// from the gate scan. A workflow waiting for a human Resume that the list
+// draws as a plain Running row is the row an operator misses.
+func TestListMarksSuspendedFromTheGateScan(t *testing.T) {
+	list := `{"metadata":{"resourceVersion":"7"},"items":[
+		{"metadata":{"name":"wf-a","namespace":"team-a","uid":"uid-a"},"status":{"phase":"Running"}},
+		{"metadata":{"name":"wf-b","namespace":"team-a","uid":"uid-b"},"status":{"phase":"Running"}}]}`
+	gates := `{"metadata":{},"items":[
+		{"metadata":{"uid":"uid-b"},"status":{"nodes":{"n1":{"type":"Suspend","phase":"Running"}}}},
+		{"metadata":{"uid":"uid-a"},"status":{"nodes":{"n1":{"type":"Pod","phase":"Running"},"n2":{"type":"Suspend","phase":"Succeeded"}}}}]}`
+	var gateQuery url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isGateScan(r) {
+			gateQuery = r.URL.Query()
+			w.Write([]byte(gates))
+			return
+		}
+		if strings.Contains(r.URL.Query().Get("fields"), "items.status.nodes") {
+			t.Error("the list request asked for node maps")
+		}
+		w.Write([]byte(list))
+	}))
+	defer srv.Close()
+
+	page, err := newTestClient(t, srv).List(context.Background(), core.Query{Namespace: "team-a", Limit: 100})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page.Items) != 2 {
+		t.Fatalf("items = %d, want 2", len(page.Items))
+	}
+	if page.Items[0].Suspended {
+		t.Error("wf-a is marked suspended: its only Suspend node has finished")
+	}
+	if !page.Items[1].Suspended {
+		t.Error("wf-b is not marked suspended: it holds a running Suspend node")
+	}
+	if got := gateQuery.Get("listOptions.labelSelector"); got != incompleteSelector {
+		t.Errorf("gate scan selector = %q, want %q", got, incompleteSelector)
+	}
+	if got := gateQuery.Get("listOptions.limit"); got != "500" {
+		t.Errorf("gate scan limit = %q, want the scan bound", got)
+	}
+}
+
+// A caller's own selector narrows the scan as well, or the scan reads
+// workflows the list never shows.
+func TestGateScanKeepsTheCallersSelector(t *testing.T) {
+	var gateSelector string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isGateScan(r) {
+			gateSelector = r.URL.Query().Get("listOptions.labelSelector")
+			serveNoGates(w)
+			return
+		}
+		w.Write([]byte(`{"metadata":{},"items":[{"metadata":{"name":"wf-a","namespace":"team-a","uid":"uid-a"},"status":{"phase":"Running"}}]}`))
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(t, srv).List(context.Background(), core.Query{Namespace: "team-a", LabelSelector: "app=users"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if want := "app=users," + incompleteSelector; gateSelector != want {
+		t.Errorf("gate scan selector = %q, want %q", gateSelector, want)
+	}
+}
+
+// An empty page needs no scan. Paging past the end of a namespace must not
+// cost a request per page.
+func TestAnEmptyPageRunsNoGateScan(t *testing.T) {
+	var scans int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isGateScan(r) {
+			scans++
+			serveNoGates(w)
+			return
+		}
+		w.Write([]byte(`{"metadata":{},"items":[]}`))
+	}))
+	defer srv.Close()
+
+	if _, err := newTestClient(t, srv).List(context.Background(), core.Query{Namespace: "team-a"}); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if scans != 0 {
+		t.Errorf("gate scans = %d, want none", scans)
 	}
 }
