@@ -248,6 +248,11 @@ func (c *Connector) startForward(ctx context.Context, cfg config.Config) (*portf
 				sink.Emit(diagnostics.StageForward, string(e.State), e.Attempt-1, e.State == portforward.StateLost, 0, "")
 			}
 			switch e.State {
+			// Only a change in whether the transport can carry a request
+			// reaches the model. StateStarting sits between two of those,
+			// and StateWarning is an error line from a forward that still
+			// serves: reporting either as a lost connection would block
+			// actions while every request still succeeds.
 			case portforward.StateReady, portforward.StateLost, portforward.StateFailed, portforward.StateStopped:
 			default:
 				continue

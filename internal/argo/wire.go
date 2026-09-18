@@ -80,6 +80,48 @@ func decodeListPage(body []byte) (core.Page, error) {
 	return page, nil
 }
 
+// suspendedEnvelope is the gate scan's answer: the identity of a workflow and
+// only the two node fields that say whether it waits for a human.
+type suspendedEnvelope struct {
+	Items []struct {
+		Metadata struct {
+			UID string `json:"uid"`
+		} `json:"metadata"`
+		Status struct {
+			Nodes map[string]struct {
+				Type  string `json:"type"`
+				Phase string `json:"phase"`
+			} `json:"nodes"`
+		} `json:"status"`
+	} `json:"items"`
+}
+
+// decodeSuspendedUIDs reports which of the scanned workflows hold a Suspend
+// node in a Running phase, keyed by workflow UID.
+//
+// The list body it reads carries node maps, which are the bulk of a workflow
+// object. The scan is therefore kept to the workflows that can still be
+// waiting, and the rest of the list is fetched without node data at all.
+func decodeSuspendedUIDs(body []byte) (map[string]bool, error) {
+	var env suspendedEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, fmt.Errorf("decode gate scan: %w", err)
+	}
+	out := make(map[string]bool, len(env.Items))
+	for _, it := range env.Items {
+		if it.Metadata.UID == "" {
+			continue
+		}
+		for _, n := range it.Status.Nodes {
+			if n.Type == "Suspend" && n.Phase == "Running" {
+				out[it.Metadata.UID] = true
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
 // decodeWorkflowDetail decodes a detail response, preserving the entire raw
 // body verbatim in Workflow.Resource (docs/development.md: raw bytes for
 // the resource view, never typed-drop).
