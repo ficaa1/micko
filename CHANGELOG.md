@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- A port-forward that prints an error line for one dropped connection no
+  longer counts as a lost connection. kubectl prints such a line while the
+  listener keeps serving, and it blocked every action until the process
+  itself restarted.
+- A stale snapshot is now recollected off the list route. Actions stay
+  blocked until a fresh list is accepted, and the poll collected one on the
+  list route alone, so the block never cleared while a workflow was open.
+- The workflow list now asks the server for the fields a summary row needs
+  instead of the whole workflow object. The spec, the stored templates and
+  the node maps dominate the payload, and every poll downloaded them for
+  every workflow. The node maps are fetched by a second narrow request for
+  the workflows that have not completed, which is the only set that can hold
+  a running Suspend node, so the list keeps its gate marker.
+
 ## 0.3.1
 
 - Added the profile picker. Started with no `--profile` and no `--server`,
