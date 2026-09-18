@@ -460,6 +460,15 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" {
 			cmds = append(cmds, m.startDetailFetch())
 		}
+		// A stale snapshot blocks every mutation, and only an accepted list
+		// clears it. The list poll runs on the list route alone, so without
+		// this a reader who lost the snapshot while reading a workflow stays
+		// blocked for as long as they stay on it. The collection runs only
+		// while the block is up, so a healthy session off the list route
+		// keeps polling nothing but its own workflow.
+		if m.connectionReady && !m.connectionFresh && !m.listState.loading {
+			cmds = append(cmds, m.startListGeneration())
+		}
 		return m, tea.Batch(append(cmds, m.armTick())...)
 
 	case listLoadedMsg:

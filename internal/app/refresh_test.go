@@ -103,3 +103,41 @@ func TestRRefreshesTheOpenWorkflow(t *testing.T) {
 		t.Fatal("r did not fetch the open workflow")
 	}
 }
+
+// Only an accepted list snapshot clears the stale block on mutations. The
+// poll collects one on the list route alone, so a reader whose snapshot went
+// stale while they read a workflow would stay blocked for as long as they
+// stayed on it.
+func TestAStaleSnapshotIsRecollectedOffTheListRoute(t *testing.T) {
+	wf := workflowFixture("wf-1")
+	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
+	m := testRoot(t, f)
+	m.listState.items = []core.Summary{wf.Summary}
+	m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
+	m.detailState.loading = false
+	m.connectionReady = true
+	m.connectionFresh = false
+
+	m.Update(tickMsg{})
+	if !m.listState.loading {
+		t.Fatal("a stale snapshot was not recollected on the detail route: actions stay blocked")
+	}
+}
+
+// The recollection above runs only while the block is up. A fresh session
+// reading one workflow must not pay for a full snapshot on every tick.
+func TestAFreshSnapshotIsNotRecollectedOffTheListRoute(t *testing.T) {
+	wf := workflowFixture("wf-1")
+	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
+	m := testRoot(t, f)
+	m.listState.items = []core.Summary{wf.Summary}
+	m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
+	m.detailState.loading = false
+	m.connectionReady = true
+	m.connectionFresh = true
+
+	m.Update(tickMsg{})
+	if m.listState.loading {
+		t.Fatal("a fresh snapshot was recollected off the list route")
+	}
+}
