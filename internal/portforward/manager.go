@@ -42,6 +42,11 @@ const (
 	StateLost     State = "lost"
 	StateFailed   State = "failed"
 	StateStopped  State = "stopped"
+	// StateWarning is an error line printed by a forward that is still
+	// serving. kubectl reports a dropped single connection this way and keeps
+	// the listener open, so the transport is not down and consumers must not
+	// treat it as a loss. It carries the line for diagnostics only.
+	StateWarning State = "warning"
 )
 
 type Event struct {
@@ -240,7 +245,17 @@ func (m *Manager) run(ctx context.Context) {
 						ready <- struct{}{}
 					}
 				} else if strings.Contains(strings.ToLower(line), "unable to listen") || strings.Contains(strings.ToLower(line), "error") {
-					m.emit(Event{State: StateFailed, Message: sanitize(line), Attempt: attempt})
+					// Before readiness an error line is the attempt failing:
+					// the port is taken, the service is missing, the context
+					// is wrong. After readiness the same line is one dropped
+					// connection out of many, and the listener still serves
+					// every following request. Only the process exiting ends
+					// the forward, and that path emits StateLost below.
+					state := StateFailed
+					if stateReady {
+						state = StateWarning
+					}
+					m.emit(Event{State: state, Message: sanitize(line), Attempt: attempt})
 				}
 			case err := <-wait:
 				attemptOver()

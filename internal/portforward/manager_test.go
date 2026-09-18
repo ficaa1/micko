@@ -132,3 +132,42 @@ func awaitState(t *testing.T, ch <-chan Event, want State) {
 		t.Fatalf("timed out waiting for %s", want)
 	}
 }
+
+// TestManagerKeepsServingAfterConnectionErrorLine pins that an error line from
+// a forward that is still listening is a warning, not a failure. kubectl
+// prints one for every single connection it drops, and a consumer that reads
+// it as a lost transport blocks while the forward still carries requests.
+func TestManagerKeepsServingAfterConnectionErrorLine(t *testing.T) {
+	p := newFake()
+	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "0"}, func(context.Context, string, ...string) Process { return p })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.Start(ctx)
+	awaitState(t, m.Events(), StateStarting)
+	p.ready()
+	awaitState(t, m.Events(), StateReady)
+	_, _ = p.errW.Write([]byte("E0918 12:00:00.000000 1 portforward.go:409] an error occurred forwarding 51234 -> 2746\n"))
+	awaitState(t, m.Events(), StateWarning)
+	if got := m.Endpoint(); got != "http://127.0.0.1:1234" {
+		t.Fatalf("endpoint after a dropped connection = %q, want the owned one", got)
+	}
+}
+
+// TestManagerReportsErrorLineBeforeReadinessAsFailure pins the other half:
+// until a port is bound, an error line is the attempt failing.
+func TestManagerReportsErrorLineBeforeReadinessAsFailure(t *testing.T) {
+	p := newFake()
+	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "2746"}, func(context.Context, string, ...string) Process { return p })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.Start(ctx)
+	awaitState(t, m.Events(), StateStarting)
+	_, _ = p.errW.Write([]byte("Unable to listen on port 2746: address already in use\n"))
+	awaitState(t, m.Events(), StateFailed)
+}
