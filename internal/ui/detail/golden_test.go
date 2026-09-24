@@ -11,7 +11,8 @@ import (
 )
 
 // updateGolden regenerates golden files when -update is passed
-// (conventional golden-test flag).
+// (conventional golden-test flag). UPDATE_GOLDEN=1 does the same, as it
+// does in the other view packages.
 var updateGolden = flag.Bool("update", false, "rewrite golden files")
 
 // TestDetailGoldenFixtures pins deterministic rendering for the canonical
@@ -38,7 +39,7 @@ func TestDetailGoldenFixtures(t *testing.T) {
 // compareGolden compares (and with -update, rewrites) a golden file.
 func compareGolden(t *testing.T, name, got string) {
 	t.Helper()
-	if *updateGolden {
+	if *updateGolden || os.Getenv("UPDATE_GOLDEN") == "1" {
 		if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
