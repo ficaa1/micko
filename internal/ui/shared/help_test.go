@@ -3,6 +3,8 @@ package shared
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TestHelpOverlayToggle: `?` opens and closes; Esc closes.
@@ -51,6 +53,36 @@ func TestHelpOverlayFitsBudget(t *testing.T) {
 		if got > h2 {
 			t.Fatalf("height %d: overlay rendered %d lines:\n%s", h2, got, v)
 		}
+	}
+}
+
+// A themed overlay is the same text as a plain one: the theme picks out the
+// title and the section names but adds and removes no character, and a line
+// clipped to the width still fits it.
+func TestHelpOverlayThemeOnlyStyles(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	var plain, themed HelpOverlay
+	plain.Toggle()
+	themed.Toggle()
+	th, err := SkinTheme("nord", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	themed.SetTheme(th)
+	for _, w := range []int{0, 40, 100} {
+		want := plain.View(w, 30)
+		got := themed.View(w, 30)
+		if ansi.Strip(got) != want {
+			t.Fatalf("width %d: themed overlay text differs:\n%s\n---\n%s", w, ansi.Strip(got), want)
+		}
+		for _, l := range strings.Split(got, "\n") {
+			if w > 0 && ansi.StringWidth(l) > w {
+				t.Fatalf("width %d: themed line is %d cells: %q", w, ansi.StringWidth(l), l)
+			}
+		}
+	}
+	if !strings.Contains(themed.View(100, 30), th.Accent.Render("Global")) {
+		t.Error("section names are not drawn in the accent")
 	}
 }
 

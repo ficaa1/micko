@@ -376,6 +376,9 @@ func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 }
 
+// SetTheme replaces the style set the list is drawn in.
+func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
+
 // sanitizeOne is the single render-path sanitization choke point for
 // server-derived strings in this component (SEC-02).
 func sanitizeOne(s string) string { return shared.Sanitize(s) }
