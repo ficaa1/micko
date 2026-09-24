@@ -59,6 +59,12 @@ type OutlineRow struct {
 	// tree order. The tree draws a task once, under its DAG, so a join that
 	// waits for six tasks is one row that names them rather than six copies.
 	Deps []string
+	// After holds the IDs of the siblings this node waited for before it
+	// could start: the tasks a DAG task depends on, every step of the step
+	// group before a step's own, or the attempt before a retry attempt. A
+	// node with none started when its parent did. The timeline reads it for
+	// the time a node spent waiting and for the critical path.
+	After []string
 	// Retries is how many times a Retry node ran its template again after
 	// the first attempt.
 	Retries int
@@ -145,6 +151,9 @@ type treeBuilder struct {
 	listPos map[string]int
 	// ordered marks parents whose children keep listPos order.
 	ordered map[string]bool
+	// stepGroup is a step's group ordinal under its Steps node: 0 for the
+	// first group drawn, 1 for the next, and so on.
+	stepGroup map[string]int
 	// deps is each DAG task's dependency tasks, deduplicated.
 	deps    map[string][]string
 	depSeen map[[2]string]bool
@@ -167,6 +176,7 @@ func newTreeBuilder(wf core.Workflow) *treeBuilder {
 		owned:      make(map[string][]string, n),
 		listPos:    map[string]int{},
 		ordered:    map[string]bool{},
+		stepGroup:  map[string]int{},
 		deps:       map[string][]string{},
 		depSeen:    map[[2]string]bool{},
 		referenced: make(map[string]bool, n),
@@ -348,7 +358,7 @@ func (b *treeBuilder) orderSteps() {
 			return b.lessByStart(gs[i], gs[j])
 		})
 		pos := 0
-		for _, g := range gs {
+		for gi, g := range gs {
 			for _, c := range b.nodes[g].Children {
 				if b.owner[c] != s {
 					continue
@@ -357,6 +367,7 @@ func (b *treeBuilder) orderSteps() {
 					continue
 				}
 				b.listPos[c] = pos
+				b.stepGroup[c] = gi
 				pos++
 			}
 		}
@@ -495,6 +506,8 @@ func (b *treeBuilder) row(id string) OutlineRow {
 	}
 	r.Children = make([]OutlineRow, 0, len(kids))
 	members := 0
+	prevGroup := b.previousStepGroups(id, kids)
+	lastMember := ""
 	for i, k := range kids {
 		if b.visited[k] {
 			continue
@@ -512,9 +525,19 @@ func (b *treeBuilder) row(id string) OutlineRow {
 			for _, d := range ordered {
 				child.Deps = append(child.Deps, nodeDisplay(b.nodes[d]))
 			}
+			child.After = ordered
 		}
-		if _, ok := b.listPos[k]; ok && b.nodes[k].Type != "Container" {
+		if prev, ok := prevGroup[k]; ok {
+			child.After = prev
+		}
+		_, member := b.listPos[k]
+		member = member && b.nodes[k].Type != "Container"
+		if member {
 			members++
+			if n.Type == "Retry" && lastMember != "" {
+				child.After = []string{lastMember}
+			}
+			lastMember = k
 		}
 		r.Children = append(r.Children, child)
 	}
@@ -522,6 +545,36 @@ func (b *treeBuilder) row(id string) OutlineRow {
 		r.Retries = members - 1
 	}
 	return r
+}
+
+// previousStepGroups maps each step of a Steps node to the steps of the
+// group drawn before its own, which it waited for. Steps of the first group
+// waited for nothing and are absent. kids is the Steps node's display
+// children; anything else returns nil.
+func (b *treeBuilder) previousStepGroups(id string, kids []string) map[string][]string {
+	if b.nodes[id].Type != "Steps" {
+		return nil
+	}
+	byGroup := map[int][]string{}
+	var groups []int
+	for _, k := range kids {
+		g, ok := b.stepGroup[k]
+		if !ok || b.owner[k] != id {
+			continue
+		}
+		if _, seen := byGroup[g]; !seen {
+			groups = append(groups, g)
+		}
+		byGroup[g] = append(byGroup[g], k)
+	}
+	sort.Ints(groups)
+	out := map[string][]string{}
+	for i := 1; i < len(groups); i++ {
+		for _, k := range byGroup[groups[i]] {
+			out[k] = byGroup[groups[i-1]]
+		}
+	}
+	return out
 }
 
 // order sorts one parent's display children. See BuildNodeOutline for the
