@@ -562,13 +562,16 @@ func TestPTYDemoResizeReacts(t *testing.T) {
 	// Drop the frames rendered at the old size. One more can still arrive
 	// after the clear, because the program was already writing it when the
 	// resize landed, so the assertion asks for order rather than absence:
-	// the full layout has to render after the last resize notice.
+	// the full layout has to render after the last resize notice. The cut
+	// falls after the notice's last line, so the stale frame's own text is
+	// not mistaken for a notice drawn after the layout.
 	p.ClearScreen()
+	const notice = "Resize to at least"
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		if last := strings.LastIndex(s, "too small"); last >= 0 {
-			s = s[last:]
+		if last := strings.LastIndex(s, notice); last >= 0 {
+			s = s[last+len(notice):]
 		}
-		return strings.Contains(s, demoListed) && !strings.Contains(s, "Resize to at least")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("120x40 did not restore the full layout; screen=%q", p.Screen())
 	}
