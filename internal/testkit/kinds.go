@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/ficaa1/argo-tui/internal/core"
@@ -15,7 +16,67 @@ var (
 	_ core.CronLister            = (*FakeReader)(nil)
 	_ core.TemplateLister        = (*FakeReader)(nil)
 	_ core.ClusterTemplateLister = (*FakeReader)(nil)
+	_ core.ArchiveReader         = (*FakeReader)(nil)
 )
+
+// ListArchivedWorkflows implements core.ArchiveReader over
+// ArchivedWorkflows, filtered by namespace and label selector, in pages whose
+// continuation token is an offset, as the server's is.
+func (f *FakeReader) ListArchivedWorkflows(ctx context.Context, q core.ArchiveQuery) (core.ArchivePage, error) {
+	if err := ctx.Err(); err != nil {
+		return core.ArchivePage{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.KindCalls++
+	if f.ArchiveErr != nil {
+		return core.ArchivePage{}, f.ArchiveErr
+	}
+	var all []core.Workflow
+	for _, wf := range f.ArchivedWorkflows {
+		if q.Namespace != "" && wf.Summary.Ref.Namespace != q.Namespace {
+			continue
+		}
+		if !MatchLabels(q.LabelSelector, wf.Summary.Labels) {
+			continue
+		}
+		all = append(all, wf)
+	}
+	offset := 0
+	if q.Continue != "" {
+		if _, err := fmt.Sscanf(q.Continue, "%d", &offset); err != nil || offset < 0 || offset > len(all) {
+			return core.ArchivePage{}, core.ErrInvalidf("bad continue token %q", q.Continue)
+		}
+	}
+	end := len(all)
+	if q.Limit > 0 && offset+int(q.Limit) < end {
+		end = offset + int(q.Limit)
+	}
+	page := core.ArchivePage{Items: append([]core.Workflow(nil), all[offset:end]...)}
+	if end < len(all) {
+		page.Continue = fmt.Sprint(end)
+	}
+	return page, nil
+}
+
+// GetArchivedWorkflow implements core.ArchiveReader.
+func (f *FakeReader) GetArchivedWorkflow(ctx context.Context, uid string) (core.Workflow, error) {
+	if err := ctx.Err(); err != nil {
+		return core.Workflow{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.GetCalls++
+	if f.ArchiveErr != nil {
+		return core.Workflow{}, f.ArchiveErr
+	}
+	for _, wf := range f.ArchivedWorkflows {
+		if wf.Summary.Ref.UID == uid {
+			return wf, nil
+		}
+	}
+	return core.Workflow{}, core.ErrNotFoundf("not found")
+}
 
 // ListWorkflowTemplates implements core.TemplateLister over
 // WorkflowTemplates, filtered by namespace unless it is empty.
