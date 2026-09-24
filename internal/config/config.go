@@ -68,6 +68,25 @@ type File struct {
 	// RefreshIntervalRaw keeps the raw string so parse errors can name the
 	// key ("refreshInterval: ..."), which yaml's own unmarshal errors do not.
 	RefreshIntervalRaw string `yaml:"refreshInterval,omitempty"`
+	// Journal turns the action journal off when set to false. It is a
+	// pointer so that leaving the key out keeps the journal on: a record of
+	// writes is the safe default, and turning it off has to be a decision.
+	Journal *bool `yaml:"journal,omitempty"`
+}
+
+// JournalEnabled reports whether the config file leaves the action journal
+// on. A file that is absent, or that does not parse, leaves it on: the parse
+// error is reported by the profile list, and a broken file must not
+// silently disable a safety record.
+func JournalEnabled(cfgData []byte) bool {
+	if len(cfgData) == 0 {
+		return true
+	}
+	var f File
+	if err := yaml.Unmarshal(cfgData, &f); err != nil {
+		return true
+	}
+	return f.Journal == nil || *f.Journal
 }
 
 // refreshInterval parses RefreshIntervalRaw; empty means "not set".
