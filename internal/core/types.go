@@ -50,11 +50,13 @@ type Summary struct {
 	StartedAt       *time.Time
 	FinishedAt      *time.Time
 	Labels          map[string]string
-	// Suspended reports that the workflow currently holds at least one
-	// Suspend node in a Running phase, i.e. it waits for a human Resume.
-	// It is derived from the node map the server sent with this summary;
-	// when the server sends no node data it stays false and the list says
-	// nothing rather than guessing (docs/development.md).
+	// Suspended reports that the workflow waits for a human Resume: it
+	// holds at least one Suspend node in a Running phase, or it has not
+	// finished and its spec.suspend is set (the state the suspend action
+	// leaves). These are the two conditions Argo's own resume clears. The
+	// node half is derived from the node map the server sent with this
+	// summary; when the server sends no node data that half stays false and
+	// the list says nothing rather than guessing (docs/development.md).
 	Suspended bool
 	// Progress is the server's "done/total" count of the workflow's pod
 	// nodes, verbatim (for example "3/7"). Empty means the server sent none;
