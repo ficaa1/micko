@@ -106,6 +106,9 @@ func (m *Model) SetError(msg string) {
 // SetSize records the dialog box size.
 func (m *Model) SetSize(w, h int) { m.width, m.height = w, h }
 
+// SetTheme replaces the style set the dialog is drawn in.
+func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
+
 // Names returns the current candidate list (tests and the root).
 func (m *Model) Names() []string { return append([]string(nil), m.names...) }
 
@@ -205,7 +208,7 @@ func (m *Model) Hints() string {
 // BodyLines renders the dialog. Every state says what it is: an empty list
 // after a denied request must not look like a cluster with no namespaces.
 func (m *Model) BodyLines() []string {
-	lines := []string{"switch namespace — current: " + shared.Sanitize(m.current)}
+	lines := []string{m.theme.Title.Render("switch namespace") + m.theme.Muted.Render(" — current: ") + shared.Sanitize(m.current)}
 	typed := strings.TrimSpace(m.filter)
 	lines = append(lines, "filter: "+shared.Sanitize(m.filter)+"_")
 	switch {
@@ -226,8 +229,11 @@ func (m *Model) BodyLines() []string {
 			mark = "* "
 		}
 		row := mark + shared.Sanitize(n)
-		if i == m.cursor {
-			row = m.theme.Selected.Render(row)
+		switch {
+		case i == m.cursor:
+			row = m.theme.SelectRow(row, m.width)
+		case n == m.current:
+			row = m.theme.Accent.Render(row)
 		}
 		lines = append(lines, row)
 	}

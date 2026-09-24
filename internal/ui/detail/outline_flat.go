@@ -3,6 +3,7 @@ package detail
 import (
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/argo-tui/internal/core"
@@ -129,7 +130,9 @@ func countRows(rows []OutlineRow) int {
 // type and phase words in fixed columns.
 //
 // Text carries every fact. The glyph and the colour repeat the phase, they
-// never replace the word, so a mono terminal loses nothing (UI-03/07).
+// never replace the word, so a mono terminal loses nothing (UI-03/07). The
+// tree connectors are drawn in the guide style, dimmer than the row, so the
+// eye follows the names rather than the lines between them.
 func RenderFlatRow(r FlatRow, width int, theme shared.Theme, selected bool) string {
 	phase := rowPhase(r.Row)
 	glyph := shared.PhaseSymbol(phase)
@@ -166,16 +169,27 @@ func RenderFlatRow(r FlatRow, width int, theme shared.Theme, selected bool) stri
 		line = left + "  " + right
 	}
 
+	var style lipgloss.Style
 	switch {
 	case selected:
-		return theme.Selected.Render(line)
+		return theme.SelectRow(line, width)
 	case r.Suspended():
-		return theme.Warning.Render(line)
+		style = theme.Warning
 	case r.Skipped():
-		return theme.Dim.Render(line)
+		style = theme.Dim
 	default:
-		return theme.PhaseStyle(phase).Render(line)
+		style = theme.PhaseStyle(phase)
 	}
+	// The prefix is cut by the name budget like any other text, so only the
+	// part of it that survived is drawn as a guide.
+	guide := r.Prefix
+	if r.Section != "" || !strings.HasPrefix(line, guide) {
+		guide = ""
+	}
+	if guide == "" {
+		return style.Render(line)
+	}
+	return theme.TreeGuide.Render(guide) + style.Render(line[len(guide):])
 }
 
 // padCell pads s with spaces to exactly n display cells.

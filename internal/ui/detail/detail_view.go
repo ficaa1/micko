@@ -45,7 +45,7 @@ func RenderDetail(state DetailViewState, active string) string {
 // pane title, which the shell draws in its border.
 func RenderDetailBody(state DetailViewState, active string) string {
 	var b strings.Builder
-	b.WriteString(tabStrip(active) + "\n")
+	b.WriteString(tabStrip(active, shared.Theme{}) + "\n")
 	switch active {
 	case "summary":
 		b.WriteString("phase: " + shared.Sanitize(phaseName(state.Summary.Phase)) + "\n")
@@ -65,16 +65,18 @@ func RenderDetailBody(state DetailViewState, active string) string {
 }
 
 // tabStrip marks the active section. Text carries the state, not color: the
-// active tab is the one wrapped in brackets, so a mono terminal keeps it.
-func tabStrip(active string) string {
+// active tab is the one wrapped in brackets, so a mono terminal keeps it. The
+// theme only repeats it, drawing the active tab in the accent and the others
+// muted.
+func tabStrip(active string, t shared.Theme) string {
 	cells := []string{"Summary", "Nodes", "Resource"}
 	out := make([]string, 0, len(cells))
 	for _, c := range cells {
 		if strings.EqualFold(c, active) {
-			out = append(out, "["+c+"]")
+			out = append(out, t.TabActive.Render("["+c+"]"))
 			continue
 		}
-		out = append(out, " "+c+" ")
+		out = append(out, t.TabInactive.Render(" "+c+" "))
 	}
 	return strings.Join(out, " ")
 }

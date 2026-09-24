@@ -144,11 +144,12 @@ func TestSearchScopeIsRetainedBuffer(t *testing.T) {
 // theme there is nothing to see, so this pins the coloured one.
 func TestSearchHighlightsTheTermInPlace(t *testing.T) {
 	m := testModel(t)
-	m.SetTheme(shared.NewTheme(false))
+	th := shared.NewTheme(false)
+	m.SetTheme(th)
 	m.ApplyRecords(recs(6))
 	m.applySearch("line-2")
 	v := m.View()
-	if !strings.Contains(v, "\x1b[") {
+	if !strings.Contains(v, th.Selected.Render("line-2")) {
 		t.Fatalf("no highlight reached the screen:\n%q", v)
 	}
 	// The retained buffer itself stays clean: raw text is what a copy yanks.

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- The screen chrome is drawn with more care. The header band shows the
+  program, server and namespace in separate styles and the safety mode as a
+  badge, louder when actions are enabled. Footer keys stand out from their
+  descriptions. The selected row is a bar across the pane, the list colours
+  only the phase cell and mutes the times and message, table heads and tree
+  connectors are styled, and the detail tabs, pickers, action pane, help
+  overlay and log annotations use the same palette. Truecolor skins round
+  the border corners. The text on screen is unchanged: every phase keeps its
+  glyph and word.
+
 - The demo dataset now has twelve workflows whose node maps follow the
   shapes the Argo controller writes: chained step groups, DAG tasks that list
   their dependents as children, retry attempts, an exit handler, a fan-out in

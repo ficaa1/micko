@@ -16,8 +16,13 @@ import (
 // keys so the view behind it cannot move, `q` closes it instead of quitting,
 // and only Ctrl-C still quits globally.
 type HelpOverlay struct {
-	open bool
+	open  bool
+	theme Theme
 }
+
+// SetTheme replaces the style set the overlay is drawn in. The zero theme
+// draws plain text.
+func (h *HelpOverlay) SetTheme(t Theme) { h.theme = t }
 
 // IsOpen reports whether the overlay is currently shown.
 func (h *HelpOverlay) IsOpen() bool { return h.open }
@@ -90,6 +95,23 @@ func helpLines() []string {
 	}
 }
 
+// styleLine draws one overlay line: the title and each section's name stand
+// out, the keys and their meanings stay plain. Styling runs after clipping,
+// so a cut line never loses the reset at its end.
+func (h *HelpOverlay) styleLine(i int, l string) string {
+	if l == "" || strings.HasPrefix(l, " ") {
+		return l
+	}
+	label, rest, _ := strings.Cut(l, " ")
+	if i == 0 {
+		return h.theme.Title.Render(label) + h.theme.Muted.Render(" "+rest)
+	}
+	if rest == "" {
+		return h.theme.Accent.Render(label)
+	}
+	return h.theme.Accent.Render(label) + " " + rest
+}
+
 // View renders the overlay clipped to the given box. A closed overlay renders
 // nothing, so callers can concatenate it unconditionally.
 //
@@ -105,12 +127,12 @@ func (h *HelpOverlay) View(width, height int) string {
 	if height > 0 && len(lines) > height {
 		lines = lines[:height]
 	}
-	if width > 0 {
-		clipped := make([]string, len(lines))
-		for i, l := range lines {
-			clipped[i] = ansi.Truncate(l, width, "…")
+	styled := make([]string, len(lines))
+	for i, l := range lines {
+		if width > 0 {
+			l = ansi.Truncate(l, width, "…")
 		}
-		lines = clipped
+		styled[i] = h.styleLine(i, l)
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(styled, "\n")
 }

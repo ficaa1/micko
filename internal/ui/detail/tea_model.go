@@ -440,7 +440,7 @@ func (m *Model) BodyLines() []string {
 	if lines, ok := m.stateLines(); ok {
 		return lines
 	}
-	lines := append([]string{tabStrip(m.tab), m.tabStatusLine()}, m.windowedLines()...)
+	lines := append([]string{tabStrip(m.tab, m.theme), m.tabStatusLine()}, m.windowedLines()...)
 	if m.height > 0 {
 		lines = shared.ClampLines(lines, m.height)
 	}
