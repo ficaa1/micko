@@ -63,6 +63,10 @@ func listKinds() []listKind {
 			name: "workflows", aliases: []string{"wf"}, desc: "the workflow list",
 			route: RouteList, show: (*Root).showWorkflows,
 		},
+		{
+			name: "cronworkflows", aliases: []string{"cwf", "cron"}, desc: "the cron workflow list",
+			route: RouteCron, show: (*Root).showCron,
+		},
 	}
 }
 
@@ -191,16 +195,11 @@ func (m *Root) unknownCommand(msg palette.UnknownMsg) {
 }
 
 // showWorkflows is the workflows kind's show: the workflow list, from any
-// route. It leaves detail and logs the way esc does, so their requests stop.
+// route. It leaves detail and logs the way esc does, so their requests stop,
+// and it is the plain list: a drill-down in progress ends.
 func (m *Root) showWorkflows() tea.Cmd {
-	switch m.route {
-	case RouteLogs:
-		m.cancelInflight("logs")
-		m.logState.running = false
-	case RouteDetail:
-		m.cancelInflight("detail")
-		m.detailState.loading = false
-	}
+	m.leaveDetailAndLogs()
+	m.endDrill()
 	m.route = RouteList
 	m.flash = "workflows"
 	if m.connected() && !m.listState.loading && !terminalWatchMode(m.watchMode) {

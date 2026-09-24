@@ -32,8 +32,11 @@ type deps struct {
 	// nsLister answers the namespace picker. It is optional: a Reader that
 	// cannot list namespaces simply does not implement it.
 	nsLister core.NamespaceLister
-	clock    Clock
-	interval time.Duration
+	// cronLister lists cron workflows. Optional like nsLister: without it the
+	// cron route says the connection cannot list them.
+	cronLister core.CronLister
+	clock      Clock
+	interval   time.Duration
 	// namespace is the active namespace; switching it bumps the connection
 	// generation (plan §2 journey 5).
 	namespace string
@@ -41,6 +44,13 @@ type deps struct {
 	// token may read. namespace keeps the session's own namespace, which the
 	// toggle returns to.
 	allNamespaces bool
+	// drillNamespace and labelSelector narrow the workflow list to the runs
+	// one object owns (a cron workflow's, a template's). drillNamespace is
+	// that object's namespace, which the list asks for instead of the
+	// session's; empty keeps the session's scope. Both are empty outside a
+	// drill-down.
+	drillNamespace string
+	labelSelector  string
 	// snapshotCap bounds collected summaries per generation (plan §5:
 	// snapshot cap 5,000; tests/demo may lower it).
 	snapshotCap int
@@ -51,7 +61,20 @@ type deps struct {
 // listNamespace is the namespace the list and the watch ask for. Empty is
 // Argo's "every namespace": the path becomes /api/v1/workflows/ with the
 // trailing slash, which the server's route matches with an empty namespace.
+//
+// In a drill-down the owner's namespace wins: a cron workflow's runs live in
+// its own namespace, so the list asks there even when the session is looking
+// at every namespace.
 func (d deps) listNamespace() string {
+	if d.drillNamespace != "" {
+		return d.drillNamespace
+	}
+	return d.scopeNamespace()
+}
+
+// scopeNamespace is the namespace the session looks at, ignoring any
+// drill-down: the one the kind lists ask for. Empty is every namespace.
+func (d deps) scopeNamespace() string {
 	if d.allNamespaces {
 		return ""
 	}
@@ -95,9 +118,10 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 				return msg
 			}
 			page, err := d.reader.List(ctx, core.Query{
-				Namespace: d.listNamespace(),
-				Continue:  cont,
-				Limit:     d.pageSize,
+				Namespace:     d.listNamespace(),
+				LabelSelector: d.labelSelector,
+				Continue:      cont,
+				Limit:         d.pageSize,
 			})
 			if err != nil {
 				if ctx.Err() != nil {
