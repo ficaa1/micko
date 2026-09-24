@@ -84,6 +84,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return func() tea.Msg { return intent }
 		}
 		return nil
+	case "T":
+		// Open the workflow straight on its timeline: the question "where
+		// did the time go" is often the reason to open it at all.
+		if intent := m.OpenSectionIntent(shared.SectionTimeline); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
 	case "/":
 		m.SearchOn = true
 		m.queryBefore = m.query

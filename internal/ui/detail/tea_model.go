@@ -29,7 +29,7 @@ type Model struct {
 	// notFound renders the not-found state (root-driven).
 	notFound bool
 
-	// tab is the active detail tab: "summary" | "nodes" | "resource".
+	// tab is the active detail section, one of the IDs in sections.
 	tab string
 	// revealResource is the session-only explicit reveal for the resource
 	// tab (DET-12 ⛨). It resets when the workflow (by UID) changes and is
@@ -89,6 +89,17 @@ type Model struct {
 	// gPending is the armed half of vim's gg (see the list pane).
 	gPending bool
 
+	// tl is the timeline section's chart, rebuilt with the node tree, and
+	// tlNameNeed the widest name cell among its rows. tlCursor is its
+	// selected row and tlTop its first visible one.
+	tl         timeline
+	tlNameNeed int
+	tlCursor   int
+	tlTop      int
+	// tlStale marks a chart the tree has changed under since it was laid
+	// out; showSection lays it out again before it is shown.
+	tlStale bool
+
 	// theme styles the node rows. It is injected so goldens can force the
 	// plain theme.
 	theme shared.Theme
@@ -125,6 +136,7 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 		Outline:  BuildNodeOutline(wf, OutlineOptions{}),
 		Resource: RenderResource(wf, false),
 		Message:  wf.Summary.Message,
+		Nodes:    wf.Nodes,
 	}
 	m.rawResource = append([]byte(nil), wf.Resource...)
 	m.nodeMap = wf.Nodes
@@ -142,6 +154,7 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 	m.rebuildNodes(keep)
 	if !sameWorkflow {
 		m.nodeCursor, m.nodeTop = 0, 0
+		m.tlCursor, m.tlTop = 0, 0
 		m.resourceTop, m.summaryTop = 0, 0
 	}
 	m.loaded = true
@@ -219,12 +232,16 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		return nil
 	}
 
+	if id, ok := sectionForKey(key); ok {
+		m.showSection(id)
+		return nil
+	}
 	switch key {
 	case "tab":
-		m.tab = nextTab(m.tab)
+		m.showSection(nextTab(m.tab))
 		return nil
 	case "shift+tab":
-		m.tab = prevTab(m.tab)
+		m.showSection(prevTab(m.tab))
 		return nil
 	case "esc":
 		// A find is cleared before esc leaves the workflow, so the key
@@ -285,20 +302,43 @@ func (m *Model) handleKey(key string) tea.Cmd {
 	case "l", "enter":
 		return m.nodeLogsCmd()
 	default:
-		if m.tab == "nodes" {
+		switch m.tab {
+		case "nodes":
 			m.handleNodesKey(key)
+		case "timeline":
+			m.handleTimelineKey(key)
 		}
 		return nil
 	}
 }
 
-// SelectedNode returns the node row under the cursor on the nodes tab, and
-// false when there is none (another tab, or an empty outline).
-func (m *Model) SelectedNode() (OutlineRow, bool) {
-	if m.tab != "nodes" || m.nodeCursor < 0 || m.nodeCursor >= len(m.nodes) {
-		return OutlineRow{}, false
+// Section is the active detail section's ID.
+func (m *Model) Section() string { return m.tab }
+
+// SetSection shows the section id, and reports false, changing nothing,
+// when id names no section.
+func (m *Model) SetSection(id string) bool {
+	if !HasSection(id) {
+		return false
 	}
-	return m.nodes[m.nodeCursor].Row, true
+	m.showSection(id)
+	return true
+}
+
+// SelectedNode returns the node row under the cursor on the nodes tab or
+// the timeline, and false when there is none (another tab, or no rows).
+func (m *Model) SelectedNode() (OutlineRow, bool) {
+	switch m.tab {
+	case "nodes":
+		if m.nodeCursor < 0 || m.nodeCursor >= len(m.nodes) {
+			return OutlineRow{}, false
+		}
+		return m.nodes[m.nodeCursor].Row, true
+	case "timeline":
+		r, ok := m.tlCursorRow()
+		return r.Row, ok
+	}
+	return OutlineRow{}, false
 }
 
 // NodeLogsIntent is the "show me this node's logs" intent. The root alone
@@ -330,6 +370,8 @@ func (m *Model) scrollLines() int {
 	switch m.tab {
 	case "nodes":
 		return len(m.nodes)
+	case "timeline":
+		return len(m.tl.rows)
 	case "resource":
 		return len(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"))
 	default:
@@ -342,8 +384,11 @@ func (m *Model) scrollLines() int {
 // gives rows to its progress header, its column heads and a bottom info
 // panel, and nodesLayout accounts for them.
 func (m *Model) viewRows() int {
-	if m.tab == "nodes" {
+	switch m.tab {
+	case "nodes":
 		return m.nodesLayout().treeRows
+	case "timeline":
+		return m.timelineLayout().treeRows
 	}
 	h := m.height - detailChromeRows
 	if h < 1 {
@@ -364,8 +409,8 @@ func (m *Model) pageStep() int {
 
 // scrollMax is the largest valid cursor or scroll anchor for the active tab.
 func (m *Model) scrollMax() int {
-	if m.tab == "nodes" {
-		if n := len(m.nodes) - 1; n > 0 {
+	if m.tab == "nodes" || m.tab == "timeline" {
+		if n := m.scrollLines() - 1; n > 0 {
 			return n
 		}
 		return 0
@@ -384,6 +429,8 @@ func (m *Model) scrollPos() int {
 	switch m.tab {
 	case "nodes":
 		return m.nodeCursor
+	case "timeline":
+		return m.tlCursor
 	case "resource":
 		return m.resourceTop
 	default:
@@ -401,6 +448,8 @@ func (m *Model) jumpTo(pos int) {
 	switch m.tab {
 	case "nodes":
 		m.nodeCursor = pos
+	case "timeline":
+		m.tlCursor = pos
 	case "resource":
 		m.resourceTop = pos
 	default:
@@ -458,10 +507,13 @@ func (m *Model) PaneTitle() string {
 
 // Hints is the detail key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	if m.tab == "nodes" {
+	switch m.tab {
+	case "nodes":
 		return m.nodesHints()
+	case "timeline":
+		return m.timelineHints()
 	}
-	return "tab section  v reveal  y copy  a actions  f raw  r refresh  esc back"
+	return "tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back"
 }
 
 // TextEntry reports whether the pane owns printable keys: the find input is
@@ -495,9 +547,12 @@ func (m *Model) BodyLines() []string {
 		return lines
 	}
 	var lines []string
-	if m.tab == "nodes" {
+	switch m.tab {
+	case "nodes":
 		lines = append([]string{tabStrip(m.tab, m.theme)}, m.nodesBody()...)
-	} else {
+	case "timeline":
+		lines = append([]string{tabStrip(m.tab, m.theme)}, m.timelineBody()...)
+	default:
 		lines = append([]string{tabStrip(m.tab, m.theme), m.tabStatusLine()}, m.windowedLines()...)
 	}
 	if m.height > 0 {
@@ -516,6 +571,8 @@ func (m *Model) RawLines() []string {
 	switch m.tab {
 	case "nodes":
 		return m.nodesRawLines()
+	case "timeline":
+		return m.timelineRawLines()
 	case "resource":
 		return strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n")
 	default:
@@ -546,6 +603,8 @@ func (m *Model) tabStatusLine() string {
 	switch m.tab {
 	case "nodes":
 		return m.nodesStatusLine()
+	case "timeline":
+		return m.timelineStatusLine()
 	case "resource":
 		reveal := "redacted (v reveals)"
 		if m.revealResource {
@@ -566,6 +625,8 @@ func (m *Model) windowedLines() []string {
 	switch m.tab {
 	case "nodes":
 		return m.nodeTreeLines(m.nodesLayout())
+	case "timeline":
+		return m.timelineLines(m.timelineLayout())
 	case "resource":
 		return sliceLines(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"), m.resourceTop, h)
 	default:
@@ -633,18 +694,6 @@ func itoaDetail(n int) string {
 	return string(b[i:])
 }
 
-// prevTab cycles the tab strip backwards (shift+tab).
-func prevTab(cur string) string {
-	switch cur {
-	case "summary":
-		return "resource"
-	case "nodes":
-		return "summary"
-	default:
-		return "nodes"
-	}
-}
-
 // bodyText picks the body for the current state. Every state renders
 // something: an empty pane would say nothing about why it is empty.
 func (m *Model) bodyText() string {
@@ -672,16 +721,4 @@ func (m *Model) resolvedState() DetailViewState {
 		}, true)
 	}
 	return state
-}
-
-// nextTab cycles summary → nodes → resource → summary.
-func nextTab(cur string) string {
-	switch cur {
-	case "summary":
-		return "nodes"
-	case "nodes":
-		return "resource"
-	default:
-		return "summary"
-	}
 }

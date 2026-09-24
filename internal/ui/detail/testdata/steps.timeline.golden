@@ -1,0 +1,5 @@
+DETAIL wf-steps
+ Summary   Nodes  [Timeline]  Resource 
+NAME                DURATION
+▾ ✓ wf-steps Steps
+└─ ✓ pod-1                     ------------------------------------------------------------
