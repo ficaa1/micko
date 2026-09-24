@@ -180,7 +180,7 @@ footer reports the first failure of the session. Sessions without
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `space` mark, `a` actions, `esc` clear marks then filter |
+| Workflow list | `enter` open, `l` workflow logs, `/` filter, `s` sort, `p` phase, `n` namespace, `space` mark, `a` actions, `w` wide columns, `esc` clear marks then filter |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `y` confirms, `D` finishes a delete |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
@@ -188,6 +188,39 @@ footer reports the first failure of the session. Sessions without
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
+
+### Filtering and wide columns
+
+`/` filters the list as you type. A plain word matches workflow names; the
+rest is a small query language:
+
+| Query | Matches |
+| --- | --- |
+| `etl report` | names containing `etl` and `report` (spaces separate terms; every term must match) |
+| `etl\|report` | names containing either (`\|` joins alternatives within a term) |
+| `!etl` | names not containing `etl`; `!` negates one alternative, so `!a\|b` is "not a, or b" |
+| `/^demo-.*-\d+$/` | names matching a Go regular expression, case-insensitive |
+| `~ddp` | names containing `d`, `d`, `p` in that order (fuzzy) |
+| `phase=failed`, `phase!=succeeded` | the phase, case-insensitive; `suspended` is a phase here, and `running` includes it |
+| `age<2h`, `age>1d` | time since the workflow started, or was created if it has not |
+| `dur>10m` | run time; a running workflow counts until now |
+| `label:team=data`, `label:team`, `label:!team` | a label's exact value, its presence, its absence |
+| `tmpl=nightly` | started from this WorkflowTemplate or ClusterWorkflowTemplate |
+| `cron=etl-hourly` | started by this CronWorkflow |
+
+Durations take `s`, `m`, `h` and `d`, combined as in `1d12h`. A workflow with
+no timestamp matches neither side of an `age` or `dur` bound. A term that does
+not parse leaves the previous filter applied and shows its error in the
+toolbar, and `enter` will not apply it; `esc` cancels the edit. Once applied,
+the toolbar shows the filter as it was read, such as `phase=Failed & age<2h`.
+Like the rest of the list, the filter runs on the collected snapshot, not on
+the server.
+
+`w` toggles wide columns: PROGRESS (the server's done/total count of pods, with
+a bar), STARTED and FINISHED in local time, TEMPLATE, CRON and LABELS (the
+labels no other column shows). As the pane narrows they drop in this order:
+LABELS, CRON, FINISHED, MESSAGE, TEMPLATE, STARTED, PROGRESS. Without `w`, a
+pane of 120 columns or more shows PROGRESS as well.
 
 Suspended workflows sort first by default and their waiting nodes are marked
 `AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
