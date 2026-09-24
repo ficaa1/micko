@@ -55,7 +55,7 @@ type namespaceEnvelope struct {
 func (c *Client) ListNamespaces(ctx context.Context) ([]string, string, error) {
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
-	if ns, err := c.managedNamespace(ctx); err == nil && ns != "" {
+	if ns, err := c.serverScope(ctx); err == nil && ns != "" {
 		return []string{ns}, "the server manages this namespace only", nil
 	}
 	req, err := c.newRequest(ctx, "/api/v1/workflows/", url.Values{
@@ -98,6 +98,45 @@ func (c *Client) ListNamespaces(ctx context.Context) ([]string, string, error) {
 	}
 	sort.Strings(out)
 	return out, "read from the workflows this token can see", nil
+}
+
+// serverScope is managedNamespace asked once per client. A server's managed
+// namespace is fixed when it starts, and the cluster-wide list consults it
+// on every poll, so repeating the request would double the poll's cost for
+// an answer that cannot change. Only a successful answer is kept.
+func (c *Client) serverScope(ctx context.Context) (string, error) {
+	c.scopeMu.Lock()
+	if c.scopeKnown {
+		ns := c.scopeNS
+		c.scopeMu.Unlock()
+		return ns, nil
+	}
+	c.scopeMu.Unlock()
+	ns, err := c.managedNamespace(ctx)
+	if err != nil {
+		return "", err
+	}
+	c.scopeMu.Lock()
+	c.scopeKnown, c.scopeNS = true, ns
+	c.scopeMu.Unlock()
+	return ns, nil
+}
+
+// checkClusterScope refuses a cluster-wide list on a server that manages one
+// namespace.
+//
+// Such a server watches its own namespace only. Asked for every namespace it
+// answers from that one, or refuses outright, depending on the token; either
+// way the reader would take the answer for the whole cluster. The refusal
+// here names the namespace instead. A server that will not say its scope is
+// asked anyway: its own answer, including a 403, is then the truth.
+func (c *Client) checkClusterScope(ctx context.Context) error {
+	ns, err := c.serverScope(ctx)
+	if err != nil || ns == "" {
+		return nil
+	}
+	return core.NewAPIError(core.ErrUnsupported, 0,
+		"the server manages namespace "+ns+" only and cannot list all namespaces")
 }
 
 // managedNamespace asks the server whether it is scoped to one namespace. A
