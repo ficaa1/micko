@@ -1,0 +1,93 @@
+== demo-release-gate
+ Summary  [Nodes]  Resource 
+progress 2/2 ================  ✓ 2  ◐ 1  elapsed 12m00s
+4 nodes · sort pipeline · 1/4
+NAME                             TEMPLATE  DURATION  TIMELINE            12m00s  MESSAGE
+▾ ● demo-release-gate Steps      release     12m00s  =========================>
+├─ ✓ build                       build        3m00s  =======-------------------
+├─ ✓ integration-test            test         4m00s  ------=========-----------
+└─ ◐ approve-production Suspend  approval     4m50s  ---------------==========>  AWAITING RESUME
+== demo-nightly-report
+ Summary  [Nodes]  Resource 
+progress 5/6 =============---  ✓ 2  ✗ 3  ⊘ 1  took 4m00s
+8 nodes · sort pipeline · 1/8
+NAME                                TEMPLATE   DURATION  TIMELINE             4m00s  MESSAGE
+▾ ✗ demo-nightly-report DAG         report        4m00s  ==========================  child 'transform' failed
+├─ ✓ extract                        extract         50s  ======--------------------
+├▾ ✗ transform Retry ↻ 2 ← extract  transform     2m30s  ------=================---  No more retries left
+│  ├─ ✗ transform(0) exit 1         transform       40s  ------=====---------------  Error (exit code 1)
+│  ├─ ✗ transform(1) exit 1         transform       45s  ------------=====---------  Error (exit code 1)
+│  └─ ✗ transform(2) exit 1         transform       50s  -----------------======---  Error (exit code 1)
+└─ ⊘ load ← transform               load                 --------------------------  omitted: depends condition not met
+  ✓ onExit exit handler             notify          20s  -----------------------===
+== demo-train-pipeline
+ Summary  [Nodes]  Resource 
+progress 3/8 ===========>----  ✓ 3  ● 3  ○ 2  elapsed 4m00s of ~9m
+9 nodes · sort pipeline · 1/9
+NAME                                                   TEMPLATE     DURATION  TIMELINE             4m00s  MESSAGE
+▾ ● demo-train-pipeline DAG                            train           4m00s  =========================>
+├─ ✓ preprocess                                        preprocess      1m10s  ========------------------
+├─ ✓ train-shard(0:0) ← preprocess                     train-shard     1m35s  --------===========-------
+├─ ✓ train-shard(1:1) ← preprocess                     train-shard     1m45s  --------============------
+├─ ● train-shard(2:2) ← preprocess                     train-shard     2m40s  --------=================>
+├─ ● train-shard(3:3) ← preprocess                     train-shard     2m40s  --------=================>
+├─ ● train-shard(4:4) ← preprocess                     train-shard     2m40s  --------=================>
+├─ ○ train-shard(5:5) ← preprocess                     train-shard            --------------------------
+└─ ○ evaluate ← train-shard(0:0), train-shard(1:1) +4  evaluate               --------------------------
+== demo-data-pull
+ Summary  [Nodes]  Resource 
+progress 3/5 ===============>  ✓ 3  ● 2  ⊘ 1  elapsed 40m00s of ~55m
+6 nodes · 1 skipped hidden · sort pipeline · 1/6
+NAME                      TEMPLATE          DURATION  TIMELINE            40m00s  MESSAGE
+▾ ● demo-data-pull Steps  pull                40m00s  =========================>
+├─ ✓ list-sources         list-sources         8m00s  =====---------------------
+├─ ✓ incremental-sync     incremental-sync    20m00s  -----=============--------
+├─ ✓ pull(eu)             pull-region          9m00s  ------------------======--
+├─ ● pull(us)             pull-region         11m49s  ------------------=======>
+└─ ● pull(apac)           pull-region         11m49s  ------------------=======>
+== demo-deploy-multi-layer
+ Summary  [Nodes]  Resource 
+progress 5/5 ================  ✓ 5  ⊘ 16  took 11m00s
+10 nodes · 16 skipped hidden · sort pipeline · 1/10
+NAME                             TEMPLATE  DURATION  TIMELINE            11m00s  MESSAGE
+▾ ✓ demo-deploy-multi-layer DAG  deploy      11m00s  ==========================
+├─ ✓ plan                        plan         1m30s  ====----------------------
+├▾ ✓ network DAG ← plan          layer        2m00s  ---======-----------------
+│  └─ ✓ apply-eu-west            apply        1m50s  ---=====------------------
+├▾ ✓ database DAG ← plan         layer        2m00s  --------=====-------------
+│  └─ ✓ apply-eu-west            apply        1m50s  --------=====-------------
+├▾ ✓ compute DAG ← plan          layer        2m00s  -------------=====--------
+│  └─ ✓ apply-eu-west            apply        1m50s  -------------=====--------
+└▾ ✓ edge DAG ← plan             layer        2m00s  ------------------=====---
+   └─ ✓ apply-eu-west            apply        1m50s  ------------------=====---
+== demo-nightly-report, info on extract
+ Summary  [Nodes]  Resource 
+progress 5/6 =============---  ✓ 2  ✗ 3  ⊘ 1  took 4m00s
+8 nodes · sort pipeline · 2/8 · l logs
+NAME                                DURATION  TIMELINE      MESSAGE                   │ NODE extract  values redacted (v reveals)
+▾ ✗ demo-nightly-report DAG            4m00s  ============  child 'transform' failed  │ name      extract
+├─ ✓ extract                             50s  ===---------                            │ full name demo-nightly-report.extract
+├▾ ✗ transform Retry ↻ 2 ← extract     2m30s  ---========-  No more retries left      │ id        demo-nightly-report-3295999816
+│  ├─ ✗ transform(0) exit 1              40s  ---==-------  Error (exit code 1)       │ type      Pod
+│  ├─ ✗ transform(1) exit 1              45s  -----===----  Error (exit code 1)       │ template  extract
+│  └─ ✗ transform(2) exit 1              50s  --------===-  Error (exit code 1)       │
+└─ ⊘ load ← transform                         ------------  omitted: depends conditi… │ phase     ✓ Succeeded
+  ✓ onExit exit handler                  20s  ----------==                            │ started   2026-09-08 10:00:05 UTC (1h59m ago)
+                                                                                      │ finished  2026-09-08 10:00:55 UTC (1h59m ago)
+                                                                                      │ duration  50s
+                                                                                      │ progress  1/1
+                                                                                      │
+                                                                                      │ pod       demo-nightly-report-extract-3295999816
+                                                                                      │ host      demo-worker-1
+                                                                                      │ exit code 0
+                                                                                      │ cpu       13s × 1 cpu
+                                                                                      │ memory    2m31s × 100Mi
+                                                                                      │
+                                                                                      │ inputs    date = [REDACTED]
+                                                                                      │           source = [REDACTED]
+                                                                                      │ outputs   rows = [REDACTED]
+                                                                                      │           artifact raw-extract
+                                                                                      │
+                                                                                      │
+                                                                                      │
+                                                                                      │

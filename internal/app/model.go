@@ -309,6 +309,20 @@ func (m *Root) armTick() tea.Cmd {
 	return m.deps.tickCmd()
 }
 
+// escLeavesRoute reports whether esc goes back from the active route. A
+// child that is using esc itself, to close its own input or clear its own
+// search, keeps it.
+func (m *Root) escLeavesRoute() bool {
+	switch m.route {
+	case RouteDetail:
+		return m.detailView == nil || !m.detailView.EscapeConsumed()
+	case RouteLogs:
+		return m.logsView == nil || !m.logsView.EscapeConsumed()
+	default:
+		return false
+	}
+}
+
 // textEntryActive reports whether the active route owns printable keys.
 func (m *Root) textEntryActive() bool {
 	switch m.route {
@@ -316,6 +330,8 @@ func (m *Root) textEntryActive() bool {
 		return m.listView.SearchOn
 	case RouteLogs:
 		return m.logsView != nil && m.logsView.EscapeConsumed()
+	case RouteDetail:
+		return m.detailView != nil && m.detailView.TextEntry()
 	default:
 		return false
 	}
@@ -426,7 +442,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
 			return m, m.startDetailFetch()
 		}
-		if m.route == RouteDetail && key == "a" {
+		if m.route == RouteDetail && key == "a" && !m.textEntryActive() {
 			m.actionView = m.newActionView(m.selection)
 			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 			if m.connectionReady && m.connectionFresh {
@@ -436,7 +452,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if key == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
+		if key == "esc" && m.escLeavesRoute() {
 			return m, m.back()
 		}
 		// List route: route the keyboard into the list child (j/k/arrows/Enter/
@@ -664,6 +680,7 @@ func (m *Root) View() tea.View {
 		f.Route = "detail"
 		if m.detailView != nil {
 			m.detailView.SetSize(f.BodyWidth(), f.BodyHeight())
+			m.detailView.SetNow(m.deps.clock.Now())
 			f.Hints = m.detailView.Hints()
 			f.Status = m.detailView.PaneStatus()
 			f.Body = m.detailView.BodyLines()
