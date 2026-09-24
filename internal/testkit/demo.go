@@ -404,6 +404,7 @@ func demoNightlyReport(start time.Time) core.Workflow {
 		in: core.NodeIO{Parameters: params("status", "Failed", "channel", "#data-alerts")}})
 	return b.finish(4*time.Minute, "child 'transform' failed", map[string]string{
 		"workflows.argoproj.io/workflow-template": "nightly-report",
+		"team": "data",
 	})
 }
 
@@ -439,7 +440,10 @@ func demoTrainPipeline(start time.Time) core.Workflow {
 		}
 	}
 	b.outbound(root, eval)
-	return b.finish(running, "", map[string]string{"workflows.argoproj.io/workflow-template": "train"})
+	return b.finish(running, "", map[string]string{
+		"workflows.argoproj.io/workflow-template": "train",
+		"team": "ml",
+	})
 }
 
 // demoDataPull is a steps workflow on its third group, with a conditional
@@ -502,7 +506,10 @@ func demoReleaseGate(start time.Time) core.Workflow {
 		template: "approval", at: 7*time.Minute + 10*time.Second, dur: running})
 	g3 := b.add(approve, root, demoNode{display: "[3]", typ: "StepGroup", phase: "Pending", at: notStarted})
 	_ = g3
-	return b.finish(running, "", map[string]string{"workflows.argoproj.io/workflow-template": "release"})
+	return b.finish(running, "", map[string]string{
+		"workflows.argoproj.io/workflow-template": "release",
+		"team": "platform", "env": "prod",
+	})
 }
 
 // demoBackfill ran out of memory: exit code 137 on its only worker pod.
@@ -545,7 +552,10 @@ func demoDeploy(start time.Time) core.Workflow {
 		}
 		at += 2*time.Minute + 5*time.Second
 	}
-	return b.finish(11*time.Minute, "", map[string]string{"workflows.argoproj.io/workflow-template": "deploy"})
+	return b.finish(11*time.Minute, "", map[string]string{
+		"workflows.argoproj.io/workflow-template": "deploy",
+		"team": "platform", "env": "prod",
+	})
 }
 
 // demoValidation never ran: the spec failed validation, so there are no nodes.
@@ -578,6 +588,7 @@ func demoETLRun(start time.Time, i int) core.Workflow {
 	b.add(g1, root, check)
 	return b.finish(6*time.Minute, msg, map[string]string{
 		"workflows.argoproj.io/cron-workflow": "demo-etl-hourly",
+		"team":                                "data",
 	})
 }
 
