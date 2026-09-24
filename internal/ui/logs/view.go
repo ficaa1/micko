@@ -30,10 +30,17 @@ const (
 	rowEnd                   // explicit end-of-stream row
 )
 
-// row is one scrollable line: body text or an annotation.
+// row is one scrollable line: body text or an annotation. With wrapping on
+// a row can take several screen lines; it is still one row, so scrolling,
+// pausing and search jumps all anchor on the logical line.
 type row struct {
 	kind rowKind
 	text string
+	// logIdx is the row's index among the retained log lines, -1 for an
+	// annotation. Search hits are indices of the same kind.
+	logIdx int
+	// pod is the pod the line came from, for the source label.
+	pod string
 }
 
 // layout fixed chrome: header, status, [editor line], count line, footer.
@@ -67,13 +74,37 @@ func (b *buffer) snapshot() []row {
 			if e.kind == markOpen {
 				text = markerLineWithCount(e.ctxPod, e.ctxCont, lineCount)
 			}
-			rows = append(rows, row{kind: rowMarker, text: text})
+			rows = append(rows, row{kind: rowMarker, text: text, logIdx: -1})
 			continue
 		}
-		rows = append(rows, row{kind: rowLog, text: e.line.Content})
+		rows = append(rows, row{kind: rowLog, text: e.line.Content, logIdx: logIdx, pod: e.line.PodName})
 		logIdx++
 	}
 	return rows
+}
+
+// filterRows keeps the log rows that contain term, with the search's own
+// case rule, and drops the annotations: the filter shows matching lines
+// and nothing else, the way less's & does.
+func filterRows(rows []row, term string, caseSensitive bool) []row {
+	out := make([]row, 0, len(rows))
+	needle := term
+	if !caseSensitive {
+		needle = strings.ToLower(term)
+	}
+	for _, r := range rows {
+		if r.kind != rowLog {
+			continue
+		}
+		hay := r.text
+		if !caseSensitive {
+			hay = strings.ToLower(hay)
+		}
+		if strings.Contains(hay, needle) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // hitRowIndex maps each hit, in order, to the scrollable row that carries it.
@@ -102,39 +133,6 @@ func hitRowIndex(hits []int, hitLogIdx []int) []int {
 		out = append(out, r)
 	}
 	return out
-}
-
-// highlight marks every occurrence of the search term inside one line.
-//
-// The current hit is reversed and the others are coloured, so the eye lands on
-// the line n or N just moved to without losing the others. Nothing is added to
-// the text: the styling is an overlay, and RawLines and the clipboard keep the
-// line exactly as the server sent it.
-func (m *Model) highlight(text string, current bool) string {
-	term := m.search.term
-	if term == "" || text == "" {
-		return text
-	}
-	style := m.theme.Warning
-	if current {
-		style = m.theme.Selected
-	}
-	hay, needle := text, term
-	if !m.search.caseSensitive {
-		hay, needle = strings.ToLower(text), strings.ToLower(term)
-	}
-	var b strings.Builder
-	for i := 0; ; {
-		j := strings.Index(hay[i:], needle)
-		if j < 0 {
-			b.WriteString(text[i:])
-			break
-		}
-		b.WriteString(text[i : i+j])
-		b.WriteString(style.Render(text[i+j : i+j+len(needle)]))
-		i += j + len(needle)
-	}
-	return b.String()
 }
 
 // viewRows is the scrollable window height (fixed chrome + footer + an
@@ -175,9 +173,22 @@ func (m *Model) bottomAt() int {
 }
 
 // minBottom is the lowest bottom index that still fills the pane. Scrolling
-// cannot go below it: rows[0] is already the first line on screen.
+// cannot go below it: rows[0] is already the first line on screen. With
+// wrapping on, a row can take several screen lines, so the floor is the
+// first row at which the rows up to it fill the pane.
 func (m *Model) minBottom() int {
-	min := m.viewRows() - 1
+	h := m.viewRows()
+	if m.wrap {
+		used := 0
+		for i, r := range m.rows {
+			used += m.rowHeight(r)
+			if used >= h {
+				return i
+			}
+		}
+		return m.maxBottom()
+	}
+	min := h - 1
 	if max := m.maxBottom(); min > max {
 		return max
 	}
@@ -185,6 +196,29 @@ func (m *Model) minBottom() int {
 		return 0
 	}
 	return min
+}
+
+// textWidth is the number of cells a row's text gets on one screen line:
+// the pane width less the label column when labels are shown.
+func (m *Model) textWidth(r row) int {
+	w := m.width
+	if r.kind == rowLog && m.labelsShown() {
+		w -= labelWidth + labelGap
+	}
+	if w < 1 {
+		return 1
+	}
+	return w
+}
+
+// rowHeight is the number of screen lines a row takes: one, or with
+// wrapping on, as many as its text needs at the pane width. Annotations are
+// short and never wrap. An unknown width (0) wraps nothing.
+func (m *Model) rowHeight(r row) int {
+	if !m.wrap || r.kind != rowLog || m.width <= 0 {
+		return 1
+	}
+	return len(wrapBreaks(r.text, m.textWidth(r)))
 }
 
 // clampBottomRaw clamps an absolute bottom index into [minBottom, maxBottom].
@@ -221,33 +255,62 @@ func (m *Model) ensureSnapshot() {
 		return
 	}
 	m.rows = m.buf.snapshot()
-	hitLogIdx := make([]int, 0, len(m.rows))
-	logIdx := 0
-	for _, row := range m.rows {
-		if row.kind == rowLog {
-			hitLogIdx = append(hitLogIdx, logIdx)
-			logIdx++
-		} else {
-			hitLogIdx = append(hitLogIdx, -1)
+	m.retainedLogs = 0
+	for _, r := range m.rows {
+		if r.kind == rowLog {
+			m.retainedLogs++
 		}
+	}
+	if m.filterOn && m.search.term != "" {
+		m.rows = filterRows(m.rows, m.search.term, m.search.caseSensitive)
+	}
+	hitLogIdx := make([]int, 0, len(m.rows))
+	for _, r := range m.rows {
+		hitLogIdx = append(hitLogIdx, r.logIdx)
 	}
 	m.hitRows = hitRowIndex(m.hits, hitLogIdx)
 	m.rowsFor = len(m.buf.buf)
 }
 
-// window returns the rows visible at the current scroll position.
+// window returns the rows visible at the current scroll position, the top
+// one included when wrapping shows only its tail.
 func (m *Model) window() []row {
-	rows, _ := m.windowAt()
+	rows, _, _ := m.windowAt()
 	return rows
 }
 
-// windowAt returns the visible rows and the absolute index of the first one,
-// so the renderer can tell which row carries the current search hit.
-func (m *Model) windowAt() ([]row, int) {
+// windowAt returns the visible rows, the absolute index of the first one,
+// so the renderer can tell which row carries the current search hit, and
+// how many of the first row's screen lines are scrolled off the top.
+//
+// The window is anchored at its bottom row, a logical line. With wrapping
+// on, rows are added above it until the pane is full, and the top one may
+// show only its last screen lines. Turning wrapping on or off therefore
+// keeps the same line at the bottom of the pane.
+func (m *Model) windowAt() ([]row, int, int) {
 	m.ensureSnapshot()
 	h := m.viewRows()
 	if len(m.rows) == 0 {
-		return nil, 0
+		return nil, 0, 0
+	}
+	if m.wrap {
+		bottom := m.bottomAt()
+		if min := m.minBottom(); bottom <= min {
+			// At the top of the log the first row starts the pane. The
+			// floor row may not fit whole below it; windowLines cuts its
+			// tail at the pane's last line.
+			return m.rows[:min+1], 0, 0
+		}
+		top, used := bottom, m.rowHeight(m.rows[bottom])
+		for top > 0 && used < h {
+			top--
+			used += m.rowHeight(m.rows[top])
+		}
+		skip := 0
+		if used > h && top < bottom {
+			skip = used - h
+		}
+		return m.rows[top : bottom+1], top, skip
 	}
 	bottom := m.bottomAt()
 	// Scrolling up past the first line must not shrink the pane. Without
@@ -264,7 +327,7 @@ func (m *Model) windowAt() ([]row, int) {
 	if top < 0 {
 		top = 0
 	}
-	return m.rows[top : bottom+1], top
+	return m.rows[top : bottom+1], top, 0
 }
 
 // View renders the log pane (header, status, editors, count, window,
@@ -339,21 +402,58 @@ func (m *Model) bodyLines() []string {
 	}
 	b.WriteString(m.countView())
 	b.WriteString("\n")
-	rows, top := m.windowAt()
-	cur := m.currentHitRow()
-	for i, r := range rows {
-		text := r.text
-		if r.kind == rowLog {
-			text = m.highlight(text, top+i == cur)
-		}
-		b.WriteString(text)
-		if i < len(rows)-1 {
-			b.WriteString("\n")
-		}
-	}
+	b.WriteString(strings.Join(m.windowLines(), "\n"))
 	// An empty buffer leaves the count line as the last written line, whose
 	// trailing newline would otherwise become a phantom blank row.
 	return strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
+}
+
+// windowLines renders the visible window as screen lines: each row with its
+// source label and its styled spans, cut into screen lines when wrapping is
+// on. A wrapped row's continuation lines are indented past the label
+// column, so the labels stay a clean column.
+func (m *Model) windowLines() []string {
+	rows, top, skip := m.windowAt()
+	cur := m.currentHitRow()
+	h := m.viewRows()
+	out := make([]string, 0, h)
+	for i, r := range rows {
+		if r.kind != rowLog {
+			out = append(out, r.text)
+			continue
+		}
+		prefix, indent := "", ""
+		if m.labelsShown() {
+			prefix = m.labelCell(r.pod)
+			indent = strings.Repeat(" ", labelWidth+labelGap)
+		}
+		spans := m.lineSpans(r.text, top+i == cur)
+		if !m.wrap || m.width <= 0 {
+			out = append(out, prefix+renderRange(r.text, 0, len(r.text), spans))
+			continue
+		}
+		breaks := wrapBreaks(r.text, m.textWidth(r))
+		for j, from := range breaks {
+			if i == 0 && j < skip {
+				continue
+			}
+			to := len(r.text)
+			if j+1 < len(breaks) {
+				to = breaks[j+1]
+			}
+			lead := indent
+			if j == 0 {
+				lead = prefix
+			}
+			out = append(out, lead+renderRange(r.text, from, to, spans))
+		}
+	}
+	// A bottom row taller than the pane shows its first screen lines: the
+	// anchor is the line's start, which is where it has to be read from.
+	if len(out) > h && m.wrap {
+		out = out[:h]
+	}
+	return out
 }
 
 // headerView is the pane title: sanitized workflow name (SEC-02).
@@ -372,6 +472,15 @@ func (m *Model) statusView() string {
 		" · [" + m.phase.String() + "]"
 	if m.phase == PhaseError && m.errText != "" {
 		s += " — " + shared.Sanitize(m.errText)
+	}
+	// The filter hides lines, so the count of what it hides sits on the
+	// line that is always shown, beside the stream state.
+	if m.filterOn && m.search.term != "" {
+		m.ensureSnapshot()
+		s += " · & \"" + m.search.term + "\": showing " + itoaView(len(m.rows)) + " of " + itoaView(m.retainedLogs)
+	}
+	if m.note != "" {
+		s += " · " + m.note
 	}
 	return s
 }
@@ -396,7 +505,9 @@ func (m *Model) countView() string {
 	return s
 }
 
-// footerView carries the key hints (q/n/p/? are root-owned).
+// footerView carries the key hints (q/n/p/? are root-owned). They are in
+// the order a reader reaches for them, because a narrow pane clips the
+// footer from the right; `?` lists the rest.
 func (m *Model) footerView() string {
-	return "t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back"
+	return "t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back"
 }

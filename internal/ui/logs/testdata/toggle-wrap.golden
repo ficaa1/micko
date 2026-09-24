@@ -1,0 +1,10 @@
+logs: wf-1
+Scope: workflow-wide · container: main · [FOLLOWING]
+retained: 4/10000 lines (0 evicted)
+── (all pods):main ── 4 lines recorded
+transform(0)     2026-09-07T10:00:00Z reading raw-extract (184022 rows)
+transform(0)     2026-09-07T10:00:03Z ERROR column 'revenue_eur' has 312 nulls; 
+                 schema requires non-null values in every row
+load             {"level":"warn","msg":"slow insert","rows":184022}
+extra-3          errors: 0
+t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back

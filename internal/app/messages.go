@@ -105,6 +105,15 @@ type logRecordMsg struct {
 	Err      error
 }
 
+// logSourcesMsg carries the pod-to-step map for a workflow-wide log pane.
+// Sources is nil when the workflow could not be read.
+type logSourcesMsg struct {
+	genStamp
+	RequestID uint64
+	Ref       core.Ref
+	Sources   map[string]string
+}
+
 // tickMsg schedules the next poll only after the previous collection
 // completes (plan §5: "start the next timer after completion, not
 // concurrent ticker launches").
