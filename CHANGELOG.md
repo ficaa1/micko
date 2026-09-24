@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Added marks and bulk actions. `space` marks the selected workflow and `esc`
+  clears the marks before it clears the filter. Marks follow their workflow
+  through refreshes, sorting and filtering, and the toolbar counts them,
+  including the ones the filter hides. With marks, `a` acts on every marked
+  workflow: the menu says how many each verb applies to, the confirmation
+  lists them, and the requests go out one at a time, each with its own
+  identity check and read-back and none ever resent. The result lists every
+  workflow's outcome.
+- `a` now works on the workflow list too, for the selected workflow, behind
+  the same fresh-data gate as the detail view.
+- Added suspend (`z`), terminate (`t`) and delete (`d`) to the actions menu.
+  Terminate asks for the workflow's name, or for the number of workflows in a
+  bulk action. Delete asks twice: a final screen deletes only on `D`.
+- The actions menu now offers only the verbs that apply to the workflow's
+  phase, and an action whose workflow has moved on since the menu opened is
+  refused before anything is sent.
+- A workflow suspended with `spec.suspend` now reads as Suspended in the list,
+  and resume is offered for it.
+- Every write attempt is now recorded in
+  `~/.local/state/argo-tui/actions.jsonl` (or under `$XDG_STATE_HOME`), one
+  JSON line per attempt. `journal: false` in the config file turns it off.
+
 - The demo dataset now has twelve workflows whose node maps follow the
   shapes the Argo controller writes: chained step groups, DAG tasks that list
   their dependents as children, retry attempts, an exit handler, a fan-out in

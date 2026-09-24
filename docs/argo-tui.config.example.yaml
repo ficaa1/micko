@@ -2,6 +2,9 @@
 # Actions require --allow-actions and confirmation for each request.
 currentProfile: dev
 refreshInterval: 5s
+# Every write attempt is appended to $XDG_STATE_HOME/argo-tui/actions.jsonl
+# (default ~/.local/state/argo-tui/actions.jsonl). Uncomment to turn it off.
+# journal: false
 
 profiles:
   dev:
