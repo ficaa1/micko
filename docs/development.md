@@ -10,11 +10,11 @@ access for managed forwarding goes through `kubectl`.
 | --- | --- |
 | `cmd/argo-tui` | Flags, config, connection setup and process lifecycle |
 | `internal/config`, `internal/portforward` | Profile validation and owned port-forward recovery |
-| `internal/core` | Reader, Watcher and Actioner interfaces, the optional listers of the other kinds; workflow and cron workflow types and errors |
+| `internal/core` | Reader, Watcher and Actioner interfaces, the optional listers of the other kinds; workflow, cron workflow and template types and errors |
 | `internal/cronexpr` | The controller's cron dialect: parsing and next run times in a time zone |
 | `internal/argo` | REST transport, pagination, watch/log parsing, pod resolution and mutations |
 | `internal/app` | Routes, async commands, stale-response rejection, action orchestration and the command registry |
-| `internal/ui` | List, detail, logs, namespaces, profiles, command palette, actions and shared rendering; `kindlist` is the list of the other kinds and `cronlist` the cron workflow kind |
+| `internal/ui` | List, detail, logs, namespaces, profiles, command palette, actions and shared rendering; `kindlist` is the list of the other kinds, `cronlist` and `templatelist` its kinds |
 | `internal/testkit` | In-memory reader, synthetic demo data and injectable clock |
 
 Keep API declarations in the Go source rather than duplicating them in docs.
@@ -49,6 +49,11 @@ live in [ci.yml](../.github/workflows/ci.yml).
   with `listOptions.limit` and `listOptions.continue`; that endpoint takes no
   `fields` projection. Their drill-down is the workflow list with
   `listOptions.labelSelector=workflows.argoproj.io/cron-workflow=<name>`.
+- Workflow templates come from `/api/v1/workflow-templates/{namespace}` and
+  cluster templates from `/api/v1/cluster-workflow-templates`, paged the same
+  way and without a projection. Their drill-downs select on
+  `workflows.argoproj.io/workflow-template` and
+  `workflows.argoproj.io/cluster-workflow-template`.
 - Watch and log parsers accept JSON-lines and SSE envelopes, including in-band
   errors after HTTP 200. Stream cancellation is distinct from transport failure.
   Watch recovery belongs to the app; expired resource versions require a relist.

@@ -360,6 +360,10 @@ func (m *Root) kindURL() string {
 	switch m.route {
 	case RouteCron:
 		return base + "/cron-workflows/" + ns + "/" + name
+	case RouteTemplates:
+		return base + "/workflow-templates/" + ns + "/" + name
+	case RouteClusterTemplates:
+		return base + "/cluster-workflow-templates/" + name
 	}
 	return ""
 }
