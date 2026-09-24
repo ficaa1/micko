@@ -332,7 +332,8 @@ const running = time.Duration(-2)
 // out-of-memory kill, a fan-out still in progress, a validation error with no
 // nodes at all, a deploy tree that is mostly skipped branches, and runs a
 // CronWorkflow started. Two more runs live in a second namespace,
-// DemoMLNamespace.
+// DemoMLNamespace. The CronWorkflows beside them are linked to those runs by
+// the controller's labels.
 func DemoReader(clock *FakeClock) *FakeReader {
 	now := clock.Now()
 	f := &FakeReader{
@@ -379,6 +380,12 @@ func DemoReader(clock *FakeClock) *FakeReader {
 	}
 	put(demoHParamSweep(now.Add(-18 * time.Minute)))
 	put(demoBatchInfer(now.Add(-7 * time.Hour)))
+
+	runs := make([]core.Workflow, 0, len(f.Order))
+	for _, ref := range f.Order {
+		runs = append(runs, f.Workflows[ref])
+	}
+	f.CronWorkflows = demoCronWorkflows(now, runs)
 	return f
 }
 
