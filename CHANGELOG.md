@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The list filter now reads a small query language. Spaces separate terms
+  that must all match, `|` offers alternatives, `!` negates, `/.../` is a
+  regular expression and `~` a fuzzy match. `phase=`, `age<`, `dur>`,
+  `label:`, `tmpl=` and `cron=` filter on the phase, the age, the run time,
+  the labels and the template or CronWorkflow a run came from. A plain word
+  still matches names. A term that does not parse leaves the filter as it
+  was and says why in the toolbar, which shows the applied filter as it was
+  read.
+- `w` on the workflow list adds wide columns: progress with a bar, start and
+  finish times, the template, the CronWorkflow and the remaining labels. They
+  give way in a fixed order as the pane narrows. A pane of 120 columns or
+  more shows the progress column without `w`.
+- The space bar now types a space in the list filter instead of being
+  dropped.
+
 - Added marks and bulk actions. `space` marks the selected workflow and `esc`
   clears the marks before it clears the filter. Marks follow their workflow
   through refreshes, sorting and filtering, and the toolbar counts them,

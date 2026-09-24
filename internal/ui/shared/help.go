@@ -56,41 +56,42 @@ func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
 		"",
-		"Global    q quit        ctrl+c quit        ? help",
-		"          esc back / close",
-		"          P switch profile (cluster)",
-		"          f raw full-screen view (no borders, easy to copy)",
-		"          y copy to clipboard              o open in Argo UI",
+		"Global    q quit  ctrl+c quit  ? help  esc back / close  P profile",
+		"          f raw full screen (easy to copy)  y copy  o open in Argo UI",
+		"Move      j / k  pgup / pgdn  gg / home top  G / end bottom",
 		"",
-		"Move      j / k         up / down          pgup / pgdn page",
-		"          gg top        G bottom           home / end",
+		"List      enter open  l logs  s sort  p phase  r refresh  n namespace",
+		"          space mark  a actions (marked, or selected)  w wide columns",
+		"          esc clear marks, then filter",
+		"          / filter: word  a|b  !word  /regex/  ~fuzzy  (spaces: AND)",
+		"            phase=failed  phase!=x  age<2h  dur>10m  tmpl=x  cron=x",
+		"            label:k=v  label:k  label:!k",
 		"",
-		"List      enter open    l logs             / search (live)",
-		"          s sort        p phase filter     r refresh",
-		"          space mark / unmark              a actions (marked, or selected)",
-		"          n switch namespace               esc clear marks, then filter",
+		"Detail    tab / shift+tab section  r refresh  a actions",
+		"          h show / hide skipped nodes  s sort nodes  p phase filter",
+		"          l logs for the selected node  v reveal redacted values",
 		"",
-		"Detail    tab next section  shift+tab previous",
-		"          h show / hide skipped nodes",
-		"          s sort the nodes tab (started / name / phase)",
-		"          p filter the nodes tab by phase",
-		"          l logs for the selected node",
-		"          v reveal redacted resource values",
-		"          r refresh this workflow now",
-		"          a actions (requires --allow-actions)",
-		"",
-		"Logs      t follow (tail)  space pause     c container",
-		"          / search      n next match       N previous match",
+		"Logs      t follow (tail)  space pause  c container  G newest",
+		"          / search  n / N next / previous match  esc back",
 		"          | pipe the retained lines to another program",
-		"          G newest line                    esc back",
 		"",
 		"Actions   a opens the pane; only verbs that apply are offered",
 		"          u resume  z suspend  r retry  b resubmit  s stop",
 		"          t terminate (type the name)  d delete (then only D deletes)",
 		"          y confirms; enter and esc cancel; one result goes to the footer",
 		"          marked: one request per workflow, in order; results stay until esc",
+		"          actions need --allow-actions",
 	}
 }
+
+// helpFitWidth and helpFitHeight are the body of an 80x40 terminal inside
+// the shell's border: the smallest common terminal the overlay is written
+// to fit whole. Help that clips there hides keys from the reader who most
+// needs them.
+const (
+	helpFitWidth  = 76
+	helpFitHeight = 36
+)
 
 // View renders the overlay clipped to the given box. A closed overlay renders
 // nothing, so callers can concatenate it unconditionally.
