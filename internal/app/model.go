@@ -156,6 +156,8 @@ type Root struct {
 	kindDefs   map[Route]*kindDef
 	kindStates map[Route]*kindState
 	cronView   *kindlist.Model[core.CronWorkflow]
+	tmplView   *kindlist.Model[core.WorkflowTemplate]
+	ctmplView  *kindlist.Model[core.WorkflowTemplate]
 
 	// drill is the active drill-down from a kind's row to the workflows it
 	// owns; nil outside one.
@@ -228,18 +230,22 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 		nsLister = n
 	}
 	cronLister, _ := r.(core.CronLister)
+	templateLister, _ := r.(core.TemplateLister)
+	clusterTemplateLister, _ := r.(core.ClusterTemplateLister)
 	m := &Root{
 		deps: deps{
-			reader:      r,
-			watcher:     watcher,
-			actioner:    actioner,
-			nsLister:    nsLister,
-			cronLister:  cronLister,
-			clock:       clock,
-			interval:    interval,
-			namespace:   namespace,
-			snapshotCap: 5000,
-			pageSize:    100,
+			reader:                r,
+			watcher:               watcher,
+			actioner:              actioner,
+			nsLister:              nsLister,
+			cronLister:            cronLister,
+			templateLister:        templateLister,
+			clusterTemplateLister: clusterTemplateLister,
+			clock:                 clock,
+			interval:              interval,
+			namespace:             namespace,
+			snapshotCap:           5000,
+			pageSize:              100,
 		},
 		inflight:        map[string]inflightOp{},
 		theme:           shared.NewTheme(false),
@@ -257,7 +263,11 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	}
 	m.palView.SetCommands(paletteSpecs(m.registry))
 	m.palView.SetArgSource(m.paletteArgs)
-	m.kindDefs = map[Route]*kindDef{RouteCron: m.newCronKind()}
+	m.kindDefs = map[Route]*kindDef{
+		RouteCron:             m.newCronKind(),
+		RouteTemplates:        m.newTemplateKind(),
+		RouteClusterTemplates: m.newClusterTemplateKind(),
+	}
 	m.kindStates = map[Route]*kindState{}
 	for r := range m.kindDefs {
 		m.kindStates[r] = &kindState{}
@@ -438,6 +448,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "o":
 				return m, m.openInBrowser()
 			}
+		}
+		// A cluster-scoped kind belongs to no namespace, so the namespace
+		// keys have nothing to change there. They say so rather than switch
+		// a scope the pane does not show.
+		if m.clusterScopedRoute() && (key == "n" || key == "0") && !m.textEntryActive() {
+			m.flash = "cluster workflow templates belong to no namespace: n and 0 do not apply here"
+			return m, nil
 		}
 		// `n` switches namespace. It is bound on the list because that is the
 		// route the namespace describes; in the logs pane `n` is the next
@@ -761,7 +778,7 @@ func (m *Root) View() tea.View {
 			f.Status = m.logsView.PaneStatus()
 			f.Body = m.logsView.BodyLines()
 		}
-	case RouteCron:
+	case RouteCron, RouteTemplates, RouteClusterTemplates:
 		def := m.kind(m.route)
 		def.pane.SetSize(f.BodyWidth(), bodyH)
 		f.Title = def.pane.PaneTitle()

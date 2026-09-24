@@ -25,10 +25,6 @@ const OwnerLabel = "workflows.argoproj.io/cron-workflow"
 // upcomingCount is how many run times the info panel lists.
 const upcomingCount = 5
 
-// Redacted is what a parameter value shows until the reader reveals it. It is
-// the resource tab's marker, so the two panes redact alike.
-const Redacted = "[REDACTED]"
-
 // Spec is the cron workflow kind.
 func Spec() kindlist.Spec[core.CronWorkflow] {
 	return kindlist.Spec[core.CronWorkflow]{
@@ -441,39 +437,8 @@ func info(cw core.CronWorkflow, reveal bool, now time.Time) []kindlist.Field {
 	if cw.Entrypoint != "" {
 		add("Entrypoint", cw.Entrypoint)
 	}
-	f = append(f, ArgumentFields(cw.Arguments, reveal)...)
+	f = append(f, kindlist.ArgumentFields(cw.Arguments, reveal)...)
 	return f
-}
-
-// ArgumentFields renders workflow arguments for an info panel: one line per
-// parameter, its value redacted unless reveal is on, its source when it is
-// read at run time.
-func ArgumentFields(args []core.Argument, reveal bool) []kindlist.Field {
-	if len(args) == 0 {
-		return []kindlist.Field{{Label: "Arguments", Value: "none"}}
-	}
-	var f []kindlist.Field
-	for i, a := range args {
-		label := ""
-		if i == 0 {
-			label = "Arguments"
-		}
-		f = append(f, kindlist.Field{Label: label, Value: a.Name + " = " + argumentValue(a, reveal)})
-	}
-	return f
-}
-
-func argumentValue(a core.Argument, reveal bool) string {
-	switch {
-	case a.HasValue && reveal:
-		return a.Value
-	case a.HasValue:
-		return Redacted
-	case a.ValueFrom != "":
-		return "(from " + a.ValueFrom + ")"
-	default:
-		return "(no value: supplied at submission)"
-	}
 }
 
 // runTime is one upcoming run: the wall time in the schedule's zone and how
