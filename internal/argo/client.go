@@ -559,6 +559,8 @@ var listFields = strings.Join([]string{
 	"items.status.message",
 	"items.status.startedAt",
 	"items.status.finishedAt",
+	"items.status.progress",
+	"items.status.estimatedDuration",
 }, ",")
 
 // gateFields is the projection of the gate scan: an identity and the node
