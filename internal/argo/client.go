@@ -555,6 +555,7 @@ var listFields = strings.Join([]string{
 	"items.metadata.labels",
 	"items.metadata.annotations",
 	"items.metadata.creationTimestamp",
+	"items.spec.suspend",
 	"items.status.phase",
 	"items.status.message",
 	"items.status.startedAt",
@@ -683,8 +684,13 @@ func (c *Client) markSuspended(ctx context.Context, q core.Query, page *core.Pag
 	if err != nil {
 		return core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable gate scan (protocol mismatch; see docs/development.md)", err)
 	}
+	// The scan adds the gate half of the marker. The spec.suspend half came
+	// with the page itself and must survive a workflow the scan did not
+	// mark.
 	for i := range page.Items {
-		page.Items[i].Suspended = suspended[page.Items[i].Ref.UID]
+		if suspended[page.Items[i].Ref.UID] {
+			page.Items[i].Suspended = true
+		}
 	}
 	return nil
 }
