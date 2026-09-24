@@ -53,8 +53,25 @@ type Model struct {
 	rows   []core.Summary // sorted+filtered view over items (display order)
 	selUID string         // selected workflow identity: UID + namespace + name
 	phase  PhaseFilter    // local phase filter bucket
-	query  string         // local search text (snapshot-scoped)
+	query  string         // applied filter text (snapshot-scoped); always parses
 	sort   SortKey        // current sort
+	// match is query parsed. It is rebuilt only when the query changes, so
+	// a snapshot refresh re-filters without re-parsing.
+	match Matcher
+	// queryErr is why the text being typed does not parse, empty when it
+	// does. The previous filter stays applied meanwhile, and the toolbar
+	// shows this, so the reader can tell why the rows stopped changing.
+	queryErr string
+	// now is the snapshot time: the clock reading that came with the last
+	// SetItems. The age and duration predicates measure from it, so a
+	// filter answers for the snapshot on screen.
+	now time.Time
+	// wide adds the metadata columns (the w key).
+	wide bool
+	// loc is the zone the STARTED and FINISHED columns are shown in; nil
+	// means the local zone. Tests pin it so goldens do not depend on the
+	// machine's zone.
+	loc    *time.Location
 	status Status
 	errMsg string        // sanitized error/stale-reason text when StatusStale/...
 	errAge time.Duration // stale age when StatusStale (root supplies)
@@ -124,6 +141,7 @@ func New(theme shared.Theme, noColor bool) Model {
 // (reorder/deletion-safe; LIST-12). Sorting/filtering is reapplied.
 func (m *Model) SetItems(items []core.Summary, now time.Time) {
 	m.items = items
+	m.now = now
 	m.total = len(items)
 	m.reselect(now)
 	m.pruneMarks()
@@ -272,11 +290,31 @@ func (m *Model) CycleSort() {
 	m.applyView()
 }
 
-// SetQuery applies the local search text (snapshot-scoped; LIST-05/09).
-func (m *Model) SetQuery(q string) { m.query = q; m.applyView() }
+// SetQuery parses and applies the local filter (snapshot-scoped;
+// LIST-05/09). A query that does not parse changes nothing: the previous
+// filter stays applied, and the error is returned and kept for the toolbar.
+func (m *Model) SetQuery(q string) error {
+	match, err := ParseQuery(q)
+	if err != nil {
+		m.queryErr = err.Error()
+		return err
+	}
+	m.query, m.match, m.queryErr = q, match, ""
+	m.applyView()
+	return nil
+}
 
-// Query returns the active search text.
+// Query returns the applied filter text.
 func (m *Model) Query() string { return m.query }
+
+// QueryError is why the filter being typed does not parse, or "".
+func (m *Model) QueryError() string { return m.queryErr }
+
+// ToggleWide switches the metadata columns on or off.
+func (m *Model) ToggleWide() { m.wide = !m.wide }
+
+// Wide reports whether the metadata columns are on.
+func (m *Model) Wide() bool { return m.wide }
 
 // SortKey returns the active sort.
 func (m *Model) SortKey() SortKey { return m.sort }
@@ -290,15 +328,18 @@ func (m *Model) VisibleCount() int { return m.visible }
 func (m *Model) TotalCount() int   { return m.total }
 
 // applyView recomputes the display rows from items: filter by phase bucket
-// + name substring, then sort. Selection survives by UID (never reindexed
-// by position — plan gate "no row-index identity").
+// and the parsed query, then sort. Selection survives by UID (never
+// reindexed by position — plan gate "no row-index identity").
+//
+// Every filter goes through here. HiddenMarkCount compares the marks with
+// m.rows, so a filter applied anywhere else would miscount hidden marks.
 func (m *Model) applyView() {
 	rows := make([]core.Summary, 0, len(m.items))
 	for _, it := range m.items {
 		if !m.phase.Matches(it) {
 			continue
 		}
-		if !nameMatches(it.Ref.Name, m.query) {
+		if !m.match.Match(it, m.now) {
 			continue
 		}
 		rows = append(rows, it)
