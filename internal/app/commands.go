@@ -37,11 +37,25 @@ type deps struct {
 	// namespace is the active namespace; switching it bumps the connection
 	// generation (plan §2 journey 5).
 	namespace string
+	// allNamespaces widens the list and the watch to every namespace the
+	// token may read. namespace keeps the session's own namespace, which the
+	// toggle returns to.
+	allNamespaces bool
 	// snapshotCap bounds collected summaries per generation (plan §5:
 	// snapshot cap 5,000; tests/demo may lower it).
 	snapshotCap int
 	// pageSize is the requested page size (plan §5: default 100).
 	pageSize int64
+}
+
+// listNamespace is the namespace the list and the watch ask for. Empty is
+// Argo's "every namespace": the path becomes /api/v1/workflows/ with the
+// trailing slash, which the server's route matches with an empty namespace.
+func (d deps) listNamespace() string {
+	if d.allNamespaces {
+		return ""
+	}
+	return d.namespace
 }
 
 // requestIDProvider hands out monotonically increasing request IDs.
@@ -81,7 +95,7 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 				return msg
 			}
 			page, err := d.reader.List(ctx, core.Query{
-				Namespace: d.namespace,
+				Namespace: d.listNamespace(),
 				Continue:  cont,
 				Limit:     d.pageSize,
 			})

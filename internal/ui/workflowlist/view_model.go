@@ -73,7 +73,7 @@ func (m *Model) WindowStatus() string {
 
 // Hints are the list key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	return "enter open  l logs  / search  s sort  p phase  n namespace  r refresh"
+	return "enter open  l logs  / search  s sort  p phase  n namespace  0 all ns  r refresh"
 }
 
 // footerPosition is the window indicator appended to the standalone footer.
@@ -92,7 +92,11 @@ func (m *Model) frameLines(now time.Time, reserve int) []string {
 	lines := strings.Split(m.toolbarView(), "\n")
 
 	wName, wPhase, wAge, wDur, wMsg := m.colWidths()
-	head := padRight("NAME", wName) + "  " +
+	head := ""
+	if wNS := m.nsWidth(); wNS > 0 {
+		head = padRight("NAMESPACE", wNS) + "  "
+	}
+	head += padRight("NAME", wName) + "  " +
 		padRight("PHASE", wPhase) + "  " +
 		padLeft("AGE", wAge) + "  " +
 		padRight("DURATION", wDur)
@@ -167,7 +171,11 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	shown := DisplayPhase(r)
 	phase := shared.PhaseSymbol(shown) + " " + m.rowPhaseText(sanitizeOne(shown))
 	msg := sanitizeOne(r.Message)
-	line := padRight(truncateRight(name, wName), wName) + "  " +
+	line := ""
+	if wNS := m.nsWidth(); wNS > 0 {
+		line = padRight(truncateRight(sanitizeOne(r.Ref.Namespace), wNS), wNS) + "  "
+	}
+	line += padRight(truncateRight(name, wName), wName) + "  " +
 		padRight(truncateRight(phase, wPhase), wPhase) + "  " +
 		padLeft(ageText(r, now), wAge) + "  " +
 		padRight(durationText(r), wDur)
@@ -213,6 +221,9 @@ func (m *Model) toolbarView() string {
 	searchCell := "Search: " + q
 	if q == "" && !m.SearchOn {
 		searchCell = "Search: (none)  / to filter by name"
+		if m.allNS {
+			searchCell = "Search: (none)  / to filter by namespace/name"
+		}
 	}
 	// Scope honesty: the search/filter is LOCAL to the collected snapshot.
 	// Show the scope whenever a query is active or the snapshot is known
@@ -292,6 +303,9 @@ func (m *Model) toolbarPrefixParts() []string {
 	searchCell := "Search: " + q
 	if q == "" && !m.SearchOn {
 		searchCell = "Search: (none)  / to filter by name"
+		if m.allNS {
+			searchCell = "Search: (none)  / to filter by namespace/name"
+		}
 	}
 	scope := ""
 	if m.total > m.visible {
@@ -381,6 +395,18 @@ func (m *Model) colWidths() (name, phase, age, dur, msg int) {
 	// Three two-cell gaps separate the four fixed columns, and a fourth
 	// separates the message from them.
 	msg = m.width - (name + phase + age + dur + colGap*3) - colGap
+	if ns := m.nsWidth(); ns > 0 {
+		msg -= ns + colGap
+		// On a pane too narrow for the namespace beside the fixed columns,
+		// NAME gives up the difference: it is the one fixed column whose
+		// cells are still readable when clipped.
+		if over := name + phase + age + dur + colGap*3 + ns + colGap - m.width; m.width > 0 && over > 0 {
+			name -= over
+			if name < minNameWidth {
+				name = minNameWidth
+			}
+		}
+	}
 	// Under 80 columns the fixed columns are already clipping names and
 	// durations. Spending what is left on a fifth column would clip them
 	// further to show a fragment of a sentence.
@@ -389,6 +415,37 @@ func (m *Model) colWidths() (name, phase, age, dur, msg int) {
 	}
 	return
 }
+
+// nsWidth is the NAMESPACE column's width: zero outside the all-namespaces
+// view, otherwise the longest namespace in the snapshot, bounded so a long
+// namespace cannot take the NAME column's room. It is measured over the whole
+// snapshot rather than the visible window, so scrolling never moves the
+// columns.
+func (m *Model) nsWidth() int {
+	if !m.allNS {
+		return 0
+	}
+	limit := 16
+	switch {
+	case m.width >= 100:
+		limit = 20
+	case m.width > 0 && m.width < 80:
+		limit = 12
+	}
+	w := len("NAMESPACE")
+	for _, it := range m.items {
+		if n := ansi.StringWidth(sanitizeOne(it.Ref.Namespace)); n > w {
+			w = n
+		}
+	}
+	if w > limit {
+		w = limit
+	}
+	return w
+}
+
+// minNameWidth is the narrowest NAME column the namespace column may leave.
+const minNameWidth = 12
 
 // colGap is the run of spaces between two columns.
 const colGap = 2
@@ -413,8 +470,14 @@ func (m *Model) emptyStateView() string {
 		return m.theme.ErrorText.Render("no workflows visible: list forbidden (" + m.errMsg + ")")
 	case m.status == StatusUnauthenticated:
 		return m.theme.ErrorText.Render("no workflows visible: not authenticated (" + m.errMsg + ")")
+	case m.status == StatusStale && m.total == 0:
+		// A failed first collection has nothing to be stale against; the
+		// failure is all there is to show.
+		return m.theme.ErrorText.Render("no workflows visible: " + m.errMsg)
 	case m.total > 0 && m.visible == 0:
 		return m.theme.Dim.Render("no workflows match the current filter (search is local to the collected snapshot)")
+	case m.allNS:
+		return m.theme.Dim.Render("no workflows in any namespace this token can read")
 	default:
 		return m.theme.Dim.Render("no workflows in this namespace yet")
 	}

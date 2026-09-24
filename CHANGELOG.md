@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Added a command palette. `:` opens it on every route; typing ranks the
+  commands and their aliases, `tab` completes the highlighted one, and `enter`
+  runs exactly what was typed. `wf` shows the workflow list, `ns [name]` and
+  `profile [name]` (or `ctx`) switch namespace and profile or open their
+  pickers, `all` toggles all namespaces, and `help` and `q` do what their keys
+  do. Namespace and profile names complete after a space, and `ctrl+p` and
+  `ctrl+n` recall earlier commands. A word that names no command is reported
+  in the footer, never run as a near match.
+- Added an all-namespaces view: `0` on the workflow list, or `:all`. The list
+  shows every workflow the token may read with a NAMESPACE column, the header
+  reads `ns: all`, the filter also matches `namespace/name`, and detail, logs
+  and actions use each row's own namespace. A token that may not list
+  cluster-wide, or a server started for one managed namespace, gets that
+  reason on the pane instead of an empty list.
+- A list that fails before anything was collected now says so on the pane
+  instead of reading as a namespace with no workflows.
+- The demo has a second namespace, `demo-ml`, with a hyperparameter sweep in
+  progress and a finished batch inference run.
+
 - The demo dataset now has twelve workflows whose node maps follow the
   shapes the Argo controller writes: chained step groups, DAG tasks that list
   their dependents as children, retry attempts, an exit handler, a fan-out in

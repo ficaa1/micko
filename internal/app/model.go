@@ -13,6 +13,7 @@ import (
 	"github.com/ficaa1/argo-tui/internal/ui/detail"
 	"github.com/ficaa1/argo-tui/internal/ui/logs"
 	"github.com/ficaa1/argo-tui/internal/ui/namespaces"
+	"github.com/ficaa1/argo-tui/internal/ui/palette"
 	"github.com/ficaa1/argo-tui/internal/ui/profiles"
 	"github.com/ficaa1/argo-tui/internal/ui/shared"
 	"github.com/ficaa1/argo-tui/internal/ui/shell"
@@ -127,6 +128,14 @@ type Root struct {
 	// profile configured, offered alongside whatever the server reports.
 	nsView *namespaces.Model
 	nsSeed []string
+	// nsDiscovered is the server's last answer to the namespace list, kept
+	// for the palette's `ns` completion. Nil means it has not been asked.
+	nsDiscovered []string
+
+	// palView is the `:` command palette; registry is the command table it
+	// is loaded from and that its RunMsg is resolved against.
+	palView  *palette.Model
+	registry []command
 
 	// profView is the profile picker dialog (the P key). conn is the live
 	// connection behind it, held so a switch can close the old transport and
@@ -206,7 +215,7 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	if n, ok := r.(core.NamespaceLister); ok {
 		nsLister = n
 	}
-	return &Root{
+	m := &Root{
 		deps: deps{
 			reader:      r,
 			watcher:     watcher,
@@ -229,7 +238,12 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 		profileCurrent:  opts.Profile,
 		connectionReady: true,
 		connectionFresh: true,
+		palView:         palette.New(shared.NewTheme(false)),
+		registry:        newRegistry(),
 	}
+	m.palView.SetCommands(paletteSpecs(m.registry))
+	m.palView.SetArgSource(m.paletteArgs)
+	return m
 }
 
 // newDetailView builds the detail pane with the shared theme, so node rows
@@ -333,6 +347,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
+		// The command palette is a dialog that owns printable keys: q and ?
+		// are letters of a command being typed.
+		if m.paletteOpen() {
+			return m, m.palView.Update(msg)
+		}
 		// The namespace picker is a dialog too, and it owns printable keys:
 		// typing narrows the list. It therefore has to be tested before the
 		// global q and ? below, or neither letter could ever be typed.
@@ -379,6 +398,10 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if !m.textEntryActive() {
 			switch key {
+			case ":":
+				// The palette opens on every route. It is not offered in the
+				// raw view above, whose only job is to be copied from.
+				return m, m.openPalette()
 			case "f", "ctrl+f":
 				// The bordered pane wraps every line, so a mouse selection
 				// picks up the border columns too. The raw view drops all
@@ -397,8 +420,14 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// `n` switches namespace. It is bound on the list because that is the
 		// route the namespace describes; in the logs pane `n` is the next
 		// search match, which is the vim meaning a reader expects there.
-		if m.route == RouteList && key == "n" && !m.textEntryActive() {
+		if isListRoute(m.route) && key == "n" && !m.textEntryActive() {
 			return m, m.openNamespacePicker()
+		}
+		// `0` toggles the all-namespaces view, bound where `n` is: on the list
+		// routes, whose scope the namespace sets. The detail and logs panes
+		// show one workflow, which lives in one namespace either way.
+		if isListRoute(m.route) && key == "0" && !m.textEntryActive() {
+			return m, m.toggleAllNamespaces()
 		}
 		// P switches profile. Capital, because p is the phase filter on the
 		// list and on the nodes tab. It is bound on every route: a reader who
@@ -529,6 +558,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case profiles.SwitchMsg:
 		return m, m.switchProfile(msg.Profile)
 
+	case palette.RunMsg:
+		return m, m.runCommand(msg)
+
+	case palette.UnknownMsg:
+		m.unknownCommand(msg)
+		return m, nil
+
 	case profileConnectedMsg:
 		return m, m.handleProfileConnected(msg)
 
@@ -584,14 +620,17 @@ func (m *Root) View() tea.View {
 		return m.rawView()
 	}
 	f := shell.Frame{
-		// `?` is root-owned on every route, so the shell advertises it once
-		// rather than each pane repeating it in its own hints.
-		Help:      "? help",
+		// `:` and `?` are root-owned on every route, so the shell advertises
+		// them once rather than each pane repeating them in its own hints.
+		// They share the protected right-hand cell: between them they lead to
+		// every command and every key, so a narrow terminal drops route hints
+		// before it drops them.
+		Help:      ": command  ? help",
 		Width:     m.width,
 		Height:    m.height,
 		App:       "argo-tui " + m.version,
 		Server:    m.serverLabel(),
-		Namespace: m.deps.namespace,
+		Namespace: m.namespaceLabel(),
 		Mode:      m.modeLabel(),
 	}
 
@@ -631,13 +670,28 @@ func (m *Root) View() tea.View {
 		return m.finishView(f)
 	}
 
+	// The palette sits at the top of the active pane rather than replacing
+	// it: the reader is choosing where to go from what they are looking at.
+	// The pane below is sized to what the palette leaves.
+	bodyH := f.BodyHeight()
+	var pal []string
+	if m.paletteOpen() {
+		pal = m.palView.BodyLines(f.BodyWidth(), paletteRows(bodyH))
+		if bodyH > 0 {
+			bodyH -= len(pal)
+			if bodyH < 1 {
+				bodyH = 1
+			}
+		}
+	}
+
 	switch m.route {
 	case RouteDetail:
 		f.Title = m.detailPaneTitle()
 		f.TitleRight = m.detailSummary()
 		f.Route = "detail"
 		if m.detailView != nil {
-			m.detailView.SetSize(f.BodyWidth(), f.BodyHeight())
+			m.detailView.SetSize(f.BodyWidth(), bodyH)
 			f.Hints = m.detailView.Hints()
 			f.Status = m.detailView.PaneStatus()
 			f.Body = m.detailView.BodyLines()
@@ -646,7 +700,7 @@ func (m *Root) View() tea.View {
 		f.Route = "logs"
 		if m.logsView != nil {
 			m.logsView.SetPaneMode(true)
-			m.logsView.SetSize(f.BodyWidth(), f.BodyHeight())
+			m.logsView.SetSize(f.BodyWidth(), bodyH)
 			f.Title = m.logsView.PaneTitle()
 			f.TitleRight = m.logSummary()
 			f.Hints = m.logsView.Hints()
@@ -654,7 +708,7 @@ func (m *Root) View() tea.View {
 			f.Body = m.logsView.BodyLines()
 		}
 	default:
-		m.listView.SetSize(f.BodyWidth(), f.BodyHeight())
+		m.listView.SetSize(f.BodyWidth(), bodyH)
 		f.Title = m.listView.PaneTitle()
 		f.TitleRight = m.listSummary()
 		f.Route = "list"
@@ -664,7 +718,30 @@ func (m *Root) View() tea.View {
 		f.Body = m.listView.BodyLines(m.deps.clock.Now())
 		f.Status = m.listStatusCell()
 	}
+	if pal != nil {
+		f.Body = append(pal, f.Body...)
+		f.Route = "command"
+		f.Hints = m.palView.Hints()
+		f.Help = ""
+	}
 	return m.finishView(f)
+}
+
+// paletteRows is how many suggestions the palette may show in a pane of
+// bodyH lines: at most palette.MaxRows, and never more than about half the
+// pane, so the view underneath keeps its column heads and a few rows.
+func paletteRows(bodyH int) int {
+	rows := palette.MaxRows
+	if bodyH <= 0 {
+		return rows
+	}
+	if half := bodyH/2 - 2; half < rows {
+		rows = half
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	return rows
 }
 
 // splitLines turns a child's rendered block into frame body lines.
@@ -787,6 +864,9 @@ func (m *Root) listSummary() string {
 		return "list: empty"
 	default:
 		s := "list: " + lenItems(st.items)
+		if m.deps.allNamespaces {
+			s += " in " + plural(countNamespaces(st.items), "namespace")
+		}
 		if m.watchMode != "" {
 			s += " | mode: " + m.watchMode
 		}
@@ -795,6 +875,15 @@ func (m *Root) listSummary() string {
 		}
 		return s
 	}
+}
+
+// countNamespaces counts the distinct namespaces in a snapshot.
+func countNamespaces(items []core.Summary) int {
+	seen := map[string]bool{}
+	for _, it := range items {
+		seen[it.Ref.Namespace] = true
+	}
+	return len(seen)
 }
 
 func lenItems(items []core.Summary) string {
@@ -1024,7 +1113,7 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		if st.staleSince.IsZero() {
 			st.staleSince = m.deps.clock.Now()
 		}
-		m.listView.SetStatus(workflowlist.StatusStale, msg.Err.Message, m.deps.clock.Now().Sub(st.staleSince))
+		m.listView.SetStatus(m.listErrorStatus(msg.Err), m.listErrorText(msg.Err), m.deps.clock.Now().Sub(st.staleSince))
 		switch msg.Err.Kind {
 		case core.ErrUnauthenticated, core.ErrForbidden:
 			m.watchMode = "authentication/permission required"
@@ -1056,6 +1145,36 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		return tea.Batch(m.startWatch(), m.armTick())
 	}
 	return m.armTick()
+}
+
+// listErrorStatus picks how the list shows a failed collection. With rows
+// still on screen the failure is a stale snapshot. With none, a refusal is
+// shown as the refusal it is: an empty table under a small "stale" note
+// reads as a namespace with no workflows, which is the one wrong conclusion
+// the reader must not draw.
+func (m *Root) listErrorStatus(ae *core.APIError) workflowlist.Status {
+	if len(m.listState.items) > 0 {
+		return workflowlist.StatusStale
+	}
+	switch ae.Kind {
+	case core.ErrForbidden:
+		return workflowlist.StatusForbidden
+	case core.ErrUnauthenticated:
+		return workflowlist.StatusUnauthenticated
+	default:
+		return workflowlist.StatusStale
+	}
+}
+
+// listErrorText is the reason the list shows for a failed collection. In the
+// all-namespaces view it says which request failed and how to leave it: a
+// token that may read one namespace is routinely refused the cluster-wide
+// list, and the fix is the key that returns to that namespace.
+func (m *Root) listErrorText(ae *core.APIError) string {
+	if !m.deps.allNamespaces {
+		return ae.Message
+	}
+	return "all namespaces: " + ae.Message + " — press 0 to return to " + m.deps.namespace
 }
 
 // handleDetailLoaded applies a detail result honoring staleness + UID

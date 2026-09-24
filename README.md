@@ -128,18 +128,45 @@ check and the write remains possible.
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `0` all namespaces |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
 | Resource | `v` reveal hidden parameter/output values |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
+| Command palette | `:` open, `tab` complete, `up`/`down` choose, `enter` run, `ctrl+p`/`ctrl+n` history, `esc` close |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
 
 Suspended workflows sort first by default and their waiting nodes are marked
 `AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
 workflow's pod naming annotation and leaves the shortcut unavailable when
 it cannot resolve one safely.
+
+`:` opens the command palette on every route. Type a command and the palette
+lists the matches with their aliases and a one-line description, best first;
+`tab` completes the highlighted one and `enter` runs what is typed. Enter never
+runs a guess: a word that names no command is reported in the footer.
+
+| Command | Does |
+| --- | --- |
+| `workflows`, `wf` | Show the workflow list |
+| `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
+| `all` | Toggle the all-namespaces view |
+| `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
+| `help` | Show every key |
+| `quit`, `q` | Quit |
+
+After `ns` and `profile` a space starts completing the argument from the
+namespaces and profiles the session knows. `ctrl+p` and `ctrl+n` step through
+the commands run earlier in the session.
+
+`0` on the workflow list, or `:all`, lists every namespace the token may read.
+The header shows the namespace as `all`, the list gains a NAMESPACE column,
+and the `/` filter matches `namespace/name`, so `team-a/` narrows it to one
+namespace. Detail, logs and actions use each row's own namespace. The token
+needs permission to list workflows cluster-wide; without it, and on a server
+started for one managed namespace, the pane says so, and `0` returns to the
+namespace you came from.
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a
@@ -182,7 +209,7 @@ environment source from that profile before switching to a file.
   Argo auth mode for 401; check access to the selected namespace for 403.
 - A stale banner retains the last successful data while the connection recovers.
 - Search and sorting apply to the collected workflow snapshot, capped at 5,000
-  entries. Logs retain at most 10,000 lines or 8 MiB; pausing stops scrolling,
+  entries, in the all-namespaces view as well. Logs retain at most 10,000 lines or 8 MiB; pausing stops scrolling,
   not collection. Deleted pods or unavailable archived logs may prevent viewing logs.
 - Resource values are hidden until explicitly revealed. Log text, copied text
   and pipe output may contain sensitive application data.

@@ -102,12 +102,17 @@ func (m *Root) rawLines() []string {
 
 // listRawLines renders the visible list rows as plain "name phase age" text.
 // The table's padding is what makes it readable on screen and awkward in a
-// paste, so the raw form uses single spaces.
+// paste, so the raw form uses single spaces. Across namespaces each line
+// starts with the row's namespace, as the table does.
 func (m *Root) listRawLines() []string {
 	rows := m.listView.Rows()
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, shared.Sanitize(r.Ref.Name)+"\t"+
+		ns := ""
+		if m.deps.allNamespaces {
+			ns = shared.Sanitize(r.Ref.Namespace) + "\t"
+		}
+		out = append(out, ns+shared.Sanitize(r.Ref.Name)+"\t"+
 			shared.Sanitize(workflowlist.DisplayPhase(r))+"\t"+
 			shared.Sanitize(r.Ref.UID))
 	}

@@ -25,6 +25,9 @@ func (h *HelpOverlay) IsOpen() bool { return h.open }
 // Toggle opens a closed overlay and closes an open one (the `?` key).
 func (h *HelpOverlay) Toggle() { h.open = !h.open }
 
+// Open shows the overlay whatever its state (the palette's help command).
+func (h *HelpOverlay) Open() { h.open = true }
+
 // Close hides the overlay (Esc, or `q` within the dialog).
 func (h *HelpOverlay) Close() { h.open = false }
 
@@ -57,7 +60,7 @@ func helpLines() []string {
 		"KEYS                                       ? or esc to close",
 		"",
 		"Global    q quit        ctrl+c quit        ? help",
-		"          esc back / close",
+		"          : command palette                esc back / close",
 		"          P switch profile (cluster)",
 		"          f raw full-screen view (no borders, easy to copy)",
 		"          y copy to clipboard              o open in Argo UI",
@@ -67,7 +70,13 @@ func helpLines() []string {
 		"",
 		"List      enter open    l logs             / search (live)",
 		"          s sort        p phase filter     r refresh",
-		"          n switch namespace               esc clear filter",
+		"          n switch namespace               0 all namespaces",
+		"          esc clear filter",
+		"",
+		"Command   : opens it; type a command, tab completes it",
+		"          up / down choose a suggestion    enter runs",
+		"          ctrl+p / ctrl+n history          esc close",
+		"          wf  ns [name]  all  ctx [name]  help  q",
 		"",
 		"Detail    tab next section  shift+tab previous",
 		"          h show / hide skipped nodes",
