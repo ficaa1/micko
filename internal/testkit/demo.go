@@ -635,8 +635,13 @@ func demoLogs(n core.Node, now time.Time) []core.LogRecord {
 	}
 	out := make([]core.LogRecord, 0, len(lines))
 	for i, l := range lines {
-		ts := at.Add(time.Duration(i) * 3 * time.Second).UTC().Format(time.RFC3339)
-		out = append(out, core.LogRecord{PodName: n.PodName, Container: "main", Content: ts + " " + l, ReceivedAt: now})
+		// The program stamps its own line to the second; the runtime
+		// receives it a moment later, and that later time is the one the
+		// server's timestamps (ctrl+t) show.
+		written := at.Add(time.Duration(i) * 3 * time.Second)
+		ts := written.UTC().Format(time.RFC3339)
+		out = append(out, core.LogRecord{PodName: n.PodName, Container: "main", Content: ts + " " + l,
+			ReceivedAt: written.Add(137 * time.Millisecond)})
 	}
 	return out
 }
