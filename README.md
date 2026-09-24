@@ -112,24 +112,77 @@ Actions are disabled by default. Enable them for a session with:
 ./dist/argo-tui --profile dev --allow-actions
 ```
 
-Open a workflow and press `a`, then `u` (resume), `r` (retry), `b` (resubmit)
-or `s` (stop). The confirmation identifies the target; only `y` confirms.
-Enter and Esc cancel. Stop is graceful and runs exit handlers.
+Press `a` on the workflow list or in a workflow's detail view. The menu offers
+only the verbs that apply to the workflow's phase:
 
-The app checks identity before sending a mutation and never automatically
-retries a write. An `UNKNOWN` outcome means the server may have applied it;
-inspect the workflow before deciding what to do next. The server's permissions
-remain authoritative. Argo's action endpoints address workflows by name and
-have no UID precondition, so a same-name replacement between the identity
-check and the write remains possible.
+| Key | Verb | Applies to |
+| --- | --- | --- |
+| `u` | resume | a suspended workflow |
+| `z` | suspend | a running workflow that is not suspended |
+| `r` | retry | a failed or errored workflow |
+| `b` | resubmit | a finished workflow |
+| `s` | stop | a running workflow; graceful, runs exit handlers |
+| `t` | terminate | a running workflow; no exit handlers |
+| `d` | delete | any workflow |
+
+The confirmation identifies the target; only `y` confirms, and Enter and Esc
+cancel. Terminate asks you to type the workflow's name. Delete cannot be undone,
+so it asks twice: after `y`, a final screen deletes only on `D` (shift+d) and
+any other key cancels. Neither the `d` that opened it nor the `y` that passed
+the first step can finish it, however often it is pressed.
+
+Before sending, the app reads the workflow again and refuses the action when
+its identity changed or the verb no longer applies. It sends exactly one request
+and never retries a write. The outcome is `CONFIRMED` when the expected end
+state was observed (resumed, suspended, left its failed phase, reached a
+terminal phase, gone), `ACCEPTED` when the server applied it but the end state
+was not seen within five seconds, `REFUSED` when nothing was sent, and
+`UNKNOWN` when the server may or may not have applied it; inspect the workflow
+before deciding what to do next. The server's permissions remain authoritative.
+Argo's action endpoints address workflows by name and have no UID precondition,
+so a same-name replacement between the identity check and the write remains
+possible. With the workflow archive enabled, a deleted workflow can still be
+read from the archive, so its delete reports `ACCEPTED` rather than `CONFIRMED`.
+
+#### Marks and bulk actions
+
+`space` marks or unmarks the selected row; a marked row carries a `◆` in its
+first column and the toolbar counts the marks. Marks follow their workflow
+through refreshes, sorting and filtering. A mark hidden by the filter still
+counts, and the toolbar says how many are hidden. A mark whose workflow is gone
+from the snapshot is dropped, and switching namespace or profile clears them
+all. `esc` clears the marks first and the filter on the next press.
+
+With marks, `a` acts on every marked workflow, hidden ones included. The menu
+says how many marked workflows each verb applies to, and the confirmation lists
+them; workflows the verb does not apply to are left alone. A bulk terminate asks
+you to type the number of workflows instead of a name. The requests are sent
+one at a time, each with its own identity check and read-back, and none is ever
+resent. A workflow that fails its check is refused without affecting the
+others. `esc` during the run stops it after the request in flight; losing the
+connection or the fresh snapshot stops it too. The result lists every workflow's
+outcome with a total, and stays on screen until you close it. Closing it clears
+the marks and refreshes the list.
+
+#### Action journal
+
+Every write attempt, refused ones included, appends one JSON line to
+`$XDG_STATE_HOME/argo-tui/actions.jsonl` (by default
+`~/.local/state/argo-tui/actions.jsonl`): time, profile, server, namespace,
+name, UID, verb, outcome and error text. The file is created readable by you
+only. A journal that cannot be written never blocks or changes an action; the
+footer reports the first failure of the session. Sessions without
+`--allow-actions` and the demo write nothing. To turn the journal off, set
+`journal: false` at the top level of the config file.
 
 ## Everyday keys
 
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `space` mark, `a` actions, `esc` clear marks then filter |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
+| Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `y` confirms, `D` finishes a delete |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
 | Resource | `v` reveal hidden parameter/output values |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
@@ -164,7 +217,7 @@ command (default `lnav`). Install that program separately.
 | `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
 | `--token-file PATH`, `--ca-file PATH` | Override credential file or CA bundle |
 | `--refresh-interval DURATION` | Poll interval, default `5s`; accepted range `1s`–`10m` |
-| `--allow-actions` | Enable confirmed Resume, Retry, Resubmit and Stop |
+| `--allow-actions` | Enable confirmed workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete) |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--debug` | Emit sanitized lifecycle diagnostics |
 | `--demo` | Run the offline, read-only demo |
@@ -186,8 +239,7 @@ environment source from that profile before switching to a file.
   not collection. Deleted pods or unavailable archived logs may prevent viewing logs.
 - Resource values are hidden until explicitly revealed. Log text, copied text
   and pipe output may contain sensitive application data.
-- Terminate exists in the transport but has no UI shortcut. Workflow submission,
-  bulk actions and parameter editing are not exposed in the UI.
+- Workflow submission and parameter editing are not exposed in the UI.
 
 Project history records live testing of v0.2.0 on macOS arm64 against Argo
 Workflows v4.1.2 in server auth mode without TLS, including list/watch, node
