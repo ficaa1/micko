@@ -28,6 +28,10 @@ type Model struct {
 	lastErr string
 	// notFound renders the not-found state (root-driven).
 	notFound bool
+	// archived marks a workflow read from the workflow archive. The title
+	// and the summary say so, and the actions hint is dropped: an archived
+	// run has no live object to act on.
+	archived bool
 
 	// tab is the active detail tab: "summary" | "nodes" | "resource".
 	tab string
@@ -110,6 +114,12 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 		m.revealResource = false
 	}
 }
+
+// SetArchived says whether the workflow shown comes from the archive.
+func (m *Model) SetArchived(on bool) { m.archived = on }
+
+// Archived reports whether the workflow shown comes from the archive.
+func (m *Model) Archived() bool { return m.archived }
 
 // SetLoading marks the loading state (root-driven, before data arrives).
 func (m *Model) SetLoading() {
@@ -406,14 +416,24 @@ func (m *Model) View() tea.View {
 // Before a workflow loads there is no name to show, so the title states the
 // route instead of rendering an empty border.
 func (m *Model) PaneTitle() string {
-	if !m.loaded {
-		return "Detail"
+	title := "Detail"
+	if m.loaded {
+		title += " " + shared.Sanitize(m.state.Summary.Ref.Name)
 	}
-	return "Detail " + shared.Sanitize(m.state.Summary.Ref.Name)
+	if m.archived {
+		title += " (archived)"
+	}
+	return title
 }
 
 // Hints is the detail key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
+	if m.archived {
+		if m.tab == "nodes" {
+			return "tab section  h skipped  s sort  p phase  l logs  f raw  r refresh  esc back"
+		}
+		return "tab section  v reveal  y copy  f raw  r refresh  esc back"
+	}
 	if m.tab == "nodes" {
 		return "tab section  h skipped  s sort  p phase  l logs  a actions  f raw  r refresh  esc back"
 	}
@@ -586,6 +606,9 @@ func sliceLines(lines []string, top, h int) []string {
 func (m *Model) summaryText() string {
 	st := m.state
 	var b strings.Builder
+	if m.archived {
+		b.WriteString("source:    the workflow archive — a record kept after the run; actions do not apply\n")
+	}
 	b.WriteString("name:      " + shared.Sanitize(st.Summary.Ref.Name) + "\n")
 	b.WriteString("namespace: " + shared.Sanitize(st.Summary.Ref.Namespace) + "\n")
 	b.WriteString("uid:       " + shared.Sanitize(st.Summary.Ref.UID) + "\n")
