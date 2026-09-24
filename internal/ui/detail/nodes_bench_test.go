@@ -232,3 +232,32 @@ func syntheticWideDAG(prefix string, n int) core.Workflow {
 		NodesAvailable: true,
 	}
 }
+
+// BenchmarkTimelineFold5000 is one fold key on the timeline of a 5,000-node
+// workflow: the tree copy, the critical path and the re-flatten.
+func BenchmarkTimelineFold5000(b *testing.B) {
+	m := New()
+	m.SetSize(160, 50)
+	m.SetWorkflow(syntheticWideDAG("bench", 5000), testkit.FixtureEpoch)
+	m.SetSection("timeline")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.handleKey("space")
+	}
+}
+
+// BenchmarkTimelineRender5000 is one frame of that timeline.
+func BenchmarkTimelineRender5000(b *testing.B) {
+	m := New()
+	m.SetSize(160, 50)
+	m.SetWorkflow(syntheticWideDAG("bench", 5000), testkit.FixtureEpoch)
+	m.SetSection("timeline")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if len(m.BodyLines()) == 0 {
+			b.Fatal("empty body")
+		}
+	}
+}

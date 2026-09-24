@@ -56,43 +56,40 @@ func ClampLines(lines []string, height int) []string {
 
 // helpLines is the overlay body, most global first. Keys are written exactly
 // as tea.KeyPressMsg.String() reports them, so the text matches what a reader
-// must actually press.
+// must actually press. The whole body fits the pane of a 40-row terminal and
+// every line the pane of an 80-column one, so a common terminal shows the
+// overlay without clipping it.
 func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
 		"",
-		"Global    q quit        ctrl+c quit        ? help",
-		"          esc back / close",
-		"          P switch profile (cluster)",
-		"          f raw full-screen view (no borders, easy to copy)",
-		"          y copy to clipboard              o open in Argo UI",
+		"Global    q quit   ctrl+c quit   ? help   esc back / close",
+		"          P switch profile   f raw full screen (easy to copy)",
+		"          y copy to clipboard   o open in Argo UI",
 		"",
-		"Move      j / k         up / down          pgup / pgdn page",
-		"          gg top        G bottom           home / end",
+		"Move      j / k or arrows   pgup / pgdn   gg / home top   G / end bottom",
 		"",
 		"List      enter open    l logs             / search (live)",
 		"          s sort        p phase filter     r refresh",
 		"          n switch namespace               esc clear filter",
+		"          T open on the timeline",
 		"",
-		"Detail    tab next section  shift+tab previous",
-		"          v reveal redacted values (resource, node info)",
-		"          r refresh this workflow now",
+		"Detail    tab / shift+tab section   1-9 section by position",
+		"          T timeline   r refresh   v reveal redacted values",
 		"          a actions (requires --allow-actions)",
 		"",
-		"Nodes     enter / l logs      space fold / unfold    i info panel",
-		"          left fold or parent  right unfold          / find by name",
-		"          n / N next / previous match      esc clears the find first",
+		"Nodes     enter / l logs   space fold   left fold or parent",
+		"          right unfold   i info panel   / find, n / N next / previous",
 		"          h skipped   s sort (pipeline/started/name/phase)   p phase",
 		"",
-		"Logs      t follow (tail)  space pause     c container",
-		"          / search      n next match       N previous match",
-		"          | pipe the retained lines to another program",
-		"          G newest line                    esc back",
+		"Timeline  ◆ critical path   ░ waited   │ now   l logs   i info",
+		"          space / left / right fold, as on Nodes",
 		"",
-		"Actions   a opens the pane",
-		"          u resume   r retry   b resubmit   s stop",
-		"          y confirms; enter and esc both cancel",
-		"          the pane closes itself and reports on the footer",
+		"Logs      t follow   space pause   c container   G newest line",
+		"          / search   n / N next / previous match   | pipe to a program",
+		"",
+		"Actions   a opens the pane: u resume  r retry  b resubmit  s stop",
+		"          y confirms; enter and esc cancel; the footer reports",
 	}
 }
 

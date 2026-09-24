@@ -551,7 +551,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startListGeneration()
 
 	case OpenWorkflowMsg:
-		return m, m.openWorkflow(msg.Ref)
+		cmd := m.openWorkflow(msg.Ref)
+		if msg.Section != "" {
+			m.detailView.SetSection(msg.Section)
+		}
+		return m, cmd
 
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)

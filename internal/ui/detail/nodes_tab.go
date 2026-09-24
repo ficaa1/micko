@@ -57,8 +57,15 @@ type nodesLayout struct {
 }
 
 func (m *Model) nodesLayout() nodesLayout {
+	return m.treeLayout(nodesChromeRows, len(m.nodes), colHeadMinRows)
+}
+
+// treeLayout splits a pane that draws the node tree: chrome rows above it,
+// rows lines of tree, column heads from headMin rows of tree, and the info
+// panel beside or below the tree while it is open.
+func (m *Model) treeLayout(chrome, rows, headMin int) nodesLayout {
 	l := nodesLayout{treeW: m.width}
-	area := m.height - nodesChromeRows
+	area := m.height - chrome
 	if m.showInfo {
 		l.place = infoPlacementFor(m.width)
 	}
@@ -71,7 +78,7 @@ func (m *Model) nodesLayout() nodesLayout {
 		// whole tree fits above a bigger band, the band takes the rest, so
 		// a short tree leaves no blank rows while facts are cut below it.
 		ph := min(max(infoBottomMin, area*2/5), infoBottomMax)
-		if spare := area - len(m.nodes) - 1; spare > ph {
+		if spare := area - rows - 1; spare > ph {
 			ph = spare
 		}
 		if area-ph < minTreeRows {
@@ -84,7 +91,7 @@ func (m *Model) nodesLayout() nodesLayout {
 			area -= ph
 		}
 	}
-	l.colHead = area >= colHeadMinRows && len(m.nodes) > 0
+	l.colHead = area >= headMin && rows > 0
 	if l.colHead {
 		area--
 	}
@@ -150,6 +157,7 @@ func (m *Model) rebuildNodes(keep string) {
 		m.nodeCursor = 0
 	}
 	m.refreshFind()
+	m.timelineChanged()
 }
 
 // selectedID is the node ID under the cursor, or "" when there is none.
@@ -213,30 +221,9 @@ func (m *Model) foldOlderAttempts(retry OutlineRow) {
 // handleNodesKey handles the keys only the nodes tab binds.
 func (m *Model) handleNodesKey(key string) {
 	switch key {
-	case "space":
-		if r, ok := m.cursorRow(); ok && r.HasChildren {
-			m.setFold(r.Row.NodeID, !r.Folded)
-		}
-	case "left":
-		// Fold an open row; on a folded row or a leaf, go to the parent,
-		// so repeated presses climb the tree.
-		r, ok := m.cursorRow()
-		switch {
-		case !ok:
-		case r.HasChildren && !r.Folded:
-			m.setFold(r.Row.NodeID, true)
-		case r.Parent >= 0:
-			m.nodeCursor = r.Parent
-		}
-	case "right":
-		// Unfold a folded row; on an open one, step to its first child.
-		r, ok := m.cursorRow()
-		switch {
-		case !ok:
-		case r.Folded:
-			m.setFold(r.Row.NodeID, false)
-		case r.HasChildren && m.nodeCursor+1 < len(m.nodes):
-			m.nodeCursor++
+	case "space", "left", "right":
+		if id, fold, ok := treeFoldKey(key, m.nodes, &m.nodeCursor); ok {
+			m.setFold(id, fold)
 		}
 	case "i":
 		m.showInfo = !m.showInfo
@@ -247,6 +234,39 @@ func (m *Model) handleNodesKey(key string) {
 	case "N":
 		m.stepMatch(-1)
 	}
+}
+
+// treeFoldKey applies a fold key to a tree drawn as rows with the cursor at
+// *cursor. space folds or opens the row. left folds an open row, and on a
+// folded row or a leaf moves to the parent, so repeated presses climb the
+// tree. right opens a folded row, and on an open one steps to its first
+// child. It moves the cursor itself and returns the fold to set, if any.
+func treeFoldKey(key string, rows []FlatRow, cursor *int) (id string, fold, ok bool) {
+	if *cursor < 0 || *cursor >= len(rows) {
+		return "", false, false
+	}
+	r := rows[*cursor]
+	switch key {
+	case "space":
+		if r.HasChildren {
+			return r.Row.NodeID, !r.Folded, true
+		}
+	case "left":
+		switch {
+		case r.HasChildren && !r.Folded:
+			return r.Row.NodeID, true, true
+		case r.Parent >= 0:
+			*cursor = r.Parent
+		}
+	case "right":
+		switch {
+		case r.Folded:
+			return r.Row.NodeID, false, true
+		case r.HasChildren && *cursor+1 < len(rows):
+			*cursor++
+		}
+	}
+	return "", false, false
 }
 
 func (m *Model) cursorRow() (FlatRow, bool) {
@@ -398,7 +418,12 @@ func (m *Model) jumpToMatch(id string) {
 func (m *Model) nodesBody() []string {
 	l := m.nodesLayout()
 	lines := []string{progressLine(m.workflow(), m.now, m.width, m.theme), m.nodesStatusLine()}
-	tree := m.nodeTreeLines(l)
+	return m.withInfoPanel(lines, m.nodeTreeLines(l), l)
+}
+
+// withInfoPanel appends the tree to lines with the info panel where the
+// layout places it: a column on the right, a band below, or nowhere.
+func (m *Model) withInfoPanel(lines, tree []string, l nodesLayout) []string {
 	switch l.place {
 	case infoRight:
 		rows := l.treeRows
@@ -443,9 +468,19 @@ func (m *Model) nodesBody() []string {
 	return lines
 }
 
+// panelRow is the row the info panel describes: the one under the cursor
+// of the section on screen.
+func (m *Model) panelRow() (FlatRow, bool) {
+	if m.tab == "timeline" {
+		r, ok := m.tlCursorRow()
+		return r.FlatRow, ok
+	}
+	return m.cursorRow()
+}
+
 // infoPanel renders the info panel for the row under the cursor.
 func (m *Model) infoPanel(width, height int, place infoPlacement) []string {
-	r, ok := m.cursorRow()
+	r, ok := m.panelRow()
 	if !ok {
 		return []string{m.theme.Muted.Render(truncCell("no node selected", width))}
 	}
@@ -484,19 +519,7 @@ func (m *Model) nodeTreeLines(l nodesLayout) []string {
 		return []string{"(no nodes yet — workflow not started)"}
 	}
 	h := l.treeRows
-	top := m.nodeTop
-	if m.nodeCursor < top {
-		top = m.nodeCursor
-	}
-	if m.nodeCursor >= top+h {
-		top = m.nodeCursor - h + 1
-	}
-	if max := len(m.nodes) - h; top > max {
-		top = max
-	}
-	if top < 0 {
-		top = 0
-	}
+	top := windowTop(m.nodeTop, m.nodeCursor, h, len(m.nodes))
 	m.nodeTop = top
 	end := min(top+h, len(m.nodes))
 	rr := m.renderer(l.treeW, m.theme)

@@ -2,8 +2,17 @@ package shared
 
 import "github.com/ficaa1/argo-tui/internal/core"
 
-// OpenWorkflowMsg asks the root to load a workflow detail.
-type OpenWorkflowMsg struct{ Ref core.Ref }
+// OpenWorkflowMsg asks the root to load a workflow detail. Section names the
+// detail section to open it on; empty keeps the section the pane last
+// showed.
+type OpenWorkflowMsg struct {
+	Ref     core.Ref
+	Section string
+}
+
+// SectionTimeline is the detail section a workflow list key opens a
+// workflow straight onto, by the ID the detail pane knows it by.
+const SectionTimeline = "timeline"
 
 // OpenLogsMsg asks the root to attach a log stream.
 type OpenLogsMsg struct {
