@@ -20,19 +20,21 @@ func nordTheme(t *testing.T) shared.Theme {
 }
 
 // The tree connectors are drawn in the guide style, apart from the node they
-// lead to, so the eye follows the names. The text is the plain row exactly.
+// lead to, so the eye follows the names. Below the timing bar's tier the
+// text is the plain row exactly; the bar itself changes glyphs with the
+// theme and has its own test.
 func TestNodeRowsDrawConnectorsAsGuides(t *testing.T) {
 	th := nordTheme(t)
 	rows, _ := FlattenOutline(BuildNodeOutline(gateWorkflow(), OutlineOptions{}), true)
 	guided := 0
 	for _, r := range rows {
-		got := RenderFlatRow(r, 100, th, false)
-		if want := RenderFlatRow(r, 100, shared.NewTheme(true), false); ansi.Strip(got) != want {
+		got := RenderFlatRow(r, 70, th, false)
+		if want := RenderFlatRow(r, 70, shared.NewTheme(true), false); ansi.Strip(got) != want {
 			t.Fatalf("themed row text differs:\n%q\n%q", ansi.Strip(got), want)
 		}
-		if r.Prefix != "" && r.Section == "" {
-			if !strings.HasPrefix(got, th.TreeGuide.Render(r.Prefix)) {
-				t.Errorf("connector %q is not drawn as a guide: %q", r.Prefix, got)
+		if r.Prefix != "" && r.Section == "" && !r.HasChildren {
+			if !strings.HasPrefix(got, th.TreeGuide.Render(r.Indent)) {
+				t.Errorf("connector %q is not drawn as a guide: %q", r.Indent, got)
 			}
 			guided++
 		}

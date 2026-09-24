@@ -38,10 +38,34 @@ type Model struct {
 
 	// nodes is the flattened, scrollable outline the nodes tab renders, and
 	// hiddenSkipped is how many rows hideSkipped removed from it. Both are
-	// rebuilt whenever the workflow or the toggle changes, so the cursor and
+	// rebuilt whenever the workflow or a toggle changes, so the cursor and
 	// the drawn rows always share one index space.
 	nodes         []FlatRow
 	hiddenSkipped int
+	// nodeMap is the workflow's node map as it arrived. The info panel and
+	// the progress header read their facts here, so neither needs a request.
+	nodeMap map[string]core.Node
+	// now is the injected clock's time, for the elapsed time of running
+	// nodes. The root sets it before each render; SetWorkflow sets it too.
+	now time.Time
+	// folded holds the node IDs whose subtrees are folded away, and
+	// folds/foldedNodes count the folded rows drawn and the rows they hide.
+	// Folds are keyed by node ID, so they survive a refresh that reorders
+	// or grows the tree.
+	folded      map[string]bool
+	folds       int
+	foldedNodes int
+	// autoFolded remembers the nodes the default rule has already folded,
+	// so a node the reader unfolds stays open across refreshes.
+	autoFolded map[string]bool
+	// nameNeed and templateNeed are the widest name cell and template among
+	// the rows, so every row lays its columns out at the same place.
+	nameNeed     int
+	templateNeed int
+	// showInfo shows the node info panel for the row under the cursor.
+	showInfo bool
+	// find is the nodes tab's find-by-name state.
+	find nodeFind
 	// hideSkipped drops nodes a condition excluded. It defaults to on: a
 	// large deployment workflow is mostly skipped branches, and they bury the
 	// handful of nodes that actually ran.
@@ -74,11 +98,18 @@ type Model struct {
 
 // New builds the detail child model.
 func New() *Model {
-	return &Model{tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortStarted, theme: shared.NewTheme(false)}
+	return &Model{
+		tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortPipeline,
+		theme: shared.NewTheme(false), folded: map[string]bool{}, autoFolded: map[string]bool{},
+	}
 }
 
 // SetTheme injects the style set used for node rows.
 func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
+
+// SetNow gives the pane the injected clock's current time, which the elapsed
+// time of running nodes and their timing bars are measured to.
+func (m *Model) SetNow(t time.Time) { m.now = t }
 
 // Compile-time interface check against the frozen v2 surface.
 var _ tea.Model = (*Model)(nil)
@@ -96,7 +127,19 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 		Message:  wf.Summary.Message,
 	}
 	m.rawResource = append([]byte(nil), wf.Resource...)
-	m.rebuildNodes()
+	m.nodeMap = wf.Nodes
+	m.now = now
+	keep := m.selectedID()
+	if !sameWorkflow {
+		// Folds, the find and the default-fold memory describe one
+		// workflow's nodes; another workflow starts from its own defaults.
+		m.folded = map[string]bool{}
+		m.autoFolded = map[string]bool{}
+		m.find = nodeFind{}
+		keep = ""
+	}
+	m.applyDefaultFolds()
+	m.rebuildNodes(keep)
 	if !sameWorkflow {
 		m.nodeCursor, m.nodeTop = 0, 0
 		m.resourceTop, m.summaryTop = 0, 0
@@ -148,6 +191,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		// The find input owns every key while it is open, so a name can
+		// hold any letter the tab otherwise binds.
+		if m.find.editing {
+			return m, m.handleFindKey(msg.String())
+		}
 		return m, m.handleKey(msg.String())
 
 	default:
@@ -179,9 +227,16 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		m.tab = prevTab(m.tab)
 		return nil
 	case "esc":
+		// A find is cleared before esc leaves the workflow, so the key
+		// undoes the last thing the reader set up, one thing at a time.
+		if m.tab == "nodes" && m.find.active() {
+			m.clearFind()
+			return nil
+		}
 		return backCmd()
 	case "v":
-		// Explicit, session-only reveal of redacted resource values.
+		// Explicit, session-only reveal of redacted values: the resource
+		// tab and the node info panel share it.
 		m.revealResource = !m.revealResource
 		return nil
 	case "p":
@@ -190,16 +245,16 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		if m.tab == "nodes" {
 			m.nodePhase = m.nodePhase.Next()
 			m.nodeCursor, m.nodeTop = 0, 0
-			m.rebuildNodes()
+			m.rebuildNodes("")
 		}
 		return nil
 	case "s":
 		// Cycle the sibling order in the nodes tree. Like p, it belongs to
 		// that tab only: the summary and the resource have no rows to order.
+		// The cursor stays on its node, wherever the new order puts it.
 		if m.tab == "nodes" {
 			m.nodeSort = m.nodeSort.Next()
-			m.nodeCursor, m.nodeTop = 0, 0
-			m.rebuildNodes()
+			m.rebuildNodes(m.selectedID())
 		}
 		return nil
 	case "h":
@@ -207,7 +262,7 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		// skipped nodes, so this is the difference between a readable tree
 		// and forty lines of "when 'false' evaluated false".
 		m.hideSkipped = !m.hideSkipped
-		m.rebuildNodes()
+		m.rebuildNodes(m.selectedID())
 		return nil
 	case "j", "down":
 		m.scrollBy(1)
@@ -230,26 +285,10 @@ func (m *Model) handleKey(key string) tea.Cmd {
 	case "l", "enter":
 		return m.nodeLogsCmd()
 	default:
+		if m.tab == "nodes" {
+			m.handleNodesKey(key)
+		}
 		return nil
-	}
-}
-
-// rebuildNodes re-flattens the outline and re-clamps the cursor, so the
-// cursor can never point past the rows the view will draw.
-func (m *Model) rebuildNodes() {
-	// A phase filter searches the whole tree, so it starts from every row:
-	// hiding the skipped branches first would make the Skipped bucket empty
-	// and could drop a match under a hidden parent.
-	hide := m.hideSkipped && m.nodePhase == NodePhaseAll
-	SortOutline(&m.state.Outline, m.nodeSort)
-	m.nodes, m.hiddenSkipped = FlattenOutline(m.state.Outline, hide)
-	m.totalNodes = len(m.nodes)
-	m.nodes = FilterFlatRows(m.nodes, m.nodePhase)
-	if m.nodeCursor >= len(m.nodes) {
-		m.nodeCursor = len(m.nodes) - 1
-	}
-	if m.nodeCursor < 0 {
-		m.nodeCursor = 0
 	}
 }
 
@@ -299,8 +338,13 @@ func (m *Model) scrollLines() int {
 }
 
 // viewRows is the number of content rows the active tab may draw, after the
-// tab strip and the status line the pane always shows.
+// tab strip and the status line the pane always shows. The nodes tab also
+// gives rows to its progress header, its column heads and a bottom info
+// panel, and nodesLayout accounts for them.
 func (m *Model) viewRows() int {
+	if m.tab == "nodes" {
+		return m.nodesLayout().treeRows
+	}
 	h := m.height - detailChromeRows
 	if h < 1 {
 		return 1
@@ -415,9 +459,19 @@ func (m *Model) PaneTitle() string {
 // Hints is the detail key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
 	if m.tab == "nodes" {
-		return "tab section  h skipped  s sort  p phase  l logs  a actions  f raw  r refresh  esc back"
+		return m.nodesHints()
 	}
 	return "tab section  v reveal  y copy  a actions  f raw  r refresh  esc back"
+}
+
+// TextEntry reports whether the pane owns printable keys: the find input is
+// open, so q, ? and every other letter are part of the name being typed.
+func (m *Model) TextEntry() bool { return m.find.editing }
+
+// EscapeConsumed reports whether esc belongs to the pane rather than leaving
+// the workflow: it cancels an open find input or clears a finished find.
+func (m *Model) EscapeConsumed() bool {
+	return m.tab == "nodes" && m.find.active()
 }
 
 // PaneStatus is the right-aligned footer cell: the workflow phase, carried
@@ -440,7 +494,12 @@ func (m *Model) BodyLines() []string {
 	if lines, ok := m.stateLines(); ok {
 		return lines
 	}
-	lines := append([]string{tabStrip(m.tab, m.theme), m.tabStatusLine()}, m.windowedLines()...)
+	var lines []string
+	if m.tab == "nodes" {
+		lines = append([]string{tabStrip(m.tab, m.theme)}, m.nodesBody()...)
+	} else {
+		lines = append([]string{tabStrip(m.tab, m.theme), m.tabStatusLine()}, m.windowedLines()...)
+	}
 	if m.height > 0 {
 		lines = shared.ClampLines(lines, m.height)
 	}
@@ -456,11 +515,7 @@ func (m *Model) RawLines() []string {
 	}
 	switch m.tab {
 	case "nodes":
-		out := make([]string, 0, len(m.nodes))
-		for _, r := range m.nodes {
-			out = append(out, RenderFlatRow(r, 0, shared.NewTheme(true), false))
-		}
-		return out
+		return m.nodesRawLines()
 	case "resource":
 		return strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n")
 	default:
@@ -490,24 +545,7 @@ func (m *Model) stateLines() ([]string, bool) {
 func (m *Model) tabStatusLine() string {
 	switch m.tab {
 	case "nodes":
-		if !m.state.Outline.Available {
-			return "node status unavailable"
-		}
-		s := itoaDetail(len(m.nodes)) + " nodes"
-		if m.nodePhase != NodePhaseAll {
-			s = itoaDetail(len(m.nodes)) + " of " + itoaDetail(m.totalNodes) +
-				" nodes · phase " + string(m.nodePhase)
-		} else if m.hiddenSkipped > 0 {
-			s += " · " + itoaDetail(m.hiddenSkipped) + " skipped hidden"
-		}
-		s += " · sort " + string(m.nodeSort)
-		if len(m.nodes) > 0 {
-			s += " · " + itoaDetail(m.nodeCursor+1) + "/" + itoaDetail(len(m.nodes))
-		}
-		if row, ok := m.SelectedNode(); ok && row.HasPod && row.PodName != "" {
-			s += " · l logs"
-		}
-		return m.theme.Dim.Render(s)
+		return m.nodesStatusLine()
 	case "resource":
 		reveal := "redacted (v reveals)"
 		if m.revealResource {
@@ -527,39 +565,7 @@ func (m *Model) windowedLines() []string {
 	h := m.viewRows()
 	switch m.tab {
 	case "nodes":
-		if !m.state.Outline.Available {
-			reason := m.state.Outline.UnavailableReason
-			if reason == "" {
-				return []string{"the server did not send node status for this workflow"}
-			}
-			return []string{shared.Sanitize(reason)}
-		}
-		if len(m.nodes) == 0 {
-			return []string{"(no nodes yet — workflow not started)"}
-		}
-		top := m.nodeTop
-		if m.nodeCursor < top {
-			top = m.nodeCursor
-		}
-		if m.nodeCursor >= top+h {
-			top = m.nodeCursor - h + 1
-		}
-		if max := len(m.nodes) - h; top > max {
-			top = max
-		}
-		if top < 0 {
-			top = 0
-		}
-		m.nodeTop = top
-		end := top + h
-		if end > len(m.nodes) {
-			end = len(m.nodes)
-		}
-		out := make([]string, 0, end-top)
-		for i := top; i < end; i++ {
-			out = append(out, RenderFlatRow(m.nodes[i], m.width, m.theme, i == m.nodeCursor))
-		}
-		return out
+		return m.nodeTreeLines(m.nodesLayout())
 	case "resource":
 		return sliceLines(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"), m.resourceTop, h)
 	default:
