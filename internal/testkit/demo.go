@@ -387,6 +387,7 @@ func DemoReader(clock *FakeClock) *FakeReader {
 	}
 	f.CronWorkflows = demoCronWorkflows(now, runs)
 	f.WorkflowTemplates, f.ClusterWorkflowTemplates = demoTemplates(now)
+	demoArchive(f, now)
 	return f
 }
 
