@@ -214,13 +214,15 @@ func TestListSnapshotCollectionViaFakePagination(t *testing.T) {
 	if !lm.Done {
 		t.Fatal("collection not done")
 	}
-	// Demo dataset has 5 workflows with page size 2 → 3 pages → 5 items.
-	if len(lm.Page.Items) != 5 {
-		t.Fatalf("items = %d, want 5 (all pages collected)", len(lm.Page.Items))
+	// Page size 2 splits the demo dataset over several pages; every page
+	// must be collected into the one snapshot.
+	want := len(f.Workflows)
+	if len(lm.Page.Items) != want {
+		t.Fatalf("items = %d, want %d (all pages collected)", len(lm.Page.Items), want)
 	}
 	updated, _ := m.Update(lm)
 	root := updated.(*Root)
-	if len(root.listState.items) != 5 {
+	if len(root.listState.items) != want {
 		t.Fatalf("applied items = %d", len(root.listState.items))
 	}
 }
@@ -498,7 +500,7 @@ func loadDemoList(t *testing.T) *Root {
 		next, _ := m.Update(msg)
 		m = next.(*Root)
 	}
-	if len(m.listState.items) != 5 {
+	if len(m.listState.items) != len(f.Workflows) {
 		t.Fatalf("precondition: list not loaded (%d items)", len(m.listState.items))
 	}
 	return m

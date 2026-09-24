@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The demo dataset now has twelve workflows whose node maps follow the
+  shapes the Argo controller writes: chained step groups, DAG tasks that list
+  their dependents as children, retry attempts, an exit handler, a fan-out in
+  progress, an approval gate, an out-of-memory kill, a validation error with
+  no nodes, a deploy tree that is mostly skipped branches, and runs started by
+  a CronWorkflow. Every pod that ran has its own log, and the resource tab
+  shows a full manifest.
+- The adapter now decodes each node's progress, duration estimate, resource
+  usage, host, exit code, input and output parameters and artifacts, and its
+  retry, hook and memoization flags, and each workflow's progress and duration
+  estimate. The list asks for the workflow's progress and estimate too.
 - A port-forward that prints an error line for one dropped connection no
   longer counts as a lost connection. kubectl prints such a line while the
   listener keeps serving, and it blocked every action until the process
