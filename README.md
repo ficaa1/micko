@@ -129,6 +129,7 @@ check and the write remains possible.
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
 | Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `0` all namespaces |
+| Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
 | Resource | `v` reveal hidden parameter/output values |
@@ -150,6 +151,7 @@ runs a guess: a word that names no command is reported in the footer.
 | Command | Does |
 | --- | --- |
 | `workflows`, `wf` | Show the workflow list |
+| `cronworkflows`, `cwf`, `cron` | Show the cron workflow list |
 | `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
 | `all` | Toggle the all-namespaces view |
 | `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
@@ -167,6 +169,39 @@ namespace. Detail, logs and actions use each row's own namespace. The token
 needs permission to list workflows cluster-wide; without it, and on a server
 started for one managed namespace, the pane says so, and `0` returns to the
 namespace you came from.
+
+### Cron workflows
+
+`:cron` lists the namespace's CronWorkflows: the schedule (every entry of a
+v3.6+ `schedules` list, or the single `schedule` of older objects), the time
+zone when it is not UTC, whether it is suspended, how many runs are active,
+when it last ran, when it runs next, and its concurrency policy. The default
+order puts the next run first and suspended ones last; `s` also sorts by name
+and by last run.
+
+NEXT RUN is computed locally from the schedule the way the Argo controller
+reads it: five fields with ranges, steps, lists and month and weekday names,
+the `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly` and `@every`
+descriptors, day-of-month and day-of-week combined as the controller combines
+them, on the wall clock of `spec.timezone` across daylight-saving changes. An
+expression the controller would refuse shows `?`, and the info panel says why;
+a date that never comes shows `never`.
+
+`i` opens the info panel for the selected row, below the table or, on a pane at
+least 140 columns wide, beside it: every schedule, the time zone, the next five
+run times, the concurrency policy, the starting deadline, the history limits,
+the suspend state, the last run, the active runs, the controller's conditions,
+and the entrypoint and arguments of the workflow each run starts. Argument
+values are redacted until `v`, which reveals them for the selected row only.
+`f` shows the whole manifest, redacted the same way.
+
+`enter` lists the workflows the cron workflow started: the workflow list,
+narrowed on the server by the `workflows.argoproj.io/cron-workflow` label the
+controller puts on each run. The pane title names the cron workflow, `esc`
+returns to the cron list with the cursor where it was, and a workflow opened
+from there returns to it with a second `esc`. The cron list refreshes on the
+list's poll interval while it is shown. Suspending, resuming and submitting a
+cron workflow are not available yet.
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a

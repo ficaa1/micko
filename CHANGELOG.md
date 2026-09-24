@@ -16,6 +16,18 @@
   and actions use each row's own namespace. A token that may not list
   cluster-wide, or a server started for one managed namespace, gets that
   reason on the pane instead of an empty list.
+- Added a cron workflow list: `:cron` (or `:cwf`, `:cronworkflows`). It
+  shows each CronWorkflow's schedules, time zone, suspend state, active runs,
+  last run, next run and concurrency policy, soonest next run first and
+  suspended ones last, with `n` and `0` for the namespace as on the workflow
+  list. Next run times are computed from the schedule the way the controller
+  reads it, in the object's time zone and across daylight-saving changes; a
+  schedule the controller would refuse shows `?` with the reason. `i` opens
+  an info panel with the next five runs, the policy, the history limits, the
+  last and active runs and the arguments, whose values `v` reveals. `enter`
+  lists the workflows the cron workflow started, and `esc` returns. Both the
+  v3.5 `schedule` field and the v3.6+ `schedules` list are read. The demo has
+  four cron workflows, one of them owning the demo's hourly ETL runs.
 - A list that fails before anything was collected now says so on the pane
   instead of reading as a namespace with no workflows.
 - The demo has a second namespace, `demo-ml`, with a hyperparameter sweep in

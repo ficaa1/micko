@@ -11,6 +11,7 @@ import (
 	"github.com/ficaa1/argo-tui/internal/core"
 	"github.com/ficaa1/argo-tui/internal/ui/actions"
 	"github.com/ficaa1/argo-tui/internal/ui/detail"
+	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
 	"github.com/ficaa1/argo-tui/internal/ui/logs"
 	"github.com/ficaa1/argo-tui/internal/ui/namespaces"
 	"github.com/ficaa1/argo-tui/internal/ui/palette"
@@ -148,6 +149,17 @@ type Root struct {
 	// cursor on the first open and selects nothing by itself.
 	profileCurrent string
 	profileCursor  string
+
+	// kindDefs are the list routes of the resource kinds beside workflows,
+	// and kindStates their collection state. cronView is the cron kind's
+	// pane, typed, for the code that fills it.
+	kindDefs   map[Route]*kindDef
+	kindStates map[Route]*kindState
+	cronView   *kindlist.Model[core.CronWorkflow]
+
+	// drill is the active drill-down from a kind's row to the workflows it
+	// owns; nil outside one.
+	drill *drillState
 }
 
 // SetWebURL records the Argo UI address links are built from.
@@ -215,12 +227,14 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	if n, ok := r.(core.NamespaceLister); ok {
 		nsLister = n
 	}
+	cronLister, _ := r.(core.CronLister)
 	m := &Root{
 		deps: deps{
 			reader:      r,
 			watcher:     watcher,
 			actioner:    actioner,
 			nsLister:    nsLister,
+			cronLister:  cronLister,
 			clock:       clock,
 			interval:    interval,
 			namespace:   namespace,
@@ -243,6 +257,11 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	}
 	m.palView.SetCommands(paletteSpecs(m.registry))
 	m.palView.SetArgSource(m.paletteArgs)
+	m.kindDefs = map[Route]*kindDef{RouteCron: m.newCronKind()}
+	m.kindStates = map[Route]*kindState{}
+	for r := range m.kindDefs {
+		m.kindStates[r] = &kindState{}
+	}
 	return m
 }
 
@@ -315,6 +334,9 @@ func (m *Root) textEntryActive() bool {
 	case RouteLogs:
 		return m.logsView != nil && m.logsView.EscapeConsumed()
 	default:
+		if def := m.kind(m.route); def != nil {
+			return def.pane.Searching()
+		}
 		return false
 	}
 }
@@ -452,6 +474,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
 			return m, m.back()
 		}
+		// In a drill-down, esc returns to the kind's list once the workflow
+		// list has nothing of its own left to back out of: a filter clears
+		// first, as it does on the plain list.
+		if key == "esc" && m.route == RouteList && m.drill != nil && !m.listView.SearchOn && m.listView.Query() == "" {
+			return m, m.leaveDrill()
+		}
 		// List route: route the keyboard into the list child (j/k/arrows/Enter/
 		// l//s/r and printable search text). The child emits intents (open,
 		// logs, refresh); the root converts them to effects below. Global
@@ -472,6 +500,20 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Only restart a poll when one is not already in flight for this
 		// generation (plan §5: exactly one list op per generation).
 		m.tickArmed = false
+		// A kind's route polls its own list on the same tick. The workflow
+		// list's watch state does not stop it: a token refused workflows
+		// may still read cron workflows, and the kind reports its own
+		// refusal.
+		if m.kind(m.route) != nil {
+			var cmds []tea.Cmd
+			if !m.kindStates[m.route].loading {
+				cmds = append(cmds, m.startKindFetch(m.route))
+			}
+			if m.connectionReady && !m.connectionFresh && !m.listState.loading && !terminalWatchMode(m.watchMode) {
+				cmds = append(cmds, m.startListGeneration())
+			}
+			return m, tea.Batch(append(cmds, m.armTick())...)
+		}
 		if terminalWatchMode(m.watchMode) {
 			return m, nil
 		}
@@ -551,6 +593,18 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case namespacesLoadedMsg:
 		return m, m.handleNamespacesLoaded(msg)
+
+	case kindLoadedMsg:
+		return m, m.handleKindLoaded(msg)
+
+	case kindlist.DrillMsg:
+		return m, m.handleDrill(msg)
+
+	case kindlist.RefreshMsg:
+		if m.kind(m.route) != nil {
+			return m, m.startKindFetch(m.route)
+		}
+		return m, nil
 
 	case namespaces.SwitchMsg:
 		return m, m.switchNamespace(msg.Namespace)
@@ -707,9 +761,18 @@ func (m *Root) View() tea.View {
 			f.Status = m.logsView.PaneStatus()
 			f.Body = m.logsView.BodyLines()
 		}
+	case RouteCron:
+		def := m.kind(m.route)
+		def.pane.SetSize(f.BodyWidth(), bodyH)
+		f.Title = def.pane.PaneTitle()
+		f.TitleRight = m.kindSummary(m.route, def.noun)
+		f.Route = m.route.String()
+		f.Hints = def.pane.Hints()
+		f.Body = def.pane.BodyLines(m.deps.clock.Now())
+		f.Status = def.pane.WindowStatus()
 	default:
 		m.listView.SetSize(f.BodyWidth(), bodyH)
-		f.Title = m.listView.PaneTitle()
+		f.Title = m.listPaneTitle()
 		f.TitleRight = m.listSummary()
 		f.Route = "list"
 		f.Hints = m.listView.Hints()
@@ -864,7 +927,7 @@ func (m *Root) listSummary() string {
 		return "list: empty"
 	default:
 		s := "list: " + lenItems(st.items)
-		if m.deps.allNamespaces {
+		if m.listAcrossNamespaces() {
 			s += " in " + plural(countNamespaces(st.items), "namespace")
 		}
 		if m.watchMode != "" {
@@ -1171,7 +1234,7 @@ func (m *Root) listErrorStatus(ae *core.APIError) workflowlist.Status {
 // token that may read one namespace is routinely refused the cluster-wide
 // list, and the fix is the key that returns to that namespace.
 func (m *Root) listErrorText(ae *core.APIError) string {
-	if !m.deps.allNamespaces {
+	if !m.listAcrossNamespaces() {
 		return ae.Message
 	}
 	return "all namespaces: " + ae.Message + " — press 0 to return to " + m.deps.namespace
@@ -1267,6 +1330,9 @@ func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
 		}
 		return m.logsView.Update(msg)
 	default:
+		if def := m.kind(m.route); def != nil {
+			return def.pane.Update(msg)
+		}
 		return nil
 	}
 }

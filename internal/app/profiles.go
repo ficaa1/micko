@@ -79,6 +79,7 @@ func (m *Root) Adopt(c *Connection) {
 	m.deps.watcher, _ = c.Reader.(core.Watcher)
 	m.deps.actioner, _ = c.Reader.(core.Actioner)
 	m.deps.nsLister, _ = c.Reader.(core.NamespaceLister)
+	m.deps.cronLister, _ = c.Reader.(core.CronLister)
 	m.deps.namespace = c.Namespace
 	// A new connection starts in its profile's namespace. Carrying the
 	// all-namespaces view across would send the next cluster a cluster-wide
@@ -147,6 +148,7 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	m.conn = nil
 	m.deps.reader = nil
 	m.deps.watcher, m.deps.actioner, m.deps.nsLister = nil, nil, nil
+	m.deps.cronLister = nil
 	m.resetRoutes()
 	if m.profView != nil {
 		m.profView.SetConnecting(name)
@@ -205,7 +207,10 @@ func (m *Root) resetRoutes() {
 	m.logsView = nil
 	m.detailView = newDetailView()
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
-	m.listView.SetAllNamespaces(m.deps.allNamespaces)
+	m.drill = nil
+	m.deps.drillNamespace, m.deps.labelSelector = "", ""
+	m.resetKinds()
+	m.listView.SetAllNamespaces(m.listAcrossNamespaces())
 	m.listView.SetItems(nil, m.deps.clock.Now())
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)
 }
