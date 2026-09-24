@@ -73,7 +73,7 @@ func (m *Model) WindowStatus() string {
 
 // Hints are the list key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	return "enter open  l logs  / search  s sort  p phase  n namespace  r refresh"
+	return "enter open  l logs  / search  s sort  p phase  space mark  a actions  n namespace  r refresh"
 }
 
 // footerPosition is the window indicator appended to the standalone footer.
@@ -92,7 +92,7 @@ func (m *Model) frameLines(now time.Time, reserve int) []string {
 	lines := strings.Split(m.toolbarView(), "\n")
 
 	wName, wPhase, wAge, wDur, wMsg := m.colWidths()
-	head := padRight("NAME", wName) + "  " +
+	head := strings.Repeat(" ", markGutter) + padRight("NAME", wName) + "  " +
 		padRight("PHASE", wPhase) + "  " +
 		padLeft("AGE", wAge) + "  " +
 		padRight("DURATION", wDur)
@@ -167,7 +167,15 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	shown := DisplayPhase(r)
 	phase := shared.PhaseSymbol(shown) + " " + m.rowPhaseText(sanitizeOne(shown))
 	msg := sanitizeOne(r.Message)
-	line := padRight(truncateRight(name, wName), wName) + "  " +
+	// The mark gutter carries the mark as a glyph, so a marked row is
+	// distinguishable without colour; the Marked style is the second
+	// channel on top of it.
+	gutter := strings.Repeat(" ", markGutter)
+	marked := m.marks[r.Ref.UID]
+	if marked {
+		gutter = markGlyph + " "
+	}
+	line := gutter + padRight(truncateRight(name, wName), wName) + "  " +
 		padRight(truncateRight(phase, wPhase), wPhase) + "  " +
 		padLeft(ageText(r, now), wAge) + "  " +
 		padRight(durationText(r), wDur)
@@ -177,8 +185,20 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	if selected {
 		return m.theme.Selected.Render(line)
 	}
+	if marked {
+		return m.theme.Marked.Render(line)
+	}
 	return m.theme.PhaseStyle(shown).Render(line)
 }
+
+// markGutter is the width of the column left of NAME that holds the mark
+// glyph. It is reserved on every row, marked or not, so marking the first
+// workflow does not shift every column sideways.
+const markGutter = 2
+
+// markGlyph is the one-cell mark. It is not a phase glyph, so a marked row
+// never reads as a phase.
+const markGlyph = "◆" // black diamond
 
 // minUsableWidth below which the plan requires a resize notice (<60 cols).
 const minUsableWidth = 60
@@ -205,6 +225,12 @@ func (m *Model) headerView() string {
 // local search scope and the incomplete count visibly (plan gate; LIST-05/09).
 func (m *Model) toolbarView() string {
 	parts := []string{}
+	// The mark count leads the toolbar. The marks are the one state here
+	// that an action will act on, and a narrow pane clips the toolbar from
+	// the right.
+	if cell := m.markCell(); cell != "" {
+		parts = append(parts, m.theme.Marked.Render(cell))
+	}
 
 	q := m.query
 	if m.SearchOn {
@@ -302,6 +328,21 @@ func (m *Model) toolbarPrefixParts() []string {
 	return []string{searchCell + scope, "Phase: " + string(m.phase), "Sort: " + sortLabel(m.sort)}
 }
 
+// markCell is the toolbar's mark count, empty with no marks. It names the
+// hidden marks separately: a bulk action reaches them too, and a reader who
+// counts the diamonds on screen would otherwise come up short.
+func (m *Model) markCell() string {
+	n := m.MarkCount()
+	if n == 0 {
+		return ""
+	}
+	cell := markGlyph + " " + itoa(n) + " marked"
+	if hidden := m.HiddenMarkCount(); hidden > 0 {
+		cell += " (" + itoa(hidden) + " hidden by filter)"
+	}
+	return cell
+}
+
 // suspendedCount counts the workflows in the whole snapshot that hold an
 // open manual gate, not only the ones the current filter shows.
 func (m *Model) suspendedCount() int {
@@ -362,7 +403,9 @@ func (m *Model) searchLineView() string {
 // message clipped to a few cells shows no more than the fact that a message
 // exists, and costs the NAME column the width that does show something.
 func (m *Model) colWidths() (name, phase, age, dur, msg int) {
-	name = 30
+	// 28 plus the mark gutter leaves an 80-column pane a message column of
+	// minMessageWidth and one cell to spare.
+	name = 28
 	// The PHASE cell holds "symbol space word"; the longest phase word is
 	// "Succeeded" (9), so 11 is the narrowest width that never truncates a
 	// known phase, and 12 leaves one cell of slack in the wide layout.
@@ -378,9 +421,9 @@ func (m *Model) colWidths() (name, phase, age, dur, msg int) {
 		age = 6
 		dur = 8
 	}
-	// Three two-cell gaps separate the four fixed columns, and a fourth
-	// separates the message from them.
-	msg = m.width - (name + phase + age + dur + colGap*3) - colGap
+	// The mark gutter comes first, three two-cell gaps separate the four
+	// fixed columns, and a fourth separates the message from them.
+	msg = m.width - markGutter - (name + phase + age + dur + colGap*3) - colGap
 	// Under 80 columns the fixed columns are already clipping names and
 	// durations. Spending what is left on a fifth column would clip them
 	// further to show a fragment of a sentence.

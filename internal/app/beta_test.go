@@ -25,6 +25,12 @@ func (b *betaReader) Execute(_ context.Context, req core.ActionRequest) (core.Ac
 	if b.execErr != nil {
 		return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}, b.execErr
 	}
+	// A resume takes effect at once, as it does on a server: the read-back
+	// that follows sees the gate closed.
+	if wf, ok := b.Workflows[req.Ref]; ok && req.Action == core.ActionResume {
+		wf.Summary.Suspended = false
+		b.Workflows[req.Ref] = wf
+	}
 	ref := req.Ref
 	return core.ActionResult{Action: req.Action, Target: req.Ref, Affected: &ref, Outcome: core.ActionConfirmed}, nil
 }
@@ -49,9 +55,10 @@ func TestWatchEventUpdatesByUIDAndBookmarksDoNothing(t *testing.T) {
 
 func TestActionExecutesOnceAndRequiresReadBack(t *testing.T) {
 	wf := workflowFixture("wf")
+	wf.Summary.Phase = "Failed"
 	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
 	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
-	req := core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionRetry, Confirmation: core.Confirmation{Confirmed: true}}
+	req := core.ActionRequest{Ref: wf.Summary.Ref, Action: core.ActionResubmit, Confirmation: core.Confirmation{Confirmed: true}}
 	msg := runCmd(m.startAction(req))
 	if len(msg) != 1 {
 		t.Fatalf("action command messages=%d", len(msg))
@@ -109,6 +116,7 @@ func TestAmbiguousActionNeverRetries(t *testing.T) {
 
 func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 	wf := workflowFixture("wf")
+	wf.Summary.Suspended = true
 	b := &betaReader{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}}
 	m := NewRootWithOptions(b, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true})
 	m.route = RouteDetail

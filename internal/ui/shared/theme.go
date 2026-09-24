@@ -26,6 +26,9 @@ type Theme struct {
 	Dim       lipgloss.Style
 	Warning   lipgloss.Style
 	ErrorText lipgloss.Style
+	// Marked styles a marked list row. The mark glyph carries the mark on
+	// its own; this is the second channel, so it may degrade to plain.
+	Marked lipgloss.Style
 
 	// Shell chrome: the frame border, the pane title inside it, and the
 	// key-hint footer band. Kept separate from Header so the pane title can
@@ -60,7 +63,8 @@ func coloredTheme() Theme {
 		Dim:            lipgloss.NewStyle().Faint(true),
 		Warning:        lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
 		ErrorText:      lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true),
-		Border:         lipgloss.NewStyle().Foreground(lipgloss.Color("8")), // dim gray
+		Marked:         lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Bold(true), // blue
+		Border:         lipgloss.NewStyle().Foreground(lipgloss.Color("8")),            // dim gray
 		Title:          lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true),
 		Footer:         lipgloss.NewStyle().Faint(true),
 	}
@@ -78,6 +82,7 @@ func plainTheme() Theme {
 		Dim:            lipgloss.NewStyle(),
 		Warning:        lipgloss.NewStyle(),
 		ErrorText:      lipgloss.NewStyle(),
+		Marked:         lipgloss.NewStyle(),
 		Border:         lipgloss.NewStyle(),
 		Title:          lipgloss.NewStyle(),
 		Footer:         lipgloss.NewStyle(),

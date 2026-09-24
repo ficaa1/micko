@@ -744,6 +744,45 @@ func TestPTYDemoEscClearsAppliedFilter(t *testing.T) {
 	_, _ = p.Wait()
 }
 
+// Marking two rows reaches the terminal as two glyphs and a count, and a on
+// the list opens the bulk pane for them. The demo cannot write, so the pane
+// opens in its unavailable state and says why.
+func TestPTYDemoMarksTwoRowsAndOpensTheBulkMenu(t *testing.T) {
+	p := startDemo(t, 120, 30)
+	// The renderer repaints only the cells that change, so the capture is
+	// cleared before each step and each check is for text a step writes
+	// whole: the first mark adds the toolbar cell, and the second changes
+	// only its digit, which the bulk pane then states in full.
+	p.ClearScreen()
+	if err := p.Send(" "); err != nil {
+		t.Fatalf("send space: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "◆ 1 marked")
+	}) {
+		t.Fatalf("the first mark never rendered; screen=%q", p.Screen())
+	}
+	if err := p.SendKeys(40*time.Millisecond, "j", " "); err != nil {
+		t.Fatalf("send the second mark: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	p.ClearScreen()
+	if err := p.Send("a"); err != nil {
+		t.Fatalf("send a: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "Bulk action") && strings.Contains(s, "targets: 2 marked workflows") &&
+			strings.Contains(s, "demo mode: actions unavailable")
+	}) {
+		t.Fatalf("the bulk pane never opened; screen=%q", p.Screen())
+	}
+	// The pane is a dialog that owns q, so the way out is ctrl+c.
+	_ = p.Send("\x03")
+	if code, err := p.Wait(); err != nil || code != 0 {
+		t.Fatalf("exit: code=%d err=%v", code, err)
+	}
+}
+
 // --- H: UI shell -----------------------------------------------------------
 
 // The shell must actually reach the terminal. A bordered pane that renders

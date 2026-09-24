@@ -95,6 +95,13 @@ type Model struct {
 	visible int
 	total   int
 
+	// marks is the set of marked workflows, keyed by UID. It is keyed by
+	// identity for the same reason the selection is: sorting, filtering and
+	// a refresh reorder rows, and a mark must stay on its workflow. A mark
+	// hidden by the filter is still a mark, because the bulk action it feeds
+	// acts on every marked workflow, not only the visible ones.
+	marks map[string]bool
+
 	// theme is injected (shared.Theme) so goldens can force no-color.
 	theme shared.Theme
 
@@ -119,7 +126,83 @@ func (m *Model) SetItems(items []core.Summary, now time.Time) {
 	m.items = items
 	m.total = len(items)
 	m.reselect(now)
+	m.pruneMarks()
 	m.applyView()
+}
+
+// ToggleMark marks the selected workflow, or unmarks it when it is already
+// marked. With no selection it does nothing.
+func (m *Model) ToggleMark() {
+	uid := m.SelectedRef().UID
+	if uid == "" {
+		return
+	}
+	if m.marks[uid] {
+		delete(m.marks, uid)
+		return
+	}
+	if m.marks == nil {
+		m.marks = map[string]bool{}
+	}
+	m.marks[uid] = true
+}
+
+// IsMarked reports whether the workflow with this UID is marked.
+func (m *Model) IsMarked(uid string) bool { return m.marks[uid] }
+
+// Marked returns the marked workflows in the current sort order, hidden
+// ones included. The order is the order a bulk action runs in, so it
+// follows what the reader sees rather than the order they marked in.
+func (m *Model) Marked() []core.Summary {
+	if len(m.marks) == 0 {
+		return nil
+	}
+	out := make([]core.Summary, 0, len(m.marks))
+	for _, it := range m.items {
+		if m.marks[it.Ref.UID] {
+			out = append(out, it)
+		}
+	}
+	return Sort(out, m.sort)
+}
+
+// MarkCount is the number of marked workflows, hidden ones included.
+func (m *Model) MarkCount() int { return len(m.marks) }
+
+// HiddenMarkCount is the number of marked workflows the current filter
+// hides. A bulk action reaches them too, so the toolbar has to say so.
+func (m *Model) HiddenMarkCount() int {
+	if len(m.marks) == 0 {
+		return 0
+	}
+	shown := 0
+	for _, r := range m.rows {
+		if m.marks[r.Ref.UID] {
+			shown++
+		}
+	}
+	return len(m.marks) - shown
+}
+
+// ClearMarks drops every mark.
+func (m *Model) ClearMarks() { m.marks = nil }
+
+// pruneMarks drops the marks whose workflow left the snapshot. A mark on a
+// workflow that no longer exists would be counted in the toolbar and sent
+// to a bulk action with no row to show it on.
+func (m *Model) pruneMarks() {
+	if len(m.marks) == 0 {
+		return
+	}
+	present := make(map[string]bool, len(m.items))
+	for _, it := range m.items {
+		present[it.Ref.UID] = true
+	}
+	for uid := range m.marks {
+		if !present[uid] {
+			delete(m.marks, uid)
+		}
+	}
 }
 
 // Rows returns the currently displayed rows in display order. It is a read

@@ -88,6 +88,14 @@ type Root struct {
 	watchRetries  int
 	watchAttempt  uint64
 	actionAttempt uint64
+	// bulk is the bulk action in progress, nil when none runs.
+	bulk *bulkRun
+	// actionFromMarks records that the open action pane acts on the marked
+	// rows, so its finish can drop them.
+	actionFromMarks bool
+	// journalWarned records that a journal failure has been reported. It is
+	// reported once per session, not after every action.
+	journalWarned bool
 	// connectionReady gates mutations. Data remains rendered while false.
 	connectionReady  bool
 	connectionFresh  bool
@@ -324,12 +332,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			had := m.actionView.State()
 			_, cmd := m.actionView.Update(msg)
-			// Closing a finished action returns to the detail pane it was
-			// started from, and refetches it: the workflow the reader is
-			// looking at has just changed, and showing its pre-action state
-			// would be the most misleading moment to be stale.
-			if had == actions.StateOutcome && m.actionView.State() == actions.StateIdle && m.route == RouteDetail {
-				return m, tea.Batch(cmd, m.startDetailFetch())
+			// Closing a finished action returns to the route it was started
+			// from, and refetches it: the workflows the reader is looking at
+			// have just changed, and showing their pre-action state would be
+			// the most misleading moment to be stale.
+			if had == actions.StateOutcome && m.actionView.State() == actions.StateIdle {
+				return m, tea.Batch(cmd, m.afterActionPane())
 			}
 			return m, cmd
 		}
@@ -411,13 +419,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.startDetailFetch()
 		}
 		if m.route == RouteDetail && key == "a" {
-			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
-			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
-			if m.connectionReady && m.connectionFresh {
-				m.actionView.OpenMenu()
-			} else {
-				m.actionView.OpenUnavailable(staleActionReason(m.connectionReady))
-			}
+			m.openDetailActions()
+			return m, nil
+		}
+		if m.route == RouteList && key == "a" && !m.textEntryActive() {
+			m.openListActions()
 			return m, nil
 		}
 		if key == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
@@ -555,11 +561,20 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actions.ActionIntentMsg:
 		// Only the active, confirmed child intent may reach the executor.
-		if msg.Request.Ref != m.selection || m.actionView == nil ||
+		if m.actionView == nil || m.actionView.Bulk() || msg.Request.Ref != m.actionView.Ref() ||
 			m.actionView.State() != actions.StateSubmitting {
 			return m, nil
 		}
 		return m, m.startAction(msg.Request)
+
+	case actions.BulkIntentMsg:
+		if !m.bulkIntentMatches(msg.Requests) {
+			return m, nil
+		}
+		return m, m.startBulk(msg.Requests)
+
+	case bulkStepMsg:
+		return m, m.handleBulkStep(msg)
 
 	case ActionIntentMsg:
 		// Retain the obsolete app message as a no-op compatibility boundary.
@@ -599,8 +614,11 @@ func (m *Root) View() tea.View {
 	// cannot be mistaken for the thing being confirmed.
 	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 		f.Title = "Confirm action"
+		if m.actionView.Bulk() {
+			f.Title = "Bulk action"
+		}
 		f.Route = "action"
-		f.Hints = "y confirm  n cancel  esc close"
+		f.Hints = m.actionView.Hints()
 		f.Help = ""
 		f.Body = splitLines(m.actionView.View().Content)
 		return m.finishView(f)

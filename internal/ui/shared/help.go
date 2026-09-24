@@ -67,7 +67,8 @@ func helpLines() []string {
 		"",
 		"List      enter open    l logs             / search (live)",
 		"          s sort        p phase filter     r refresh",
-		"          n switch namespace               esc clear filter",
+		"          space mark / unmark              a actions (marked, or selected)",
+		"          n switch namespace               esc clear marks, then filter",
 		"",
 		"Detail    tab next section  shift+tab previous",
 		"          h show / hide skipped nodes",
@@ -83,10 +84,11 @@ func helpLines() []string {
 		"          | pipe the retained lines to another program",
 		"          G newest line                    esc back",
 		"",
-		"Actions   a opens the pane",
-		"          u resume   r retry   b resubmit   s stop",
-		"          y confirms; enter and esc both cancel",
-		"          the pane closes itself and reports on the footer",
+		"Actions   a opens the pane; only verbs that apply are offered",
+		"          u resume  z suspend  r retry  b resubmit  s stop",
+		"          t terminate (type the name)  d delete (then only D deletes)",
+		"          y confirms; enter and esc cancel; one result goes to the footer",
+		"          marked: one request per workflow, in order; results stay until esc",
 	}
 }
 

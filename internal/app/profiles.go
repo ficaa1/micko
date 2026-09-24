@@ -199,6 +199,9 @@ func (m *Root) resetRoutes() {
 	m.logsView = nil
 	m.detailView = newDetailView()
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
+	// Marks belong to the cluster being left; a bulk action must never
+	// reach across a switch.
+	m.listView.ClearMarks()
 	m.listView.SetItems(nil, m.deps.clock.Now())
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)
 }
