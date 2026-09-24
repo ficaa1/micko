@@ -11,7 +11,46 @@ import (
 // list calls the views read them through, and the label selector the
 // drill-down from a kind to its workflows sends.
 
-var _ core.CronLister = (*FakeReader)(nil)
+var (
+	_ core.CronLister            = (*FakeReader)(nil)
+	_ core.TemplateLister        = (*FakeReader)(nil)
+	_ core.ClusterTemplateLister = (*FakeReader)(nil)
+)
+
+// ListWorkflowTemplates implements core.TemplateLister over
+// WorkflowTemplates, filtered by namespace unless it is empty.
+func (f *FakeReader) ListWorkflowTemplates(ctx context.Context, namespace string) ([]core.WorkflowTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.KindCalls++
+	if f.TemplateErr != nil {
+		return nil, f.TemplateErr
+	}
+	var out []core.WorkflowTemplate
+	for _, t := range f.WorkflowTemplates {
+		if namespace == "" || t.Namespace == namespace {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// ListClusterWorkflowTemplates implements core.ClusterTemplateLister.
+func (f *FakeReader) ListClusterWorkflowTemplates(ctx context.Context) ([]core.WorkflowTemplate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.KindCalls++
+	if f.ClusterTemplateErr != nil {
+		return nil, f.ClusterTemplateErr
+	}
+	return append([]core.WorkflowTemplate(nil), f.ClusterWorkflowTemplates...), nil
+}
 
 // ListCronWorkflows implements core.CronLister over CronWorkflows. An empty
 // namespace answers every namespace, as the server does.
