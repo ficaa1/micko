@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- The Nodes tab reads like the pipeline it shows. Steps are listed under
+  their Steps node in group order instead of as a staircase of step groups;
+  DAG tasks are listed in dependency order with what each waits for
+  (`← extract`), so a join appears once; retry attempts nest under their
+  Retry node; and the exit handler is its own labelled tree. The default
+  `s` order follows the pipeline, and start time, name and phase remain.
+- Each node row now carries its run: the template on a wide terminal, the
+  duration (elapsed while it runs), a timing bar that places it on the
+  workflow's clock, and the message. Structural nodes are tagged with their
+  type, a Retry node shows its retry count and a failing pod its exit code.
+  Above the tree, a progress line shows the workflow's progress with a bar,
+  a count of the work by state, and the elapsed time against the estimate.
+- Subtrees fold: `space` folds or unfolds, `left` folds or climbs to the
+  parent, `right` unfolds. Folds survive refreshes, and earlier retry
+  attempts start folded.
+- `i` opens a node info panel with everything the workflow says about the
+  node under the cursor: times, pod and host, exit code, resource usage,
+  flags, and inputs and outputs, with parameter values redacted until `v`.
+  It sits to the right on a wide terminal and under the tree otherwise.
+- `/` finds a node by name; `n` and `N` step through the matches, opening
+  folds on the way. While the find input is open every letter types, `q`
+  included, and `esc` clears the find before it leaves the workflow.
 - Added skins. `default` keeps the terminal's own 16-colour palette; the
   truecolor skins are catppuccin-mocha, catppuccin-latte, gruvbox-dark,
   gruvbox-light, nord, dracula, tokyo-night, solarized-dark, solarized-light,

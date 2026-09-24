@@ -130,8 +130,8 @@ check and the write remains possible.
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
 | Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
-| Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
-| Resource | `v` reveal hidden parameter/output values |
+| Nodes | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info, `/` find by name, `n`/`N` next/previous match, `h` show skipped nodes, `s` sort, `p` phase filter |
+| Resource | `v` reveal hidden parameter/output values (also in the node info panel) |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
@@ -140,6 +140,43 @@ Suspended workflows sort first by default and their waiting nodes are marked
 `AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
 workflow's pod naming annotation and leaves the shortcut unavailable when
 it cannot resolve one safely.
+
+### Node view
+
+The Nodes tab draws the workflow the way it runs, not the way the controller
+records it. A steps template lists its steps under the Steps node in group
+order, without the step-group bookkeeping between them. A DAG lists its tasks
+in dependency order and notes what each one waits for (`← extract`), so a
+task that joins six others is one row. Retry attempts sit under their Retry
+node, loop items under their task group, and the exit handler is a tree of
+its own, labelled as such.
+
+Above the tree, a progress line gives the server's `done/total` with a bar,
+a count of the work by state (`✓ 7  ● 3  ○ 1  ✗ 1`), and the elapsed time
+with the controller's estimate when it has one (`elapsed 4m12s of ~9m`).
+Each row shows the phase glyph and name, then, as the terminal allows, the
+template (140 columns and up), the duration (elapsed while running), a timing
+bar that places the node on the workflow's clock (80 and up), and the
+message. Structural nodes carry a short type tag, a Retry node its retry
+count (`↻ 2`), and a failing pod its exit code.
+
+`space` folds or unfolds the subtree under the cursor; `left` folds, or
+climbs to the parent from a folded row or a leaf, and `right` unfolds. A
+folded row shows `▸` and how many rows it hides. Folds survive refreshes.
+Earlier retry attempts that have a subtree start folded, since the last
+attempt is the one that decided the outcome.
+
+`i` opens the node info panel: names and ID, type and template, phase and
+message, times, duration and estimate, pod, host, exit code, resource usage,
+flags, and inputs and outputs. It sits on the right of a wide terminal and
+under the tree otherwise. Parameter values and the script result stay
+redacted until `v` reveals them, as in the Resource tab. Everything in it
+comes from the workflow already loaded.
+
+`/` finds a node by name, ignoring case; `enter` jumps to the first match,
+opening folds on the way, and `n`/`N` step through the rest. The status line
+says what the tab is not showing: skipped rows, rows in folds, the phase
+filter and the match.
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a
