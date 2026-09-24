@@ -12,8 +12,8 @@ access for managed forwarding goes through `kubectl`.
 | `internal/config`, `internal/portforward` | Profile validation and owned port-forward recovery |
 | `internal/core` | Reader, Watcher and Actioner interfaces; workflow types and errors |
 | `internal/argo` | REST transport, pagination, watch/log parsing, pod resolution and mutations |
-| `internal/app` | Routes, async commands, stale-response rejection and action orchestration |
-| `internal/ui` | List, detail, logs, namespaces, actions and shared rendering |
+| `internal/app` | Routes, async commands, stale-response rejection, action orchestration and the command registry |
+| `internal/ui` | List, detail, logs, namespaces, profiles, command palette, actions and shared rendering |
 | `internal/testkit` | In-memory reader, synthetic demo data and injectable clock |
 
 Keep API declarations in the Go source rather than duplicating them in docs.
@@ -31,6 +31,15 @@ live in [ci.yml](../.github/workflows/ci.yml).
 - List and detail use `/api/v1/workflows/{namespace}` and its `/{name}` child.
   Watch uses `/api/v1/workflow-events/{namespace}`. Logs use workflow or pod
   `/log` endpoints. Configured base paths are preserved.
+- The all-namespaces view sends an empty namespace: `/api/v1/workflows/` and
+  `/api/v1/workflow-events/`, trailing slash included, which Argo's route
+  matches with an empty namespace. The server checks the token's permission to
+  list cluster-wide and answers 403 without it. A server with a
+  `managedNamespace` in `/api/v1/info` is refused the request by the adapter,
+  because its answer would cover only that namespace.
+- A palette command or a resource kind is one entry in `internal/app/palette.go`:
+  `builtinCommands` for a command, `listKinds` for a kind with its own list
+  route. The palette package ranks and completes whatever the registry holds.
 - Watch and log parsers accept JSON-lines and SSE envelopes, including in-band
   errors after HTTP 200. Stream cancellation is distinct from transport failure.
   Watch recovery belongs to the app; expired resource versions require a relist.

@@ -100,6 +100,11 @@ type Model struct {
 
 	// noColor mirrors the theme's plainness for ASCII snapshot tests.
 	noColor bool
+
+	// allNS marks a snapshot collected across namespaces. The table gains a
+	// NAMESPACE column and the filter matches it, because two rows of the
+	// same name in two namespaces are otherwise indistinguishable.
+	allNS bool
 }
 
 // New builds an empty list model. Items/status arrive via SetItems and
@@ -164,6 +169,16 @@ func (m *Model) SetStatus(s Status, msg string, staleAge time.Duration) {
 	m.errAge = staleAge
 }
 
+// SetAllNamespaces says whether the snapshot spans namespaces. The root sets
+// it with every change of scope, before the new snapshot arrives.
+func (m *Model) SetAllNamespaces(on bool) {
+	m.allNS = on
+	m.applyView()
+}
+
+// AllNamespaces reports whether the list shows the NAMESPACE column.
+func (m *Model) AllNamespaces() bool { return m.allNS }
+
 // SetPhase rotates/sets the phase filter.
 func (m *Model) SetPhase(p PhaseFilter) { m.phase = p; m.applyView() }
 
@@ -215,7 +230,7 @@ func (m *Model) applyView() {
 		if !m.phase.Matches(it) {
 			continue
 		}
-		if !nameMatches(it.Ref.Name, m.query) {
+		if !m.matches(it.Ref, m.query) {
 			continue
 		}
 		rows = append(rows, it)
