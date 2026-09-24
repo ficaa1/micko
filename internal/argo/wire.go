@@ -56,6 +56,8 @@ type rawWorkflow struct {
 		Nodes                    map[string]json.RawMessage `json:"nodes"`
 		CompressedNodes          string                     `json:"compressedNodes"`
 		OffloadNodeStatusVersion string                     `json:"offloadNodeStatusVersion"`
+		Progress                 string                     `json:"progress"`
+		EstimatedDuration        int64                      `json:"estimatedDuration"`
 	} `json:"status"`
 }
 
@@ -181,6 +183,9 @@ func wfFromRaw(raw json.RawMessage, rawForDetail []byte) (core.Workflow, error) 
 			StartedAt:       startedAt,
 			FinishedAt:      finishedAt,
 			Labels:          w.Metadata.Labels,
+			Progress:        w.Status.Progress,
+			// estimatedDuration is whole seconds on the wire.
+			EstimatedDuration: time.Duration(w.Status.EstimatedDuration) * time.Second,
 		},
 	}
 	if rawForDetail != nil {
@@ -355,6 +360,58 @@ type rawNode struct {
 	// PodName on the DTO is only ever populated from verified resolution
 	// (docs/development.md rule). The adapter intentionally never guesses
 	// from node ID (v0.1 policy, docs/development.md).
+
+	Progress          string           `json:"progress"`
+	EstimatedDuration int64            `json:"estimatedDuration"`
+	ResourcesDuration map[string]int64 `json:"resourcesDuration"`
+	HostNodeName      string           `json:"hostNodeName"`
+	Inputs            *rawNodeIO       `json:"inputs"`
+	Outputs           *rawNodeIO       `json:"outputs"`
+	NodeFlag          *struct {
+		Hooked  bool `json:"hooked"`
+		Retried bool `json:"retried"`
+	} `json:"nodeFlag"`
+	MemoizationStatus *struct {
+		Hit bool `json:"hit"`
+	} `json:"memoizationStatus"`
+}
+
+// rawNodeIO projects a node's inputs or outputs. exitCode and result appear
+// on outputs only; both are strings on the wire.
+type rawNodeIO struct {
+	Parameters []struct {
+		Name  string  `json:"name"`
+		Value *string `json:"value"`
+	} `json:"parameters"`
+	Artifacts []struct {
+		Name string `json:"name"`
+	} `json:"artifacts"`
+	Result   *string `json:"result"`
+	ExitCode *string `json:"exitCode"`
+}
+
+// nodeIO maps the wire inputs or outputs onto the core shape. A parameter
+// with no value keeps an empty Value: a parameter that has not resolved yet
+// is still worth listing by name.
+func nodeIO(r *rawNodeIO) core.NodeIO {
+	if r == nil {
+		return core.NodeIO{}
+	}
+	var out core.NodeIO
+	for _, p := range r.Parameters {
+		v := ""
+		if p.Value != nil {
+			v = *p.Value
+		}
+		out.Parameters = append(out.Parameters, core.Parameter{Name: p.Name, Value: v})
+	}
+	for _, a := range r.Artifacts {
+		out.Artifacts = append(out.Artifacts, a.Name)
+	}
+	if r.Result != nil {
+		out.Result = *r.Result
+	}
+	return out
 }
 
 func decodeNode(id string, raw json.RawMessage) (core.Node, error) {
@@ -383,5 +440,20 @@ func decodeNode(id string, raw json.RawMessage) (core.Node, error) {
 		}(),
 		// PodName: never populated here — see resolvePodNames, which only
 		// derives a name when the server stated the pod-name format.
+		Progress:          rn.Progress,
+		EstimatedDuration: time.Duration(rn.EstimatedDuration) * time.Second,
+		ResourcesDuration: rn.ResourcesDuration,
+		HostNodeName:      rn.HostNodeName,
+		ExitCode: func() string {
+			if rn.Outputs == nil || rn.Outputs.ExitCode == nil {
+				return ""
+			}
+			return *rn.Outputs.ExitCode
+		}(),
+		Inputs:         nodeIO(rn.Inputs),
+		Outputs:        nodeIO(rn.Outputs),
+		Retried:        rn.NodeFlag != nil && rn.NodeFlag.Retried,
+		Hooked:         rn.NodeFlag != nil && rn.NodeFlag.Hooked,
+		MemoizationHit: rn.MemoizationStatus != nil && rn.MemoizationStatus.Hit,
 	}, nil
 }

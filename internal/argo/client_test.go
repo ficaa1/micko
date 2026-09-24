@@ -1139,6 +1139,8 @@ func TestListProjectionNamesEverySummaryField(t *testing.T) {
 		"items.status.phase",
 		"items.status.startedAt",
 		"items.status.finishedAt",
+		"items.status.progress",
+		"items.status.estimatedDuration",
 	}
 	have := map[string]bool{}
 	for _, f := range strings.Split(listFields, ",") {
