@@ -401,13 +401,10 @@ func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
 		t.Fatalf("send keys: %v", err)
 	}
 	ok := waitScreen(p, 10*time.Second, func(s string) bool {
-		// The detail pane titles the opened workflow; assert on that rendered
-		// title (the "route: detail" header prefix is unreliable here because
-		// the alternate-screen repaint overwrites it via C0 controls that the
-		// PTY harness's stripANSI discards, so the stream only carries the
-		// overwriting suffix).
-		// demoRows[1] is a failed run, so its phase word is on the pane.
-		return strings.Contains(s, "Detail "+demoRows[1]) && strings.Contains(s, "✗ Failed")
+		// The summary's uid line names the opened workflow; see detailShows
+		// for why the border title is not used. demoRows[1] is a failed run,
+		// so its phase word is on the pane.
+		return detailShows(s, demoRows[1]) && strings.Contains(s, "✗ Failed")
 	})
 	if !ok {
 		t.Fatalf("j/enter did not open the second row's detail; screen=%q", p.Screen())
@@ -842,7 +839,7 @@ func TestPTYDemoDetailKeepsTheFrame(t *testing.T) {
 		t.Fatalf("send enter: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "Detail "+demoRows[0]) &&
+		return detailShows(s, demoRows[0]) &&
 			strings.Contains(s, "tab section") &&
 			strings.Contains(s, "? help")
 	}) {
