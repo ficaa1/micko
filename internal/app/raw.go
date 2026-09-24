@@ -216,6 +216,11 @@ func (m *Root) workflowURL() string {
 	if ref.Name == "" || ref.Namespace == "" {
 		return ""
 	}
+	// An archived run's page in the Argo UI is keyed by its UID: the name
+	// may belong to another run by now, or to none.
+	if m.detailState.archived && ref == m.detailState.ref && ref.UID != "" {
+		return strings.TrimSuffix(m.webURL, "/") + "/archived-workflows/" + ref.Namespace + "/" + ref.UID
+	}
 	return strings.TrimSuffix(m.webURL, "/") + "/workflows/" + ref.Namespace + "/" + ref.Name
 }
 

@@ -75,6 +75,10 @@ func listKinds() []listKind {
 			name: "clusterworkflowtemplates", aliases: []string{"cwftmpl"}, desc: "the cluster workflow template list",
 			route: RouteClusterTemplates, show: (*Root).showClusterTemplates,
 		},
+		{
+			name: "archived", aliases: []string{"aw"}, desc: "the archived workflow list",
+			route: RouteArchived, show: (*Root).showArchived,
+		},
 	}
 }
 
