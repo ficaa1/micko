@@ -16,6 +16,7 @@ import (
 	"github.com/ficaa1/argo-tui/internal/app"
 	"github.com/ficaa1/argo-tui/internal/buildinfo"
 	"github.com/ficaa1/argo-tui/internal/config"
+	"github.com/ficaa1/argo-tui/internal/journal"
 	"github.com/ficaa1/argo-tui/internal/session"
 	"github.com/ficaa1/argo-tui/internal/testkit"
 	"github.com/ficaa1/argo-tui/internal/ui/actions"
@@ -91,6 +92,11 @@ func run(args []string) int {
 		defer connector.Close()
 
 		root = app.NewRootWithOptions(nil, clock, "", config.DefaultRefreshInterval, opts)
+		// The journal records write attempts, so only a session that can
+		// write gets one. The demo, which never writes, has none at all.
+		if *allowActions && connector.JournalEnabled() {
+			root.SetJournal(journal.Open())
+		}
 		root.SetConnector(connector)
 		root.SetProfiles(connector.ProfileList())
 

@@ -1,11 +1,11 @@
 WORKFLOWS
 Search: (none)  / to filter by name  Phase: All  Sort: phase, newest first
-NAME                            PHASE              AGE  DURATION   MESSAGE
-fixture-wf-0004                 ✗ Error             2m  -        
-fixture-wf-0003                 ✗ Failed            3m  -          synthetic fa…
-fixture-wf-0001                 ● Running           5m  -        
-fixture-wf-0000                 ○ Pending           6m  -        
-fixture-wf-0002                 ✓ Succeeded         4m  -        
-fixture-wf-0005                 • WeirdFutu…        1m  -        
+  NAME                          PHASE              AGE  DURATION   MESSAGE
+  fixture-wf-0004               ✗ Error             2m  -        
+  fixture-wf-0003               ✗ Failed            3m  -          synthetic fa…
+  fixture-wf-0001               ● Running           5m  -        
+  fixture-wf-0000               ○ Pending           6m  -        
+  fixture-wf-0002               ✓ Succeeded         4m  -        
+  fixture-wf-0005               • WeirdFutu…        1m  -        
 
-enter open  l logs  / search  s sort  p phase  n namespace  r refresh  ? help
+enter open  l logs  / search  s sort  p phase  space mark  a actions  n namespace  r refresh  ? help

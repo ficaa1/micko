@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/journal"
 )
 
 // Clock abstracts time for deterministic tests (fake clock injection).
@@ -32,6 +33,8 @@ type deps struct {
 	// nsLister answers the namespace picker. It is optional: a Reader that
 	// cannot list namespaces simply does not implement it.
 	nsLister core.NamespaceLister
+	// journal records every write attempt. Nil records nothing.
+	journal  *journal.Journal
 	clock    Clock
 	interval time.Duration
 	// namespace is the active namespace; switching it bumps the connection

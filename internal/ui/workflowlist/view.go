@@ -98,12 +98,24 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		// the Suspended bucket would have had no key at all.
 		m.CyclePhase()
 		return nil
+	case "space":
+		m.ToggleMark()
+		return nil
 	case "esc":
-		// Esc backs out of the filter. A filter matching nothing renders
-		// exactly like an empty namespace, so without this the only way out
-		// is to reopen the search and submit an empty buffer. With no filter
+		// Esc clears the marks first and the filter on the next press. The
+		// marks go first because they are the state that can act: a bulk
+		// action reaches every marked workflow, hidden ones included, and a
+		// reader backing out wants that set gone before anything else.
+		//
+		// A filter matching nothing renders exactly like an empty
+		// namespace, so without the second step the only way out is to
+		// reopen the search and submit an empty buffer. With neither
 		// applied Esc stays inert: it must never become a surprise quit on
 		// the top route.
+		if len(m.marks) > 0 {
+			m.ClearMarks()
+			return nil
+		}
 		if m.query != "" {
 			m.SetQuery("")
 		}
