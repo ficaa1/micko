@@ -85,6 +85,12 @@ func (m *Root) Adopt(c *Connection) {
 	}
 	m.webURL = c.WebURL
 	m.pipeCommand = c.PipeCommand
+	if c.Skin != "" {
+		// The name was checked when the config file was read. Should it
+		// still be unknown, the session keeps the skin it has rather than
+		// refusing a connection over a colour.
+		_, _ = m.ApplySkin(c.Skin)
+	}
 	m.nsSeed = c.Namespaces
 	m.actionOpts.Server = c.Server
 	m.actionOpts.Profile = c.Profile
@@ -184,7 +190,7 @@ func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 		m.profView.Close()
 	}
 	m.flash = "profile: " + msg.Profile
-	return tea.Batch(m.startListGeneration(), m.waitConnStates())
+	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery())
 }
 
 // resetRoutes drops everything the previous connection produced and returns

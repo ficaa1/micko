@@ -28,6 +28,9 @@ const (
 	MinRefreshInterval = time.Second
 	// MaxRefreshInterval guards against effectively-disabled polling.
 	MaxRefreshInterval = 10 * time.Minute
+	// DefaultSkin is the skin used when neither the flag nor the file names
+	// one: the ANSI palette, which follows the terminal's own colours.
+	DefaultSkin = "default"
 )
 
 // Profile is one named server connection. Token material is never stored
@@ -59,6 +62,10 @@ type Profile struct {
 	// falls back to lnav. The command is run by a shell with the retained log
 	// lines on its standard input; nothing from the server ever reaches it.
 	PipeCommand string `yaml:"pipeCommand,omitempty"`
+	// Skin draws this profile's session in its own palette, overriding the
+	// file's top-level skin. It helps tell a production cluster from a
+	// scratch one at a glance; the header still names the server.
+	Skin string `yaml:"skin,omitempty"`
 }
 
 // File mirrors the on-disk config (plan §3 example).
@@ -68,6 +75,9 @@ type File struct {
 	// RefreshIntervalRaw keeps the raw string so parse errors can name the
 	// key ("refreshInterval: ..."), which yaml's own unmarshal errors do not.
 	RefreshIntervalRaw string `yaml:"refreshInterval,omitempty"`
+	// Skin is the palette for every profile that names none of its own, and
+	// for the profile picker before any profile is chosen.
+	Skin string `yaml:"skin,omitempty"`
 }
 
 // refreshInterval parses RefreshIntervalRaw; empty means "not set".
@@ -98,7 +108,10 @@ type Config struct {
 	// them alongside whatever the server reports.
 	Namespaces []string
 	// PipeCommand prefills the log pipe editor.
-	PipeCommand     string
+	PipeCommand string
+	// Skin is the palette this session is drawn in: the --skin flag, else
+	// the profile's skin, else the file's, else DefaultSkin.
+	Skin            string
 	TokenEnv        string
 	TokenFile       string
 	CAFile          string
@@ -132,6 +145,12 @@ type Options struct {
 	InsecureSkipTLSVerify bool
 	Demo                  bool
 	Debug                 bool
+	// Skin is the --skin flag. It outranks every skin in the file.
+	Skin string
+	// Skins is the set of valid skin names. The config package does not own
+	// the palettes, so the caller supplies their names; an empty list skips
+	// the check.
+	Skins []string
 }
 
 // Load reads, merges and validates configuration. cfgData may be empty
@@ -168,6 +187,10 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	cfg.WebURL = strings.TrimSuffix(prof.WebURL, "/")
 	cfg.Namespaces = append([]string(nil), prof.Namespaces...)
 	cfg.PipeCommand = strings.TrimSpace(prof.PipeCommand)
+	cfg.Skin = firstNonEmpty(strings.TrimSpace(opts.Skin), strings.TrimSpace(prof.Skin), strings.TrimSpace(f.Skin), DefaultSkin)
+	if err := CheckSkin("skin", cfg.Skin, opts.Skins); err != nil {
+		return Config{}, err
+	}
 	cfg.Namespace = firstNonEmpty(opts.Namespace, prof.Namespace)
 	cfg.TokenEnv = prof.TokenEnv
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)
@@ -312,6 +335,67 @@ func validateTokenSource(env, file string) error {
 		}
 	}
 	return nil
+}
+
+// CheckSkin rejects a skin name that is not in known, naming where it came
+// from and every valid name, so the reader can fix the file without looking
+// the names up. Names compare without case. An empty known list accepts
+// every name.
+func CheckSkin(where, name string, known []string) error {
+	if len(known) == 0 {
+		return nil
+	}
+	want := strings.ToLower(strings.TrimSpace(name))
+	for _, k := range known {
+		if strings.ToLower(k) == want {
+			return nil
+		}
+	}
+	return fmt.Errorf("config: %s: unknown skin %q (valid skins: %s)", where, name, strings.Join(known, ", "))
+}
+
+// ValidateSkins checks every skin a config file names: the top-level one
+// and each profile's. It runs when the file is read, before the TUI starts,
+// so a misspelled skin in a profile the reader switches to later is still
+// reported at startup rather than halfway through a session. Profiles are
+// checked in name order, so the error is the same on every run.
+//
+// A file that does not parse names no skins. It is not rejected here: the
+// profile picker shows the parse error, and a broken file must not stop the
+// program before the reader can see why.
+func ValidateSkins(cfgData []byte, known []string) error {
+	var f File
+	if len(cfgData) == 0 || yaml.Unmarshal(cfgData, &f) != nil {
+		return nil
+	}
+	if s := strings.TrimSpace(f.Skin); s != "" {
+		if err := CheckSkin("skin", s, known); err != nil {
+			return err
+		}
+	}
+	names := make([]string, 0, len(f.Profiles))
+	for name := range f.Profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if s := strings.TrimSpace(f.Profiles[name].Skin); s != "" {
+			if err := CheckSkin(fmt.Sprintf("profile %q skin", name), s, known); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// FileSkin is the file's top-level skin, or empty when it names none. A file
+// that does not parse names none; Load reports the parse error.
+func FileSkin(cfgData []byte) string {
+	var f File
+	if len(cfgData) == 0 || yaml.Unmarshal(cfgData, &f) != nil {
+		return ""
+	}
+	return strings.TrimSpace(f.Skin)
 }
 
 // displayPath renders the config path in errors without leaking content.

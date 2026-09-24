@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added skins. `default` keeps the terminal's own 16-colour palette; the
+  truecolor skins are catppuccin-mocha, catppuccin-latte, gruvbox-dark,
+  gruvbox-light, nord, dracula, tokyo-night, solarized-dark, solarized-light,
+  one-dark, rose-pine, rose-pine-dawn and monokai; `auto` picks a dark or
+  light skin from the terminal's background colour. Choose one with `skin:`
+  in the config file, per profile, or with `--skin`, which also works in the
+  demo. An unknown name stops the program at startup and lists the valid
+  ones. `NO_COLOR` still gives plain text.
 - The screen chrome is drawn with more care. The header band shows the
   program, server and namespace in separate styles and the safety mode as a
   badge, louder when actions are enabled. Footer keys stand out from their
