@@ -176,6 +176,24 @@ func TestInitAsksForTheBackgroundOnlyUnderAuto(t *testing.T) {
 	}
 }
 
+// A profile's skin arrives with its connection. A connection naming none
+// leaves the current skin alone.
+func TestAProfileSkinArrivesWithItsConnection(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	conn := &fakeConnector{}
+	m := profileRoot(t, conn)
+	c := mustConnect(t, conn, "dev")
+	c.Skin = "dracula"
+	m.Adopt(c)
+	if got := m.Theme().Skin; got != "dracula" {
+		t.Fatalf("skin after adopting = %q, want dracula", got)
+	}
+	m.Adopt(mustConnect(t, conn, "prod"))
+	if got := m.Theme().Skin; got != "dracula" {
+		t.Errorf("a connection with no skin changed it to %q", got)
+	}
+}
+
 // The mode badge is drawn in the armed style only when actions are enabled;
 // the words say the same thing in every theme.
 func TestHeaderBadgeFollowsTheSafetyMode(t *testing.T) {

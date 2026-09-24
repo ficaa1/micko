@@ -155,6 +155,27 @@ copy uses OSC52 and depends on terminal support. Log piping sends retained
 lines to a command you enter, using `/bin/sh`; `pipeCommand` sets the initial
 command (default `lnav`). Install that program separately.
 
+## Skins
+
+argo-tui draws in the `default` skin unless told otherwise. It uses the
+terminal's own 16-colour palette, so your terminal theme still applies. The
+other skins set their own truecolor palettes:
+
+`catppuccin-mocha`, `catppuccin-latte`, `gruvbox-dark`, `gruvbox-light`,
+`nord`, `dracula`, `tokyo-night`, `solarized-dark`, `solarized-light`,
+`one-dark`, `rose-pine`, `rose-pine-dawn`, `monokai`
+
+`auto` asks the terminal for its background colour and picks
+`catppuccin-mocha` on a dark one or `catppuccin-latte` on a light one. It
+stays on `default` if the terminal does not answer.
+
+Choose one with `skin:` at the top of the config file, or per profile to tell
+clusters apart at a glance; `--skin NAME` overrides both, and also works with
+`--demo`. An unknown name stops the program at startup and lists the valid
+ones. `NO_COLOR` turns every skin into plain text. Colour never carries
+meaning on its own: phases keep their glyph and word, and the header still
+spells out `READ ONLY` or `ACTIONS ENABLED`.
+
 ## Flags
 
 | Flag | Purpose |
@@ -167,6 +188,7 @@ command (default `lnav`). Install that program separately.
 | `--allow-actions` | Enable confirmed Resume, Retry, Resubmit and Stop |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--debug` | Emit sanitized lifecycle diagnostics |
+| `--skin NAME` | Colour skin, overriding the config file (see [Skins](#skins)) |
 | `--demo` | Run the offline, read-only demo |
 | `--version` | Print version and exit |
 

@@ -45,6 +45,11 @@ type Options struct {
 	RefreshInterval       time.Duration
 	InsecureSkipTLSVerify bool
 	Debug                 bool
+	// Skin is the --skin flag, which outranks every skin in the file.
+	Skin string
+	// Skins is the set of valid skin names. Every skin the file names is
+	// checked against it when the file is read.
+	Skins []string
 	// Diagnostics receives sanitized forwarding lifecycle lines when Debug is
 	// set. Nil silences them.
 	Diagnostics io.Writer
@@ -94,6 +99,12 @@ func NewConnector(opts Options) (*Connector, error) {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 	}
+	// A misspelled skin is a startup error, including one on a profile the
+	// reader has not chosen yet: finding out at the switch would mean a
+	// session that cannot be drawn the way the file asks.
+	if err := config.ValidateSkins(c.data, opts.Skins); err != nil {
+		return nil, err
+	}
 	summaries, current, err := config.ListProfiles(c.data)
 	if err != nil {
 		c.listErr = err.Error()
@@ -108,6 +119,19 @@ func NewConnector(opts Options) (*Connector, error) {
 // ProfileList is what the root needs to render the picker.
 func (c *Connector) ProfileList() app.ProfileList {
 	return app.ProfileList{Items: c.items, ConfigPath: c.path, Current: c.current, Err: c.listErr}
+}
+
+// Skin is the skin to draw in before a profile is chosen: the flag, else the
+// file's top-level skin, else the default. A connected profile may name its
+// own, which arrives with its connection.
+func (c *Connector) Skin() string {
+	if c.opts.Skin != "" {
+		return c.opts.Skin
+	}
+	if s := config.FileSkin(c.data); s != "" {
+		return s
+	}
+	return config.DefaultSkin
 }
 
 // HasProfiles reports whether the config file named any profile.
@@ -142,6 +166,8 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		RefreshInterval:       c.opts.RefreshInterval,
 		InsecureSkipTLSVerify: c.opts.InsecureSkipTLSVerify,
 		Debug:                 c.opts.Debug,
+		Skin:                  c.opts.Skin,
+		Skins:                 c.opts.Skins,
 	})
 	if err != nil {
 		return nil, err
@@ -196,6 +222,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		Namespace:   cfg.Namespace,
 		WebURL:      cfg.WebURL,
 		PipeCommand: cfg.PipeCommand,
+		Skin:        cfg.Skin,
 		Namespaces:  cfg.Namespaces,
 		Interval:    cfg.RefreshInterval,
 		States:      states,
