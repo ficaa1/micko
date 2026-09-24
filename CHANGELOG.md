@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- A Timeline section, after Nodes, draws the workflow as a Gantt chart: pods
+  and approval gates as bars coloured by phase on a time axis whose ticks
+  step in seconds, minutes, hours or days as the run requires, with a `now`
+  line while the workflow runs. Groups are brackets over the time they took,
+  shading marks the time a step waited before it started, and `◆` marks the
+  critical path, the chain of work that set the end time. Rows follow the
+  pipeline order and folds of the Nodes tab, `i` shows the node info panel
+  and `enter` opens the pod's log.
+- `1` to `9` jump to a detail section by its position, and `T` jumps to the
+  Timeline. `T` on the workflow list opens the selected workflow straight on
+  its Timeline.
+- The help overlay is tighter, so it fits a 40-row, 80-column terminal whole.
+
 - The Nodes tab reads like the pipeline it shows. Steps are listed under
   their Steps node in group order instead of as a staircase of step groups;
   DAG tasks are listed in dependency order with what each waits for

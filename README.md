@@ -128,9 +128,10 @@ check and the write remains possible.
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
-| Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
+| Workflow list | `enter` open, `T` open on its timeline, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline and Resource; `1`–`9` jump to a section by position; `T` timeline; `r` refresh; `a` actions |
 | Nodes | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info, `/` find by name, `n`/`N` next/previous match, `h` show skipped nodes, `s` sort, `p` phase filter |
+| Timeline | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info |
 | Resource | `v` reveal hidden parameter/output values (also in the node info panel) |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
@@ -177,6 +178,33 @@ comes from the workflow already loaded.
 opening folds on the way, and `n`/`N` step through the rest. The status line
 says what the tab is not showing: skipped rows, rows in folds, the phase
 filter and the match.
+
+### Timeline
+
+The Timeline section (`T` in the detail pane, or `T` on the list to open a
+workflow straight onto it) draws the workflow's work as a Gantt chart against
+a time axis. Pods and approval gates are bars, coloured by phase, placed
+exactly as the Nodes tab's timing bars place them; DAG, Steps and Retry nodes
+group them as a bracket over the time the group took. The axis picks its
+step from the span, from seconds for a quick run to hours or days for a long
+one, and a running workflow's chart ends at a `now` line that its running
+bars reach.
+
+A shaded stretch (`░`) before a bar is time the node spent waiting: from the
+moment what it waited for finished (the previous step group, its DAG
+dependencies, the previous retry attempt) to the moment it started. A retry's
+backoff and a queue for a free slot both show up there.
+
+Nodes marked `◆` are the critical path: the chain of work that set the end
+time, found by walking back from the work that finished last through
+whatever each piece waited for longest. Shortening anything else would not
+have finished the run sooner. While a workflow runs, the chain is the one its
+end waits on so far.
+
+Rows follow the Nodes tab's pipeline order and share its folds: `space`,
+`left` and `right` fold groups the same way, `i` opens the same info panel,
+and `enter` or `l` opens the selected pod's log. Skipped branches have no
+time to place and are left out; the status line counts them.
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a
