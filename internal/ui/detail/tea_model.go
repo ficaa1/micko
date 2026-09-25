@@ -33,7 +33,7 @@ type Model struct {
 	// run has no live object to act on.
 	archived bool
 
-	// tab is the active detail tab: "summary" | "nodes" | "resource".
+	// tab is the active detail section, one of the IDs in sections.
 	tab string
 	// redactByDefault is the profile's redactValues setting: when set, each
 	// workflow opens with its values hidden. revealResource is what the
@@ -47,10 +47,34 @@ type Model struct {
 
 	// nodes is the flattened, scrollable outline the nodes tab renders, and
 	// hiddenSkipped is how many rows hideSkipped removed from it. Both are
-	// rebuilt whenever the workflow or the toggle changes, so the cursor and
+	// rebuilt whenever the workflow or a toggle changes, so the cursor and
 	// the drawn rows always share one index space.
 	nodes         []FlatRow
 	hiddenSkipped int
+	// nodeMap is the workflow's node map as it arrived. The info panel and
+	// the progress header read their facts here, so neither needs a request.
+	nodeMap map[string]core.Node
+	// now is the injected clock's time, for the elapsed time of running
+	// nodes. The root sets it before each render; SetWorkflow sets it too.
+	now time.Time
+	// folded holds the node IDs whose subtrees are folded away, and
+	// folds/foldedNodes count the folded rows drawn and the rows they hide.
+	// Folds are keyed by node ID, so they survive a refresh that reorders
+	// or grows the tree.
+	folded      map[string]bool
+	folds       int
+	foldedNodes int
+	// autoFolded remembers the nodes the default rule has already folded,
+	// so a node the reader unfolds stays open across refreshes.
+	autoFolded map[string]bool
+	// nameNeed and templateNeed are the widest name cell and template among
+	// the rows, so every row lays its columns out at the same place.
+	nameNeed     int
+	templateNeed int
+	// showInfo shows the node info panel for the row under the cursor.
+	showInfo bool
+	// find is the nodes tab's find-by-name state.
+	find nodeFind
 	// hideSkipped drops nodes a condition excluded. It defaults to on: a
 	// large deployment workflow is mostly skipped branches, and they bury the
 	// handful of nodes that actually ran.
@@ -74,6 +98,25 @@ type Model struct {
 	// gPending is the armed half of vim's gg (see the list pane).
 	gPending bool
 
+	// tl is the timeline section's chart, rebuilt with the node tree, and
+	// tlNameNeed the widest name cell among its rows. tlCursor is its
+	// selected row and tlTop its first visible one.
+	tl         timeline
+	tlNameNeed int
+	tlCursor   int
+	tlTop      int
+	// tlStale marks a chart the tree has changed under since it was laid
+	// out; showSection lays it out again before it is shown.
+	tlStale bool
+
+	// ex is the Explain section: its report, its log evidence and its
+	// scroll position.
+	ex explainState
+
+	// ev is the Events section: the events streamed in, the order, the
+	// filter and the stream's status.
+	ev eventsState
+
 	// theme styles the node rows. It is injected so goldens can force the
 	// plain theme.
 	theme shared.Theme
@@ -83,11 +126,18 @@ type Model struct {
 
 // New builds the detail child model.
 func New() *Model {
-	return &Model{tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortStarted, theme: shared.NewTheme(false), revealResource: true}
+	return &Model{
+		tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortPipeline,
+		theme: shared.NewTheme(false), folded: map[string]bool{}, autoFolded: map[string]bool{}, revealResource: true,
+	}
 }
 
 // SetTheme injects the style set used for node rows.
 func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
+
+// SetNow gives the pane the injected clock's current time, which the elapsed
+// time of running nodes and their timing bars are measured to.
+func (m *Model) SetNow(t time.Time) { m.now = t }
 
 // Compile-time interface check against the frozen v2 surface.
 var _ tea.Model = (*Model)(nil)
@@ -103,11 +153,29 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 		Outline:  BuildNodeOutline(wf, OutlineOptions{}),
 		Resource: RenderResource(wf, false),
 		Message:  wf.Summary.Message,
+		Nodes:    wf.Nodes,
 	}
 	m.rawResource = append([]byte(nil), wf.Resource...)
-	m.rebuildNodes()
+	m.nodeMap = wf.Nodes
+	m.now = now
+	keep := m.selectedID()
+	if !sameWorkflow {
+		// Folds, the find and the default-fold memory describe one
+		// workflow's nodes; another workflow starts from its own defaults.
+		m.folded = map[string]bool{}
+		m.autoFolded = map[string]bool{}
+		m.find = nodeFind{}
+		m.ex = explainState{}
+		m.ev = eventsState{order: m.ev.order}
+		keep = ""
+	}
+	m.explainChanged()
+	m.ev.stale = true
+	m.applyDefaultFolds()
+	m.rebuildNodes(keep)
 	if !sameWorkflow {
 		m.nodeCursor, m.nodeTop = 0, 0
+		m.tlCursor, m.tlTop = 0, 0
 		m.resourceTop, m.summaryTop = 0, 0
 	}
 	m.loaded = true
@@ -171,6 +239,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		// The find input owns every key while it is open, so a name can
+		// hold any letter the tab otherwise binds.
+		if m.find.editing {
+			return m, m.handleFindKey(msg.String())
+		}
+		if m.tab == "events" && m.ev.editing {
+			m.handleEventsFilterKey(msg.String())
+			return m, nil
+		}
 		return m, m.handleKey(msg.String())
 
 	default:
@@ -194,17 +271,32 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		return nil
 	}
 
+	if id, ok := sectionForKey(key); ok {
+		m.showSection(id)
+		return nil
+	}
 	switch key {
 	case "tab":
-		m.tab = nextTab(m.tab)
+		m.showSection(nextTab(m.tab))
 		return nil
 	case "shift+tab":
-		m.tab = prevTab(m.tab)
+		m.showSection(prevTab(m.tab))
 		return nil
 	case "esc":
+		// A find is cleared before esc leaves the workflow, so the key
+		// undoes the last thing the reader set up, one thing at a time.
+		if m.tab == "nodes" && m.find.active() {
+			m.clearFind()
+			return nil
+		}
+		if m.eventsFilterActive() {
+			m.handleEventsFilterKey("esc")
+			return nil
+		}
 		return backCmd()
 	case "v":
-		// Explicit, session-only reveal of redacted resource values.
+		// Explicit, session-only reveal of redacted values: the resource
+		// tab and the node info panel share it.
 		m.revealResource = !m.revealResource
 		return nil
 	case "p":
@@ -213,16 +305,19 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		if m.tab == "nodes" {
 			m.nodePhase = m.nodePhase.Next()
 			m.nodeCursor, m.nodeTop = 0, 0
-			m.rebuildNodes()
+			m.rebuildNodes("")
 		}
 		return nil
 	case "s":
 		// Cycle the sibling order in the nodes tree. Like p, it belongs to
 		// that tab only: the summary and the resource have no rows to order.
+		// The cursor stays on its node, wherever the new order puts it.
 		if m.tab == "nodes" {
 			m.nodeSort = m.nodeSort.Next()
-			m.nodeCursor, m.nodeTop = 0, 0
-			m.rebuildNodes()
+			m.rebuildNodes(m.selectedID())
+		}
+		if m.tab == "events" {
+			m.handleEventsKey(key)
 		}
 		return nil
 	case "h":
@@ -230,7 +325,7 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		// skipped nodes, so this is the difference between a readable tree
 		// and forty lines of "when 'false' evaluated false".
 		m.hideSkipped = !m.hideSkipped
-		m.rebuildNodes()
+		m.rebuildNodes(m.selectedID())
 		return nil
 	case "j", "down":
 		m.scrollBy(1)
@@ -251,38 +346,50 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		m.jumpTo(m.scrollMax())
 		return nil
 	case "l", "enter":
+		if m.tab == "explain" {
+			return m.explainLogsCmd()
+		}
 		return m.nodeLogsCmd()
 	default:
+		switch m.tab {
+		case "nodes":
+			m.handleNodesKey(key)
+		case "timeline":
+			m.handleTimelineKey(key)
+		case "events":
+			m.handleEventsKey(key)
+		}
 		return nil
 	}
 }
 
-// rebuildNodes re-flattens the outline and re-clamps the cursor, so the
-// cursor can never point past the rows the view will draw.
-func (m *Model) rebuildNodes() {
-	// A phase filter searches the whole tree, so it starts from every row:
-	// hiding the skipped branches first would make the Skipped bucket empty
-	// and could drop a match under a hidden parent.
-	hide := m.hideSkipped && m.nodePhase == NodePhaseAll
-	SortOutline(&m.state.Outline, m.nodeSort)
-	m.nodes, m.hiddenSkipped = FlattenOutline(m.state.Outline, hide)
-	m.totalNodes = len(m.nodes)
-	m.nodes = FilterFlatRows(m.nodes, m.nodePhase)
-	if m.nodeCursor >= len(m.nodes) {
-		m.nodeCursor = len(m.nodes) - 1
+// Section is the active detail section's ID.
+func (m *Model) Section() string { return m.tab }
+
+// SetSection shows the section id, and reports false, changing nothing,
+// when id names no section.
+func (m *Model) SetSection(id string) bool {
+	if !HasSection(id) {
+		return false
 	}
-	if m.nodeCursor < 0 {
-		m.nodeCursor = 0
-	}
+	m.showSection(id)
+	return true
 }
 
-// SelectedNode returns the node row under the cursor on the nodes tab, and
-// false when there is none (another tab, or an empty outline).
+// SelectedNode returns the node row under the cursor on the nodes tab or
+// the timeline, and false when there is none (another tab, or no rows).
 func (m *Model) SelectedNode() (OutlineRow, bool) {
-	if m.tab != "nodes" || m.nodeCursor < 0 || m.nodeCursor >= len(m.nodes) {
-		return OutlineRow{}, false
+	switch m.tab {
+	case "nodes":
+		if m.nodeCursor < 0 || m.nodeCursor >= len(m.nodes) {
+			return OutlineRow{}, false
+		}
+		return m.nodes[m.nodeCursor].Row, true
+	case "timeline":
+		r, ok := m.tlCursorRow()
+		return r.Row, ok
 	}
-	return m.nodes[m.nodeCursor].Row, true
+	return OutlineRow{}, false
 }
 
 // NodeLogsIntent is the "show me this node's logs" intent. The root alone
@@ -314,6 +421,12 @@ func (m *Model) scrollLines() int {
 	switch m.tab {
 	case "nodes":
 		return len(m.nodes)
+	case "timeline":
+		return len(m.tl.rows)
+	case "explain":
+		return len(m.explainLines())
+	case "events":
+		return len(m.eventsLines())
 	case "resource":
 		return len(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"))
 	default:
@@ -322,8 +435,16 @@ func (m *Model) scrollLines() int {
 }
 
 // viewRows is the number of content rows the active tab may draw, after the
-// tab strip and the status line the pane always shows.
+// tab strip and the status line the pane always shows. The nodes tab also
+// gives rows to its progress header, its column heads and a bottom info
+// panel, and nodesLayout accounts for them.
 func (m *Model) viewRows() int {
+	switch m.tab {
+	case "nodes":
+		return m.nodesLayout().treeRows
+	case "timeline":
+		return m.timelineLayout().treeRows
+	}
 	h := m.height - detailChromeRows
 	if h < 1 {
 		return 1
@@ -343,8 +464,8 @@ func (m *Model) pageStep() int {
 
 // scrollMax is the largest valid cursor or scroll anchor for the active tab.
 func (m *Model) scrollMax() int {
-	if m.tab == "nodes" {
-		if n := len(m.nodes) - 1; n > 0 {
+	if m.tab == "nodes" || m.tab == "timeline" {
+		if n := m.scrollLines() - 1; n > 0 {
 			return n
 		}
 		return 0
@@ -363,6 +484,12 @@ func (m *Model) scrollPos() int {
 	switch m.tab {
 	case "nodes":
 		return m.nodeCursor
+	case "timeline":
+		return m.tlCursor
+	case "explain":
+		return m.ex.top
+	case "events":
+		return m.ev.top
 	case "resource":
 		return m.resourceTop
 	default:
@@ -380,6 +507,12 @@ func (m *Model) jumpTo(pos int) {
 	switch m.tab {
 	case "nodes":
 		m.nodeCursor = pos
+	case "timeline":
+		m.tlCursor = pos
+	case "explain":
+		m.ex.top = pos
+	case "events":
+		m.ev.top = pos
 	case "resource":
 		m.resourceTop = pos
 	default:
@@ -440,17 +573,38 @@ func (m *Model) PaneTitle() string {
 }
 
 // Hints is the detail key contract, mirrored by the `?` overlay.
+//
+// An archived run is a record, not a live workflow: no action applies to it,
+// so its hints never offer one.
 func (m *Model) Hints() string {
+	var h string
+	switch m.tab {
+	case "nodes":
+		h = m.nodesHints()
+	case "timeline":
+		h = m.timelineHints()
+	case "explain":
+		h = m.explainHints()
+	case "events":
+		h = m.eventsHints()
+	default:
+		h = "tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back"
+	}
 	if m.archived {
-		if m.tab == "nodes" {
-			return "tab section  h skipped  s sort  p phase  l logs  f raw  r refresh  esc back"
-		}
-		return "tab section  v reveal  y copy  f raw  r refresh  esc back"
+		h = strings.Replace(h, "  a actions", "", 1)
 	}
-	if m.tab == "nodes" {
-		return "tab section  h skipped  s sort  p phase  l logs  a actions  f raw  r refresh  esc back"
-	}
-	return "tab section  v reveal  y copy  a actions  f raw  r refresh  esc back"
+	return h
+}
+
+// TextEntry reports whether the pane owns printable keys: the find input is
+// open, so q, ? and every other letter are part of the name being typed.
+func (m *Model) TextEntry() bool { return m.find.editing || (m.tab == "events" && m.ev.editing) }
+
+// EscapeConsumed reports whether esc belongs to the pane rather than leaving
+// the workflow: it cancels an open find or events filter, or clears a kept
+// one.
+func (m *Model) EscapeConsumed() bool {
+	return (m.tab == "nodes" && m.find.active()) || m.eventsFilterActive()
 }
 
 // PaneStatus is the right-aligned footer cell: the workflow phase, carried
@@ -473,7 +627,15 @@ func (m *Model) BodyLines() []string {
 	if lines, ok := m.stateLines(); ok {
 		return lines
 	}
-	lines := append([]string{tabStrip(m.tab), m.tabStatusLine()}, m.windowedLines()...)
+	var lines []string
+	switch m.tab {
+	case "nodes":
+		lines = append([]string{tabStripFit(m.tab, m.theme, m.width)}, m.nodesBody()...)
+	case "timeline":
+		lines = append([]string{tabStripFit(m.tab, m.theme, m.width)}, m.timelineBody()...)
+	default:
+		lines = append([]string{tabStripFit(m.tab, m.theme, m.width), m.tabStatusLine()}, m.windowedLines()...)
+	}
 	if m.height > 0 {
 		lines = shared.ClampLines(lines, m.height)
 	}
@@ -489,11 +651,13 @@ func (m *Model) RawLines() []string {
 	}
 	switch m.tab {
 	case "nodes":
-		out := make([]string, 0, len(m.nodes))
-		for _, r := range m.nodes {
-			out = append(out, RenderFlatRow(r, 0, shared.NewTheme(true), false))
-		}
-		return out
+		return m.nodesRawLines()
+	case "timeline":
+		return m.timelineRawLines()
+	case "explain":
+		return m.explainRawLines()
+	case "events":
+		return m.eventsRawLines()
 	case "resource":
 		return strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n")
 	default:
@@ -523,24 +687,13 @@ func (m *Model) stateLines() ([]string, bool) {
 func (m *Model) tabStatusLine() string {
 	switch m.tab {
 	case "nodes":
-		if !m.state.Outline.Available {
-			return "node status unavailable"
-		}
-		s := itoaDetail(len(m.nodes)) + " nodes"
-		if m.nodePhase != NodePhaseAll {
-			s = itoaDetail(len(m.nodes)) + " of " + itoaDetail(m.totalNodes) +
-				" nodes · phase " + string(m.nodePhase)
-		} else if m.hiddenSkipped > 0 {
-			s += " · " + itoaDetail(m.hiddenSkipped) + " skipped hidden"
-		}
-		s += " · sort " + string(m.nodeSort)
-		if len(m.nodes) > 0 {
-			s += " · " + itoaDetail(m.nodeCursor+1) + "/" + itoaDetail(len(m.nodes))
-		}
-		if row, ok := m.SelectedNode(); ok && row.HasPod && row.PodName != "" {
-			s += " · l logs"
-		}
-		return m.theme.Dim.Render(s)
+		return m.nodesStatusLine()
+	case "timeline":
+		return m.timelineStatusLine()
+	case "explain":
+		return m.explainStatusLine()
+	case "events":
+		return m.eventsStatusLine()
 	case "resource":
 		reveal := "values redacted (v reveals)"
 		if m.revealResource {
@@ -560,39 +713,13 @@ func (m *Model) windowedLines() []string {
 	h := m.viewRows()
 	switch m.tab {
 	case "nodes":
-		if !m.state.Outline.Available {
-			reason := m.state.Outline.UnavailableReason
-			if reason == "" {
-				return []string{"the server did not send node status for this workflow"}
-			}
-			return []string{shared.Sanitize(reason)}
-		}
-		if len(m.nodes) == 0 {
-			return []string{"(no nodes yet — workflow not started)"}
-		}
-		top := m.nodeTop
-		if m.nodeCursor < top {
-			top = m.nodeCursor
-		}
-		if m.nodeCursor >= top+h {
-			top = m.nodeCursor - h + 1
-		}
-		if max := len(m.nodes) - h; top > max {
-			top = max
-		}
-		if top < 0 {
-			top = 0
-		}
-		m.nodeTop = top
-		end := top + h
-		if end > len(m.nodes) {
-			end = len(m.nodes)
-		}
-		out := make([]string, 0, end-top)
-		for i := top; i < end; i++ {
-			out = append(out, RenderFlatRow(m.nodes[i], m.width, m.theme, i == m.nodeCursor))
-		}
-		return out
+		return m.nodeTreeLines(m.nodesLayout())
+	case "timeline":
+		return m.timelineLines(m.timelineLayout())
+	case "explain":
+		return sliceLines(m.explainLines(), m.ex.top, h)
+	case "events":
+		return sliceLines(m.eventsLines(), m.ev.top, h)
 	case "resource":
 		return sliceLines(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"), m.resourceTop, h)
 	default:
@@ -663,18 +790,6 @@ func itoaDetail(n int) string {
 	return string(b[i:])
 }
 
-// prevTab cycles the tab strip backwards (shift+tab).
-func prevTab(cur string) string {
-	switch cur {
-	case "summary":
-		return "resource"
-	case "nodes":
-		return "summary"
-	default:
-		return "nodes"
-	}
-}
-
 // bodyText picks the body for the current state. Every state renders
 // something: an empty pane would say nothing about why it is empty.
 func (m *Model) bodyText() string {
@@ -702,16 +817,4 @@ func (m *Model) resolvedState() DetailViewState {
 		}, true)
 	}
 	return state
-}
-
-// nextTab cycles summary → nodes → resource → summary.
-func nextTab(cur string) string {
-	switch cur {
-	case "summary":
-		return "nodes"
-	case "nodes":
-		return "resource"
-	default:
-		return "summary"
-	}
 }

@@ -8,7 +8,6 @@ import (
 
 	"github.com/ficaa1/argo-tui/internal/core"
 	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
 	"github.com/ficaa1/argo-tui/internal/ui/templatelist"
 )
 
@@ -18,7 +17,7 @@ import (
 
 // newTemplateKind builds the WorkflowTemplate kind's definition for m.
 func (m *Root) newTemplateKind() *kindDef {
-	m.tmplView = kindlist.New(templatelist.Spec(), shared.NewTheme(false))
+	m.tmplView = kindlist.New(templatelist.Spec(), m.theme)
 	return &kindDef{
 		pane: m.tmplView,
 		noun: "workflow template",
@@ -41,7 +40,7 @@ func (m *Root) newTemplateKind() *kindDef {
 // newClusterTemplateKind builds the ClusterWorkflowTemplate kind's definition
 // for m. The namespace its fetch is given is always empty and not used.
 func (m *Root) newClusterTemplateKind() *kindDef {
-	m.ctmplView = kindlist.New(templatelist.ClusterSpec(), shared.NewTheme(false))
+	m.ctmplView = kindlist.New(templatelist.ClusterSpec(), m.theme)
 	return &kindDef{
 		pane: m.ctmplView,
 		noun: "cluster workflow template",

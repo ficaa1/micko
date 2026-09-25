@@ -10,7 +10,6 @@ import (
 	"github.com/ficaa1/argo-tui/internal/core"
 	"github.com/ficaa1/argo-tui/internal/ui/archivedlist"
 	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // archived.go registers the workflow archive as a kind: a list of archived
@@ -39,7 +38,7 @@ type archiveResult struct {
 
 // newArchivedKind builds the archive kind's definition for m.
 func (m *Root) newArchivedKind() *kindDef {
-	m.archView = kindlist.New(archivedlist.Spec(), shared.NewTheme(false))
+	m.archView = kindlist.New(archivedlist.Spec(), m.theme)
 	return &kindDef{
 		pane: m.archView,
 		noun: "archived workflow",

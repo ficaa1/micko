@@ -9,7 +9,6 @@ import (
 	"github.com/ficaa1/argo-tui/internal/core"
 	"github.com/ficaa1/argo-tui/internal/ui/cronlist"
 	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // cron.go registers the cron workflow kind: its view, and the call that
@@ -17,7 +16,7 @@ import (
 
 // newCronKind builds the cron kind's definition for m.
 func (m *Root) newCronKind() *kindDef {
-	m.cronView = kindlist.New(cronlist.Spec(), shared.NewTheme(false))
+	m.cronView = kindlist.New(cronlist.Spec(), m.theme)
 	return &kindDef{
 		pane: m.cronView,
 		noun: "cron workflow",

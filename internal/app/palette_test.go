@@ -205,7 +205,7 @@ func TestAllNamespacesToggle(t *testing.T) {
 	if !m.listView.AllNamespaces() {
 		t.Fatal("the list was not told it spans namespaces")
 	}
-	v := m.View().Content
+	v := screen(m)
 	if !strings.Contains(v, "ns: all") || !strings.Contains(v, "NAMESPACE") || !strings.Contains(v, "in 2 namespaces") {
 		t.Fatalf("all-namespaces frame is missing its markers:\n%s", v)
 	}

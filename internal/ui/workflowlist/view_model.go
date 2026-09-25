@@ -73,7 +73,7 @@ func (m *Model) WindowStatus() string {
 
 // Hints are the list key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	return "enter open  l logs  / search  s sort  p phase  n namespace  0 all ns  r refresh"
+	return "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  n namespace  0 all ns  r refresh"
 }
 
 // footerPosition is the window indicator appended to the standalone footer.
@@ -106,7 +106,7 @@ func (m *Model) frameLines(now time.Time, reserve int) []string {
 		// line of every screen, which a mouse selection then copies.
 		head += "  " + truncateRight("MESSAGE", wMsg)
 	}
-	lines = append(lines, m.theme.Header.Render(head))
+	lines = append(lines, m.theme.TableHeader.Render(head))
 
 	if len(m.rows) == 0 {
 		m.winStart, m.winEnd = 0, 0
@@ -159,8 +159,11 @@ func (m *Model) window(chromeLines int) (start, end int) {
 	return start, start + budget
 }
 
-// rowLine renders one table row with its phase styling (or the selection
-// highlight, which must win so the selected row is never ambiguous).
+// rowLine renders one table row. The phase cell carries the phase colour,
+// the name keeps the ordinary text colour so it reads first, and the times
+// and the message are muted. The selected row is one highlight bar instead:
+// it must win so the selection is never ambiguous, and its glyph and phase
+// word still say what the colour would have.
 func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	wName, wPhase, wAge, wDur, wMsg := m.colWidths()
 	name := sanitizeOne(r.Ref.Name)
@@ -171,21 +174,24 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	shown := DisplayPhase(r)
 	phase := shared.PhaseSymbol(shown) + " " + m.rowPhaseText(sanitizeOne(shown))
 	msg := sanitizeOne(r.Message)
-	line := ""
+	// The namespace column exists only in the all-namespaces view, where two
+	// workflows can share a name.
+	nsCell := ""
 	if wNS := m.nsWidth(); wNS > 0 {
-		line = padRight(truncateRight(sanitizeOne(r.Ref.Namespace), wNS), wNS) + "  "
+		nsCell = padRight(truncateRight(sanitizeOne(r.Ref.Namespace), wNS), wNS) + "  "
 	}
-	line += padRight(truncateRight(name, wName), wName) + "  " +
-		padRight(truncateRight(phase, wPhase), wPhase) + "  " +
-		padLeft(ageText(r, now), wAge) + "  " +
-		padRight(durationText(r), wDur)
+	nameCell := padRight(truncateRight(name, wName), wName)
+	phaseCell := padRight(truncateRight(phase, wPhase), wPhase)
+	times := padLeft(ageText(r, now), wAge) + "  " + padRight(durationText(r), wDur)
+	msgCell := ""
 	if wMsg > 0 && msg != "" {
-		line += "  " + truncateRight(msg, wMsg)
+		msgCell = "  " + truncateRight(msg, wMsg)
 	}
 	if selected {
-		return m.theme.Selected.Render(line)
+		return m.theme.SelectRow(nsCell+nameCell+"  "+phaseCell+"  "+times+msgCell, m.width)
 	}
-	return m.theme.PhaseStyle(shown).Render(line)
+	return nsCell + nameCell + "  " + m.theme.PhaseStyle(shown).Render(phaseCell) + "  " +
+		m.theme.Muted.Render(times) + m.theme.Muted.Render(msgCell)
 }
 
 // minUsableWidth below which the plan requires a resize notice (<60 cols).
@@ -218,11 +224,11 @@ func (m *Model) toolbarView() string {
 	if m.SearchOn {
 		q = m.searchLineView()
 	}
-	searchCell := "Search: " + q
+	searchCell := m.theme.Muted.Render("Search:") + " " + q
 	if q == "" && !m.SearchOn {
-		searchCell = "Search: (none)  / to filter by name"
+		searchCell = m.theme.Muted.Render("Search:") + " (none)  / to filter by name"
 		if m.allNS {
-			searchCell = "Search: (none)  / to filter by namespace/name"
+			searchCell = m.theme.Muted.Render("Search:") + " (none)  / to filter by namespace/name"
 		}
 	}
 	// Scope honesty: the search/filter is LOCAL to the collected snapshot.
@@ -236,14 +242,14 @@ func (m *Model) toolbarView() string {
 	}
 	parts = append(parts, searchCell+scope)
 
-	phaseCell := "Phase: " + string(m.phase)
+	phaseCell := m.theme.Muted.Render("Phase:") + " " + string(m.phase)
 	if n := m.suspendedCount(); n > 0 && m.phase != PhaseSuspended {
 		// The count is the whole point of the marker: an operator wants to
 		// know a gate is open without reading every row.
 		phaseCell += "  " + m.theme.Warning.Render(itoa(n)+" awaiting resume")
 	}
 	parts = append(parts, phaseCell)
-	parts = append(parts, "Sort: "+sortLabel(m.sort))
+	parts = append(parts, m.theme.Muted.Render("Sort:")+" "+sortLabel(m.sort))
 
 	// Long, untrusted-derived error reasons (the stale / unauthenticated /
 	// forbidden message) are word-wrapped to fit the remaining width instead

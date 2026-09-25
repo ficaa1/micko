@@ -345,6 +345,7 @@ func DemoReader(clock *FakeClock) *FakeReader {
 	put := func(wf core.Workflow) {
 		f.Workflows[wf.Summary.Ref] = wf
 		f.Order = append(f.Order, wf.Summary.Ref)
+		f.Events = append(f.Events, demoEvents(wf)...)
 		// The workflow-wide log is every pod's log in start order, the way
 		// the server interleaves them by pod.
 		pods := make([]core.Node, 0, len(wf.Nodes))

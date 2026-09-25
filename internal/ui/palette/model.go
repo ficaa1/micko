@@ -98,6 +98,9 @@ type Model struct {
 // New builds a closed palette with no commands.
 func New(theme shared.Theme) *Model { return &Model{theme: theme} }
 
+// SetTheme restyles the palette.
+func (m *Model) SetTheme(theme shared.Theme) { m.theme = theme }
+
 // SetCommands installs the registry, in the order the empty palette lists it.
 func (m *Model) SetCommands(cmds []Command) { m.commands = append([]Command(nil), cmds...) }
 
