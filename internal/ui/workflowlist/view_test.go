@@ -118,7 +118,7 @@ func TestTheMessageColumnGrowsWithThePane(t *testing.T) {
 	prev := 0
 	for _, w := range []int{100, 140, 200} {
 		m.SetSize(w, 20)
-		_, _, _, _, msg := m.colWidths()
+		msg := m.columnWidth(colMessage)
 		if msg <= prev {
 			t.Fatalf("width %d: message column = %d, want more than %d", w, msg, prev)
 		}
@@ -154,7 +154,7 @@ func TestARowNeverOverflowsThePane(t *testing.T) {
 func TestANarrowPaneDropsTheMessageColumn(t *testing.T) {
 	m := New(shared.NewTheme(true), false)
 	m.SetSize(70, 20)
-	if _, _, _, _, msg := m.colWidths(); msg != 0 {
+	if msg := m.columnWidth(colMessage); msg != 0 {
 		t.Errorf("message column = %d at width 70, want it dropped", msg)
 	}
 }

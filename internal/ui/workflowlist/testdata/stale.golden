@@ -8,4 +8,4 @@ Search: (none)  / to filter by name  Phase: All  Sort: phase, newest first  stal
   fixture-wf-0002               ✓ Succeeded         4m  -        
   fixture-wf-0005               • WeirdFutu…        1m  -        
 
-enter open  l logs  / search  s sort  p phase  space mark  a actions  n namespace  r refresh  ? help
+enter open  l logs  / search  s sort  p phase  space mark  a actions  n namespace  r refresh  w wide  ? help
