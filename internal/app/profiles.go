@@ -79,6 +79,7 @@ func (m *Root) Adopt(c *Connection) {
 	m.deps.watcher, _ = c.Reader.(core.Watcher)
 	m.deps.actioner, _ = c.Reader.(core.Actioner)
 	m.deps.nsLister, _ = c.Reader.(core.NamespaceLister)
+	m.deps.eventWatcher, _ = c.Reader.(core.EventWatcher)
 	m.deps.namespace = c.Namespace
 	if c.Interval > 0 {
 		m.deps.interval = c.Interval
@@ -147,7 +148,7 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	old := m.conn
 	m.conn = nil
 	m.deps.reader = nil
-	m.deps.watcher, m.deps.actioner, m.deps.nsLister = nil, nil, nil
+	m.deps.watcher, m.deps.actioner, m.deps.nsLister, m.deps.eventWatcher = nil, nil, nil, nil
 	m.resetRoutes()
 	if m.profView != nil {
 		m.profView.SetConnecting(name)

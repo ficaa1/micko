@@ -65,6 +65,13 @@ func (m *Root) syncExplainLog() tea.Cmd {
 	return m.deps.explainLogCmd(ctx, genStamp{Conn: m.connGen, Sel: m.selGen}, id, req)
 }
 
+// syncSections starts and stops the work the detail pane's sections do in
+// the background: the Explain section's log read and the Events section's
+// streams.
+func (m *Root) syncSections() tea.Cmd {
+	return tea.Batch(m.syncExplainLog(), m.syncEvents())
+}
+
 // stopExplainLog cancels a read under way and tells the section, which asks
 // for it again when it is next shown.
 func (m *Root) stopExplainLog() {

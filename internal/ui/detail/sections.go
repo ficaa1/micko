@@ -26,6 +26,7 @@ var sections = []section{
 	{id: "nodes", title: "Nodes"},
 	{id: "timeline", title: "Timeline", key: "T"},
 	{id: "explain", title: "Explain", key: "X"},
+	{id: "events", title: "Events", key: "E"},
 	{id: "resource", title: "Resource"},
 }
 

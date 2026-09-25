@@ -1,5 +1,5 @@
 DETAIL fixture-dag
- Summary  [Nodes]  Timeline   Explain   Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 - fixture-dag type=DAG phase=Failed
   - task-a type=Pod phase=Succeeded
   - task-b type=Pod phase=Failed msg=synthetic exit code 1

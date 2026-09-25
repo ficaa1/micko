@@ -285,11 +285,11 @@ func TestTabStripFits(t *testing.T) {
 		width  int
 		want   string
 	}{
-		{"explain", 80, " Summary   Nodes   Timeline  [Explain]  Resource "},
-		{"explain", 45, "Summary Nodes Timeline [Explain] Resource"},
-		{"explain", 30, "… Timeline [Explain] Resource"},
+		{"explain", 80, " Summary   Nodes   Timeline  [Explain]  Events   Resource "},
+		{"explain", 50, "Summary Nodes Timeline [Explain] Events Resource"},
+		{"explain", 30, "… Timeline [Explain] Events …"},
 		{"summary", 30, "[Summary] Nodes Timeline …"},
-		{"resource", 24, "… Explain [Resource]"},
+		{"resource", 24, "… Events [Resource]"},
 		{"explain", 13, "… [Explain] …"},
 		{"explain", 8, "… [Expl…"},
 	}
