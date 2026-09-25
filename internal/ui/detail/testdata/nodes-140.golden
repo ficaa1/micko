@@ -64,7 +64,7 @@ NAME                             TEMPLATE  DURATION  TIMELINE            11m00s 
  Summary  [Nodes]  Timeline   Resource 
 progress 5/6 =============---  ✓ 2  ✗ 3  ⊘ 1  took 4m00s
 8 nodes · sort pipeline · 2/8 · l logs
-NAME                                DURATION  TIMELINE      MESSAGE                   │ NODE extract  values redacted (v reveals)
+NAME                                DURATION  TIMELINE      MESSAGE                   │ NODE extract  values shown (v redacts)
 ▾ ✗ demo-nightly-report DAG            4m00s  ============  child 'transform' failed  │ name      extract
 ├─ ✓ extract                             50s  ===---------                            │ full name demo-nightly-report.extract
 ├▾ ✗ transform Retry ↻ 2 ← extract     2m30s  ---========-  No more retries left      │ id        demo-nightly-report-3295999816
@@ -83,9 +83,9 @@ NAME                                DURATION  TIMELINE      MESSAGE             
                                                                                       │ cpu       13s × 1 cpu
                                                                                       │ memory    2m31s × 100Mi
                                                                                       │
-                                                                                      │ inputs    date = [REDACTED]
-                                                                                      │           source = [REDACTED]
-                                                                                      │ outputs   rows = [REDACTED]
+                                                                                      │ inputs    date = 2026-09-07
+                                                                                      │           source = warehouse
+                                                                                      │ outputs   rows = 184022
                                                                                       │           artifact raw-extract
                                                                                       │
                                                                                       │

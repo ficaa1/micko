@@ -71,7 +71,7 @@ NAME                         DURATION   0        1m       2m       3m  4m00s
 │  └─ ✗ transform(2)              50s * -----------------------~========----
 └─ ⊘ load                               ------------------------------------
   ✓ onExit exit handler           20s   --------------------------------===-
-─ NODE transform(1)  values redacted (v reveals) ───────────────────────────
+─ NODE transform(1)  values shown (v redacts) ──────────────────────────────
 name      transform(1)
 full name demo-nightly-report.extract.transform.transform(1)
 id        demo-nightly-report-3318169918

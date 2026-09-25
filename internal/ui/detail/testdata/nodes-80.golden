@@ -73,7 +73,7 @@ NAME                                DURATION  TIMELINE      MESSAGE
 │  └─ ✗ transform(2) exit 1              50s  --------===-  Error (exit code 1)
 └─ ⊘ load ← transform                         ------------  omitted: depends co…
   ✓ onExit exit handler                  20s  ----------==
-─ NODE extract  values redacted (v reveals) ────────────────────────────────────
+─ NODE extract  values shown (v redacts) ───────────────────────────────────────
 name      extract
 full name demo-nightly-report.extract
 id        demo-nightly-report-3295999816
