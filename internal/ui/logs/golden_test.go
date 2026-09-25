@@ -85,6 +85,7 @@ func goldenTestcases() map[string]func(*Model) {
 		"pod-scoped": func(m *Model) {
 			m.podName = "mypod-abc"
 			m.container = "sidecar"
+			m.labels = false // NewModel's default for one pod's log
 			m.headerDone = false
 			m.ApplyRecords([]core.LogRecord{rec("sidecar says hi")})
 		},

@@ -7,6 +7,20 @@
   whose parameters carry secrets can turn it back on with `redactValues: true`
   at the top of the config file or on a profile, or with `--redact-values`;
   `v` still hides or reveals them for the session.
+- Workflow-wide logs now label each line with the step that wrote it, or the
+  pod when the step is not known, coloured per source. `L` turns the labels
+  off and on.
+- `w` in the log pane wraps long lines and keeps the line you were reading in
+  place. Search highlights carry across the wrapped lines.
+- A log line that starts with a level word such as `ERROR`, `WARN` or
+  `DEBUG`, after any timestamps, or a JSON line with a `level` or `severity`
+  field, has that word coloured. The rest of the line is untouched.
+- `&` in the log pane shows only the lines matching the `/` search, and says
+  how many of the retained lines that is. `&` again or `esc` shows every line.
+- `ctrl+t` in the log pane reopens the stream with server timestamps on or
+  off. The retained lines stay, and a marker shows where the new stream
+  starts.
+
 - The list filter now reads a small query language. Spaces separate terms
   that must all match, `|` offers alternatives, `!` negates, `/.../` is a
   regular expression and `~` a fuzzy match. `phase=`, `age<`, `dur>`,

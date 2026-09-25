@@ -79,6 +79,19 @@ func TestHelpOverlayFitsWholeAt80x40(t *testing.T) {
 	}
 }
 
+// TestHelpOverlayDocumentsTheLogKeys: the log pane's toggles are listed,
+// each with the key a reader presses.
+func TestHelpOverlayDocumentsTheLogKeys(t *testing.T) {
+	var h HelpOverlay
+	h.Toggle()
+	v := h.View(helpFitWidth, helpFitHeight)
+	for _, want := range []string{"& only matching lines", "w wrap long lines", "L source labels", "ctrl+t server timestamps"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("help does not mention %q:\n%s", want, v)
+		}
+	}
+}
+
 // TestHelpOverlayDocumentsTheFilterAndWideKeys: the filter syntax and the
 // wide toggle have no other on-screen reference than this overlay.
 func TestHelpOverlayDocumentsTheFilterAndWideKeys(t *testing.T) {

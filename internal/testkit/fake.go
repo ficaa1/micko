@@ -256,11 +256,22 @@ func (f *FakeReader) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 		if rec.PodName == "" {
 			rec.PodName = req.PodName
 		}
+		if req.Timestamps {
+			rec.Content = serverTimestamp(rec.ReceivedAt) + " " + rec.Content
+		}
 		if err := cb(rec); err != nil {
 			return err
 		}
 	}
 	return nil // clean finite EOF
+}
+
+// serverTimestamp is the stamp the Kubernetes API puts in front of each
+// line when a log request asks for timestamps: RFC 3339 in UTC with a fixed
+// nine-digit fraction. The fake stamps a record with its ReceivedAt, which
+// the demo sets to the moment the line was written.
+func serverTimestamp(t time.Time) string {
+	return t.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
 }
 
 // StreamCancelCount returns the number of streams ended via context
