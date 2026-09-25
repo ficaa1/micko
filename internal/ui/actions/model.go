@@ -43,6 +43,9 @@ type Model struct {
 	reason                       string
 	server, profile, phase       string
 	width, height                int
+	// theme styles the pane. The zero theme draws plain text; every state
+	// is carried by its words, so the styling only repeats them.
+	theme shared.Theme
 }
 
 var _ tea.Model = (*Model)(nil)
@@ -305,6 +308,9 @@ func appendInput(current, input string) string {
 func (m *Model) View() tea.View {
 	return tea.NewView(render(m))
 }
+
+// SetTheme replaces the style set the pane is drawn in.
+func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
 func actionLabel(a core.Action) string { return strings.ToUpper(string(a)) }
 func target(ref core.Ref) string {

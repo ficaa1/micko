@@ -16,6 +16,7 @@ package shell
 import (
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/argo-tui/internal/ui/shared"
@@ -45,6 +46,9 @@ type Frame struct {
 	Server    string // server identity, or the demo source
 	Namespace string
 	Mode      string // READ ONLY / ACTIONS ENABLED — the safety state
+	// ActionsEnabled draws the mode badge in the theme's armed style. The
+	// Mode words carry the meaning; the badge colour only repeats it.
+	ActionsEnabled bool
 
 	// Pane.
 	Title      string   // left of the top border, e.g. "Workflows"
@@ -52,8 +56,11 @@ type Frame struct {
 	Body       []string // already sanitized content lines
 
 	// Footer band.
-	Route  string // the active route name
-	Hints  string // route key hints, most useful first
+	Route string // the active route name
+	Hints string // route key hints, "key description" pairs, most useful first
+	// Notice replaces Hints for one frame with the result of the last
+	// command, such as a copy. It is drawn as a message, not as keys.
+	Notice string
 	Help   string // the global help hint, e.g. "? help"
 	Status string // right-aligned state, e.g. "watch • 1/5"
 }
@@ -113,26 +120,31 @@ func (f Frame) BodyHeight() int {
 // Render composes the frame into terminal text.
 func (f Frame) Render(t shared.Theme) string {
 	var out []string
-	out = append(out, t.Header.Render(f.headerBand()))
+	out = append(out, f.headerBand(t))
 
 	body := f.bodyLines()
+	b := t.Borders()
 	if f.bordered() {
 		out = append(out, f.topBorder(t))
 		inner := f.BodyWidth()
+		left, right := t.Border.Render(b.Left), t.Border.Render(b.Right)
 		for _, l := range body {
-			out = append(out, t.Border.Render("│")+" "+fit(l, inner)+" "+t.Border.Render("│"))
+			out = append(out, left+" "+fit(l, inner)+" "+right)
 		}
-		out = append(out, t.Border.Render(f.bottomBorder()))
+		out = append(out, t.Border.Render(f.bottomBorder(b)))
 	} else {
 		if f.titleRows() > 0 {
-			out = append(out, t.Title.Render(band(oneLine(f.Title), oneLine(f.TitleRight), f.Width)))
+			out = append(out, band(
+				[]span{{oneLine(f.Title), t.Title}},
+				[]span{{oneLine(f.TitleRight), t.Dim}},
+				f.Width, lipgloss.NewStyle()))
 		}
 		for _, l := range body {
 			out = append(out, fit(l, f.Width))
 		}
 	}
 
-	out = append(out, t.Footer.Render(f.footerBand()))
+	out = append(out, f.footerBand(t))
 	return strings.Join(out, "\n")
 }
 
@@ -165,19 +177,21 @@ const minTitleRight = 16
 // topBorder draws the title row: ┌ Title ──── TitleRight ─┐
 //
 // The title and the count ride the border so the pane says what it holds
-// without spending a content row on a heading.
+// without spending a content row on a heading. The corner and line
+// characters come from the theme, so a skin can round the corners.
 func (f Frame) topBorder(t shared.Theme) string {
+	b := t.Borders()
 	inner := f.Width - 2 // between the corners
 	title := oneLine(f.Title)
 	right := oneLine(f.TitleRight)
 
-	left := "─"
+	left := t.Border.Render(b.Top)
 	if title != "" {
-		left = "─ " + t.Title.Render(title) + " "
+		left += " " + t.Title.Render(title) + " "
 	}
-	tail := "─"
+	tail := t.Border.Render(b.Top)
 	if right != "" {
-		tail = " " + t.Dim.Render(right) + " ─"
+		tail = " " + t.Dim.Render(right) + " " + t.Border.Render(b.Top)
 	}
 
 	used := ansi.StringWidth(left) + ansi.StringWidth(tail)
@@ -187,9 +201,9 @@ func (f Frame) topBorder(t shared.Theme) string {
 		// dropping it, and only drop it when even a short form has no room.
 		room := inner - ansi.StringWidth(left) - 3 // " " + " ─"
 		if room >= minTitleRight {
-			tail = " " + t.Dim.Render(ansi.Truncate(right, room, "…")) + " ─"
+			tail = " " + t.Dim.Render(ansi.Truncate(right, room, "…")) + " " + t.Border.Render(b.Top)
 		} else {
-			tail = "─"
+			tail = t.Border.Render(b.Top)
 			left = ansi.Truncate(left, inner-1, "…")
 		}
 		used = ansi.StringWidth(left) + ansi.StringWidth(tail)
@@ -198,33 +212,54 @@ func (f Frame) topBorder(t shared.Theme) string {
 	if fill < 0 {
 		fill = 0
 	}
-	return t.Border.Render("┌") + left + t.Border.Render(strings.Repeat("─", fill)) +
-		tail + t.Border.Render("┐")
+	return t.Border.Render(b.TopLeft) + left + t.Border.Render(strings.Repeat(b.Top, fill)) +
+		tail + t.Border.Render(b.TopRight)
 }
 
-func (f Frame) bottomBorder() string {
+func (f Frame) bottomBorder(b lipgloss.Border) string {
 	inner := f.Width - 2
 	if inner < 0 {
 		inner = 0
 	}
-	return "└" + strings.Repeat("─", inner) + "┘"
+	return b.BottomLeft + strings.Repeat(b.Bottom, inner) + b.BottomRight
 }
 
 // headerBand names the program, where it is pointed, and the safety mode.
-// The mode is right-aligned so a reader always finds it in the same place.
-func (f Frame) headerBand() string {
-	left := oneLine(f.App)
-	var ctx []string
+// The mode is right-aligned so a reader always finds it in the same place,
+// and it is drawn as a badge: the one word on the screen that says whether a
+// key can change the cluster.
+//
+// When the theme paints the band, the band gets a one-cell margin at each
+// end so its text does not touch the screen edge. The plain theme adds
+// nothing, so a plain header is the same text as the segments joined.
+func (f Frame) headerBand(t shared.Theme) string {
+	painted := shared.IsBlock(t.Band)
+	var left []span
+	if painted {
+		left = append(left, span{" ", t.Band})
+	}
+	left = append(left, span{oneLine(f.App), t.AppName})
 	if f.Server != "" {
-		ctx = append(ctx, "server: "+oneLine(f.Server))
+		left = append(left, span{"   ", t.Band}, span{"server: ", t.Muted}, span{oneLine(f.Server), t.Text})
 	}
 	if f.Namespace != "" {
-		ctx = append(ctx, "ns: "+oneLine(f.Namespace))
+		left = append(left, span{"   ", t.Band}, span{"ns: ", t.Muted}, span{oneLine(f.Namespace), t.Text})
 	}
-	if len(ctx) > 0 {
-		left += "   " + strings.Join(ctx, "   ")
+	var right []span
+	if mode := oneLine(f.Mode); mode != "" {
+		badge := t.BadgeReadOnly
+		if f.ActionsEnabled {
+			badge = t.BadgeActions
+		}
+		if shared.IsBlock(badge) {
+			mode = " " + mode + " "
+		}
+		right = append(right, span{mode, badge})
 	}
-	return band(left, oneLine(f.Mode), f.Width)
+	if painted {
+		right = append(right, span{" ", t.Band})
+	}
+	return band(left, right, f.Width, t.Band)
 }
 
 // footerBand carries the route name and its key hints on the left, and the
@@ -233,45 +268,156 @@ func (f Frame) headerBand() string {
 // Help sits on the protected right side deliberately. `?` is the one key
 // that leads to every other key, so a narrow terminal must drop route hints
 // before it drops the way to find them again.
-func (f Frame) footerBand() string {
-	left := oneLine(f.Hints)
+//
+// A Notice replaces the hints for the frame it is set on: it answers the key
+// the reader just pressed, so it is text, not a list of keys.
+func (f Frame) footerBand(t shared.Theme) string {
+	var rest []span
+	if n := oneLine(f.Notice); n != "" {
+		rest = []span{{n, t.Accent}}
+	} else {
+		rest = hintSpans(oneLine(f.Hints), t)
+	}
+	var left []span
 	if f.Route != "" {
-		left = oneLine(f.Route) + "   " + left
-	}
-	right := oneLine(f.Help)
-	if s := oneLine(f.Status); s != "" {
-		if right != "" {
-			right += "   "
+		left = append(left, span{oneLine(f.Route), t.Accent})
+		if len(rest) > 0 {
+			left = append(left, span{"   ", t.Footer})
 		}
-		right += s
 	}
-	return band(left, right, f.Width)
+	left = append(left, rest...)
+	right := hintSpans(oneLine(f.Help), t)
+	if s := oneLine(f.Status); s != "" {
+		if len(right) > 0 {
+			right = append(right, span{"   ", t.Footer})
+		}
+		right = append(right, span{s, t.Footer})
+	}
+	return band(left, right, f.Width, lipgloss.NewStyle())
 }
 
-// band lays out a left cell and a right-aligned cell in exactly width cells.
-// The right cell is the one that survives a squeeze: it holds the safety
-// mode and the position, which are shorter and less recoverable than hints.
-func band(left, right string, width int) string {
-	if width <= 0 {
-		if right == "" {
-			return left
-		}
-		return left + "   " + right
+// hintSpans splits a hint line into keys and descriptions. Hints are written
+// as "key description" pairs separated by two or more spaces, so the first
+// word of each pair is the key. The separators are kept exactly, which is
+// what makes the plain rendering identical to the hint text.
+func hintSpans(hints string, t shared.Theme) []span {
+	if hints == "" {
+		return nil
 	}
-	rw := ansi.StringWidth(right)
+	var out []span
+	for hints != "" {
+		gap := strings.Index(hints, "  ")
+		pair := hints
+		if gap >= 0 {
+			pair = hints[:gap]
+		}
+		if key, desc, ok := strings.Cut(pair, " "); ok {
+			out = append(out, span{key, t.HintKey}, span{" " + desc, t.HintDesc})
+		} else if pair != "" {
+			out = append(out, span{pair, t.HintKey})
+		}
+		if gap < 0 {
+			break
+		}
+		rest := hints[gap:]
+		trimmed := strings.TrimLeft(rest, " ")
+		out = append(out, span{rest[:len(rest)-len(trimmed)], lipgloss.NewStyle()})
+		hints = trimmed
+	}
+	return out
+}
+
+// span is one run of text in a band and the style it is drawn in.
+type span struct {
+	text  string
+	style lipgloss.Style
+}
+
+func spansWidth(ss []span) int {
+	w := 0
+	for _, s := range ss {
+		w += ansi.StringWidth(s.text)
+	}
+	return w
+}
+
+// truncSpans cuts a run of spans to width cells, ending in "…" when anything
+// was cut. The cut falls inside whichever span crosses the edge, and that
+// span keeps its style.
+func truncSpans(ss []span, width int) []span {
+	if spansWidth(ss) <= width {
+		return ss
+	}
+	if width <= 0 {
+		return nil
+	}
+	room := width - 1 // the ellipsis
+	out := make([]span, 0, len(ss))
+	for _, s := range ss {
+		w := ansi.StringWidth(s.text)
+		if w <= room {
+			out = append(out, s)
+			room -= w
+			continue
+		}
+		out = append(out, span{ansi.Truncate(s.text, room, "") + "…", s.style})
+		break
+	}
+	return out
+}
+
+// renderSpans draws spans on a band. A span without a background of its own
+// takes the band's, so a painted band has no holes behind its text.
+func renderSpans(ss []span, base lipgloss.Style) string {
+	var b strings.Builder
+	bg := base.GetBackground()
+	painted := shared.HasBackground(base)
+	for _, s := range ss {
+		if s.text == "" {
+			continue
+		}
+		st := s.style
+		if painted && !shared.HasBackground(st) {
+			st = st.Background(bg)
+		}
+		b.WriteString(st.Render(s.text))
+	}
+	return b.String()
+}
+
+// band lays out a left run and a right-aligned run in exactly width cells.
+// The right run is the one that survives a squeeze: it holds the safety
+// mode and the position, which are shorter and less recoverable than hints.
+// base paints the gap between them, and the background of any span that has
+// none of its own.
+func band(left, right []span, width int, base lipgloss.Style) string {
+	if width <= 0 {
+		if len(right) == 0 {
+			return renderSpans(left, base)
+		}
+		return renderSpans(left, base) + "   " + renderSpans(right, base)
+	}
+	rw := spansWidth(right)
 	if rw >= width {
-		return fit(right, width)
+		right = truncSpans(right, width)
+		pad := width - spansWidth(right)
+		return renderSpans(right, base) + gapOf(pad, base)
 	}
 	avail := width - rw
-	if right != "" {
-		avail-- // at least one space between the cells
+	if rw > 0 {
+		avail-- // at least one space between the runs
 	}
-	left = ansi.Truncate(left, avail, "…")
-	gap := width - ansi.StringWidth(left) - rw
-	if gap < 0 {
-		gap = 0
+	left = truncSpans(left, avail)
+	gap := width - spansWidth(left) - rw
+	return renderSpans(left, base) + gapOf(gap, base) + renderSpans(right, base)
+}
+
+// gapOf is n cells of band background.
+func gapOf(n int, base lipgloss.Style) string {
+	if n <= 0 {
+		return ""
 	}
-	return left + strings.Repeat(" ", gap) + right
+	return base.Render(strings.Repeat(" ", n))
 }
 
 // fit clips or pads s to exactly width cells. Width 0 means "unknown", which

@@ -33,6 +33,9 @@ func renderOutlinePane(out Outline) string {
 			b.WriteString(fmt.Sprintf("- %s type=%s phase=%s",
 				shared.Sanitize(rowDisplayName(r)), shared.Sanitize(rowType(r)),
 				shared.Sanitize(rowPhase(r))))
+			if len(r.Deps) > 0 {
+				b.WriteString(" after=" + shared.Sanitize(strings.Join(r.Deps, ",")))
+			}
 			if r.Message != "" {
 				b.WriteString(" msg=" + shared.Sanitize(r.Message))
 			}

@@ -33,7 +33,7 @@ func rawKey(m *Root, key string) tea.Cmd {
 // border columns. The raw view exists to remove them.
 func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 	m, wf := rawRoot(t)
-	framed := m.View().Content
+	framed := screen(m)
 	if !strings.Contains(framed, "│") {
 		t.Fatal("the normal view is expected to be bordered")
 	}
@@ -42,7 +42,7 @@ func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 	if !m.rawMode {
 		t.Fatal("f did not enter the raw view")
 	}
-	raw := m.View().Content
+	raw := screen(m)
 	if strings.Contains(raw, "│") || strings.Contains(raw, "┌") {
 		t.Fatalf("the raw view still draws a border:\n%s", raw)
 	}
