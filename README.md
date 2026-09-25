@@ -34,10 +34,10 @@ Until then, download a binary from
 in, verify it and put it on your PATH:
 
 ```sh
-gh release download v0.3.1 --repo ficaa1/argo-tui \
+gh release download v0.5.0 --repo ficaa1/argo-tui \
   --pattern '*_darwin_arm64.tar.gz' --pattern checksums.txt
 shasum -a 256 -c checksums.txt --ignore-missing   # sha256sum -c on Linux
-tar -xzf argo-tui_0.3.1_darwin_arm64.tar.gz
+tar -xzf argo-tui_0.5.0_darwin_arm64.tar.gz
 ```
 
 ## Connect
