@@ -29,6 +29,8 @@ const (
 	RouteTemplates
 	// RouteClusterTemplates is the cluster workflow template list.
 	RouteClusterTemplates
+	// RouteArchived is the archived workflow list.
+	RouteArchived
 )
 
 // String implements fmt.Stringer.
@@ -44,6 +46,8 @@ func (r Route) String() string {
 		return "templates"
 	case RouteClusterTemplates:
 		return "clustertemplates"
+	case RouteArchived:
+		return "archived"
 	default:
 		return "list"
 	}

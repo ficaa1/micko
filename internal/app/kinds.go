@@ -365,6 +365,10 @@ func (m *Root) kindURL() string {
 		return base + "/workflow-templates/" + ns + "/" + name
 	case RouteClusterTemplates:
 		return base + "/cluster-workflow-templates/" + name
+	case RouteArchived:
+		if w, ok := m.archView.Selected(); ok {
+			return base + "/archived-workflows/" + ns + "/" + w.Summary.Ref.UID
+		}
 	}
 	return ""
 }

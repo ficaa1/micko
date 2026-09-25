@@ -43,6 +43,13 @@
   template. Cluster templates belong to no namespace, so `n` and `0` say so
   instead of switching. The demo has the templates its workflows name, and a
   cluster template its hello-world run came from.
+- Added an archived workflow list: `:aw` (or `:archived`). It lists the
+  workflow archive with the workflow list's columns, the newest 300 runs, and
+  `enter` opens a run in the detail pane from the archive, marked as archived.
+  Archived runs are not refreshed and cannot be acted on, and their log pane
+  says when nothing came back because the pods are gone. A server without an
+  archive gets "the workflow archive is not enabled on this server" instead of
+  an error.
 - A list that fails before anything was collected now says so on the pane
   instead of reading as a namespace with no workflows.
 - The demo has a second namespace, `demo-ml`, with a hyperparameter sweep in
