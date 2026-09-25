@@ -45,6 +45,9 @@ type Options struct {
 	RefreshInterval       time.Duration
 	InsecureSkipTLSVerify bool
 	Debug                 bool
+	// RedactValues is the --redact-values flag, passed through to every
+	// profile's configuration.
+	RedactValues bool
 	// Diagnostics receives sanitized forwarding lifecycle lines when Debug is
 	// set. Nil silences them.
 	Diagnostics io.Writer
@@ -146,6 +149,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		RefreshInterval:       c.opts.RefreshInterval,
 		InsecureSkipTLSVerify: c.opts.InsecureSkipTLSVerify,
 		Debug:                 c.opts.Debug,
+		RedactValues:          c.opts.RedactValues,
 	})
 	if err != nil {
 		return nil, err
@@ -200,6 +204,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		Namespace:   cfg.Namespace,
 		WebURL:      cfg.WebURL,
 		PipeCommand: cfg.PipeCommand,
+		Redact:      cfg.RedactValues,
 		Namespaces:  cfg.Namespaces,
 		Interval:    cfg.RefreshInterval,
 		States:      states,
