@@ -1,5 +1,5 @@
 == demo-nightly-report
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 1 error · 2 info
 ✗ ERROR  transform failed all 3 attempts: exit code 1 each time
 │ node      transform(2) · Pod · template transform
@@ -33,7 +33,7 @@ explain · 1 error · 2 info
 │ when      ended 3m55s into the run, after running 20s
 │ next      Nothing to do: it ran after the workflow failed.
 == demo-oom-backfill
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 1 error
 ✗ ERROR  backfill-2026-q2 failed: out of memory (OOMKilled, exit code 137)
 │ node      backfill-2026-q2 · Pod · template backfill-quarter
@@ -52,7 +52,7 @@ explain · 1 error
 │           (resources.limits.memory), or make the step hold less in memory.
 │           Then retry the workflow (a, r) to rerun only what failed.
 == demo-etl-hourly-1790000000
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 1 error
 ✗ ERROR  quality-check failed: exit code 2
 │ node      quality-check · Pod · template quality-check
@@ -72,7 +72,7 @@ explain · 1 error
 │           check that failed. Then retry the workflow (a, r) to rerun only
 │           what failed.
 == demo-param-check
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 1 error
 ✗ ERROR  The workflow failed validation before any node ran:
          {{inputs.parameters.bucket}} did not resolve
@@ -83,7 +83,7 @@ explain · 1 error
 │            a default in the template, check the spec with `argo lint`,
 │            then submit it again.
 == demo-release-gate
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 2 info
 ◇ INFO  Waiting for a person at approve-production for 4m50s
 │ node     approve-production · Suspend · template approval
@@ -96,7 +96,7 @@ explain · 2 info
 │ progress 2/2 pods done
 │ next     Nothing to do yet. The Timeline (T) shows where the time goes.
 == demo-train-pipeline
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 1 info
 ◇ INFO  Running for 4m00s of an estimated 9m00s
 │ running       train-shard(2:2) 2m40s, train-shard(3:3) 2m40s,
@@ -108,7 +108,7 @@ explain · 1 info
 │ next          Nothing to do yet. The Timeline (T) shows where the time
 │               goes.
 == demo-cleanup
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 1 info
 ◇ INFO  Not started: submitted 1m00s ago and the controller has not run any
         node
@@ -118,7 +118,7 @@ explain · 1 info
 │           namespace (its namespace and instanceID settings), and whether a
 │           parallelism limit or a semaphore is holding the workflow.
 == demo-deploy-multi-layer
- Summary   Nodes   Timeline  [Explain]  Resource 
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
 explain · 1 info
 ◇ INFO  Succeeded in 11m00s
 │ ran  5 pods succeeded, 16 nodes skipped by their conditions

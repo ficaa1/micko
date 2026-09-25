@@ -109,6 +109,10 @@ type Model struct {
 	// scroll position.
 	ex explainState
 
+	// ev is the Events section: the events streamed in, the order, the
+	// filter and the stream's status.
+	ev eventsState
+
 	// theme styles the node rows. It is injected so goldens can force the
 	// plain theme.
 	theme shared.Theme
@@ -158,9 +162,11 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 		m.autoFolded = map[string]bool{}
 		m.find = nodeFind{}
 		m.ex = explainState{}
+		m.ev = eventsState{order: m.ev.order}
 		keep = ""
 	}
 	m.explainChanged()
+	m.ev.stale = true
 	m.applyDefaultFolds()
 	m.rebuildNodes(keep)
 	if !sameWorkflow {
@@ -228,6 +234,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.find.editing {
 			return m, m.handleFindKey(msg.String())
 		}
+		if m.tab == "events" && m.ev.editing {
+			m.handleEventsFilterKey(msg.String())
+			return m, nil
+		}
 		return m, m.handleKey(msg.String())
 
 	default:
@@ -269,6 +279,10 @@ func (m *Model) handleKey(key string) tea.Cmd {
 			m.clearFind()
 			return nil
 		}
+		if m.eventsFilterActive() {
+			m.handleEventsFilterKey("esc")
+			return nil
+		}
 		return backCmd()
 	case "v":
 		// Explicit, session-only reveal of redacted values: the resource
@@ -291,6 +305,9 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		if m.tab == "nodes" {
 			m.nodeSort = m.nodeSort.Next()
 			m.rebuildNodes(m.selectedID())
+		}
+		if m.tab == "events" {
+			m.handleEventsKey(key)
 		}
 		return nil
 	case "h":
@@ -329,6 +346,8 @@ func (m *Model) handleKey(key string) tea.Cmd {
 			m.handleNodesKey(key)
 		case "timeline":
 			m.handleTimelineKey(key)
+		case "events":
+			m.handleEventsKey(key)
 		}
 		return nil
 	}
@@ -396,6 +415,8 @@ func (m *Model) scrollLines() int {
 		return len(m.tl.rows)
 	case "explain":
 		return len(m.explainLines())
+	case "events":
+		return len(m.eventsLines())
 	case "resource":
 		return len(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"))
 	default:
@@ -457,6 +478,8 @@ func (m *Model) scrollPos() int {
 		return m.tlCursor
 	case "explain":
 		return m.ex.top
+	case "events":
+		return m.ev.top
 	case "resource":
 		return m.resourceTop
 	default:
@@ -478,6 +501,8 @@ func (m *Model) jumpTo(pos int) {
 		m.tlCursor = pos
 	case "explain":
 		m.ex.top = pos
+	case "events":
+		m.ev.top = pos
 	case "resource":
 		m.resourceTop = pos
 	default:
@@ -542,18 +567,21 @@ func (m *Model) Hints() string {
 		return m.timelineHints()
 	case "explain":
 		return m.explainHints()
+	case "events":
+		return m.eventsHints()
 	}
 	return "tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back"
 }
 
 // TextEntry reports whether the pane owns printable keys: the find input is
 // open, so q, ? and every other letter are part of the name being typed.
-func (m *Model) TextEntry() bool { return m.find.editing }
+func (m *Model) TextEntry() bool { return m.find.editing || (m.tab == "events" && m.ev.editing) }
 
 // EscapeConsumed reports whether esc belongs to the pane rather than leaving
-// the workflow: it cancels an open find input or clears a finished find.
+// the workflow: it cancels an open find or events filter, or clears a kept
+// one.
 func (m *Model) EscapeConsumed() bool {
-	return m.tab == "nodes" && m.find.active()
+	return (m.tab == "nodes" && m.find.active()) || m.eventsFilterActive()
 }
 
 // PaneStatus is the right-aligned footer cell: the workflow phase, carried
@@ -605,6 +633,8 @@ func (m *Model) RawLines() []string {
 		return m.timelineRawLines()
 	case "explain":
 		return m.explainRawLines()
+	case "events":
+		return m.eventsRawLines()
 	case "resource":
 		return strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n")
 	default:
@@ -639,6 +669,8 @@ func (m *Model) tabStatusLine() string {
 		return m.timelineStatusLine()
 	case "explain":
 		return m.explainStatusLine()
+	case "events":
+		return m.eventsStatusLine()
 	case "resource":
 		reveal := "values redacted (v reveals)"
 		if m.revealResource {
@@ -663,6 +695,8 @@ func (m *Model) windowedLines() []string {
 		return m.timelineLines(m.timelineLayout())
 	case "explain":
 		return sliceLines(m.explainLines(), m.ex.top, h)
+	case "events":
+		return sliceLines(m.eventsLines(), m.ev.top, h)
 	case "resource":
 		return sliceLines(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"), m.resourceTop, h)
 	default:
