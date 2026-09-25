@@ -2,6 +2,9 @@
 # Actions require --allow-actions and confirmation for each request.
 currentProfile: dev
 refreshInterval: 5s
+# Open every workflow with parameter and output values hidden (v reveals).
+# A profile can set it too, overriding this line either way.
+# redactValues: true
 
 profiles:
   dev:
@@ -26,3 +29,4 @@ profiles:
     # webURL: https://argo.example.com
     # Initial command in the log pipe editor; must be installed separately.
     # pipeCommand: lnav
+    # redactValues: true
