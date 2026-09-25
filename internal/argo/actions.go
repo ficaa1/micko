@@ -14,26 +14,39 @@ import (
 
 var _ core.Actioner = (*Client)(nil)
 
+// actionEndpoint is the method, path and body of one action, as Argo's
+// OpenAPI spec defines it:
+//
+//   - resume, suspend, retry, resubmit, stop, terminate: PUT
+//     /api/v1/workflows/{namespace}/{name}/{action} with a JSON body naming
+//     the workflow; the answer is the workflow.
+//   - delete: DELETE /api/v1/workflows/{namespace}/{name} with no body; the
+//     answer is an empty object.
+func actionEndpoint(req core.ActionRequest) (method, path string, body []byte, err error) {
+	path = "/api/v1/workflows/" + url.PathEscape(req.Ref.Namespace) + "/" + url.PathEscape(req.Ref.Name)
+	if req.Action == core.ActionDelete {
+		return http.MethodDelete, path, nil, nil
+	}
+	body, err = json.Marshal(req.WireBody())
+	if err != nil {
+		return "", "", nil, fmt.Errorf("marshal %s action: %w", req.Action, err)
+	}
+	return http.MethodPut, path + "/" + string(req.Action), body, nil
+}
+
 // Execute sends exactly one action request. It deliberately has no retry
-// path: a transport failure after the server receives a PUT is ambiguous.
+// path: a transport failure after the server receives a write is ambiguous.
 func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.ActionResult, error) {
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
 	result := core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}
-	if req.Action != core.ActionResume && req.Action != core.ActionRetry && req.Action != core.ActionResubmit && req.Action != core.ActionStop && req.Action != core.ActionTerminate {
-		return result, fmt.Errorf("unsupported action %q", req.Action)
+	if err := req.CheckConfirmation(); err != nil {
+		return result, err
 	}
-	if !req.Confirmation.Confirmed {
-		return result, core.ErrActionNotConfirmed
-	}
-	if req.Action == core.ActionTerminate && req.Confirmation.TypedName != req.Ref.Name {
-		return result, core.ErrConfirmationNameMismatch
-	}
-	body, err := json.Marshal(req.WireBody())
+	method, path, body, err := actionEndpoint(req)
 	if err != nil {
-		return result, fmt.Errorf("marshal %s action: %w", req.Action, err)
+		return result, err
 	}
-	path := "/api/v1/workflows/" + url.PathEscape(req.Ref.Namespace) + "/" + url.PathEscape(req.Ref.Name) + "/" + string(req.Action)
 	base, err := c.baseURL()
 	if err != nil {
 		// Nothing was sent, so the outcome is not unknown: the request was
@@ -47,13 +60,19 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 	if err != nil {
 		return result, core.ErrUnauthenticatedf("reading credentials from %s: %s", c.describeTokenSource(), sanitizeLine(err.Error()))
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, target.String(), bytes.NewReader(body))
+	var reqBody io.Reader
+	if body != nil {
+		reqBody = bytes.NewReader(body)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, method, target.String(), reqBody)
 	if err != nil {
 		return result, core.ErrProtocalf("building action request: %v", err)
 	}
 	setAuthorization(httpReq, token)
 	httpReq.Header.Set("User-Agent", c.userAgent)
-	httpReq.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		httpReq.Header.Set("Content-Type", "application/json")
+	}
 	// The same helper every read goes through: it rejects a redirect with a
 	// clear message instead of a raw transport error, and names a TLS
 	// failure as one.
@@ -68,7 +87,18 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 	responseBody, readErr := readAllBody(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		result.Outcome = ""
-		return result, mapHTTPError(resp, http.MethodPut, path, responseBody, nil, c.now)
+		return result, mapHTTPError(resp, method, path, responseBody, nil, c.now)
+	}
+	if req.Action == core.ActionDelete {
+		// A 2xx to a DELETE is the whole answer: the body is an empty
+		// object with nothing to decode, and a body that could not be read
+		// takes nothing away from the status line. There is no workflow
+		// left to name, so Affected stays nil.
+		result.Outcome = core.ActionAccepted
+		if readErr == nil {
+			result.Response = append(json.RawMessage(nil), responseBody...)
+		}
+		return result, nil
 	}
 	if readErr != nil {
 		// The request was sent and the server answered 2xx, so the mutation

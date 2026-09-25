@@ -108,6 +108,9 @@ func (m *Model) SetConnecting(name string) { m.connecting = name }
 // SetSize records the dialog box size.
 func (m *Model) SetSize(w, h int) { m.width, m.height = w, h }
 
+// SetTheme replaces the style set the dialog is drawn in.
+func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
+
 // Items returns the current candidate list (tests and the root).
 func (m *Model) Items() []Item { return append([]Item(nil), m.items...) }
 
@@ -221,9 +224,9 @@ func (m *Model) Hints() string {
 func (m *Model) BodyLines() []string {
 	var lines []string
 	if m.current != "" {
-		lines = append(lines, "switch profile — current: "+shared.Sanitize(m.current))
+		lines = append(lines, m.theme.Title.Render("switch profile")+m.theme.Muted.Render(" — current: ")+shared.Sanitize(m.current))
 	} else {
-		lines = append(lines, "choose a profile")
+		lines = append(lines, m.theme.Title.Render("choose a profile"))
 	}
 	if m.connecting != "" {
 		lines = append(lines, "", "connecting to "+shared.Sanitize(m.connecting)+"…",
@@ -260,10 +263,14 @@ func (m *Model) BodyLines() []string {
 		if it.Namespace != "" {
 			row += "  ns=" + shared.Sanitize(it.Namespace)
 		}
-		if i == m.cursor {
-			row = m.theme.Selected.Render(row)
+		row = strings.TrimRight(row, " ")
+		switch {
+		case i == m.cursor:
+			row = m.theme.SelectRow(row, m.width)
+		case it.Name == m.current:
+			row = m.theme.Accent.Render(row)
 		}
-		lines = append(lines, strings.TrimRight(row, " "))
+		lines = append(lines, row)
 	}
 	if m.configPath != "" {
 		lines = append(lines, "", m.theme.Dim.Render(shared.Sanitize(m.configPath)))

@@ -16,6 +16,8 @@ type DetailViewState struct {
 	Outline  Outline
 	Resource string // pre-rendered, redacted + sanitized YAML
 	Message  string
+	// Nodes is the node map as it arrived, for the timeline's span.
+	Nodes map[string]core.Node
 }
 
 // DetailViewStateFromWorkflow derives the view state from a workflow. now
@@ -30,6 +32,7 @@ func DetailViewStateFromWorkflow(wf core.Workflow, now time.Time) DetailViewStat
 		Outline:  BuildNodeOutline(wf, OutlineOptions{}),
 		Resource: RenderResource(wf, false),
 		Message:  wf.Summary.Message,
+		Nodes:    wf.Nodes,
 	}
 }
 
@@ -45,7 +48,7 @@ func RenderDetail(state DetailViewState, active string) string {
 // pane title, which the shell draws in its border.
 func RenderDetailBody(state DetailViewState, active string) string {
 	var b strings.Builder
-	b.WriteString(tabStrip(active) + "\n")
+	b.WriteString(tabStrip(active, shared.Theme{}) + "\n")
 	switch active {
 	case "summary":
 		b.WriteString("phase: " + shared.Sanitize(phaseName(state.Summary.Phase)) + "\n")
@@ -56,6 +59,16 @@ func RenderDetailBody(state DetailViewState, active string) string {
 		}
 	case "nodes":
 		b.WriteString(renderOutlinePane(state.Outline))
+	case "timeline":
+		for _, l := range renderTimelineText(state) {
+			b.WriteString(l + "\n")
+		}
+	case "explain":
+		for _, l := range renderExplainText(state) {
+			b.WriteString(l + "\n")
+		}
+	case "events":
+		b.WriteString("(events are streamed live; a static render has none)\n")
 	case "resource":
 		b.WriteString(state.Resource)
 	default:
@@ -64,17 +77,15 @@ func RenderDetailBody(state DetailViewState, active string) string {
 	return b.String()
 }
 
-// tabStrip marks the active section. Text carries the state, not color: the
-// active tab is the one wrapped in brackets, so a mono terminal keeps it.
-func tabStrip(active string) string {
-	cells := []string{"Summary", "Nodes", "Resource"}
-	out := make([]string, 0, len(cells))
-	for _, c := range cells {
-		if strings.EqualFold(c, active) {
-			out = append(out, "["+c+"]")
-			continue
-		}
-		out = append(out, " "+c+" ")
-	}
-	return strings.Join(out, " ")
+// renderTimelineText is the timeline as plain text with no clock: the chart
+// ends at the latest time the workflow records, so a running node's bar
+// reaches as far as the data does.
+func renderTimelineText(state DetailViewState) []string {
+	m := New()
+	m.state = state
+	m.nodeMap = state.Nodes
+	m.now = workflowSpan(m.workflow(), time.Time{}).end
+	m.rebuildNodes("")
+	m.showSection("timeline")
+	return m.timelineRawLines()
 }

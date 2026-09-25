@@ -416,3 +416,67 @@ func TestListProfilesAcceptsAnEmptyFile(t *testing.T) {
 		t.Errorf("ListProfiles(nil) = %+v, %q; want nothing", got, current)
 	}
 }
+
+// The journal is on unless the file turns it off. A missing key, a missing
+// file and a file that does not parse all leave it on.
+func TestJournalIsOnUnlessTurnedOff(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+		want bool
+	}{
+		{"no file", "", true},
+		{"key absent", "currentProfile: dev\n", true},
+		{"turned on", "journal: true\n", true},
+		{"turned off", "journal: false\nprofiles: {}\n", false},
+		{"broken file", "journal: [\n", true},
+	}
+	for _, tc := range cases {
+		if got := JournalEnabled([]byte(tc.data)); got != tc.want {
+			t.Errorf("%s: JournalEnabled = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// The journal key is a top-level setting and must not trip profile loading.
+func TestJournalKeyLoadsAlongsideProfiles(t *testing.T) {
+	data := []byte("journal: false\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: ARGO_TUI_TOKEN_JOURNAL\n")
+	if _, err := Load(data, Options{}); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+}
+
+// Values are shown unless the file, the chosen profile or the flag asks for
+// redaction. A profile's own setting beats the top-level one in both
+// directions, and the flag can only turn redaction on.
+func TestRedactValuesLayers(t *testing.T) {
+	const top = "redactValues: true\n"
+	const optOut = "    redactValues: false\n"
+	const optIn = "    redactValues: true\n"
+	cases := []struct {
+		name string
+		yaml string
+		flag bool
+		want bool
+	}{
+		{"unset", yamlOneProfile, false, false},
+		{"top level", top + yamlOneProfile, false, true},
+		{"profile opts in", yamlOneProfile + optIn, false, true},
+		{"profile opts out of the top level", top + yamlOneProfile + optOut, false, false},
+		{"flag", yamlOneProfile, true, true},
+		{"flag beats a profile opt-out", top + yamlOneProfile + optOut, true, true},
+	}
+	for _, c := range cases {
+		cfg, err := Load([]byte(c.yaml), Options{RedactValues: c.flag})
+		if err != nil {
+			t.Fatalf("%s: Load: %v", c.name, err)
+		}
+		if cfg.RedactValues != c.want {
+			t.Errorf("%s: RedactValues = %v, want %v", c.name, cfg.RedactValues, c.want)
+		}
+	}
+	demo, err := Load(nil, Options{Demo: true, RedactValues: true})
+	if err != nil || !demo.RedactValues {
+		t.Errorf("demo with --redact-values: RedactValues = %v, err = %v", demo.RedactValues, err)
+	}
+}

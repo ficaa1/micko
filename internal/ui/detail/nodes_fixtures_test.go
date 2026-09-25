@@ -96,19 +96,20 @@ func skippedFixture() core.Workflow {
 	}
 }
 
-// TestNodeOutlineStepsFixture: StepGroup nesting renders under the Steps
-// boundary; pods keep their identity.
+// TestNodeOutlineStepsFixture: a StepGroup is drawn as its steps, directly
+// under the Steps boundary; pods keep their identity, and the build counts
+// the group it folded in.
 func TestNodeOutlineStepsFixture(t *testing.T) {
 	wf := stepsFixture()
 	out := BuildNodeOutline(wf, OutlineOptions{})
-	if got := renderOutlineShape(out); got != "root\n  group-1\n    pod-1\n" {
+	if got := renderOutlineShape(out); got != "root\n  pod-1\n" {
 		t.Fatalf("steps outline =\n%s", got)
 	}
-	if out.Rows[0].Children[0].Children[0].HasPod != true {
+	if !out.Rows[0].Children[0].HasPod {
 		t.Error("Pod node must report pod potential")
 	}
-	if out.Rows[0].Children[0].HasPod {
-		t.Error("StepGroup must not claim pod potential")
+	if out.StepGroups != 1 {
+		t.Errorf("StepGroups = %d, want 1", out.StepGroups)
 	}
 }
 

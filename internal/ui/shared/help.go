@@ -16,14 +16,22 @@ import (
 // keys so the view behind it cannot move, `q` closes it instead of quitting,
 // and only Ctrl-C still quits globally.
 type HelpOverlay struct {
-	open bool
+	open  bool
+	theme Theme
 }
+
+// SetTheme replaces the style set the overlay is drawn in. The zero theme
+// draws plain text.
+func (h *HelpOverlay) SetTheme(t Theme) { h.theme = t }
 
 // IsOpen reports whether the overlay is currently shown.
 func (h *HelpOverlay) IsOpen() bool { return h.open }
 
 // Toggle opens a closed overlay and closes an open one (the `?` key).
 func (h *HelpOverlay) Toggle() { h.open = !h.open }
+
+// Open shows the overlay whatever its state (the palette's help command).
+func (h *HelpOverlay) Open() { h.open = true }
 
 // Close hides the overlay (Esc, or `q` within the dialog).
 func (h *HelpOverlay) Close() { h.open = false }
@@ -51,44 +59,75 @@ func ClampLines(lines []string, height int) []string {
 
 // helpLines is the overlay body, most global first. Keys are written exactly
 // as tea.KeyPressMsg.String() reports them, so the text matches what a reader
-// must actually press.
+// must actually press. The whole body fits the pane of a 40-row terminal and
+// every line the pane of an 80-column one, so a common terminal shows the
+// overlay without clipping it.
 func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
 		"",
-		"Global    q quit        ctrl+c quit        ? help",
-		"          esc back / close",
-		"          P switch profile (cluster)",
-		"          f raw full-screen view (no borders, easy to copy)",
-		"          y copy to clipboard              o open in Argo UI",
+		"Global    q quit  ctrl+c quit  ? help  esc back / close  : command",
+		"          P profile  f raw full screen  y copy  o open in Argo UI",
+		"Move      j / k  pgup / pgdn  gg / home top  G / end bottom",
 		"",
-		"Move      j / k         up / down          pgup / pgdn page",
-		"          gg top        G bottom           home / end",
+		"List      enter open  l logs  s sort  p phase  r refresh  n namespace",
+		"          0 all ns  T / X / E open on the timeline / explanation / events",
+		"          space mark  a actions (marked, or selected)  w wide columns",
+		"          esc clear marks, then filter",
+		"          / filter: word  a|b  !word  /regex/  ~fuzzy  (spaces: AND)",
+		"          phase=failed  age<2h  dur>10m  tmpl=x  cron=x  label:k=v  label:!k",
+		"Command   : then a command; tab completes, enter runs, ctrl+p / n history",
+		"          wf  cron  tmpl  cwftmpl  aw  ns [name]  all  ctx [name]  help  q",
+		"Kinds     :cron :tmpl :cwftmpl :aw take the list keys; enter lists runs",
+		"          i info panel  v hide / reveal values  f manifest",
 		"",
-		"List      enter open    l logs             / search (live)",
-		"          s sort        p phase filter     r refresh",
-		"          n switch namespace               esc clear filter",
+		"Detail    tab / shift+tab section  1-9 section  T / X / E jump  r refresh",
+		"          a actions  v hide / reveal values  y copy  f raw",
+		"Nodes     enter / l logs  space fold  left / right fold, parent, unfold",
+		"          i info  / find  n / N next / previous  h skipped  s sort  p phase",
+		"Timeline  ◆ critical path  ░ waited  │ now  l logs  i info  space fold",
+		"Explain   why it ended, as findings  y copy report  l failing log",
+		"Events    live Kubernetes events  s warnings first  / filter",
 		"",
-		"Detail    tab next section  shift+tab previous",
-		"          h show / hide skipped nodes",
-		"          s sort the nodes tab (started / name / phase)",
-		"          p filter the nodes tab by phase",
-		"          l logs for the selected node",
-		"          v reveal redacted resource values",
-		"          r refresh this workflow now",
-		"          a actions (requires --allow-actions)",
+		"Logs      t follow  space pause  c container  G newest  esc back",
+		"          / search  n / N next / previous match  & only matching lines",
+		"          w wrap long lines  L source labels  | pipe to a program",
+		"          ctrl+t server timestamps (reopens the stream, keeps the lines)",
 		"",
-		"Logs      t follow (tail)  space pause     c container",
-		"          / search      n next match       N previous match",
-		"          | pipe the retained lines to another program",
-		"          G newest line                    esc back",
-		"",
-		"Actions   a opens the pane",
-		"          u resume   r retry   b resubmit   s stop",
-		"          y confirms; enter and esc both cancel",
-		"          the pane closes itself and reports on the footer",
+		"Actions   a opens the pane; only verbs that apply are offered",
+		"          u resume  z suspend  r retry  b resubmit  s stop",
+		"          t terminate (type the name)  d delete (then only D deletes)",
+		"          y confirms; enter and esc cancel; one result goes to the footer",
+		"          marked: one request per workflow, in order; results stay until esc",
+		"          actions need --allow-actions",
 	}
 }
+
+// styleLine draws one overlay line: the title and each section's name stand
+// out, the keys and their meanings stay plain. Styling runs after clipping,
+// so a cut line never loses the reset at its end.
+func (h *HelpOverlay) styleLine(i int, l string) string {
+	if l == "" || strings.HasPrefix(l, " ") {
+		return l
+	}
+	label, rest, _ := strings.Cut(l, " ")
+	if i == 0 {
+		return h.theme.Title.Render(label) + h.theme.Muted.Render(" "+rest)
+	}
+	if rest == "" {
+		return h.theme.Accent.Render(label)
+	}
+	return h.theme.Accent.Render(label) + " " + rest
+}
+
+// helpFitWidth and helpFitHeight are the body of an 80x40 terminal inside
+// the shell's border: the smallest common terminal the overlay is written
+// to fit whole. Help that clips there hides keys from the reader who most
+// needs them.
+const (
+	helpFitWidth  = 76
+	helpFitHeight = 36
+)
 
 // View renders the overlay clipped to the given box. A closed overlay renders
 // nothing, so callers can concatenate it unconditionally.
@@ -105,12 +144,12 @@ func (h *HelpOverlay) View(width, height int) string {
 	if height > 0 && len(lines) > height {
 		lines = lines[:height]
 	}
-	if width > 0 {
-		clipped := make([]string, len(lines))
-		for i, l := range lines {
-			clipped[i] = ansi.Truncate(l, width, "…")
+	styled := make([]string, len(lines))
+	for i, l := range lines {
+		if width > 0 {
+			l = ansi.Truncate(l, width, "…")
 		}
-		lines = clipped
+		styled[i] = h.styleLine(i, l)
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(styled, "\n")
 }

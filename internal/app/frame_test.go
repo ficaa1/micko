@@ -16,7 +16,7 @@ func TestFrameFillsTheWholeWindow(t *testing.T) {
 		m = resize(t, m, tc.w, tc.h)
 		got := viewLines(m)
 		if len(got) != tc.h {
-			t.Fatalf("%dx%d: %d lines, want %d:\n%s", tc.w, tc.h, len(got), tc.h, m.View().Content)
+			t.Fatalf("%dx%d: %d lines, want %d:\n%s", tc.w, tc.h, len(got), tc.h, screen(m))
 		}
 		for i, l := range got {
 			if w := ansi.StringWidth(l); w != tc.w {
@@ -110,7 +110,7 @@ func TestHelpOverlayKeepsTheFrameGeometry(t *testing.T) {
 func TestNarrowTerminalDegradesWithoutLosingChrome(t *testing.T) {
 	m := loadDemoList(t)
 	m = resize(t, m, 50, 14)
-	out := m.View().Content
+	out := screen(m)
 	if strings.Contains(out, "┌") {
 		t.Fatalf("border drawn at 50 columns:\n%s", out)
 	}

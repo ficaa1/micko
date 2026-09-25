@@ -1,4 +1,4 @@
 logs: wf-1
 Scope: workflow-wide · container: main · [IDLE]
 retained: 0/10000 lines (0 evicted)
-t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back
+t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back

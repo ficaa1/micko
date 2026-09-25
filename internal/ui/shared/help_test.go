@@ -3,6 +3,8 @@ package shared
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TestHelpOverlayToggle: `?` opens and closes; Esc closes.
@@ -54,11 +56,82 @@ func TestHelpOverlayFitsBudget(t *testing.T) {
 	}
 }
 
+// A themed overlay is the same text as a plain one: the theme picks out the
+// title and the section names but adds and removes no character, and a line
+// clipped to the width still fits it.
+func TestHelpOverlayThemeOnlyStyles(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	var plain, themed HelpOverlay
+	plain.Toggle()
+	themed.Toggle()
+	th, err := SkinTheme("nord", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	themed.SetTheme(th)
+	for _, w := range []int{0, 40, 100} {
+		want := plain.View(w, 30)
+		got := themed.View(w, 30)
+		if ansi.Strip(got) != want {
+			t.Fatalf("width %d: themed overlay text differs:\n%s\n---\n%s", w, ansi.Strip(got), want)
+		}
+		for _, l := range strings.Split(got, "\n") {
+			if w > 0 && ansi.StringWidth(l) > w {
+				t.Fatalf("width %d: themed line is %d cells: %q", w, ansi.StringWidth(l), l)
+			}
+		}
+	}
+	if !strings.Contains(themed.View(100, 30), th.Accent.Render("Global")) {
+		t.Error("section names are not drawn in the accent")
+	}
+}
+
 // TestHelpOverlayClosedRendersNothing keeps the caller simple: a closed
 // overlay contributes no lines to the frame.
 func TestHelpOverlayClosedRendersNothing(t *testing.T) {
 	var h HelpOverlay
 	if got := h.View(80, 20); got != "" {
 		t.Fatalf("closed overlay must render nothing, got %q", got)
+	}
+}
+
+// TestHelpOverlayFitsWholeAt80x40: every line of the overlay is shown, and
+// none is clipped, inside the body of an 80x40 terminal.
+func TestHelpOverlayFitsWholeAt80x40(t *testing.T) {
+	lines := helpLines()
+	if len(lines) > helpFitHeight {
+		t.Fatalf("help has %d lines; an 80x40 body holds %d", len(lines), helpFitHeight)
+	}
+	for _, l := range lines {
+		if w := ansi.StringWidth(l); w > helpFitWidth {
+			t.Errorf("help line is %d cells, an 80-column body holds %d: %q", w, helpFitWidth, l)
+		}
+	}
+}
+
+// TestHelpOverlayDocumentsTheLogKeys: the log pane's toggles are listed,
+// each with the key a reader presses.
+func TestHelpOverlayDocumentsTheLogKeys(t *testing.T) {
+	var h HelpOverlay
+	h.Toggle()
+	v := h.View(helpFitWidth, helpFitHeight)
+	for _, want := range []string{"& only matching lines", "w wrap long lines", "L source labels", "ctrl+t server timestamps"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("help does not mention %q:\n%s", want, v)
+		}
+	}
+}
+
+// TestHelpOverlayDocumentsTheFilterAndWideKeys: the filter syntax and the
+// wide toggle have no other on-screen reference than this overlay.
+func TestHelpOverlayDocumentsTheFilterAndWideKeys(t *testing.T) {
+	var h HelpOverlay
+	h.Toggle()
+	v := h.View(helpFitWidth, helpFitHeight)
+	for _, want := range []string{"w wide columns", "a|b", "!word", "/regex/", "~fuzzy", "phase=failed",
+		"age<2h", "dur>10m", "label:k=v", "label:!k", "tmpl=x", "cron=x"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("help does not mention %q:\n%s", want, v)
+		}
 	}
 }
