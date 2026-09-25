@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Parameter and output values are now shown by default. The redaction they
+  used to open with hid what a reader opens a workflow to see. A cluster
+  whose parameters carry secrets can turn it back on with `redactValues: true`
+  at the top of the config file or on a profile, or with `--redact-values`;
+  `v` still hides or reveals them for the session.
 - The list filter now reads a small query language. Spaces separate terms
   that must all match, `|` offers alternatives, `!` negates, `/.../` is a
   regular expression and `~` a fuzzy match. `phase=`, `age<`, `dur>`,
