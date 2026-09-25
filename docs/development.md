@@ -59,8 +59,9 @@ live in [ci.yml](../.github/workflows/ci.yml).
   and unavailable node status must remain distinguishable from zero values or
   an empty workflow. Node IDs are not assumed to be pod names; naming is resolved
   in the adapter and covered by pod-name tests.
-- Untrusted terminal text passes through shared sanitization. Resource parameter
-  and output values are hidden by default. These controls do not guarantee that
+- Untrusted terminal text passes through shared sanitization. Parameter and output
+  values are shown unless the profile sets `redactValues` or the session was
+  started with `--redact-values`. These controls do not guarantee that
   arbitrary application logs contain no secrets.
 
 The adapter and fixtures target Argo Workflows v4.1.2. See the

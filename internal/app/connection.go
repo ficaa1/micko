@@ -27,6 +27,9 @@ type Connection struct {
 	Namespace   string
 	WebURL      string
 	PipeCommand string
+	// Redact starts every workflow with its values hidden, as the profile
+	// or the --redact-values flag asks.
+	Redact bool
 	// Namespaces are the namespaces the profile names, offered by the `n`
 	// picker alongside whatever the server reports.
 	Namespaces []string
