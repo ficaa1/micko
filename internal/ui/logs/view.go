@@ -326,6 +326,13 @@ func (m *Model) bodyLines() []string {
 	var b strings.Builder
 	b.WriteString(m.statusView())
 	b.WriteString("\n")
+	// A notice explains an empty stream, so it is shown only while nothing
+	// was retained. It gets lines of its own, wrapped, because it is the one
+	// thing on an empty pane worth reading in full.
+	if m.notice != "" && m.phase != PhaseError && len(m.buf.Lines()) == 0 {
+		b.WriteString(shared.Wrap(shared.Sanitize(m.notice), m.width))
+		b.WriteString("\n")
+	}
 	if m.searchOn {
 		b.WriteString("search: " + m.searchBuf + "_  (enter apply, esc cancel)")
 		b.WriteString("\n")

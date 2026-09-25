@@ -80,7 +80,17 @@ func (m *Root) Adopt(c *Connection) {
 	m.deps.actioner, _ = c.Reader.(core.Actioner)
 	m.deps.nsLister, _ = c.Reader.(core.NamespaceLister)
 	m.deps.eventWatcher, _ = c.Reader.(core.EventWatcher)
+	m.deps.cronLister, _ = c.Reader.(core.CronLister)
+	m.deps.templateLister, _ = c.Reader.(core.TemplateLister)
+	m.deps.clusterTemplateLister, _ = c.Reader.(core.ClusterTemplateLister)
+	m.deps.archive, _ = c.Reader.(core.ArchiveReader)
 	m.deps.namespace = c.Namespace
+	// A new connection starts in its profile's namespace. Carrying the
+	// all-namespaces view across would send the next cluster a cluster-wide
+	// list the reader never asked it for.
+	m.deps.allNamespaces = false
+	m.listView.SetAllNamespaces(false)
+	m.nsDiscovered = nil
 	if c.Interval > 0 {
 		m.deps.interval = c.Interval
 	}
@@ -149,6 +159,9 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	m.conn = nil
 	m.deps.reader = nil
 	m.deps.watcher, m.deps.actioner, m.deps.nsLister, m.deps.eventWatcher = nil, nil, nil, nil
+	m.deps.cronLister = nil
+	m.deps.templateLister, m.deps.clusterTemplateLister = nil, nil
+	m.deps.archive = nil
 	m.resetRoutes()
 	if m.profView != nil {
 		m.profView.SetConnecting(name)
@@ -206,7 +219,12 @@ func (m *Root) resetRoutes() {
 	m.logState = logState{}
 	m.logsView = nil
 	m.detailView = m.newDetailView()
+	m.detailFrom = RouteList
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
+	m.drill = nil
+	m.deps.drillNamespace, m.deps.labelSelector = "", ""
+	m.resetKinds()
+	m.listView.SetAllNamespaces(m.listAcrossNamespaces())
 	m.listView.SetItems(nil, m.deps.clock.Now())
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)
 }

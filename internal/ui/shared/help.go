@@ -30,6 +30,9 @@ func (h *HelpOverlay) IsOpen() bool { return h.open }
 // Toggle opens a closed overlay and closes an open one (the `?` key).
 func (h *HelpOverlay) Toggle() { h.open = !h.open }
 
+// Open shows the overlay whatever its state (the palette's help command).
+func (h *HelpOverlay) Open() { h.open = true }
+
 // Close hides the overlay (Esc, or `q` within the dialog).
 func (h *HelpOverlay) Close() { h.open = false }
 
@@ -63,16 +66,18 @@ func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
 		"",
-		"Global    q quit   ctrl+c quit   ? help   esc back / close",
-		"          P switch profile   f raw full screen (easy to copy)",
-		"          y copy to clipboard   o open in Argo UI",
-		"",
+		"Global    q quit   ctrl+c quit   ? help   esc back / close   : command",
+		"          P switch profile   f raw full screen   y copy   o open in Argo UI",
 		"Move      j / k or arrows   pgup / pgdn   gg / home top   G / end bottom",
 		"",
-		"List      enter open    l logs             / search (live)",
-		"          s sort        p phase filter     r refresh",
-		"          n switch namespace               esc clear filter",
+		"List      enter open   l logs   / search (live)   s sort   p phase",
+		"          n namespace   0 all namespaces   r refresh   esc clear filter",
 		"          T / X / E open on the timeline / explanation / events",
+		"",
+		"Command   : then a command; tab completes, enter runs, ctrl+p / n history",
+		"          wf  cron  tmpl  cwftmpl  aw  ns [name]  all  ctx [name]  help  q",
+		"Kinds     :cron :tmpl :cwftmpl :aw take the list keys; enter lists runs",
+		"          i info panel   v hide/reveal values   f manifest",
 		"",
 		"Detail    tab / shift+tab section   1-9 section by position",
 		"          T timeline   X explain   E events   r refresh",
@@ -82,11 +87,8 @@ func helpLines() []string {
 		"          right unfold   i info panel   / find, n / N next / previous",
 		"          h skipped   s sort (pipeline/started/name/phase)   p phase",
 		"",
-		"Timeline  ◆ critical path   ░ waited   │ now   l logs   i info",
-		"          space / left / right fold, as on Nodes",
-		"",
+		"Timeline  ◆ critical path   ░ waited   │ now   l logs   i info   space fold",
 		"Explain   why it ended, as findings   y copy report   l failing log",
-		"",
 		"Events    live Kubernetes events   s warnings first   / filter",
 		"",
 		"Logs      t follow   space pause   c container   G newest line",

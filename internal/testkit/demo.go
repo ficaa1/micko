@@ -26,8 +26,14 @@ import (
 //
 // Everything is fabricated: names, UIDs, hosts and log text.
 
-// DemoNamespace is the namespace every demo workflow lives in.
+// DemoNamespace is the namespace the demo starts in; most demo workflows
+// live in it.
 const DemoNamespace = "demo"
+
+// DemoMLNamespace is the demo's second namespace. It holds a few workflows so
+// the namespace picker and the all-namespaces view have something to show
+// beyond the namespace the session starts in.
+const DemoMLNamespace = "demo-ml"
 
 // demoBuilder assembles one demo workflow's node map with realistic IDs, pod
 // names and timings.
@@ -41,7 +47,12 @@ type demoBuilder struct {
 }
 
 func newDemo(name, phase string, created time.Time) *demoBuilder {
-	wf := SyntheticWorkflow(DemoNamespace, name, phase, created)
+	return newDemoIn(DemoNamespace, name, phase, created)
+}
+
+// newDemoIn starts a demo workflow in namespace ns.
+func newDemoIn(ns, name, phase string, created time.Time) *demoBuilder {
+	wf := SyntheticWorkflow(ns, name, phase, created)
 	wf.PodNameVersion = "v2"
 	return &demoBuilder{wf: wf, name: name, start: created, templates: map[string]bool{}}
 }
@@ -320,7 +331,9 @@ const running = time.Duration(-2)
 // a run parked on an approval gate, a failure behind exhausted retries, an
 // out-of-memory kill, a fan-out still in progress, a validation error with no
 // nodes at all, a deploy tree that is mostly skipped branches, and runs a
-// CronWorkflow started.
+// CronWorkflow started. Two more runs live in a second namespace,
+// DemoMLNamespace. The CronWorkflows beside them are linked to those runs by
+// the controller's labels.
 func DemoReader(clock *FakeClock) *FakeReader {
 	now := clock.Now()
 	f := &FakeReader{
@@ -366,16 +379,29 @@ func DemoReader(clock *FakeClock) *FakeReader {
 	for i, age := range []time.Duration{65 * time.Minute, 125 * time.Minute, 185 * time.Minute} {
 		put(demoETLRun(now.Add(-age), i))
 	}
+	put(demoHParamSweep(now.Add(-18 * time.Minute)))
+	put(demoBatchInfer(now.Add(-7 * time.Hour)))
+
+	runs := make([]core.Workflow, 0, len(f.Order))
+	for _, ref := range f.Order {
+		runs = append(runs, f.Workflows[ref])
+	}
+	f.CronWorkflows = demoCronWorkflows(now, runs)
+	f.WorkflowTemplates, f.ClusterWorkflowTemplates = demoTemplates(now)
+	demoArchive(f, now)
 	return f
 }
 
-// demoHelloWorld is the smallest workflow: one pod, done.
+// demoHelloWorld is the smallest workflow: one pod, done, submitted from the
+// demo's cluster workflow template.
 func demoHelloWorld(start time.Time) core.Workflow {
 	b := newDemo("demo-hello-world", "Succeeded", start)
 	b.add("", "", demoNode{display: "demo-hello-world", typ: "Pod", phase: "Succeeded",
 		template: "whalesay", dur: 4 * time.Minute, exit: "0",
 		in: core.NodeIO{Parameters: params("message", "hello argo-tui")}})
-	return b.finish(4*time.Minute, "", nil)
+	return b.finish(4*time.Minute, "", map[string]string{
+		"workflows.argoproj.io/cluster-workflow-template": "whalesay",
+	})
 }
 
 // demoNightlyReport is a DAG whose transform task exhausted its retries.
@@ -580,6 +606,48 @@ func demoETLRun(start time.Time, i int) core.Workflow {
 	return b.finish(6*time.Minute, msg, map[string]string{
 		"workflows.argoproj.io/cron-workflow": "demo-etl-hourly",
 	})
+}
+
+// demoHParamSweep is a hyperparameter sweep in the second namespace: a DAG
+// fanning out one trial per learning rate, one still running, with the
+// selection step waiting on all of them.
+func demoHParamSweep(start time.Time) core.Workflow {
+	b := newDemoIn(DemoMLNamespace, "demo-ml-hparam-sweep", "Running", start)
+	root := b.add("", "", demoNode{display: "demo-ml-hparam-sweep", typ: "DAG", phase: "Running",
+		template: "sweep", dur: running, estimate: 25 * time.Minute})
+	pick := ""
+	for i, lr := range []string{"0.001", "0.0003", "0.0001"} {
+		ph, dur, exit := "Succeeded", time.Duration(9+2*i)*time.Minute, "0"
+		if i == 2 {
+			ph, dur, exit = "Running", running, ""
+		}
+		trial := b.add(root, root, demoNode{display: fmt.Sprintf("train-trial(%d:%s)", i, lr), typ: "Pod",
+			phase: ph, template: "train-trial", at: 3 * time.Second, dur: dur, exit: exit,
+			estimate: 12 * time.Minute,
+			in:       core.NodeIO{Parameters: params("lr", lr, "epochs", "10")}})
+		if pick == "" {
+			pick = b.add(trial, root, demoNode{display: "select-best", typ: "Pod", phase: "Pending",
+				template: "select-best", at: notStarted})
+		} else {
+			b.link(trial, pick)
+		}
+	}
+	b.outbound(root, pick)
+	return b.finish(running, "", map[string]string{"workflows.argoproj.io/workflow-template": "hparam-sweep"})
+}
+
+// demoBatchInfer is a finished batch inference run in the second namespace.
+func demoBatchInfer(start time.Time) core.Workflow {
+	b := newDemoIn(DemoMLNamespace, "demo-ml-batch-infer", "Succeeded", start)
+	root := b.add("", "", demoNode{display: "demo-ml-batch-infer", typ: "Steps", phase: "Succeeded",
+		template: "infer", dur: 14 * time.Minute})
+	g0 := b.add(root, root, demoNode{display: "[0]", typ: "StepGroup", phase: "Succeeded",
+		at: 2 * time.Second, dur: 14 * time.Minute})
+	b.add(g0, root, demoNode{display: "score", typ: "Pod", phase: "Succeeded", template: "score",
+		at: 2 * time.Second, dur: 14 * time.Minute, exit: "0",
+		in:  core.NodeIO{Parameters: params("model", "resnet-lite:7", "batch", "2026-09-06")},
+		out: core.NodeIO{Parameters: params("scored", "1250000"), Artifacts: []string{"predictions"}}})
+	return b.finish(14*time.Minute, "", nil)
 }
 
 // demoLogs fabricates a pod's log for the demo. The text follows the node's

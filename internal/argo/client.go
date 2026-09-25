@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ficaa1/argo-tui/internal/core"
@@ -64,6 +65,12 @@ type Client struct {
 	userAgent string
 	// unaryTimeout bounds one non-streaming request end to end.
 	unaryTimeout time.Duration
+
+	// scopeMu guards the cached answer of serverScope. scopeKnown is set
+	// only by a successful answer, so a failed lookup is retried next time.
+	scopeMu    sync.Mutex
+	scopeKnown bool
+	scopeNS    string
 }
 
 // assert the frozen read contract is satisfied at compile time (A1 gate).
@@ -581,9 +588,18 @@ const incompleteSelector = "workflows.argoproj.io/completed!=true"
 // the list shows as a plain Running row.
 const gateScanLimit = 500
 
+// List collects one page. An empty q.Namespace lists every namespace the
+// token may read: the path keeps its trailing slash, /api/v1/workflows/,
+// because Argo's route matches that with an empty namespace and does not
+// match /api/v1/workflows at all.
 func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
+	if q.Namespace == "" {
+		if err := c.checkClusterScope(ctx); err != nil {
+			return core.Page{}, err
+		}
+	}
 	path := "/api/v1/workflows/" + url.PathEscape(q.Namespace)
 	query := url.Values{}
 	if q.Limit > 0 {
