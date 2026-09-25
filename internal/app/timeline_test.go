@@ -76,7 +76,7 @@ func TestDetailSectionKeys(t *testing.T) {
 		key  rune
 		want string
 	}{
-		{'T', "timeline"}, {'1', "summary"}, {'4', "resource"}, {'2', "nodes"},
+		{'T', "timeline"}, {'1', "summary"}, {'5', "resource"}, {'2', "nodes"},
 		{'9', "nodes"}, {'3', "timeline"},
 	}
 	for _, s := range steps {
@@ -132,7 +132,7 @@ func TestHelpFitsAnEightyByFortyTerminal(t *testing.T) {
 	m := resize(t, loadDemoList(t), 80, 40)
 	m = typeKey(m, '?')
 	s := screen(m)
-	for _, want := range []string{"KEYS", "Timeline", "1-9 section", "T open on the timeline", "y confirms"} {
+	for _, want := range []string{"KEYS", "Timeline", "1-9 section", "T open on the timeline", "X open on the explanation", "Explain   why it ended", "y confirms"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("help lacks %q:\n%s", want, s)
 		}

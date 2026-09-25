@@ -105,6 +105,10 @@ type Model struct {
 	// out; showSection lays it out again before it is shown.
 	tlStale bool
 
+	// ex is the Explain section: its report, its log evidence and its
+	// scroll position.
+	ex explainState
+
 	// theme styles the node rows. It is injected so goldens can force the
 	// plain theme.
 	theme shared.Theme
@@ -153,8 +157,10 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 		m.folded = map[string]bool{}
 		m.autoFolded = map[string]bool{}
 		m.find = nodeFind{}
+		m.ex = explainState{}
 		keep = ""
 	}
+	m.explainChanged()
 	m.applyDefaultFolds()
 	m.rebuildNodes(keep)
 	if !sameWorkflow {
@@ -313,6 +319,9 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		m.jumpTo(m.scrollMax())
 		return nil
 	case "l", "enter":
+		if m.tab == "explain" {
+			return m.explainLogsCmd()
+		}
 		return m.nodeLogsCmd()
 	default:
 		switch m.tab {
@@ -385,6 +394,8 @@ func (m *Model) scrollLines() int {
 		return len(m.nodes)
 	case "timeline":
 		return len(m.tl.rows)
+	case "explain":
+		return len(m.explainLines())
 	case "resource":
 		return len(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"))
 	default:
@@ -444,6 +455,8 @@ func (m *Model) scrollPos() int {
 		return m.nodeCursor
 	case "timeline":
 		return m.tlCursor
+	case "explain":
+		return m.ex.top
 	case "resource":
 		return m.resourceTop
 	default:
@@ -463,6 +476,8 @@ func (m *Model) jumpTo(pos int) {
 		m.nodeCursor = pos
 	case "timeline":
 		m.tlCursor = pos
+	case "explain":
+		m.ex.top = pos
 	case "resource":
 		m.resourceTop = pos
 	default:
@@ -525,6 +540,8 @@ func (m *Model) Hints() string {
 		return m.nodesHints()
 	case "timeline":
 		return m.timelineHints()
+	case "explain":
+		return m.explainHints()
 	}
 	return "tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back"
 }
@@ -562,11 +579,11 @@ func (m *Model) BodyLines() []string {
 	var lines []string
 	switch m.tab {
 	case "nodes":
-		lines = append([]string{tabStrip(m.tab, m.theme)}, m.nodesBody()...)
+		lines = append([]string{tabStripFit(m.tab, m.theme, m.width)}, m.nodesBody()...)
 	case "timeline":
-		lines = append([]string{tabStrip(m.tab, m.theme)}, m.timelineBody()...)
+		lines = append([]string{tabStripFit(m.tab, m.theme, m.width)}, m.timelineBody()...)
 	default:
-		lines = append([]string{tabStrip(m.tab, m.theme), m.tabStatusLine()}, m.windowedLines()...)
+		lines = append([]string{tabStripFit(m.tab, m.theme, m.width), m.tabStatusLine()}, m.windowedLines()...)
 	}
 	if m.height > 0 {
 		lines = shared.ClampLines(lines, m.height)
@@ -586,6 +603,8 @@ func (m *Model) RawLines() []string {
 		return m.nodesRawLines()
 	case "timeline":
 		return m.timelineRawLines()
+	case "explain":
+		return m.explainRawLines()
 	case "resource":
 		return strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n")
 	default:
@@ -618,6 +637,8 @@ func (m *Model) tabStatusLine() string {
 		return m.nodesStatusLine()
 	case "timeline":
 		return m.timelineStatusLine()
+	case "explain":
+		return m.explainStatusLine()
 	case "resource":
 		reveal := "values redacted (v reveals)"
 		if m.revealResource {
@@ -640,6 +661,8 @@ func (m *Model) windowedLines() []string {
 		return m.nodeTreeLines(m.nodesLayout())
 	case "timeline":
 		return m.timelineLines(m.timelineLayout())
+	case "explain":
+		return sliceLines(m.explainLines(), m.ex.top, h)
 	case "resource":
 		return sliceLines(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"), m.resourceTop, h)
 	default:
