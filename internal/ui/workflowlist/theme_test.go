@@ -63,7 +63,7 @@ func TestRowsColourThePhaseCellAndSelectAcrossThePane(t *testing.T) {
 	if w := ansi.StringWidth(sel); w != 100 {
 		t.Errorf("selected row is %d cells, want the pane's 100", w)
 	}
-	if !strings.HasPrefix(other, "fixture-wf-") {
+	if !strings.HasPrefix(other, strings.Repeat(" ", markGutter)+"fixture-wf-") {
 		t.Errorf("the name is styled: %q", other)
 	}
 	phase := strings.Fields(ansi.Strip(other))[2]

@@ -225,6 +225,9 @@ func (m *Root) resetRoutes() {
 	m.deps.drillNamespace, m.deps.labelSelector = "", ""
 	m.resetKinds()
 	m.listView.SetAllNamespaces(m.listAcrossNamespaces())
+	// Marks name workflows of the scope being left; a bulk action must never
+	// reach across a switch.
+	m.listView.ClearMarks()
 	m.listView.SetItems(nil, m.deps.clock.Now())
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)
 }

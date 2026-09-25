@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/journal"
 )
 
 // Clock abstracts time for deterministic tests (fake clock injection).
@@ -43,7 +44,9 @@ type deps struct {
 	templateLister        core.TemplateLister
 	clusterTemplateLister core.ClusterTemplateLister
 	// archive reads the workflow archive, optional in the same way.
-	archive  core.ArchiveReader
+	archive core.ArchiveReader
+	// journal records every write attempt. Nil records nothing.
+	journal  *journal.Journal
 	clock    Clock
 	interval time.Duration
 	// namespace is the active namespace; switching it bumps the connection
@@ -188,6 +191,32 @@ func (d deps) detailCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref
 		}
 		return detailLoadedMsg{genStamp: g, RequestID: id, Ref: ref, Workflow: wf}
 	}
+}
+
+// logSourcesCmd reads one workflow for its node map and answers with the
+// pod-to-step map the log pane labels its lines with. It reports nothing
+// on failure: the labels then stay on pod names, which is what they show
+// before the answer arrives anyway.
+func (d deps) logSourcesCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref) func() tea.Msg {
+	return func() tea.Msg {
+		wf, err := d.reader.Get(ctx, ref)
+		if err != nil || wf.Summary.Ref.UID != ref.UID || !wf.NodesAvailable {
+			return logSourcesMsg{genStamp: g, RequestID: id, Ref: ref}
+		}
+		return logSourcesMsg{genStamp: g, RequestID: id, Ref: ref, Sources: podSources(wf.Nodes)}
+	}
+}
+
+// podSources maps each pod name to the display name of the node that ran
+// it. Nodes without a resolved pod name are left out.
+func podSources(nodes map[string]core.Node) map[string]string {
+	out := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		if n.PodName != "" && n.DisplayName != "" {
+			out[n.PodName] = n.DisplayName
+		}
+	}
+	return out
 }
 
 // Log stream plumbing --------------------------------------------------------

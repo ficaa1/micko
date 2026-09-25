@@ -54,7 +54,8 @@ func TestViewTruncationMarkerVisible(t *testing.T) {
 }
 
 // TestViewGoldenFollow pins the follow-mode render: header, status with
-// scope + FOLLOWING, context marker with count, lines.
+// scope + FOLLOWING, context marker with count, lines with their source
+// label (workflow-wide logs label every line by default).
 func TestViewGoldenFollow(t *testing.T) {
 	m := testModel(t)
 	m.ApplyRecords([]core.LogRecord{rec("one"), rec("two")})
@@ -64,9 +65,9 @@ func TestViewGoldenFollow(t *testing.T) {
 		"Scope: workflow-wide · container: main · [FOLLOWING]",
 		"retained: 2/10000 lines (0 evicted)",
 		"── (all pods):main ── 2 lines recorded",
-		"one",
-		"two",
-		"t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back",
+		"pod-1            one",
+		"pod-1            two",
+		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden follow mismatch:\n got: %q\nwant: %q", got, want)
@@ -85,8 +86,8 @@ func TestViewGoldenPaused(t *testing.T) {
 		"Scope: workflow-wide · container: main · [PAUSED]",
 		"retained: 1/10000 lines (0 evicted)",
 		"── (all pods):main ── 1 line recorded",
-		"one",
-		"t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back",
+		"pod-1            one",
+		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden paused mismatch:\n got: %q\nwant: %q", got, want)
@@ -106,10 +107,10 @@ func TestViewGoldenReconnect(t *testing.T) {
 		"Scope: workflow-wide · container: main · [FOLLOWING]",
 		"retained: 2/10000 lines (0 evicted)",
 		"── (all pods):main ── 2 lines recorded",
-		"before",
+		"pod-1            before",
 		"── reconnect: new stream; overlap/gap possible ──",
-		"after",
-		"t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back",
+		"pod-1            after",
+		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden reconnect mismatch:\n got: %q\nwant: %q", got, want)
@@ -129,9 +130,9 @@ func TestViewGoldenEnded(t *testing.T) {
 		"Scope: workflow-wide · container: main · [ENDED]",
 		"retained: 1/10000 lines (0 evicted)",
 		"── (all pods):main ── 1 line recorded",
-		"only",
+		"pod-1            only",
 		"── stream ended ──",
-		"t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back",
+		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
 	}, "\n")
 	if got != want {
 		t.Errorf("golden ended mismatch:\n got: %q\nwant: %q", got, want)

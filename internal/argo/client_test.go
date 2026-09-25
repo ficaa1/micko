@@ -1136,6 +1136,7 @@ func TestListProjectionNamesEverySummaryField(t *testing.T) {
 		"items.metadata.namespace",
 		"items.metadata.uid",
 		"items.metadata.creationTimestamp",
+		"items.spec.suspend",
 		"items.status.phase",
 		"items.status.startedAt",
 		"items.status.finishedAt",

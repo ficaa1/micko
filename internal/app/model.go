@@ -100,6 +100,14 @@ type Root struct {
 	watchRetries  int
 	watchAttempt  uint64
 	actionAttempt uint64
+	// bulk is the bulk action in progress, nil when none runs.
+	bulk *bulkRun
+	// actionFromMarks records that the open action pane acts on the marked
+	// rows, so its finish can drop them.
+	actionFromMarks bool
+	// journalWarned records that a journal failure has been reported. It is
+	// reported once per session, not after every action.
+	journalWarned bool
 	// connectionReady gates mutations. Data remains rendered while false.
 	connectionReady  bool
 	connectionFresh  bool
@@ -244,6 +252,11 @@ type logState struct {
 	// archived marks a stream of an archived run's logs, whose pods are
 	// often gone; an empty or failed stream then says so.
 	archived bool
+	// streamID is the request ID of the stream the pane is reading.
+	// Reopening the stream for timestamps keeps the pane and the
+	// generations, so only this tells the old stream's late batches and
+	// its cancellation apart from the new stream's.
+	streamID uint64
 }
 
 // NewRoot constructs the root model.
@@ -400,7 +413,7 @@ func (m *Root) escLeavesRoute() bool {
 	case RouteDetail:
 		return m.detailView == nil || !m.detailView.EscapeConsumed()
 	case RouteLogs:
-		return m.logsView == nil || !m.logsView.EscapeConsumed()
+		return m.logsView == nil || (!m.logsView.EscapeConsumed() && !m.logsView.EscapeClears())
 	default:
 		return false
 	}
@@ -442,12 +455,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			had := m.actionView.State()
 			_, cmd := m.actionView.Update(msg)
-			// Closing a finished action returns to the detail pane it was
-			// started from, and refetches it: the workflow the reader is
-			// looking at has just changed, and showing its pre-action state
-			// would be the most misleading moment to be stale.
-			if had == actions.StateOutcome && m.actionView.State() == actions.StateIdle && m.route == RouteDetail {
-				return m, tea.Batch(cmd, m.startDetailFetch())
+			// Closing a finished action returns to the route it was started
+			// from, and refetches it: the workflows the reader is looking at
+			// have just changed, and showing their pre-action state would be
+			// the most misleading moment to be stale.
+			if had == actions.StateOutcome && m.actionView.State() == actions.StateIdle {
+				return m, tea.Batch(cmd, m.afterActionPane())
 			}
 			return m, cmd
 		}
@@ -556,18 +569,20 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.startDetailFetch()
 		}
 		if m.route == RouteDetail && key == "a" && !m.textEntryActive() {
-			m.actionView = m.newActionView(m.selection)
-			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 			if m.detailState.archived {
 				// The archive holds a record, not a workflow: every action
 				// endpoint addresses the live object, which may be gone or
 				// may be another run of the same name.
+				m.actionView = m.newActionView(m.selection)
+				m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 				m.actionView.OpenUnavailable("this workflow is archived: actions apply to live workflows only")
-			} else if m.connectionReady && m.connectionFresh {
-				m.actionView.OpenMenu()
-			} else {
-				m.actionView.OpenUnavailable(staleActionReason(m.connectionReady))
+				return m, nil
 			}
+			m.openDetailActions()
+			return m, nil
+		}
+		if m.route == RouteList && key == "a" && !m.textEntryActive() {
+			m.openListActions()
 			return m, nil
 		}
 		if key == "esc" && m.escLeavesRoute() {
@@ -755,6 +770,17 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logs.PipeIntent:
 		return m, m.startPipe(msg)
 
+	case logs.TimestampsIntent:
+		return m, m.reopenLogs(msg)
+
+	case logSourcesMsg:
+		m.clearInflight("logsources", msg.RequestID)
+		if msg.Conn != m.connGen || msg.Sel != m.selGen || m.logsView == nil || m.logsView.Ref() != msg.Ref {
+			return m, nil
+		}
+		m.logsView.SetSources(msg.Sources)
+		return m, nil
+
 	case pipeDoneMsg:
 		return m, m.handlePipeDone(msg)
 
@@ -775,11 +801,20 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actions.ActionIntentMsg:
 		// Only the active, confirmed child intent may reach the executor.
-		if msg.Request.Ref != m.selection || m.actionView == nil ||
+		if m.actionView == nil || m.actionView.Bulk() || msg.Request.Ref != m.actionView.Ref() ||
 			m.actionView.State() != actions.StateSubmitting {
 			return m, nil
 		}
 		return m, m.startAction(msg.Request)
+
+	case actions.BulkIntentMsg:
+		if !m.bulkIntentMatches(msg.Requests) {
+			return m, nil
+		}
+		return m, m.startBulk(msg.Requests)
+
+	case bulkStepMsg:
+		return m, m.handleBulkStep(msg)
 
 	case ActionIntentMsg:
 		// Retain the obsolete app message as a no-op compatibility boundary.
@@ -824,8 +859,11 @@ func (m *Root) View() tea.View {
 	// cannot be mistaken for the thing being confirmed.
 	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 		f.Title = "Confirm action"
+		if m.actionView.Bulk() {
+			f.Title = "Bulk action"
+		}
 		f.Route = "action"
-		f.Hints = "y confirm  n cancel  esc close"
+		f.Hints = m.actionView.Hints()
 		f.Help = ""
 		f.Body = splitLines(m.actionView.View().Content)
 		return m.finishView(f)
@@ -1181,6 +1219,7 @@ func (m *Root) back() tea.Cmd {
 	case RouteLogs:
 		// Leaving logs cancels the stream promptly (plan §5; STR-02).
 		m.cancelInflight("logs")
+		m.cancelInflight("logsources")
 		m.logState.running = false
 		// logsFrom is set by openLogs; a zero value (RouteList) is the
 		// safe fallback for a log view reached with no explicit origin.
@@ -1259,10 +1298,47 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	m.selGen++
 	m.route = RouteLogs
 	m.logState = logState{ref: msg.Ref, container: msg.Container, running: true, archived: archived}
+	prev := m.logsView
 	m.logsView = logs.NewModel(msg.Ref, msg.PodName, msg.Container)
 	m.logsView.SetTheme(m.theme)
 	m.logsView.SetPipeCommand(m.pipeCommand)
-	return m.startLogStream(msg)
+	m.logsView.KeepViewPrefs(prev)
+	return tea.Batch(m.startLogStream(msg), m.startLogSources(msg))
+}
+
+// startLogSources gives a workflow-wide log pane the node each pod belongs
+// to, so its lines are labelled by step name rather than by pod name. The
+// loaded detail answers when it is the same workflow; otherwise the
+// workflow is read once. A pane on one pod needs no map, and a failed read
+// only leaves the labels on pod names.
+func (m *Root) startLogSources(msg OpenLogsMsg) tea.Cmd {
+	if msg.PodName != "" {
+		return nil
+	}
+	if wf := m.detailState.workflow; wf.Summary.Ref.UID == msg.Ref.UID && wf.NodesAvailable {
+		m.logsView.SetSources(podSources(wf.Nodes))
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	g := genStamp{Conn: m.connGen, Sel: m.selGen}
+	id := m.ids.newID()
+	m.setInflight("logsources", id, cancel)
+	return m.deps.logSourcesCmd(ctx, g, id, msg.Ref)
+}
+
+// reopenLogs restarts the stream with server timestamps switched as the
+// pane asked, keeping the pane and its retained lines. The pane has marked
+// the switch point already. The old stream is canceled first; its late
+// replies carry the old request ID and are ignored.
+func (m *Root) reopenLogs(msg logs.TimestampsIntent) tea.Cmd {
+	if m.route != RouteLogs || m.logsView == nil || m.logsView.Ref() != msg.Ref {
+		return nil
+	}
+	pod, container := m.logsView.Context()
+	m.logState.running = true
+	m.logState.lastErr = nil
+	m.logState.canceled = false
+	return m.startLogStream(OpenLogsMsg{Ref: msg.Ref, PodName: pod, Container: container})
 }
 
 // startListGeneration cancels any prior list, bumps nothing (list runs per
@@ -1307,6 +1383,7 @@ func (m *Root) startLogStream(msg OpenLogsMsg) tea.Cmd {
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
 	m.setInflight("logs", id, cancel)
+	m.logState.streamID = id
 	req := core.LogRequest{
 		Ref:       msg.Ref,
 		PodName:   msg.PodName,
@@ -1317,6 +1394,9 @@ func (m *Root) startLogStream(msg OpenLogsMsg) tea.Cmd {
 		// server ends the stream itself once the pod finishes, and back()
 		// cancels it on exit.
 		Follow: true,
+		// The pane owns the timestamps choice (ctrl+t) and keeps it across
+		// a container switch.
+		Timestamps: m.logsView != nil && m.logsView.Timestamps(),
 	}
 	return m.deps.streamLogsCmd(ctx, g, id, req)
 }
@@ -1457,6 +1537,12 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
 		return nil // stale
+	}
+	if msg.RequestID != m.logState.streamID {
+		// A stream replaced by a reopen on the same pane: its batches would
+		// duplicate lines, and its cancellation would mark the live stream
+		// canceled.
+		return nil
 	}
 	st := &m.logState
 	st.received += len(msg.Records)

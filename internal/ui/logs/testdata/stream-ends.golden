@@ -2,7 +2,7 @@ logs: wf-1
 Scope: workflow-wide · container: main · [ENDED]
 retained: 2/10000 lines (0 evicted)
 ── (all pods):main ── 2 lines recorded
-step: starting
-step: done
+pod-1            step: starting
+pod-1            step: done
 ── stream ended ──
-t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back
+t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back

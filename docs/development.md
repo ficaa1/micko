@@ -65,9 +65,18 @@ live in [ci.yml](../.github/workflows/ci.yml).
 - Watch and log parsers accept JSON-lines and SSE envelopes, including in-band
   errors after HTTP 200. Stream cancellation is distinct from transport failure.
   Watch recovery belongs to the app; expired resource versions require a relist.
-- Resume, Retry, Resubmit, Stop and transport-only Terminate use PUT action
-  endpoints. Writes are sent once; ambiguous results remain unknown. The UI
-  requires session opt-in and confirmation; demo mode cannot write.
+- Resume, Suspend, Retry, Resubmit, Stop and Terminate use the PUT
+  `/api/v1/workflows/{namespace}/{name}/{action}` endpoints; Delete uses
+  DELETE `/api/v1/workflows/{namespace}/{name}` with no body. The server builds
+  its own delete options, so no UID precondition can be sent with a delete
+  either. Writes are sent once; ambiguous results remain unknown. The UI
+  requires session opt-in and confirmation; demo mode cannot write. A bulk
+  action is a sequence of single requests, each with its own preflight and
+  read-back. Every attempt is appended to the action journal
+  (`internal/journal`), whose failures are reported and never block a write.
+- A workflow counts as suspended when it holds a running Suspend node or has
+  not finished and has `spec.suspend` set, the two states Argo's resume clears.
+  The list projection carries `spec.suspend`; the gate scan adds the node half.
 - Unknown workflow fields are retained in raw resource JSON. Missing timestamps
   and unavailable node status must remain distinguishable from zero values or
   an empty workflow. Node IDs are not assumed to be pod names; naming is resolved

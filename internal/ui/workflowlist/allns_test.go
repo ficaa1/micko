@@ -37,7 +37,7 @@ func allNSModel(width int) Model {
 func TestAllNamespacesAddsTheNamespaceColumn(t *testing.T) {
 	m := allNSModel(120)
 	lines := m.BodyLines(testkit.FixtureEpoch)
-	if !strings.HasPrefix(lines[1], "NAMESPACE  NAME") {
+	if !strings.HasPrefix(lines[1], strings.Repeat(" ", markGutter)+"NAMESPACE  NAME") {
 		t.Fatalf("column heads = %q, want NAMESPACE first", lines[1])
 	}
 	body := strings.Join(lines, "\n")
@@ -84,7 +84,7 @@ func TestNamespaceColumnIsBounded(t *testing.T) {
 		t.Fatalf("nsWidth = %d, want the 80-column bound of 16", w)
 	}
 	row := m.BodyLines(testkit.FixtureEpoch)[2]
-	if !strings.HasPrefix(row, strings.Repeat("n", 15)+"…  wf") {
+	if !strings.HasPrefix(row, strings.Repeat(" ", markGutter)+strings.Repeat("n", 15)+"…  wf") {
 		t.Fatalf("row = %q, want the namespace clipped with an ellipsis", row)
 	}
 }
@@ -101,6 +101,15 @@ func TestAllNamespacesFilterMatchesTheNamespace(t *testing.T) {
 	m.SetQuery("etl")
 	if n := len(m.Rows()); n != 2 {
 		t.Fatalf("etl matched %d rows, want both namespaces", n)
+	}
+
+	// The query language's other name predicates see the namespace too,
+	// and an anchored pattern still matches the bare name.
+	for q, want := range map[string]int{"/^team-b\\//": 1, "/^etl$/": 2, "~tma": 1, "!team-a/": 2} {
+		m.SetQuery(q)
+		if n := len(m.Rows()); n != want {
+			t.Errorf("%s matched %d rows, want %d", q, n, want)
+		}
 	}
 
 	one := New(testTheme(), true)

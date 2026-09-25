@@ -160,6 +160,23 @@ func TestFakeReaderStreamLogs(t *testing.T) {
 			t.Errorf("StreamCancels = %d, want 1", f.StreamCancels)
 		}
 	})
+	t.Run("timestamps are stamped the way the API stamps them", func(t *testing.T) {
+		at := time.Date(2026, 9, 7, 10, 0, 3, 137000000, time.UTC)
+		f := &FakeReader{StreamSequence: []core.LogRecord{{Content: "hello", ReceivedAt: at}}}
+		var got []string
+		for _, ts := range []bool{false, true} {
+			_ = f.StreamLogs(context.Background(), core.LogRequest{Timestamps: ts}, func(r core.LogRecord) error {
+				got = append(got, r.Content)
+				return nil
+			})
+		}
+		if len(got) != 2 || got[0] != "hello" || got[1] != "2026-09-07T10:00:03.137000000Z hello" {
+			t.Fatalf("contents = %q", got)
+		}
+		if f.StreamSequence[0].Content != "hello" {
+			t.Fatal("stamping changed the stored record")
+		}
+	})
 	t.Run("serial callback ordering", func(t *testing.T) {
 		f := &FakeReader{StreamSequence: []core.LogRecord{{Content: "1"}, {Content: "2"}, {Content: "3"}}}
 		var order []string
