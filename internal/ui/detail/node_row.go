@@ -447,7 +447,7 @@ func (rr rowRenderer) line(r FlatRow, match bool) pieces {
 		// though its bar still marks when the condition was decided.
 		if r.Section == "" && !r.Skipped() {
 			if d, ok := nodeDuration(r.Row, rr.now); ok {
-				txt = shortDuration(d)
+				txt = shared.ShortDuration(d)
 				if _, _, running, _ := nodeInterval(r.Row, rr.now); running {
 					style = t.PhaseRunning
 				}
@@ -506,7 +506,7 @@ func (rr rowRenderer) header() string {
 		label := "TIMELINE"
 		scale := ""
 		if rr.span.ok() {
-			scale = shortDuration(rr.span.length())
+			scale = shared.ShortDuration(rr.span.length())
 		}
 		if cellWidth(label)+1+cellWidth(scale) > c.bar {
 			label = truncCell(label, c.bar)

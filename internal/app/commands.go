@@ -32,8 +32,11 @@ type deps struct {
 	// nsLister answers the namespace picker. It is optional: a Reader that
 	// cannot list namespaces simply does not implement it.
 	nsLister core.NamespaceLister
-	clock    Clock
-	interval time.Duration
+	// eventWatcher streams Kubernetes events for the Events section. It is
+	// optional too: without it the section says the backend has none.
+	eventWatcher core.EventWatcher
+	clock        Clock
+	interval     time.Duration
 	// namespace is the active namespace; switching it bumps the connection
 	// generation (plan §2 journey 5).
 	namespace string

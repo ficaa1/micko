@@ -16,8 +16,8 @@ import (
 var updateGolden = flag.Bool("update", false, "rewrite golden files")
 
 // TestDetailGoldenFixtures pins deterministic rendering for the canonical
-// fixtures: DAG (retry/suspend), offloaded, steps. Summary and nodes tabs
-// both pinned; the resource tab content is fixture JSON-derived (already
+// fixtures: DAG (retry/suspend), offloaded, steps. The summary, nodes,
+// timeline and explain tabs are pinned; the resource tab content is fixture JSON-derived (already
 // pinned by resource tests) and stays out of these goldens to avoid churn
 // from fixture JSON cosmetics.
 func TestDetailGoldenFixtures(t *testing.T) {
@@ -33,6 +33,10 @@ func TestDetailGoldenFixtures(t *testing.T) {
 			RenderDetail(state, "summary"))
 		compareGolden(t, filepath.Join("testdata", name+".nodes.golden"),
 			RenderDetail(state, "nodes"))
+		compareGolden(t, filepath.Join("testdata", name+".timeline.golden"),
+			RenderDetail(state, "timeline"))
+		compareGolden(t, filepath.Join("testdata", name+".explain.golden"),
+			RenderDetail(state, "explain"))
 	}
 }
 

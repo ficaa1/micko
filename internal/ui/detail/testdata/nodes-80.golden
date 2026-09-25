@@ -1,5 +1,5 @@
 == demo-release-gate
- Summary  [Nodes]  Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 progress 2/2 ==========  ✓ 2  ◐ 1  elapsed 12m00s
 4 nodes · sort pipeline · 1/4
 NAME                             DURATION  TIMELINE      MESSAGE
@@ -8,7 +8,7 @@ NAME                             DURATION  TIMELINE      MESSAGE
 ├─ ✓ integration-test               4m00s  ---====-----
 └─ ◐ approve-production Suspend     4m50s  -------====>  AWAITING RESUME
 == demo-nightly-report
- Summary  [Nodes]  Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 progress 5/6 ========--  ✓ 2  ✗ 3  ⊘ 1  took 4m00s
 8 nodes · sort pipeline · 1/8
 NAME                                DURATION  TIMELINE      MESSAGE
@@ -21,7 +21,7 @@ NAME                                DURATION  TIMELINE      MESSAGE
 └─ ⊘ load ← transform                         ------------  omitted: depends co…
   ✓ onExit exit handler                  20s  ----------==
 == demo-train-pipeline
- Summary  [Nodes]  Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 progress 3/8 =======>--  ✓ 3  ● 3  ○ 2  elapsed 4m00s of ~9m
 9 nodes · sort pipeline · 1/9
 NAME                                      DURATION  TIMELINE      MESSAGE
@@ -35,7 +35,7 @@ NAME                                      DURATION  TIMELINE      MESSAGE
 ├─ ○ train-shard(5:5) ← preprocess                  ------------
 └─ ○ evaluate ← train-shard(0:0) +5                 ------------
 == demo-data-pull
- Summary  [Nodes]  Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 progress 3/5 =========>  ✓ 3  ● 2  ⊘ 1  elapsed 40m00s of ~55m
 6 nodes · 1 skipped hidden · sort pipeline · 1/6
 NAME                      DURATION  TIMELINE      MESSAGE
@@ -46,7 +46,7 @@ NAME                      DURATION  TIMELINE      MESSAGE
 ├─ ● pull(us)               11m49s  --------===>
 └─ ● pull(apac)             11m49s  --------===>
 == demo-deploy-multi-layer
- Summary  [Nodes]  Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 progress 5/5 ==========  ✓ 5  ⊘ 16  took 11m00s
 10 nodes · 16 skipped hidden · sort pipeline · 1/10
 NAME                             DURATION  TIMELINE      MESSAGE
@@ -61,7 +61,7 @@ NAME                             DURATION  TIMELINE      MESSAGE
 └▾ ✓ edge DAG ← plan                2m00s  --------===-
    └─ ✓ apply-eu-west               1m50s  --------===-
 == demo-nightly-report, info on extract
- Summary  [Nodes]  Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 progress 5/6 ========--  ✓ 2  ✗ 3  ⊘ 1  took 4m00s
 8 nodes · sort pipeline · 2/8 · l logs
 NAME                                DURATION  TIMELINE      MESSAGE

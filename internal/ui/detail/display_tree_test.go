@@ -430,3 +430,58 @@ func TestDisplayTreeNeverDerivesAPodName(t *testing.T) {
 		t.Fatalf("PodName = %q, want empty", got)
 	}
 }
+
+// Each node names the siblings it waited for: a step the steps of the group
+// before its own, a DAG task its dependencies, a retry attempt the attempt
+// before it. The first group, a task with no dependencies and the first
+// attempt waited for nothing but their parent.
+func TestDisplayTreeRecordsWhatEachNodeWaitedFor(t *testing.T) {
+	after := func(out Outline) map[string]string {
+		m := map[string]string{}
+		var walk func(rows []OutlineRow)
+		walk = func(rows []OutlineRow) {
+			for _, r := range rows {
+				m[r.NodeID] = strings.Join(r.After, ",")
+				walk(r.Children)
+			}
+		}
+		walk(out.Rows)
+		return m
+	}
+	steps := newTreeFixture("wf").
+		node("wf", "wf", "wf", "Steps", "Running", "", 0, "g0").
+		node("g0", "wf[0]", "[0]", "StepGroup", "Succeeded", "wf", 0, "build").
+		node("build", "wf[0].build", "build", "Pod", "Succeeded", "wf", 0, "g1").
+		node("g1", "wf[1]", "[1]", "StepGroup", "Succeeded", "wf", 3, "test-b", "test-a").
+		node("test-b", "wf[1].test-b", "test-b", "Pod", "Succeeded", "wf", 3, "g2").
+		node("test-a", "wf[1].test-a", "test-a", "Pod", "Succeeded", "wf", 3, "g2").
+		node("g2", "wf[2]", "[2]", "StepGroup", "Running", "wf", 7, "approve").
+		node("approve", "wf[2].approve", "approve", "Suspend", "Running", "wf", 7)
+	got := after(BuildNodeOutline(steps.workflow(), OutlineOptions{}))
+	want := map[string]string{"wf": "", "build": "", "test-b": "build", "test-a": "build", "approve": "test-b,test-a"}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("steps: %s after %q, want %q", id, got[id], w)
+		}
+	}
+
+	dag := newTreeFixture("wf").
+		node("wf", "wf", "wf", "DAG", "Failed", "", 0, "extract").
+		node("extract", "wf.extract", "extract", "Pod", "Succeeded", "wf", 0, "retry", "side").
+		node("retry", "wf.transform", "transform", "Retry", "Failed", "wf", 1, "t0", "t1", "t2").
+		node("t0", "wf.transform(0)", "transform(0)", "Pod", "Failed", "wf", 1).
+		node("t1", "wf.transform(1)", "transform(1)", "Pod", "Failed", "wf", 2).
+		node("t2", "wf.transform(2)", "transform(2)", "Pod", "Failed", "wf", 3, "load").
+		node("side", "wf.side", "side", "Pod", "Succeeded", "wf", 1, "load").
+		node("load", "wf.load", "load", "Pod", "Omitted", "wf", -1)
+	got = after(BuildNodeOutline(dag.workflow(), OutlineOptions{}))
+	want = map[string]string{
+		"extract": "", "retry": "extract", "side": "extract", "load": "side,retry",
+		"t0": "", "t1": "t0", "t2": "t1",
+	}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("dag: %s after %q, want %q", id, got[id], w)
+		}
+	}
+}

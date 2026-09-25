@@ -1,7 +1,6 @@
 package detail
 
 import (
-	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -120,9 +119,14 @@ func nodeDuration(r OutlineRow, now time.Time) (time.Duration, bool) {
 type barKind int
 
 const (
-	barTrack barKind = iota // the empty track (BarEmpty)
-	barDone                 // finished work (BarFill)
-	barLive                 // work still running (BarRunning)
+	barTrack   barKind = iota // the empty track (BarEmpty)
+	barDone                   // finished work (BarFill)
+	barLive                   // work still running (BarRunning)
+	barFailed                 // work that failed (PhaseFailed)
+	barGate                   // a gate waiting for a person (Warning)
+	barWait                   // time a node waited before it started (BarEmpty)
+	barBracket                // the span of a group of nodes (TreeGuide)
+	barBlank                  // blank cells, unstyled
 )
 
 // barSeg is a run of bar cells of one kind.
@@ -131,12 +135,23 @@ type barSeg struct {
 	kind barKind
 }
 
+// style maps a kind to its token. The bar tokens carry finished, running
+// and empty; a failed bar and a waiting gate take the phase colours their
+// row's glyph already has, so the bar and the glyph agree.
 func (k barKind) style(t shared.Theme) lipgloss.Style {
 	switch k {
 	case barDone:
 		return t.BarFill
 	case barLive:
 		return t.BarRunning
+	case barFailed:
+		return t.PhaseFailed
+	case barGate:
+		return t.Warning
+	case barBracket:
+		return t.TreeGuide
+	case barBlank:
+		return lipgloss.NewStyle()
 	default:
 		return t.BarEmpty
 	}
@@ -264,7 +279,7 @@ func intervalBar(width, from, to int, kind barKind, ascii bool) []barSeg {
 			lastFill = i
 		}
 	}
-	if ascii && kind == barLive && lastFill >= 0 {
+	if ascii && (kind == barLive || kind == barGate) && lastFill >= 0 {
 		cells[lastFill] = asciiHead
 	}
 	return mergeCells(cells, kinds)
@@ -331,23 +346,4 @@ func mergeCells(cells []string, kinds []barKind) []barSeg {
 // and the zero theme the unstyled renders use.
 func barsASCII(t shared.Theme) bool {
 	return t.Skin == "plain" || t.Skin == ""
-}
-
-// shortDuration renders a duration to the second while it is short and to
-// the minute once it is long, in at most six cells: 42s, 4m12s, 2h05m, 3d04h.
-func shortDuration(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	s := int64(d / time.Second)
-	switch {
-	case s < 60:
-		return fmt.Sprintf("%ds", s)
-	case s < 3600:
-		return fmt.Sprintf("%dm%02ds", s/60, s%60)
-	case s < 86400:
-		return fmt.Sprintf("%dh%02dm", s/3600, s%3600/60)
-	default:
-		return fmt.Sprintf("%dd%02dh", s/86400, s%86400/3600)
-	}
 }
