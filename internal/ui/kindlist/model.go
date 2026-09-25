@@ -8,8 +8,8 @@
 // Like the workflow list it is a child model over injected values: it never
 // fetches, never starts goroutines, and returns intents (DrillMsg,
 // RefreshMsg) for the root to turn into requests. Every server string is
-// sanitized before it is drawn, and parameter values stay redacted until the
-// reader reveals them with v.
+// sanitized before it is drawn, and parameter values follow the profile's
+// redactValues setting, which v flips for the selected row.
 package kindlist
 
 import (
