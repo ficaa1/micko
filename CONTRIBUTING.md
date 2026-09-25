@@ -1,4 +1,4 @@
-# argo-tui
+# Contributing to argo-tui
 
 ## Comments
 

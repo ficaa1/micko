@@ -164,8 +164,8 @@ jobs:
             echo "formula already at ${VERSION}"
             exit 0
           fi
-          git config user.name "argo-tui release"
-          git config user.email "noreply@github.com"
+          git config user.name "ficaa1"
+          git config user.email "17272851+ficaa1@users.noreply.github.com"
           git commit -m "argo-tui ${VERSION}"
           # HEAD rather than a branch name: a tap that has never been pushed
           # to is cloned on an unborn branch with no upstream.
