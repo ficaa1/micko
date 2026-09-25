@@ -59,6 +59,9 @@ type Profile struct {
 	// falls back to lnav. The command is run by a shell with the retained log
 	// lines on its standard input; nothing from the server ever reaches it.
 	PipeCommand string `yaml:"pipeCommand,omitempty"`
+	// RedactValues overrides the file's top-level redactValues for this
+	// profile. Nil means the profile does not say.
+	RedactValues *bool `yaml:"redactValues,omitempty"`
 }
 
 // File mirrors the on-disk config (plan §3 example).
@@ -72,6 +75,11 @@ type File struct {
 	// pointer so that leaving the key out keeps the journal on: a record of
 	// writes is the safe default, and turning it off has to be a decision.
 	Journal *bool `yaml:"journal,omitempty"`
+	// RedactValues hides parameter and output values until `v` reveals
+	// them. It is off unless set: the values are what a reader opens a
+	// workflow to see, and a cluster whose parameters carry secrets turns
+	// it on here or per profile.
+	RedactValues bool `yaml:"redactValues,omitempty"`
 }
 
 // JournalEnabled reports whether the config file leaves the action journal
@@ -117,7 +125,10 @@ type Config struct {
 	// them alongside whatever the server reports.
 	Namespaces []string
 	// PipeCommand prefills the log pipe editor.
-	PipeCommand     string
+	PipeCommand string
+	// RedactValues starts every workflow with its parameter and output
+	// values hidden; `v` still reveals them for the session.
+	RedactValues    bool
 	TokenEnv        string
 	TokenFile       string
 	CAFile          string
@@ -151,6 +162,10 @@ type Options struct {
 	InsecureSkipTLSVerify bool
 	Demo                  bool
 	Debug                 bool
+	// RedactValues is the --redact-values flag. It can only turn redaction
+	// on: a flag that could turn it off would override a profile that asks
+	// for it, and that profile is the one with something to hide.
+	RedactValues bool
 }
 
 // Load reads, merges and validates configuration. cfgData may be empty
@@ -187,6 +202,10 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	cfg.WebURL = strings.TrimSuffix(prof.WebURL, "/")
 	cfg.Namespaces = append([]string(nil), prof.Namespaces...)
 	cfg.PipeCommand = strings.TrimSpace(prof.PipeCommand)
+	cfg.RedactValues = opts.RedactValues || f.RedactValues
+	if prof.RedactValues != nil {
+		cfg.RedactValues = opts.RedactValues || *prof.RedactValues
+	}
 	cfg.Namespace = firstNonEmpty(opts.Namespace, prof.Namespace)
 	cfg.TokenEnv = prof.TokenEnv
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)
@@ -199,7 +218,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 		if name != "" || opts.Server != "" || opts.Namespace != "" || opts.TokenFile != "" || opts.CAFile != "" || opts.InsecureSkipTLSVerify || opts.Debug {
 			return Config{}, fmt.Errorf("config: --demo cannot be combined with profile, connection, TLS, or debug options")
 		}
-		return Config{Demo: true}, nil
+		return Config{Demo: true, RedactValues: opts.RedactValues}, nil
 	}
 
 	// Secret-source exclusivity (plan §3): tokenEnv and tokenFile together
