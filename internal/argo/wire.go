@@ -48,6 +48,12 @@ type rawWorkflow struct {
 		Annotations       map[string]string `json:"annotations"`
 		CreationTimestamp *time.Time        `json:"creationTimestamp"`
 	} `json:"metadata"`
+	Spec struct {
+		// Suspend is set by the suspend action and cleared by resume. The
+		// workflow keeps its Running phase while it is set, so this field is
+		// the only thing that tells a suspended workflow from a running one.
+		Suspend *bool `json:"suspend"`
+	} `json:"spec"`
 	Status struct {
 		Phase                    string                     `json:"phase"`
 		Message                  string                     `json:"message"`
@@ -221,7 +227,7 @@ func wfFromRaw(raw json.RawMessage, rawForDetail []byte) (core.Workflow, error) 
 		}
 	}
 	wf.PodNameVersion = w.Metadata.Annotations[podNameFormatAnnotation]
-	wf.Summary.Suspended = hasRunningSuspendNode(wf.Nodes)
+	wf.Summary.Suspended = hasRunningSuspendNode(wf.Nodes) || specSuspended(w.Spec.Suspend, w.Status.Phase)
 	resolvePodNames(&wf)
 	return wf, nil
 }
@@ -241,6 +247,14 @@ func hasRunningSuspendNode(nodes map[string]core.Node) bool {
 		}
 	}
 	return false
+}
+
+// specSuspended reports whether spec.suspend holds the workflow. A finished
+// workflow keeps whatever spec.suspend it had when it was stopped or
+// terminated, and nothing is waiting on it any more, so a finished phase
+// wins over the flag.
+func specSuspended(suspend *bool, phase string) bool {
+	return suspend != nil && *suspend && !core.FinishedPhase(phase)
 }
 
 // resolvePodNames fills Node.PodName for pod-backed nodes, using the naming

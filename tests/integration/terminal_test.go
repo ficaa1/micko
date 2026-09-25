@@ -744,6 +744,105 @@ func TestPTYDemoEscClearsAppliedFilter(t *testing.T) {
 	_, _ = p.Wait()
 }
 
+// Marking two rows reaches the terminal as two glyphs and a count, and a on
+// the list opens the bulk pane for them. The demo cannot write, so the pane
+// opens in its unavailable state and says why.
+func TestPTYDemoMarksTwoRowsAndOpensTheBulkMenu(t *testing.T) {
+	p := startDemo(t, 120, 30)
+	// The renderer repaints only the cells that change, so the capture is
+	// cleared before each step and each check is for text a step writes
+	// whole: the first mark adds the toolbar cell, and the second changes
+	// only its digit, which the bulk pane then states in full.
+	p.ClearScreen()
+	if err := p.Send(" "); err != nil {
+		t.Fatalf("send space: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "◆ 1 marked")
+	}) {
+		t.Fatalf("the first mark never rendered; screen=%q", p.Screen())
+	}
+	if err := p.SendKeys(40*time.Millisecond, "j", " "); err != nil {
+		t.Fatalf("send the second mark: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	p.ClearScreen()
+	if err := p.Send("a"); err != nil {
+		t.Fatalf("send a: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "Bulk action") && strings.Contains(s, "targets: 2 marked workflows") &&
+			strings.Contains(s, "demo mode: actions unavailable")
+	}) {
+		t.Fatalf("the bulk pane never opened; screen=%q", p.Screen())
+	}
+	// The pane is a dialog that owns q, so the way out is ctrl+c.
+	_ = p.Send("\x03")
+	if code, err := p.Wait(); err != nil || code != 0 {
+		t.Fatalf("exit: code=%d err=%v", code, err)
+	}
+}
+
+// typeKeys sends each rune of s as its own key press, the way a person
+// types, so the list re-filters once per key.
+func typeKeys(t *testing.T, p *PTYProcess, s string) {
+	t.Helper()
+	keys := make([]string, 0, len(s))
+	for _, r := range s {
+		keys = append(keys, string(r))
+	}
+	if err := p.SendKeys(15*time.Millisecond, keys...); err != nil {
+		t.Fatalf("type %q: %v", s, err)
+	}
+}
+
+// A query typed into the demo's filter reaches the terminal parsed: the
+// toolbar shows its canonical form and only the matching run is listed. A
+// term that does not parse shows its error and leaves the filter alone,
+// and w adds the wide columns.
+func TestPTYDemoTypesAFilterQuery(t *testing.T) {
+	p := startDemo(t, 140, 30)
+	typeKeys(t, p, "/phase=failed cron=demo-etl-hourly")
+	time.Sleep(200 * time.Millisecond)
+	// The renderer rewrites a line from its first changed cell, so the
+	// check after enter is for the part of the toolbar that changes: the
+	// typed "failed cron" becomes the parsed "Failed & cron".
+	p.ClearScreen()
+	if err := p.Send("\r"); err != nil {
+		t.Fatalf("send enter: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "Failed & cron=demo-etl-hourly [within 12 collected]")
+	}) {
+		t.Fatalf("the query never applied; screen=%q", p.Screen())
+	}
+	p.ClearScreen()
+	typeKeys(t, p, "/ age<2x")
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, `✗ bad duration "2x"`)
+	}) {
+		t.Fatalf("the parse error never showed; screen=%q", p.Screen())
+	}
+	// Esc cancels the edit and keeps the applied query.
+	if err := p.Send("\x1b"); err != nil {
+		t.Fatalf("send esc: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	p.ClearScreen()
+	if err := p.Send("w"); err != nil {
+		t.Fatalf("send w: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "STARTED") && strings.Contains(s, "TEMPLATE")
+	}) {
+		t.Fatalf("w did not add the wide columns; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	if code, err := p.Wait(); err != nil || code != 0 {
+		t.Fatalf("exit: code=%d err=%v", code, err)
+	}
+}
+
 // --- H: UI shell -----------------------------------------------------------
 
 // The shell must actually reach the terminal. A bordered pane that renders

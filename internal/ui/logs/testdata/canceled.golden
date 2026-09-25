@@ -2,6 +2,6 @@ logs: wf-1
 Scope: workflow-wide · container: main · [CANCELED]
 retained: 1/10000 lines (0 evicted)
 ── (all pods):main ── 1 line recorded
-so far, so good
+pod-1            so far, so good
 ── stream canceled ──
-t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back
+t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back

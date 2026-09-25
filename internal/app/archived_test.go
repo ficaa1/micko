@@ -165,8 +165,8 @@ func TestArchivedLogs(t *testing.T) {
 		t.Fatalf("empty archived stream:\n%s", body)
 	}
 
-	m.handleLogRecord(logRecordMsg{genStamp: genStamp{Conn: m.connGen, Sel: m.selGen}, Done: true,
-		Err: core.ErrNotFoundf(`pods "gone-pod" not found`)})
+	m.handleLogRecord(logRecordMsg{genStamp: genStamp{Conn: m.connGen, Sel: m.selGen}, RequestID: m.logState.streamID,
+		Done: true, Err: core.ErrNotFoundf(`pods "gone-pod" not found`)})
 	if m.logsView.Phase() != logs.PhaseError || !strings.Contains(strings.Join(m.logsView.BodyLines(), "\n"), `pods "gone-pod" not found — this workflow is archived`) {
 		t.Fatalf("failed archived stream:\n%s", strings.Join(m.logsView.BodyLines(), "\n"))
 	}

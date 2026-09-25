@@ -66,36 +66,40 @@ func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
 		"",
-		"Global    q quit   ctrl+c quit   ? help   esc back / close   : command",
-		"          P switch profile   f raw full screen   y copy   o open in Argo UI",
-		"Move      j / k or arrows   pgup / pgdn   gg / home top   G / end bottom",
+		"Global    q quit  ctrl+c quit  ? help  esc back / close  : command",
+		"          P profile  f raw full screen  y copy  o open in Argo UI",
+		"Move      j / k  pgup / pgdn  gg / home top  G / end bottom",
 		"",
-		"List      enter open   l logs   / search (live)   s sort   p phase",
-		"          n namespace   0 all namespaces   r refresh   esc clear filter",
-		"          T / X / E open on the timeline / explanation / events",
-		"",
+		"List      enter open  l logs  s sort  p phase  r refresh  n namespace",
+		"          0 all ns  T / X / E open on the timeline / explanation / events",
+		"          space mark  a actions (marked, or selected)  w wide columns",
+		"          esc clear marks, then filter",
+		"          / filter: word  a|b  !word  /regex/  ~fuzzy  (spaces: AND)",
+		"          phase=failed  age<2h  dur>10m  tmpl=x  cron=x  label:k=v  label:!k",
 		"Command   : then a command; tab completes, enter runs, ctrl+p / n history",
 		"          wf  cron  tmpl  cwftmpl  aw  ns [name]  all  ctx [name]  help  q",
 		"Kinds     :cron :tmpl :cwftmpl :aw take the list keys; enter lists runs",
-		"          i info panel   v hide/reveal values   f manifest",
+		"          i info panel  v hide / reveal values  f manifest",
 		"",
-		"Detail    tab / shift+tab section   1-9 section by position",
-		"          T timeline   X explain   E events   r refresh",
-		"          a actions (requires --allow-actions)   v hide/reveal values",
+		"Detail    tab / shift+tab section  1-9 section  T / X / E jump  r refresh",
+		"          a actions  v hide / reveal values  y copy  f raw",
+		"Nodes     enter / l logs  space fold  left / right fold, parent, unfold",
+		"          i info  / find  n / N next / previous  h skipped  s sort  p phase",
+		"Timeline  ◆ critical path  ░ waited  │ now  l logs  i info  space fold",
+		"Explain   why it ended, as findings  y copy report  l failing log",
+		"Events    live Kubernetes events  s warnings first  / filter",
 		"",
-		"Nodes     enter / l logs   space fold   left fold or parent",
-		"          right unfold   i info panel   / find, n / N next / previous",
-		"          h skipped   s sort (pipeline/started/name/phase)   p phase",
+		"Logs      t follow  space pause  c container  G newest  esc back",
+		"          / search  n / N next / previous match  & only matching lines",
+		"          w wrap long lines  L source labels  | pipe to a program",
+		"          ctrl+t server timestamps (reopens the stream, keeps the lines)",
 		"",
-		"Timeline  ◆ critical path   ░ waited   │ now   l logs   i info   space fold",
-		"Explain   why it ended, as findings   y copy report   l failing log",
-		"Events    live Kubernetes events   s warnings first   / filter",
-		"",
-		"Logs      t follow   space pause   c container   G newest line",
-		"          / search   n / N next / previous match   | pipe to a program",
-		"",
-		"Actions   a opens the pane: u resume  r retry  b resubmit  s stop",
-		"          y confirms; enter and esc cancel; the footer reports",
+		"Actions   a opens the pane; only verbs that apply are offered",
+		"          u resume  z suspend  r retry  b resubmit  s stop",
+		"          t terminate (type the name)  d delete (then only D deletes)",
+		"          y confirms; enter and esc cancel; one result goes to the footer",
+		"          marked: one request per workflow, in order; results stay until esc",
+		"          actions need --allow-actions",
 	}
 }
 
@@ -115,6 +119,15 @@ func (h *HelpOverlay) styleLine(i int, l string) string {
 	}
 	return h.theme.Accent.Render(label) + " " + rest
 }
+
+// helpFitWidth and helpFitHeight are the body of an 80x40 terminal inside
+// the shell's border: the smallest common terminal the overlay is written
+// to fit whole. Help that clips there hides keys from the reader who most
+// needs them.
+const (
+	helpFitWidth  = 76
+	helpFitHeight = 36
+)
 
 // View renders the overlay clipped to the given box. A closed overlay renders
 // nothing, so callers can concatenate it unconditionally.

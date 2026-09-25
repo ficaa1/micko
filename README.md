@@ -112,36 +112,143 @@ Actions are disabled by default. Enable them for a session with:
 ./dist/argo-tui --profile dev --allow-actions
 ```
 
-Open a workflow and press `a`, then `u` (resume), `r` (retry), `b` (resubmit)
-or `s` (stop). The confirmation identifies the target; only `y` confirms.
-Enter and Esc cancel. Stop is graceful and runs exit handlers.
+Press `a` on the workflow list or in a workflow's detail view. The menu offers
+only the verbs that apply to the workflow's phase:
 
-The app checks identity before sending a mutation and never automatically
-retries a write. An `UNKNOWN` outcome means the server may have applied it;
-inspect the workflow before deciding what to do next. The server's permissions
-remain authoritative. Argo's action endpoints address workflows by name and
-have no UID precondition, so a same-name replacement between the identity
-check and the write remains possible.
+| Key | Verb | Applies to |
+| --- | --- | --- |
+| `u` | resume | a suspended workflow |
+| `z` | suspend | a running workflow that is not suspended |
+| `r` | retry | a failed or errored workflow |
+| `b` | resubmit | a finished workflow |
+| `s` | stop | a running workflow; graceful, runs exit handlers |
+| `t` | terminate | a running workflow; no exit handlers |
+| `d` | delete | any workflow |
+
+The confirmation identifies the target; only `y` confirms, and Enter and Esc
+cancel. Terminate asks you to type the workflow's name. Delete cannot be undone,
+so it asks twice: after `y`, a final screen deletes only on `D` (shift+d) and
+any other key cancels. Neither the `d` that opened it nor the `y` that passed
+the first step can finish it, however often it is pressed.
+
+Before sending, the app reads the workflow again and refuses the action when
+its identity changed or the verb no longer applies. It sends exactly one request
+and never retries a write. The outcome is `CONFIRMED` when the expected end
+state was observed (resumed, suspended, left its failed phase, reached a
+terminal phase, gone), `ACCEPTED` when the server applied it but the end state
+was not seen within five seconds, `REFUSED` when nothing was sent, and
+`UNKNOWN` when the server may or may not have applied it; inspect the workflow
+before deciding what to do next. The server's permissions remain authoritative.
+Argo's action endpoints address workflows by name and have no UID precondition,
+so a same-name replacement between the identity check and the write remains
+possible. With the workflow archive enabled, a deleted workflow can still be
+read from the archive, so its delete reports `ACCEPTED` rather than `CONFIRMED`.
+
+#### Marks and bulk actions
+
+`space` marks or unmarks the selected row; a marked row carries a `◆` in its
+first column and the toolbar counts the marks. Marks follow their workflow
+through refreshes, sorting and filtering. A mark hidden by the filter still
+counts, and the toolbar says how many are hidden. A mark whose workflow is gone
+from the snapshot is dropped, and switching namespace or profile clears them
+all. `esc` clears the marks first and the filter on the next press.
+
+With marks, `a` acts on every marked workflow, hidden ones included. The menu
+says how many marked workflows each verb applies to, and the confirmation lists
+them; workflows the verb does not apply to are left alone. A bulk terminate asks
+you to type the number of workflows instead of a name. The requests are sent
+one at a time, each with its own identity check and read-back, and none is ever
+resent. A workflow that fails its check is refused without affecting the
+others. `esc` during the run stops it after the request in flight; losing the
+connection or the fresh snapshot stops it too. The result lists every workflow's
+outcome with a total, and stays on screen until you close it. Closing it clears
+the marks and refreshes the list.
+
+#### Action journal
+
+Every write attempt, refused ones included, appends one JSON line to
+`$XDG_STATE_HOME/argo-tui/actions.jsonl` (by default
+`~/.local/state/argo-tui/actions.jsonl`): time, profile, server, namespace,
+name, UID, verb, outcome and error text. The file is created readable by you
+only. A journal that cannot be written never blocks or changes an action; the
+footer reports the first failure of the session. Sessions without
+`--allow-actions` and the demo write nothing. To turn the journal off, set
+`journal: false` at the top level of the config file.
 
 ## Everyday keys
 
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `0` all namespaces |
+| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` filter, `s` sort, `p` phase, `n` namespace, `0` all namespaces, `space` mark, `a` actions, `w` wide columns, `esc` clear marks then filter |
 | Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
 | Templates (`:tmpl`, `:cwftmpl`) | the same keys; `n` and `0` do not apply to cluster templates |
 | Archived workflows (`:aw`) | `enter` open the run, `i` info panel, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` record |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline, Explain, Events and Resource; `1`–`9` jump to a section by position; `T` timeline; `X` explain; `E` events; `r` refresh; `a` actions |
+| Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `y` confirms, `D` finishes a delete |
 | Nodes | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info, `/` find by name, `n`/`N` next/previous match, `h` show skipped nodes, `s` sort, `p` phase filter |
 | Timeline | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info |
 | Explain | `y` copy the report, `l` the failing pod's full log, `v` hides or reveals parameter values |
 | Events | `s` warnings first or newest first, `/` filter, `y` copy the table, `r` refresh and restart the stream |
 | Resource | `v` hides or reveals parameter/output values (also in the node info panel) |
-| Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
+| Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `&` only matching lines, `w` wrap, `L` source labels, `ctrl+t` server timestamps, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
 | Command palette | `:` open, `tab` complete, `up`/`down` choose, `enter` run, `ctrl+p`/`ctrl+n` history, `esc` close |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
+
+### Filtering and wide columns
+
+`/` filters the list as you type. A plain word matches workflow names; the
+rest is a small query language:
+
+| Query | Matches |
+| --- | --- |
+| `etl report` | names containing `etl` and `report` (spaces separate terms; every term must match) |
+| `etl\|report` | names containing either (`\|` joins alternatives within a term) |
+| `!etl` | names not containing `etl`; `!` negates one alternative, so `!a\|b` is "not a, or b" |
+| `/^demo-.*-\d+$/` | names matching a Go regular expression, case-insensitive |
+| `~ddp` | names containing `d`, `d`, `p` in that order (fuzzy) |
+| `phase=failed`, `phase!=succeeded` | the phase, case-insensitive; `suspended` is a phase here, and `running` includes it |
+| `age<2h`, `age>1d` | time since the workflow started, or was created if it has not |
+| `dur>10m` | run time; a running workflow counts until now |
+| `label:team=data`, `label:team`, `label:!team` | a label's exact value, its presence, its absence |
+| `tmpl=nightly` | started from this WorkflowTemplate or ClusterWorkflowTemplate |
+| `cron=etl-hourly` | started by this CronWorkflow |
+
+Durations take `s`, `m`, `h` and `d`, combined as in `1d12h`. A workflow with
+no timestamp matches neither side of an `age` or `dur` bound. A term that does
+not parse leaves the previous filter applied and shows its error in the
+toolbar, and `enter` will not apply it; `esc` cancels the edit. Once applied,
+the toolbar shows the filter as it was read, such as `phase=Failed & age<2h`.
+Like the rest of the list, the filter runs on the collected snapshot, not on
+the server.
+
+`w` toggles wide columns: PROGRESS (the server's done/total count of pods, with
+a bar), STARTED and FINISHED in local time, TEMPLATE, CRON and LABELS (the
+labels no other column shows). As the pane narrows they drop in this order:
+LABELS, CRON, FINISHED, MESSAGE, TEMPLATE, STARTED, PROGRESS. Without `w`, a
+pane of 120 columns or more shows PROGRESS as well.
+
+### Reading logs
+
+A workflow's logs mix every pod, so each line starts with a label naming the
+step it came from, or the pod when the step is not known yet, coloured per
+source. `L` hides or shows the labels; a single pod's log starts without them.
+`w` wraps long lines, keeping your place: the line at the bottom of the pane
+stays there. A line whose first word after its timestamps is `ERROR`, `WARN`,
+`DEBUG` or a similar level, or a JSON line whose `level` or `severity` field
+names one, gets that word coloured; the rest of the line is left alone.
+
+`&` shows only the lines matching the current `/` search, as in `less`; `&`
+again or `esc` shows everything. The status line says how many lines are
+shown out of how many are retained. Collection carries on underneath and the
+retention limits are unchanged.
+
+`ctrl+t` asks the server to put its own timestamp in front of every line. The
+stream is reopened with the new setting, which replays the log from the start;
+the lines already on screen stay, and a marker shows where the new stream
+begins. `t` (follow) and `T` (the timeline elsewhere) were taken, so the
+timestamp toggle is `t` with control.
 
 Suspended workflows sort first by default and their waiting nodes are marked
 `AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
@@ -405,7 +512,7 @@ spells out `READ ONLY` or `ACTIONS ENABLED`.
 | `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
 | `--token-file PATH`, `--ca-file PATH` | Override credential file or CA bundle |
 | `--refresh-interval DURATION` | Poll interval, default `5s`; accepted range `1s`–`10m` |
-| `--allow-actions` | Enable confirmed Resume, Retry, Resubmit and Stop |
+| `--allow-actions` | Enable confirmed workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete) |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--debug` | Emit sanitized lifecycle diagnostics |
 | `--skin NAME` | Colour skin, overriding the config file (see [Skins](#skins)) |
@@ -432,8 +539,7 @@ environment source from that profile before switching to a file.
   workflow with them hidden; `v` reveals them for the session. Log text,
   copied text and pipe output may contain sensitive application data either
   way.
-- Terminate exists in the transport but has no UI shortcut. Workflow submission,
-  bulk actions and parameter editing are not exposed in the UI.
+- Workflow submission and parameter editing are not exposed in the UI.
 
 Project history records live testing of v0.2.0 on macOS arm64 against Argo
 Workflows v4.1.2 in server auth mode without TLS, including list/watch, node

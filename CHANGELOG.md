@@ -130,6 +130,57 @@
   instead of reading as a namespace with no workflows.
 - The demo has a second namespace, `demo-ml`, with a hyperparameter sweep in
   progress and a finished batch inference run.
+- Workflow-wide logs now label each line with the step that wrote it, or the
+  pod when the step is not known, coloured per source. `L` turns the labels
+  off and on.
+- `w` in the log pane wraps long lines and keeps the line you were reading in
+  place. Search highlights carry across the wrapped lines.
+- A log line that starts with a level word such as `ERROR`, `WARN` or
+  `DEBUG`, after any timestamps, or a JSON line with a `level` or `severity`
+  field, has that word coloured. The rest of the line is untouched.
+- `&` in the log pane shows only the lines matching the `/` search, and says
+  how many of the retained lines that is. `&` again or `esc` shows every line.
+- `ctrl+t` in the log pane reopens the stream with server timestamps on or
+  off. The retained lines stay, and a marker shows where the new stream
+  starts.
+
+- The list filter now reads a small query language. Spaces separate terms
+  that must all match, `|` offers alternatives, `!` negates, `/.../` is a
+  regular expression and `~` a fuzzy match. `phase=`, `age<`, `dur>`,
+  `label:`, `tmpl=` and `cron=` filter on the phase, the age, the run time,
+  the labels and the template or CronWorkflow a run came from. A plain word
+  still matches names, and in the all-namespaces view a word, a regular
+  expression or a fuzzy pattern also matches `namespace/name`. A term that does not parse leaves the filter as it
+  was and says why in the toolbar, which shows the applied filter as it was
+  read.
+- `w` on the workflow list adds wide columns: progress with a bar, start and
+  finish times, the template, the CronWorkflow and the remaining labels. They
+  give way in a fixed order as the pane narrows. A pane of 120 columns or
+  more shows the progress column without `w`.
+- The space bar now types a space in the list filter instead of being
+  dropped.
+
+- Added marks and bulk actions. `space` marks the selected workflow and `esc`
+  clears the marks before it clears the filter. Marks follow their workflow
+  through refreshes, sorting and filtering, and the toolbar counts them,
+  including the ones the filter hides. With marks, `a` acts on every marked
+  workflow: the menu says how many each verb applies to, the confirmation
+  lists them, and the requests go out one at a time, each with its own
+  identity check and read-back and none ever resent. The result lists every
+  workflow's outcome.
+- `a` now works on the workflow list too, for the selected workflow, behind
+  the same fresh-data gate as the detail view.
+- Added suspend (`z`), terminate (`t`) and delete (`d`) to the actions menu.
+  Terminate asks for the workflow's name, or for the number of workflows in a
+  bulk action. Delete asks twice: a final screen deletes only on `D`.
+- The actions menu now offers only the verbs that apply to the workflow's
+  phase, and an action whose workflow has moved on since the menu opened is
+  refused before anything is sent.
+- A workflow suspended with `spec.suspend` now reads as Suspended in the list,
+  and resume is offered for it.
+- Every write attempt is now recorded in
+  `~/.local/state/argo-tui/actions.jsonl` (or under `$XDG_STATE_HOME`), one
+  JSON line per attempt. `journal: false` in the config file turns it off.
 
 - The demo dataset now has twelve workflows whose node maps follow the
   shapes the Argo controller writes: chained step groups, DAG tasks that list

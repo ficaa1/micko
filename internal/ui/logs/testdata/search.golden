@@ -2,10 +2,10 @@ logs: wf-1
 Scope: workflow-wide · container: main · [PAUSED]
 retained: 6/10000 lines (0 evicted) · search "line-2": 1/1 (n next, N previous) · search scope: retained buffer only (6 lines searched)
 ── (all pods):main ── 6 lines recorded
-line-0
-line-1
-line-2
-line-3
-line-4
-line-5
-t follow  space pause  / search  n next  c container  | pipe  f raw  y copy  esc back
+pod-1            line-0
+pod-1            line-1
+pod-1            line-2
+pod-1            line-3
+pod-1            line-4
+pod-1            line-5
+t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back

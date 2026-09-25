@@ -10,8 +10,10 @@ import (
 )
 
 // The pane's own annotations, the stream marker and the retention count,
-// are muted so the log lines read first. Log lines themselves are never
-// restyled, and the text is the plain pane's exactly.
+// are muted so the log lines read first. The text a log line carries is
+// never restyled, and the pane's text is the plain pane's exactly. The
+// source label in front of a line is the pane's, coloured by pod, and is
+// left out of the check.
 func TestAnnotationsAreMutedAndLogLinesAreNot(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	th, err := shared.SkinTheme("solarized-dark", false)
@@ -46,7 +48,7 @@ func TestAnnotationsAreMutedAndLogLinesAreNot(t *testing.T) {
 			t.Errorf("%s is not muted: %q", name, l)
 		}
 	}
-	if strings.Contains(logLine, "\x1b[") {
+	if text := logLine[strings.Index(logLine, "line-1"):]; strings.Contains(text, "\x1b[") {
 		t.Errorf("a log line was restyled: %q", logLine)
 	}
 }

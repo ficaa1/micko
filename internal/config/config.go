@@ -81,11 +81,30 @@ type File struct {
 	// Skin is the palette for every profile that names none of its own, and
 	// for the profile picker before any profile is chosen.
 	Skin string `yaml:"skin,omitempty"`
+	// Journal turns the action journal off when set to false. It is a
+	// pointer so that leaving the key out keeps the journal on: a record of
+	// writes is the safe default, and turning it off has to be a decision.
+	Journal *bool `yaml:"journal,omitempty"`
 	// RedactValues hides parameter and output values until `v` reveals
 	// them. It is off unless set: the values are what a reader opens a
 	// workflow to see, and a cluster whose parameters carry secrets turns
 	// it on here or per profile.
 	RedactValues bool `yaml:"redactValues,omitempty"`
+}
+
+// JournalEnabled reports whether the config file leaves the action journal
+// on. A file that is absent, or that does not parse, leaves it on: the parse
+// error is reported by the profile list, and a broken file must not
+// silently disable a safety record.
+func JournalEnabled(cfgData []byte) bool {
+	if len(cfgData) == 0 {
+		return true
+	}
+	var f File
+	if err := yaml.Unmarshal(cfgData, &f); err != nil {
+		return true
+	}
+	return f.Journal == nil || *f.Journal
 }
 
 // refreshInterval parses RefreshIntervalRaw; empty means "not set".

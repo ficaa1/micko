@@ -137,6 +137,10 @@ func (c *Connector) Skin() string {
 	return config.DefaultSkin
 }
 
+// JournalEnabled reports whether the config file leaves the action journal
+// on (the top-level `journal` key).
+func (c *Connector) JournalEnabled() bool { return config.JournalEnabled(c.data) }
+
 // HasProfiles reports whether the config file named any profile.
 func (c *Connector) HasProfiles() bool { return len(c.items) > 0 }
 
