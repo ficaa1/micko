@@ -18,8 +18,10 @@ import (
 //   - search scope is stated: "search scope: retained buffer only"
 //   - the viewport never scrolls on its own while paused; following pins
 //     to the tail (LOG-07/08)
-//   - no ANSI of its own reaches the terminal; text accompanies every
-//     state so color is never the only carrier (plan §2)
+//   - the only styling is the theme's: stream markers and the retention
+//     count are muted so the log lines read first, and search hits are
+//     highlighted; text accompanies every state so color is never the only
+//     carrier (plan §2)
 
 // rowKind distinguishes rendered row provenance.
 type rowKind int
@@ -387,6 +389,13 @@ func (m *Model) bodyLines() []string {
 	var b strings.Builder
 	b.WriteString(m.statusView())
 	b.WriteString("\n")
+	// A notice explains an empty stream, so it is shown only while nothing
+	// was retained. It gets lines of its own, wrapped, because it is the one
+	// thing on an empty pane worth reading in full.
+	if m.notice != "" && m.phase != PhaseError && len(m.buf.Lines()) == 0 {
+		b.WriteString(shared.Wrap(shared.Sanitize(m.notice), m.width))
+		b.WriteString("\n")
+	}
 	if m.searchOn {
 		b.WriteString("search: " + m.searchBuf + "_  (enter apply, esc cancel)")
 		b.WriteString("\n")
@@ -400,7 +409,7 @@ func (m *Model) bodyLines() []string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(m.countView())
+	b.WriteString(m.theme.Muted.Render(m.countView()))
 	b.WriteString("\n")
 	b.WriteString(strings.Join(m.windowLines(), "\n"))
 	// An empty buffer leaves the count line as the last written line, whose
@@ -419,7 +428,8 @@ func (m *Model) windowLines() []string {
 	out := make([]string, 0, h)
 	for i, r := range rows {
 		if r.kind != rowLog {
-			out = append(out, r.text)
+			// A marker is the pane's own annotation, not server output.
+			out = append(out, m.theme.Muted.Render(r.text))
 			continue
 		}
 		prefix, indent := "", ""

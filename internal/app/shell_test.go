@@ -6,14 +6,20 @@ import (
 	"time"
 
 	"charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/argo-tui/internal/core"
 	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
-// viewLines returns the rendered frame as terminal lines.
+// screen is the rendered frame as a reader sees it: the text with the
+// styling removed. The root draws in the default skin, which styles a key
+// apart from its description, so "? help" is only contiguous on screen.
+func screen(m *Root) string { return ansi.Strip(m.View().Content) }
+
+// viewLines returns the rendered frame as terminal lines, without styling.
 func viewLines(m *Root) []string {
-	return strings.Split(strings.TrimRight(m.View().Content, "\n"), "\n")
+	return strings.Split(strings.TrimRight(screen(m), "\n"), "\n")
 }
 
 // resize delivers a WindowSizeMsg the way the runtime does.
@@ -31,7 +37,7 @@ func TestFrameNeverExceedsTerminalHeight(t *testing.T) {
 	for _, h := range []int{9, 14, 24, 40} {
 		m = resize(t, m, 100, h)
 		if got := len(viewLines(m)); got > h {
-			t.Fatalf("height %d: frame is %d lines:\n%s", h, got, m.View().Content)
+			t.Fatalf("height %d: frame is %d lines:\n%s", h, got, screen(m))
 		}
 	}
 }
@@ -41,7 +47,7 @@ func TestFrameNeverExceedsTerminalHeight(t *testing.T) {
 func TestListFooterSurvivesShortTerminal(t *testing.T) {
 	m := loadDemoList(t)
 	m = resize(t, m, 100, 9)
-	if v := m.View().Content; !strings.Contains(v, "? help") {
+	if v := screen(m); !strings.Contains(v, "? help") {
 		t.Fatalf("key hints lost on a 9-row terminal:\n%s", v)
 	}
 }
@@ -60,9 +66,9 @@ func TestManyWorkflowsStillFit(t *testing.T) {
 	m.listView.SetItems(items, testkit.FixtureEpoch)
 	m = resize(t, m, 120, 20)
 	if got := len(viewLines(m)); got > 20 {
-		t.Fatalf("60 workflows on a 20-row terminal rendered %d lines:\n%s", got, m.View().Content)
+		t.Fatalf("60 workflows on a 20-row terminal rendered %d lines:\n%s", got, screen(m))
 	}
-	if v := m.View().Content; !strings.Contains(v, "? help") {
+	if v := screen(m); !strings.Contains(v, "? help") {
 		t.Fatalf("footer lost with 60 workflows:\n%s", v)
 	}
 }
@@ -73,13 +79,13 @@ func TestManyWorkflowsStillFit(t *testing.T) {
 func TestHelpKeyOpensOverlay(t *testing.T) {
 	m := loadDemoList(t)
 	m = resize(t, m, 100, 30)
-	if strings.Contains(m.View().Content, "KEYS") {
+	if strings.Contains(screen(m), "KEYS") {
 		t.Fatal("help must start closed")
 	}
 
 	next, _ := m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	m = next.(*Root)
-	v := m.View().Content
+	v := screen(m)
 	if !strings.Contains(v, "KEYS") {
 		t.Fatalf("? did not open the help overlay:\n%s", v)
 	}
@@ -90,8 +96,8 @@ func TestHelpKeyOpensOverlay(t *testing.T) {
 	// Esc closes it and returns to the list.
 	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = next.(*Root)
-	if strings.Contains(m.View().Content, "KEYS") {
-		t.Fatalf("Esc did not close the help overlay:\n%s", m.View().Content)
+	if strings.Contains(screen(m), "KEYS") {
+		t.Fatalf("Esc did not close the help overlay:\n%s", screen(m))
 	}
 	if m.route != RouteList {
 		t.Fatalf("closing help changed the route to %v", m.route)
@@ -119,7 +125,7 @@ func TestHelpOverlayOwnsInput(t *testing.T) {
 	if m.quitting {
 		t.Fatal("q must close the help overlay, not quit the program")
 	}
-	if strings.Contains(m.View().Content, "KEYS") {
+	if strings.Contains(screen(m), "KEYS") {
 		t.Fatal("q did not close the help overlay")
 	}
 	_ = cmd
@@ -152,7 +158,7 @@ func TestHelpKeyDoesNotTypeIntoSearch(t *testing.T) {
 	}
 	next, _ = m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	m = next.(*Root)
-	if strings.Contains(m.View().Content, "KEYS") {
+	if strings.Contains(screen(m), "KEYS") {
 		t.Fatal("? opened help while typing a search query")
 	}
 	if m.listView.SearchValue() != "?" {
@@ -208,8 +214,8 @@ func TestHelpOpensOnEveryRoute(t *testing.T) {
 
 	next, _ = m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	m = next.(*Root)
-	if !strings.Contains(m.View().Content, "KEYS") {
-		t.Fatalf("? did not open help on the detail route:\n%s", m.View().Content)
+	if !strings.Contains(screen(m), "KEYS") {
+		t.Fatalf("? did not open help on the detail route:\n%s", screen(m))
 	}
 	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = next.(*Root)

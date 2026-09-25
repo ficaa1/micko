@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"charm.land/bubbletea/v2"
@@ -20,6 +21,7 @@ import (
 	"github.com/ficaa1/argo-tui/internal/session"
 	"github.com/ficaa1/argo-tui/internal/testkit"
 	"github.com/ficaa1/argo-tui/internal/ui/actions"
+	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
 // mainVersion and mainCommit expose the build identity to the smoke test
@@ -46,6 +48,7 @@ func run(args []string) int {
 	insecure := fs.Bool("insecure-skip-tls-verify", false, "disable TLS verification (unsafe)")
 	allowActions := fs.Bool("allow-actions", false, "enable explicitly confirmed workflow actions")
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
+	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
 	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
@@ -59,6 +62,14 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "argo-tui: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
+	// A misspelled skin is a usage error like a misspelled flag: it is
+	// reported before anything connects, with every name that would work.
+	if *skin != "" {
+		if err := shared.CheckSkin(*skin); err != nil {
+			fmt.Fprintln(os.Stderr, "argo-tui: --skin:", err)
+			return 2
+		}
+	}
 
 	clock, demoClock := newClock(*demo)
 	opts := actions.Options{
@@ -71,6 +82,8 @@ func run(args []string) int {
 	if *demo {
 		opts.Server, opts.Profile = "synthetic demo", "demo"
 		root = app.NewRootWithOptions(testkit.DemoReader(demoClock), clock, "demo", config.DefaultRefreshInterval, opts)
+		// The demo reads no config file, so the flag is its only skin.
+		_, _ = root.ApplySkin(demoSkin(*skin))
 		root.SetRedactValues(*redactValues)
 	} else {
 		connector, err := session.NewConnector(session.Options{
@@ -82,6 +95,8 @@ func run(args []string) int {
 			RefreshInterval:       *refresh,
 			InsecureSkipTLSVerify: *insecure,
 			Debug:                 *debug,
+			Skin:                  *skin,
+			Skins:                 shared.SkinNames(),
 			RedactValues:          *redactValues,
 			Diagnostics:           os.Stderr,
 		})
@@ -102,6 +117,14 @@ func run(args []string) int {
 		}
 		root.SetConnector(connector)
 		root.SetProfiles(connector.ProfileList())
+		// The picker is drawn before any profile is chosen, so it takes the
+		// flag or the file's top-level skin. A profile's own skin arrives
+		// with its connection. The auto skin's background query is started
+		// by the root's Init, so the command returned here is not needed.
+		if _, err := root.ApplySkin(connector.Skin()); err != nil {
+			fmt.Fprintln(os.Stderr, "argo-tui:", err)
+			return 1
+		}
 
 		// Naming a profile or a server is an instruction to connect to it, so
 		// that path connects here and reports a failure on stderr with a
@@ -130,6 +153,14 @@ func run(args []string) int {
 // profile is used, not which one, so they still open the picker.
 func directConnect(profile, server string) bool {
 	return profile != "" || server != ""
+}
+
+// demoSkin is the skin the demo draws in: the flag, else the default.
+func demoSkin(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	return config.DefaultSkin
 }
 
 // newClock picks the clock for this run. Every relative time on screen is

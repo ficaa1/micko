@@ -69,6 +69,42 @@ func TestSmokeRunRejectsPositionalArgs(t *testing.T) {
 	}
 }
 
+// A misspelled --skin is a usage error, reported before anything starts,
+// in the demo as well as in a real run.
+func TestRunRejectsAnUnknownSkinFlag(t *testing.T) {
+	for _, args := range [][]string{
+		{"--demo", "--skin", "neon"},
+		{"--skin", "neon", "--config", filepath.Join(t.TempDir(), "none.yaml")},
+	} {
+		if code := run(args); code != 2 {
+			t.Errorf("run(%v) exit = %d, want 2", args, code)
+		}
+	}
+}
+
+// An unknown skin in the config file fails the start with exit 1, like any
+// other invalid config, even when it is on a profile nobody chose.
+func TestRunRejectsAnUnknownSkinInTheConfigFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	body := "profiles:\n  dev:\n    server: https://argo.example.com\n    skin: neon\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := run([]string{"--config", path}); code != 1 {
+		t.Errorf("run(config with skin neon) exit = %d, want 1", code)
+	}
+}
+
+// The demo reads no config file, so its skin is the flag or the default.
+func TestTheDemoSkinIsTheFlag(t *testing.T) {
+	if got := demoSkin(""); got != "default" {
+		t.Errorf("demoSkin(\"\") = %q, want default", got)
+	}
+	if got := demoSkin("nord"); got != "nord" {
+		t.Errorf("demoSkin(nord) = %q", got)
+	}
+}
+
 // A frozen clock belongs to the demo alone, whose dataset is built from the
 // same clock and whose sample ages have to stay put. A real run must read
 // the wall clock, or every age on screen freezes at the moment of start.

@@ -7,6 +7,129 @@
   whose parameters carry secrets can turn it back on with `redactValues: true`
   at the top of the config file or on a profile, or with `--redact-values`;
   `v` still hides or reveals them for the session.
+- A Timeline section, after Nodes, draws the workflow as a Gantt chart: pods
+  and approval gates as bars coloured by phase on a time axis whose ticks
+  step in seconds, minutes, hours or days as the run requires, with a `now`
+  line while the workflow runs. Groups are brackets over the time they took,
+  shading marks the time a step waited before it started, and `◆` marks the
+  critical path, the chain of work that set the end time. Rows follow the
+  pipeline order and folds of the Nodes tab, `i` shows the node info panel
+  and `enter` opens the pod's log.
+- `1` to `9` jump to a detail section by its position, and `T` jumps to the
+  Timeline. `T` on the workflow list opens the selected workflow straight on
+  its Timeline.
+- The help overlay is tighter, so it fits a 40-row, 80-column terminal whole.
+- An Explain section, after Timeline, says why a workflow ended the way it
+  did, from what the workflow records and nothing else: no network service,
+  no model, the same answer every time. Each finding is a card with a
+  severity, a headline, its evidence and a next step. It finds the node
+  that failed first on its own, explains exhausted retries, out-of-memory
+  kills, well-known exit codes, image pull errors and pods that never
+  started, deadlines and rejected specs, lists what did not run because of
+  the failure, and reports the exit handler, a gate waiting for a person, a
+  run past its estimate, a workflow the controller has not started, and
+  steps that needed a retry in a run that succeeded. For a failed pod it
+  reads the end of the log and quotes the lines that matter; a log that is
+  gone is said so. `y` copies the explanation as text for an incident
+  channel.
+- `X` jumps to the Explain section in the detail pane, and `X` on the
+  workflow list opens the selected workflow straight on it.
+- An Events section, after Explain, streams the Kubernetes events about the
+  workflow and its pods while it is open: age, type (as a glyph and a word),
+  reason, the workflow or the node, count and message. `s` puts warnings
+  first and `/` filters. A dropped stream reconnects with back-off, and a
+  permission error or a server without Argo's event stream is said on the
+  status line. `E` jumps to it in the detail pane and opens the selected
+  workflow on it from the list. The demo serves synthetic events.
+- The detail tab strip closes up, and then shows the tabs around the active
+  one, when the terminal is too narrow for all of them.
+
+- The Nodes tab reads like the pipeline it shows. Steps are listed under
+  their Steps node in group order instead of as a staircase of step groups;
+  DAG tasks are listed in dependency order with what each waits for
+  (`← extract`), so a join appears once; retry attempts nest under their
+  Retry node; and the exit handler is its own labelled tree. The default
+  `s` order follows the pipeline, and start time, name and phase remain.
+- Each node row now carries its run: the template on a wide terminal, the
+  duration (elapsed while it runs), a timing bar that places it on the
+  workflow's clock, and the message. Structural nodes are tagged with their
+  type, a Retry node shows its retry count and a failing pod its exit code.
+  Above the tree, a progress line shows the workflow's progress with a bar,
+  a count of the work by state, and the elapsed time against the estimate.
+- Subtrees fold: `space` folds or unfolds, `left` folds or climbs to the
+  parent, `right` unfolds. Folds survive refreshes, and earlier retry
+  attempts start folded.
+- `i` opens a node info panel with everything the workflow says about the
+  node under the cursor: times, pod and host, exit code, resource usage,
+  flags, and inputs and outputs, with parameter values that `v` hides or reveals.
+  It sits to the right on a wide terminal and under the tree otherwise.
+- `/` finds a node by name; `n` and `N` step through the matches, opening
+  folds on the way. While the find input is open every letter types, `q`
+  included, and `esc` clears the find before it leaves the workflow.
+- Added skins. `default` keeps the terminal's own 16-colour palette; the
+  truecolor skins are catppuccin-mocha, catppuccin-latte, gruvbox-dark,
+  gruvbox-light, nord, dracula, tokyo-night, solarized-dark, solarized-light,
+  one-dark, rose-pine, rose-pine-dawn and monokai; `auto` picks a dark or
+  light skin from the terminal's background colour. Choose one with `skin:`
+  in the config file, per profile, or with `--skin`, which also works in the
+  demo. An unknown name stops the program at startup and lists the valid
+  ones. `NO_COLOR` still gives plain text.
+- The screen chrome is drawn with more care. The header band shows the
+  program, server and namespace in separate styles and the safety mode as a
+  badge, louder when actions are enabled. Footer keys stand out from their
+  descriptions. The selected row is a bar across the pane, the list colours
+  only the phase cell and mutes the times and message, table heads and tree
+  connectors are styled, and the detail tabs, pickers, action pane, help
+  overlay and log annotations use the same palette. Truecolor skins round
+  the border corners. The text on screen is unchanged: every phase keeps its
+  glyph and word.
+- Added a command palette. `:` opens it on every route; typing ranks the
+  commands and their aliases, `tab` completes the highlighted one, and `enter`
+  runs exactly what was typed. `wf` shows the workflow list, `ns [name]` and
+  `profile [name]` (or `ctx`) switch namespace and profile or open their
+  pickers, `all` toggles all namespaces, and `help` and `q` do what their keys
+  do. Namespace and profile names complete after a space, and `ctrl+p` and
+  `ctrl+n` recall earlier commands. A word that names no command is reported
+  in the footer, never run as a near match.
+- Added an all-namespaces view: `0` on the workflow list, or `:all`. The list
+  shows every workflow the token may read with a NAMESPACE column, the header
+  reads `ns: all`, the filter also matches `namespace/name`, and detail, logs
+  and actions use each row's own namespace. A token that may not list
+  cluster-wide, or a server started for one managed namespace, gets that
+  reason on the pane instead of an empty list.
+- Added a cron workflow list: `:cron` (or `:cwf`, `:cronworkflows`). It
+  shows each CronWorkflow's schedules, time zone, suspend state, active runs,
+  last run, next run and concurrency policy, soonest next run first and
+  suspended ones last, with `n` and `0` for the namespace as on the workflow
+  list. Next run times are computed from the schedule the way the controller
+  reads it, in the object's time zone and across daylight-saving changes; a
+  schedule the controller would refuse shows `?` with the reason. `i` opens
+  an info panel with the next five runs, the policy, the history limits, the
+  last and active runs and the arguments, whose values `v` hides or reveals. `enter`
+  lists the workflows the cron workflow started, and `esc` returns. Both the
+  v3.5 `schedule` field and the v3.6+ `schedules` list are read. The demo has
+  four cron workflows, one of them owning the demo's hourly ETL runs.
+- Added workflow template and cluster workflow template lists: `:tmpl` (or
+  `:wftmpl`, `:workflowtemplates`) and `:cwftmpl` (or
+  `:clusterworkflowtemplates`). They show each template's entrypoint, how many
+  templates and parameters it defines, its age and its description. `i` opens
+  an info panel with the arguments (values follow `redactValues`, with their
+  defaults and allowed values), each template and its type, the service
+  account and the labels, and `enter` lists the workflows submitted from the
+  template. Cluster templates belong to no namespace, so `n` and `0` say so
+  instead of switching. The demo has the templates its workflows name, and a
+  cluster template its hello-world run came from.
+- Added an archived workflow list: `:aw` (or `:archived`). It lists the
+  workflow archive with the workflow list's columns, the newest 300 runs, and
+  `enter` opens a run in the detail pane from the archive, marked as archived.
+  Archived runs are not refreshed and cannot be acted on, and their log pane
+  says when nothing came back because the pods are gone. A server without an
+  archive gets "the workflow archive is not enabled on this server" instead of
+  an error.
+- A list that fails before anything was collected now says so on the pane
+  instead of reading as a namespace with no workflows.
+- The demo has a second namespace, `demo-ml`, with a hyperparameter sweep in
+  progress and a finished batch inference run.
 - Workflow-wide logs now label each line with the step that wrote it, or the
   pod when the step is not known, coloured per source. `L` turns the labels
   off and on.
@@ -26,7 +149,8 @@
   regular expression and `~` a fuzzy match. `phase=`, `age<`, `dur>`,
   `label:`, `tmpl=` and `cron=` filter on the phase, the age, the run time,
   the labels and the template or CronWorkflow a run came from. A plain word
-  still matches names. A term that does not parse leaves the filter as it
+  still matches names, and in the all-namespaces view a word, a regular
+  expression or a fuzzy pattern also matches `namespace/name`. A term that does not parse leaves the filter as it
   was and says why in the toolbar, which shows the applied filter as it was
   read.
 - `w` on the workflow list adds wide columns: progress with a bar, start and

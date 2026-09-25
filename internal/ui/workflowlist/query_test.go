@@ -10,7 +10,7 @@ import (
 	"github.com/ficaa1/argo-tui/internal/testkit"
 )
 
-// demoSummaries is the demo dataset's list, as the demo serves it, with the
+// demoSummaries is the demo namespace's list, as the demo serves it, with the
 // clock it was built against.
 func demoSummaries(t *testing.T) ([]core.Summary, time.Time) {
 	t.Helper()
@@ -18,7 +18,10 @@ func demoSummaries(t *testing.T) ([]core.Summary, time.Time) {
 	f := testkit.DemoReader(testkit.NewFakeClock(now))
 	var out []core.Summary
 	for _, ref := range f.Order {
-		out = append(out, f.Workflows[ref].Summary)
+		// The demo namespace's workflows: the list a session opens on.
+		if ref.Namespace == testkit.DemoNamespace {
+			out = append(out, f.Workflows[ref].Summary)
+		}
 	}
 	return out, now
 }

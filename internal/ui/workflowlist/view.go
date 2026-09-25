@@ -85,6 +85,27 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return func() tea.Msg { return intent }
 		}
 		return nil
+	case "T":
+		// Open the workflow straight on its timeline: the question "where
+		// did the time go" is often the reason to open it at all.
+		if intent := m.OpenSectionIntent(shared.SectionTimeline); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
+	case "X":
+		// Open the workflow straight on its explanation: for a failed run,
+		// "why" is the first question.
+		if intent := m.OpenSectionIntent(shared.SectionExplain); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
+	case "E":
+		// Open the workflow straight on its Kubernetes events: a pod that
+		// cannot be scheduled or pulled says why only there.
+		if intent := m.OpenSectionIntent(shared.SectionEvents); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
 	case "/":
 		m.SearchOn = true
 		m.queryBefore = m.query

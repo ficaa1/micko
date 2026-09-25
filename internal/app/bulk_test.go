@@ -172,7 +172,7 @@ func TestBulkStopRunsOncePerTargetInOrder(t *testing.T) {
 			t.Errorf("%s: %s, want confirmed", name, o)
 		}
 	}
-	view := m.View().Content
+	view := screen(m)
 	if !strings.Contains(view, "total: 3 confirmed, 0 accepted, 0 refused, 0 unknown (3 workflows)") ||
 		!strings.Contains(view, "CONFIRMED  ns/wf-b — phase Failed") {
 		t.Fatalf("outcome pane:\n%s", view)
@@ -195,8 +195,8 @@ func TestBulkRefusesAReplacedTargetAndContinues(t *testing.T) {
 	if got["wf-b"] != core.ActionRefused || got["wf-a"] != core.ActionConfirmed || got["wf-c"] != core.ActionConfirmed {
 		t.Fatalf("outcomes = %v", got)
 	}
-	if !strings.Contains(m.View().Content, "REFUSED    ns/wf-b — not sent: workflow UID mismatch") {
-		t.Fatalf("the refusal reason is not shown:\n%s", m.View().Content)
+	if !strings.Contains(screen(m), "REFUSED    ns/wf-b — not sent: workflow UID mismatch") {
+		t.Fatalf("the refusal reason is not shown:\n%s", screen(m))
 	}
 }
 

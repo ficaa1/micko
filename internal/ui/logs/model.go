@@ -87,6 +87,9 @@ type Model struct {
 
 	phase   Phase  // stream lifecycle
 	errText string // sanitized error/unavailable explanation (LOG-12)
+	// notice explains a stream that ended cleanly with nothing to show when
+	// there is a known reason, so an empty pane never reads as a quiet pod.
+	notice string
 
 	search       searchState // committed search
 	searchBuf    string      // keystroke buffer while focused
@@ -106,9 +109,10 @@ type Model struct {
 
 	width, height int // last known terminal size (SetSize)
 	noColor       bool
-	// theme styles the search highlight. Nothing else in this pane is
-	// coloured, so it is the one channel that says "this is the word you
-	// searched for" without editing the line.
+	// theme styles the search highlight and mutes the pane's own
+	// annotations. Log lines are never coloured as a whole, so the highlight
+	// is the one channel that says "this is the word you searched for"
+	// without editing the line.
 	theme shared.Theme
 
 	// paneMode says a shell draws this pane's title and footer bands, so the
@@ -203,7 +207,7 @@ func (m *Model) SetNoColor(v bool) {
 	}
 }
 
-// SetTheme injects the style set used for the search highlight.
+// SetTheme injects the style set used for the highlight and annotations.
 func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
 // Ref returns the workflow the viewer is attached to.
@@ -291,6 +295,10 @@ func (m *Model) SetError(text string) {
 		m.phase = PhaseError
 	}
 }
+
+// SetNotice records why a stream may show nothing. The pane shows it below
+// the status line for as long as no line has been retained.
+func (m *Model) SetNotice(text string) { m.notice = strings.TrimSpace(text) }
 
 // ApplyRecords feeds one batch of records into the buffer (the root
 // delivers logRecordMsg batches — plan §5; the component owns no

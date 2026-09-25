@@ -124,6 +124,11 @@ type Model struct {
 
 	// noColor mirrors the theme's plainness for ASCII snapshot tests.
 	noColor bool
+
+	// allNS marks a snapshot collected across namespaces. The table gains a
+	// NAMESPACE column and the filter matches it, because two rows of the
+	// same name in two namespaces are otherwise indistinguishable.
+	allNS bool
 }
 
 // New builds an empty list model. Items/status arrive via SetItems and
@@ -265,6 +270,16 @@ func (m *Model) SetStatus(s Status, msg string, staleAge time.Duration) {
 	m.errAge = staleAge
 }
 
+// SetAllNamespaces says whether the snapshot spans namespaces. The root sets
+// it with every change of scope, before the new snapshot arrives.
+func (m *Model) SetAllNamespaces(on bool) {
+	m.allNS = on
+	m.applyView()
+}
+
+// AllNamespaces reports whether the list shows the NAMESPACE column.
+func (m *Model) AllNamespaces() bool { return m.allNS }
+
 // SetPhase rotates/sets the phase filter.
 func (m *Model) SetPhase(p PhaseFilter) { m.phase = p; m.applyView() }
 
@@ -335,11 +350,12 @@ func (m *Model) TotalCount() int   { return m.total }
 // m.rows, so a filter applied anywhere else would miscount hidden marks.
 func (m *Model) applyView() {
 	rows := make([]core.Summary, 0, len(m.items))
+	match := m.match.AcrossNamespaces(m.allNS)
 	for _, it := range m.items {
 		if !m.phase.Matches(it) {
 			continue
 		}
-		if !m.match.Match(it, m.now) {
+		if !match.Match(it, m.now) {
 			continue
 		}
 		rows = append(rows, it)
@@ -423,6 +439,16 @@ func (m *Model) OpenIntent() tea.Msg {
 	return shared.OpenWorkflowMsg{Ref: sel.Ref}
 }
 
+// OpenSectionIntent returns the intent that opens the selected workflow on
+// one detail section, or nil when nothing is selected.
+func (m *Model) OpenSectionIntent(section string) tea.Msg {
+	sel := m.Selected()
+	if sel.Ref.UID == "" {
+		return nil
+	}
+	return shared.OpenWorkflowMsg{Ref: sel.Ref, Section: section}
+}
+
 // LogsIntent returns the open-logs intent for the selected row, or nil.
 // Container defaults to "main" visibly (plan §2; the UI for editing the
 // container lives in the logs view, D1).
@@ -499,6 +525,9 @@ func (m *Model) searchRight() {
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 }
+
+// SetTheme replaces the style set the list is drawn in.
+func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
 // sanitizeOne is the single render-path sanitization choke point for
 // server-derived strings in this component (SEC-02).

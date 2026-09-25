@@ -79,12 +79,29 @@ func (m *Root) Adopt(c *Connection) {
 	m.deps.watcher, _ = c.Reader.(core.Watcher)
 	m.deps.actioner, _ = c.Reader.(core.Actioner)
 	m.deps.nsLister, _ = c.Reader.(core.NamespaceLister)
+	m.deps.eventWatcher, _ = c.Reader.(core.EventWatcher)
+	m.deps.cronLister, _ = c.Reader.(core.CronLister)
+	m.deps.templateLister, _ = c.Reader.(core.TemplateLister)
+	m.deps.clusterTemplateLister, _ = c.Reader.(core.ClusterTemplateLister)
+	m.deps.archive, _ = c.Reader.(core.ArchiveReader)
 	m.deps.namespace = c.Namespace
+	// A new connection starts in its profile's namespace. Carrying the
+	// all-namespaces view across would send the next cluster a cluster-wide
+	// list the reader never asked it for.
+	m.deps.allNamespaces = false
+	m.listView.SetAllNamespaces(false)
+	m.nsDiscovered = nil
 	if c.Interval > 0 {
 		m.deps.interval = c.Interval
 	}
 	m.webURL = c.WebURL
 	m.pipeCommand = c.PipeCommand
+	if c.Skin != "" {
+		// The name was checked when the config file was read. Should it
+		// still be unknown, the session keeps the skin it has rather than
+		// refusing a connection over a colour.
+		_, _ = m.ApplySkin(c.Skin)
+	}
 	m.SetRedactValues(c.Redact)
 	m.nsSeed = c.Namespaces
 	m.actionOpts.Server = c.Server
@@ -141,7 +158,10 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	old := m.conn
 	m.conn = nil
 	m.deps.reader = nil
-	m.deps.watcher, m.deps.actioner, m.deps.nsLister = nil, nil, nil
+	m.deps.watcher, m.deps.actioner, m.deps.nsLister, m.deps.eventWatcher = nil, nil, nil, nil
+	m.deps.cronLister = nil
+	m.deps.templateLister, m.deps.clusterTemplateLister = nil, nil
+	m.deps.archive = nil
 	m.resetRoutes()
 	if m.profView != nil {
 		m.profView.SetConnecting(name)
@@ -185,7 +205,7 @@ func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 		m.profView.Close()
 	}
 	m.flash = "profile: " + msg.Profile
-	return tea.Batch(m.startListGeneration(), m.waitConnStates())
+	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery())
 }
 
 // resetRoutes drops everything the previous connection produced and returns
@@ -198,10 +218,14 @@ func (m *Root) resetRoutes() {
 	m.detailState = detailState{}
 	m.logState = logState{}
 	m.logsView = nil
-	m.detailView = newDetailView()
-	m.detailView.SetRedactByDefault(m.redact)
+	m.detailView = m.newDetailView()
+	m.detailFrom = RouteList
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
-	// Marks belong to the cluster being left; a bulk action must never
+	m.drill = nil
+	m.deps.drillNamespace, m.deps.labelSelector = "", ""
+	m.resetKinds()
+	m.listView.SetAllNamespaces(m.listAcrossNamespaces())
+	// Marks name workflows of the scope being left; a bulk action must never
 	// reach across a switch.
 	m.listView.ClearMarks()
 	m.listView.SetItems(nil, m.deps.clock.Now())

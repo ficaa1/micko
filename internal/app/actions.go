@@ -524,7 +524,7 @@ func (m *Root) openListActions() {
 // same on every route: an action chosen from a stale list is exactly as
 // dangerous as one chosen from a stale detail pane.
 func (m *Root) openActions(ref core.Ref, targets []core.Summary, fromMarks bool) {
-	m.actionView = actions.NewWithOptions(ref, m.actionOpts)
+	m.actionView = m.newActionView(ref)
 	if len(targets) > 0 {
 		m.actionView.SetTargets(targets)
 	}
