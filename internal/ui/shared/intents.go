@@ -10,9 +10,13 @@ type OpenWorkflowMsg struct {
 	Section string
 }
 
-// SectionTimeline is the detail section a workflow list key opens a
-// workflow straight onto, by the ID the detail pane knows it by.
-const SectionTimeline = "timeline"
+// The detail sections a workflow list key opens a workflow straight onto,
+// by the IDs the detail pane knows them by.
+const (
+	SectionTimeline = "timeline"
+	SectionExplain  = "explain"
+	SectionEvents   = "events"
+)
 
 // OpenLogsMsg asks the root to attach a log stream.
 type OpenLogsMsg struct {

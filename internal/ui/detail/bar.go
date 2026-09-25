@@ -1,7 +1,6 @@
 package detail
 
 import (
-	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -347,23 +346,4 @@ func mergeCells(cells []string, kinds []barKind) []barSeg {
 // and the zero theme the unstyled renders use.
 func barsASCII(t shared.Theme) bool {
 	return t.Skin == "plain" || t.Skin == ""
-}
-
-// shortDuration renders a duration to the second while it is short and to
-// the minute once it is long, in at most six cells: 42s, 4m12s, 2h05m, 3d04h.
-func shortDuration(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	s := int64(d / time.Second)
-	switch {
-	case s < 60:
-		return fmt.Sprintf("%ds", s)
-	case s < 3600:
-		return fmt.Sprintf("%dm%02ds", s/60, s%60)
-	case s < 86400:
-		return fmt.Sprintf("%dh%02dm", s/3600, s%3600/60)
-	default:
-		return fmt.Sprintf("%dd%02dh", s/86400, s%86400/3600)
-	}
 }

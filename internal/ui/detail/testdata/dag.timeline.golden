@@ -1,5 +1,5 @@
 DETAIL fixture-dag
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Events   Resource 
 NAME                   DURATION   0           1m          2m          3m          4m     5m00s
 ▾ ✗ fixture-dag DAG
 ├─ ✓ task-a                  0s   =-----------------------------------------------------------

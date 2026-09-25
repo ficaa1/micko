@@ -114,7 +114,7 @@ func nodeInfoGroups(r FlatRow, n core.Node, found bool, now time.Time, reveal bo
 		how = append(how, item("finished", clockText(*n.FinishedAt, now), text))
 	}
 	if d, ok := nodeDuration(row, now); ok {
-		v := shortDuration(d)
+		v := shared.ShortDuration(d)
 		if _, _, running, _ := nodeInterval(row, now); running {
 			v += " (running)"
 		}
@@ -192,7 +192,7 @@ func resourceItems(res map[string]int64, style lipgloss.Style) []infoItem {
 	})
 	out := make([]infoItem, 0, len(keys))
 	for _, k := range keys {
-		v := shortDuration(time.Duration(res[k]) * time.Second)
+		v := shared.ShortDuration(time.Duration(res[k]) * time.Second)
 		switch k {
 		case "cpu":
 			v += " × 1 cpu"

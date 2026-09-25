@@ -73,7 +73,7 @@ func (m *Model) WindowStatus() string {
 
 // Hints are the list key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	return "enter open  l logs  T timeline  / search  s sort  p phase  n namespace  r refresh"
+	return "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  n namespace  r refresh"
 }
 
 // footerPosition is the window indicator appended to the standalone footer.
