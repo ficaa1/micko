@@ -29,7 +29,7 @@
   reads it, in the object's time zone and across daylight-saving changes; a
   schedule the controller would refuse shows `?` with the reason. `i` opens
   an info panel with the next five runs, the policy, the history limits, the
-  last and active runs and the arguments, whose values `v` reveals. `enter`
+  last and active runs and the arguments, whose values `v` hides or reveals. `enter`
   lists the workflows the cron workflow started, and `esc` returns. Both the
   v3.5 `schedule` field and the v3.6+ `schedules` list are read. The demo has
   four cron workflows, one of them owning the demo's hourly ETL runs.

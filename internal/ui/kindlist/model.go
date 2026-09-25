@@ -134,10 +134,14 @@ type Model[T any] struct {
 
 	allNS bool
 	info  bool
-	// revealKey is the row whose values the reader revealed with v. The
-	// reveal belongs to that one object: moving the cursor redacts again,
-	// so scrolling never shows another row's secrets unasked.
-	revealKey string
+	// redact is the profile's redactValues setting: when set, values start
+	// hidden and v reveals them; otherwise they start shown and v hides them.
+	redact bool
+	// flipKey is the row on which the reader pressed v, flipping that row
+	// from the default. The flip belongs to that one object: moving the
+	// cursor returns to the default, so with redaction on, scrolling never
+	// shows another row's secrets unasked.
+	flipKey string
 
 	// now is the clock reading of the last snapshot. Sort orders that
 	// depend on the time (next run soonest) read it, so the order is the
@@ -169,7 +173,7 @@ func (m *Model[T]) SetItems(items []T, now time.Time) {
 // the old scope under the new header would be wrong until the first answer.
 func (m *Model[T]) Reset() {
 	m.items, m.rows = nil, nil
-	m.selKey, m.revealKey = "", ""
+	m.selKey, m.flipKey = "", ""
 	m.scrollTop = 0
 	m.status = StatusLoading
 	m.errMsg, m.errAge = "", 0
@@ -213,7 +217,19 @@ func (m *Model[T]) SearchValue() string { return m.searchBuf }
 func (m *Model[T]) InfoOpen() bool { return m.info }
 
 // Revealed reports whether the selected row's values are shown.
-func (m *Model[T]) Revealed() bool { return m.selKey != "" && m.revealKey == m.selKey }
+func (m *Model[T]) Revealed() bool {
+	if m.selKey == "" {
+		return false
+	}
+	return (m.flipKey == m.selKey) == m.redact
+}
+
+// SetRedact applies the profile's redactValues setting and drops any flip,
+// so a profile that redacts never inherits a row the previous one showed.
+func (m *Model[T]) SetRedact(redact bool) {
+	m.redact = redact
+	m.flipKey = ""
+}
 
 // SortLabel names the active sort.
 func (m *Model[T]) SortLabel() string {
@@ -343,11 +359,11 @@ func (m *Model[T]) moveTo(i int) {
 	m.setSel(m.key(m.rows[i]))
 }
 
-// setSel moves the cursor to key. A reveal belongs to the row it was made
+// setSel moves the cursor to key. A flip belongs to the row it was made
 // on, so moving anywhere else ends it.
 func (m *Model[T]) setSel(key string) {
 	if key != m.selKey {
-		m.revealKey = ""
+		m.flipKey = ""
 	}
 	m.selKey = key
 }
@@ -423,10 +439,10 @@ func (m *Model[T]) handleKey(key string) tea.Cmd {
 	case "i":
 		m.info = !m.info
 	case "v":
-		if m.Revealed() {
-			m.revealKey = ""
+		if m.flipKey == m.selKey {
+			m.flipKey = ""
 		} else {
-			m.revealKey = m.selKey
+			m.flipKey = m.selKey
 		}
 	case "r":
 		return func() tea.Msg { return RefreshMsg{} }
@@ -513,7 +529,11 @@ func (m *Model[T]) Hints() string {
 		h = "i info  / search  s sort"
 	}
 	if m.info {
-		h += "  v reveal"
+		if m.Revealed() {
+			h += "  v redact"
+		} else {
+			h += "  v reveal"
+		}
 	}
 	if m.spec.Namespaced {
 		h += "  n namespace  0 all ns"

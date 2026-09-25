@@ -157,7 +157,7 @@ func (m *Model[T]) toolbarLines() []string {
 	if m.info {
 		reveal := "values redacted (v reveals)"
 		if m.Revealed() {
-			reveal = "values REVEALED (v redacts)"
+			reveal = "values shown (v redacts)"
 		}
 		parts = append(parts, reveal)
 	}

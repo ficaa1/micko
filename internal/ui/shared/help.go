@@ -74,7 +74,7 @@ func helpLines() []string {
 		"          esc clear filter",
 		"",
 		"Kinds     :cron cron workflows; enter lists a row's workflows",
-		"          i info panel  v reveal its values  f manifest",
+		"          i info panel  v hide or reveal its values  f manifest",
 		"",
 		"Command   : opens it; type a command, tab completes it",
 		"          up / down choose a suggestion    enter runs",

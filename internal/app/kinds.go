@@ -44,6 +44,7 @@ type kindPane interface {
 	Namespaced() bool
 	Reset()
 	Len() int
+	SetRedact(bool)
 }
 
 // kindState is one kind's collection state.
