@@ -129,7 +129,7 @@ check and the write remains possible.
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
 | Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `0` all namespaces |
-| Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
+| Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
 | Resource | `v` hides or reveals parameter/output values |
@@ -192,8 +192,9 @@ least 140 columns wide, beside it: every schedule, the time zone, the next five
 run times, the concurrency policy, the starting deadline, the history limits,
 the suspend state, the last run, the active runs, the controller's conditions,
 and the entrypoint and arguments of the workflow each run starts. Argument
-values are redacted until `v`, which reveals them for the selected row only.
-`f` shows the whole manifest, redacted the same way.
+values are shown, and `v` hides them for the selected row; under
+`redactValues` they start hidden and `v` reveals that row only. `f` shows the
+whole manifest the same way.
 
 `enter` lists the workflows the cron workflow started: the workflow list,
 narrowed on the server by the `workflows.argoproj.io/cron-workflow` label the

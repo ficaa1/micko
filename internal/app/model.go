@@ -179,6 +179,9 @@ func (m *Root) SetPipeCommand(cmd string) { m.pipeCommand = cmd }
 func (m *Root) SetRedactValues(redact bool) {
 	m.redact = redact
 	m.detailView.SetRedactByDefault(redact)
+	for _, def := range m.kindDefs {
+		def.pane.SetRedact(redact)
+	}
 }
 
 // listState is the list route's data + status.
