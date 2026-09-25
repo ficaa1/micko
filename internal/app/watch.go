@@ -43,6 +43,7 @@ func (m *Root) startWatch() tea.Cmd {
 	// against the namespace the reader just left.
 	req := core.WatchRequest{
 		Namespace:       m.deps.listNamespace(),
+		LabelSelector:   m.deps.labelSelector,
 		ResourceVersion: m.watchRV,
 	}
 	watcher := m.deps.watcher

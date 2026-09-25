@@ -10,10 +10,11 @@ access for managed forwarding goes through `kubectl`.
 | --- | --- |
 | `cmd/argo-tui` | Flags, config, connection setup and process lifecycle |
 | `internal/config`, `internal/portforward` | Profile validation and owned port-forward recovery |
-| `internal/core` | Reader, Watcher and Actioner interfaces; workflow types and errors |
+| `internal/core` | Reader, Watcher and Actioner interfaces, the optional listers of the other kinds and the archive; workflow, cron workflow and template types and errors |
+| `internal/cronexpr` | The controller's cron dialect: parsing and next run times in a time zone |
 | `internal/argo` | REST transport, pagination, watch/log parsing, pod resolution and mutations |
 | `internal/app` | Routes, async commands, stale-response rejection, action orchestration and the command registry |
-| `internal/ui` | List, detail, logs, namespaces, profiles, command palette, actions and shared rendering |
+| `internal/ui` | List, detail, logs, namespaces, profiles, command palette, actions and shared rendering; `kindlist` is the list of the other kinds, `cronlist`, `templatelist` and `archivedlist` its kinds |
 | `internal/testkit` | In-memory reader, synthetic demo data and injectable clock |
 
 Keep API declarations in the Go source rather than duplicating them in docs.
@@ -40,6 +41,27 @@ live in [ci.yml](../.github/workflows/ci.yml).
 - A palette command or a resource kind is one entry in `internal/app/palette.go`:
   `builtinCommands` for a command, `listKinds` for a kind with its own list
   route. The palette package ranks and completes whatever the registry holds.
+  A kind beside workflows also needs a narrow lister interface in
+  `internal/core`, implemented by the adapter and the fake, a
+  `kindlist.Spec` for its columns, sorts and info panel, and a `kindDef` in
+  `internal/app` (see `cron.go`).
+- Cron workflows are listed from `/api/v1/cron-workflows/{namespace}`, paged
+  with `listOptions.limit` and `listOptions.continue`; that endpoint takes no
+  `fields` projection. Their drill-down is the workflow list with
+  `listOptions.labelSelector=workflows.argoproj.io/cron-workflow=<name>`.
+- Workflow templates come from `/api/v1/workflow-templates/{namespace}` and
+  cluster templates from `/api/v1/cluster-workflow-templates`, paged the same
+  way and without a projection. Their drill-downs select on
+  `workflows.argoproj.io/workflow-template` and
+  `workflows.argoproj.io/cluster-workflow-template`.
+- The archive is `/api/v1/archived-workflows`, narrowed with
+  `listOptions.fieldSelector=metadata.namespace=<ns>` (every server version
+  reads it; v3.5+ also takes a `namespace` parameter) and paged with an offset
+  token; a run is read from `/api/v1/archived-workflows/{uid}`. With no archive
+  configured the server's null archive answers the list with an empty page and
+  the detail with a 500 "getting archived workflows not supported"; the adapter
+  reports that, and a missing route (404 on the list, 501), as
+  `core.ArchiveDisabledMessage`.
 - Watch and log parsers accept JSON-lines and SSE envelopes, including in-band
   errors after HTTP 200. Stream cancellation is distinct from transport failure.
   Watch recovery belongs to the app; expired resource versions require a relist.

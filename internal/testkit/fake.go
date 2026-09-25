@@ -61,6 +61,24 @@ type FakeReader struct {
 	GetErr    error
 	StreamErr error
 
+	// CronWorkflows is what ListCronWorkflows answers from, filtered by
+	// namespace. CronErr fails the call instead.
+	CronWorkflows []core.CronWorkflow
+	CronErr       error
+
+	// WorkflowTemplates and ClusterWorkflowTemplates answer the template
+	// lists; TemplateErr and ClusterTemplateErr fail them instead.
+	WorkflowTemplates        []core.WorkflowTemplate
+	ClusterWorkflowTemplates []core.WorkflowTemplate
+	TemplateErr              error
+	ClusterTemplateErr       error
+
+	// ArchivedWorkflows is the workflow archive, newest first. ArchiveErr
+	// fails both archive calls, the way a server without an archive fails
+	// them.
+	ArchivedWorkflows []core.Workflow
+	ArchiveErr        error
+
 	// Namespaces is the extra namespace list ListNamespaces reports, on top
 	// of the namespaces the stored workflows are in. NamespacesErr fails the
 	// call instead.
@@ -90,6 +108,8 @@ type FakeReader struct {
 
 	// Call counters (guarded by mu) for test assertions.
 	ListCalls, GetCalls, StreamStarts int
+	// KindCalls counts the list calls of the other resource kinds.
+	KindCalls int
 	// StreamCancels counts streams that ended via context cancellation.
 	StreamCancels int
 }
@@ -137,6 +157,9 @@ func (f *FakeReader) collect(q core.Query) []core.Summary {
 		}
 		wf, ok := f.Workflows[ref]
 		if !ok {
+			continue
+		}
+		if !MatchLabels(q.LabelSelector, wf.Summary.Labels) {
 			continue
 		}
 		items = append(items, wf.Summary)
