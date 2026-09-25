@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Parameter and output values are now shown by default. The redaction they
+  used to open with hid what a reader opens a workflow to see. A cluster
+  whose parameters carry secrets can turn it back on with `redactValues: true`
+  at the top of the config file or on a profile, or with `--redact-values`;
+  `v` still hides or reveals them for the session.
 - The demo dataset now has twelve workflows whose node maps follow the
   shapes the Argo controller writes: chained step groups, DAG tasks that list
   their dependents as children, retry attempts, an exit handler, a fan-out in

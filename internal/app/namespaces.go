@@ -98,6 +98,7 @@ func (m *Root) switchNamespace(ns string) tea.Cmd {
 	m.logState = logState{}
 	m.logsView = nil
 	m.detailView = newDetailView()
+	m.detailView.SetRedactByDefault(m.redact)
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
 	m.listView.SetItems(nil, m.deps.clock.Now())
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)
