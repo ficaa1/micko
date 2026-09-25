@@ -477,8 +477,14 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.route == RouteList {
 			return m, m.updateChild(msg)
 		}
-		// Detail/logs routes: the active child consumes non-global keys.
-		return m, m.updateChild(msg)
+		// Detail/logs routes: the active child consumes non-global keys. A
+		// key in the detail pane can open or leave the Explain section,
+		// which starts or cancels its log read.
+		cmd := m.updateChild(msg)
+		if m.route == RouteDetail {
+			return m, tea.Batch(cmd, m.syncExplainLog())
+		}
+		return m, cmd
 
 	case tea.QuitMsg:
 		m.quitting = true
@@ -568,7 +574,10 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Section != "" {
 			m.detailView.SetSection(msg.Section)
 		}
-		return m, cmd
+		return m, tea.Batch(cmd, m.syncExplainLog())
+
+	case explainLogMsg:
+		return m, m.handleExplainLog(msg)
 
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)
@@ -956,9 +965,12 @@ func (m *Root) back() tea.Cmd {
 			target = RouteList
 		}
 		m.route = target
-		return nil
+		// Opening the log canceled an explain read under way; back on the
+		// section it is asked for again.
+		return m.syncExplainLog()
 	case RouteDetail:
 		m.cancelInflight("detail")
+		m.stopExplainLog()
 		m.detailState.loading = false
 		m.route = RouteList
 		// A Resume or a Stop changes the row the reader is about to look
@@ -1002,6 +1014,7 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if m.route != RouteLogs {
 		m.logsFrom = m.route
 	}
+	m.stopExplainLog()
 	m.selection = msg.Ref
 	m.selGen++
 	m.route = RouteLogs
@@ -1164,7 +1177,7 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	st.lastErr = nil
 	st.notFound = false
 	m.detailView.SetWorkflow(msg.Workflow, m.deps.clock.Now())
-	return nil
+	return m.syncExplainLog()
 }
 
 // handleLogRecord applies one batched delivery honoring staleness.

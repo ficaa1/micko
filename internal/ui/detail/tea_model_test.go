@@ -13,7 +13,7 @@ import (
 
 func TestTeaModelTabCycles(t *testing.T) {
 	m := New()
-	tabs := []string{"summary", "nodes", "timeline", "resource", "summary"}
+	tabs := []string{"summary", "nodes", "timeline", "explain", "resource", "summary"}
 	for i, want := range tabs[1:] {
 		updated, _ := m.Update(tea.KeyPressMsg{Code: 9}) // tab
 		mm := updated.(*Model)

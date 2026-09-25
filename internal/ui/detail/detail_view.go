@@ -63,6 +63,10 @@ func RenderDetailBody(state DetailViewState, active string) string {
 		for _, l := range renderTimelineText(state) {
 			b.WriteString(l + "\n")
 		}
+	case "explain":
+		for _, l := range renderExplainText(state) {
+			b.WriteString(l + "\n")
+		}
 	case "resource":
 		b.WriteString(state.Resource)
 	default:

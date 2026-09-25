@@ -91,6 +91,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return func() tea.Msg { return intent }
 		}
 		return nil
+	case "X":
+		// Open the workflow straight on its explanation: for a failed run,
+		// "why" is the first question.
+		if intent := m.OpenSectionIntent(shared.SectionExplain); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
 	case "/":
 		m.SearchOn = true
 		m.queryBefore = m.query

@@ -1,5 +1,5 @@
 == demo-release-gate
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Resource 
 4 rows · 1/4 · * critical path so far: the 3 nodes that set the pace
 NAME                             DURATION   0      1m      2m     3m      4m     5m      6m      7m     8m      9m     10m     11m   now
 ▾ ● demo-release-gate Steps        12m00s   |------------------------------------------------------------------------------------------|
@@ -7,7 +7,7 @@ NAME                             DURATION   0      1m      2m     3m      4m    
 ├─ ✓ integration-test               4m00s * -----------------------===============================-------------------------------------|
 └─ ◐ approve-production Suspend     4m50s * ------------------------------------------------------====================================>|
 == demo-nightly-report
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Resource 
 8 rows · 1/8 · * critical path: the 4 nodes that set the end time
 NAME                         DURATION   0           30s         1m          1m30s       2m          2m30s       3m          3m30s  4m00s
 ▾ ✗ demo-nightly-report DAG     4m00s   |----------------------------------------------------------------------------------------------|
@@ -19,7 +19,7 @@ NAME                         DURATION   0           30s         1m          1m30
 └─ ⊘ load                               ------------------------------------------------------------------------------------------------
   ✓ onExit exit handler           20s   --------------------------------------------------------------------------------------========--
 == demo-train-pipeline
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Resource 
 9 rows · 1/9 · * critical path so far: the 2 nodes that set the pace
 NAME                         DURATION   0          30s         1m          1m30s       2m          2m30s       3m          3m30s     now
 ▾ ● demo-train-pipeline DAG     4m00s   |----------------------------------------------------------------------------------------------|
@@ -32,7 +32,7 @@ NAME                         DURATION   0          30s         1m          1m30s
 ├─ ○ train-shard(5:5)                   -----------------------------------------------------------------------------------------------|
 └─ ○ evaluate                           -----------------------------------------------------------------------------------------------|
 == demo-data-pull
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Resource 
 6 rows · 1 skipped not drawn · 1/6 · * critical path so far: the 3 nodes that set the pace
 NAME                      DURATION   0           5m          10m         15m          20m         25m         30m         35m        now
 ▾ ● demo-data-pull Steps    40m00s   |-------------------------------------------------------------------------------------------------|
@@ -42,7 +42,7 @@ NAME                      DURATION   0           5m          10m         15m    
 ├─ ● pull(us)               11m49s * ---------------------------------------------------------------------============================>|
 └─ ● pull(apac)             11m49s   ---------------------------------------------------------------------============================>|
 == demo-deploy-multi-layer
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Resource 
 10 rows · 16 skipped not drawn · 1/10 · * critical path: the 2 nodes that set the end time
 NAME                             DURATION   0       1m      2m       3m      4m      5m       6m      7m      8m       9m         11m00s
 ▾ ✓ demo-deploy-multi-layer DAG    11m00s   |------------------------------------------------------------------------------------------|
@@ -56,11 +56,11 @@ NAME                             DURATION   0       1m      2m       3m      4m 
 └▾ ✓ edge DAG                       2m00s                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|----------------|
    └─ ✓ apply-eu-west               1m50s * -----------------------------------------------------------------================-----------
 == demo-param-check
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Resource 
 0 rows
 (no nodes — the workflow ended before any node ran)
 == demo-nightly-report, info on transform(1)
- Summary   Nodes  [Timeline]  Resource 
+ Summary   Nodes  [Timeline]  Explain   Resource 
 8 rows · 5/8 · l logs · * critical path: the 4 nodes that set the end time
 NAME                         DURATION   0         1m        2m        3m    4m00s │ NODE transform(1)  values shown (v redacts)
 ▾ ✗ demo-nightly-report DAG     4m00s   |---------------------------------------| │ name      transform(1)

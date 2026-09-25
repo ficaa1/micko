@@ -1,0 +1,9 @@
+DETAIL fixture-offloaded
+ Summary   Nodes   Timeline  [Explain]  Resource 
+Explain fixture-offloaded in ns: Running
+1 warning
+
+▲ WARNING  Node status is unavailable, so the nodes cannot be explained
+  reason node status offloaded and not hydrated by the server
+  phase  Running
+  next   The node status is probably offloaded; check that the server can read the offload database.
