@@ -64,6 +64,8 @@ func TestApplySkinRethemesEveryOpenView(t *testing.T) {
 		"logs":         {strings.Join(m.logsView.BodyLines(), "\n"), sgr(th.Muted)},
 		"profiles":     {strings.Join(m.profView.BodyLines(), "\n"), sgr(th.Title)},
 		"actions":      {m.actionView.View().Content, sgr(th.Title)},
+		"cron list":    {strings.Join(m.kind(RouteCron).pane.BodyLines(testkit.FixtureEpoch), "\n"), sgr(th.TableHeader)},
+		"palette":      {strings.Join(m.palView.BodyLines(80, 4), "\n"), sgr(th.Title)},
 	}
 	for name, c := range checks {
 		if !strings.Contains(c.out, c.want) {

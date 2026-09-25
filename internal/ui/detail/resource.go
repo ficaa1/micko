@@ -22,12 +22,20 @@ import (
 // The function never echoes invalid JSON raw: it reports an explicit
 // protocol explanation instead.
 func RenderResource(wf core.Workflow, revealForSession bool) string {
-	if len(wf.Resource) == 0 {
+	return RenderManifest(wf.Resource, revealForSession)
+}
+
+// RenderManifest renders any Argo object's raw JSON — a cron workflow, a
+// template — exactly as the resource tab renders a workflow: normalized
+// YAML, the same redaction, the same sanitizing. The raw views of the other
+// resource kinds call it so there is one redaction rule, not one per view.
+func RenderManifest(raw []byte, revealForSession bool) string {
+	if len(raw) == 0 {
 		return "(no resource payload returned by the server)\n"
 	}
 
 	var doc any
-	if err := json.Unmarshal(wf.Resource, &doc); err != nil {
+	if err := json.Unmarshal(raw, &doc); err != nil {
 		return "(resource payload is not valid JSON; nothing to display " +
 			"— normalized rendering unavailable)\n"
 	}

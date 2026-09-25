@@ -78,6 +78,17 @@ func isCanonicalPhase(p string) bool {
 	return false
 }
 
+// matches is the list's search predicate. Across namespaces it also matches
+// the row's "namespace/name", so typing a namespace, or "namespace/" for one
+// namespace alone, narrows the cluster-wide list to it. In one namespace the
+// namespace is the same on every row and matching it would match everything.
+func (m *Model) matches(ref core.Ref, query string) bool {
+	if m.allNS {
+		return nameMatches(ref.Namespace+"/"+ref.Name, query)
+	}
+	return nameMatches(ref.Name, query)
+}
+
 // nameMatches is the local search predicate: case-insensitive substring
 // over the workflow name. The scope is always "names within the loaded
 // snapshot" and the view must say so.

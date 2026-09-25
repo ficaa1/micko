@@ -27,7 +27,8 @@ func TestDemoEvents(t *testing.T) {
 	reasons := map[string]bool{}
 	for _, e := range f.Events {
 		reasons[e.Reason] = true
-		if e.UID == "" || e.Namespace != DemoNamespace || e.LastSeen.IsZero() || e.Count < 1 {
+		inDemo := e.Namespace == DemoNamespace || e.Namespace == DemoMLNamespace
+		if e.UID == "" || !inDemo || e.LastSeen.IsZero() || e.Count < 1 {
 			t.Fatalf("incomplete event %+v", e)
 		}
 	}

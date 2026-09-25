@@ -38,6 +38,12 @@ func (m *Root) SetTheme(t shared.Theme) {
 	if m.profView != nil {
 		m.profView.SetTheme(t)
 	}
+	if m.palView != nil {
+		m.palView.SetTheme(t)
+	}
+	for _, def := range m.kindDefs {
+		def.pane.SetTheme(t)
+	}
 }
 
 // Theme is the theme the frame is drawn in.

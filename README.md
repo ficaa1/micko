@@ -128,7 +128,10 @@ check and the write remains possible.
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `0` all namespaces |
+| Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
+| Templates (`:tmpl`, `:cwftmpl`) | the same keys; `n` and `0` do not apply to cluster templates |
+| Archived workflows (`:aw`) | `enter` open the run, `i` info panel, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` record |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline, Explain, Events and Resource; `1`–`9` jump to a section by position; `T` timeline; `X` explain; `E` events; `r` refresh; `a` actions |
 | Nodes | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info, `/` find by name, `n`/`N` next/previous match, `h` show skipped nodes, `s` sort, `p` phase filter |
 | Timeline | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info |
@@ -137,12 +140,43 @@ check and the write remains possible.
 | Resource | `v` hides or reveals parameter/output values (also in the node info panel) |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
+| Command palette | `:` open, `tab` complete, `up`/`down` choose, `enter` run, `ctrl+p`/`ctrl+n` history, `esc` close |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
 
 Suspended workflows sort first by default and their waiting nodes are marked
 `AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
 workflow's pod naming annotation and leaves the shortcut unavailable when
 it cannot resolve one safely.
+
+`:` opens the command palette on every route. Type a command and the palette
+lists the matches with their aliases and a one-line description, best first;
+`tab` completes the highlighted one and `enter` runs what is typed. Enter never
+runs a guess: a word that names no command is reported in the footer.
+
+| Command | Does |
+| --- | --- |
+| `workflows`, `wf` | Show the workflow list |
+| `cronworkflows`, `cwf`, `cron` | Show the cron workflow list |
+| `workflowtemplates`, `wftmpl`, `tmpl` | Show the workflow template list |
+| `clusterworkflowtemplates`, `cwftmpl` | Show the cluster workflow template list |
+| `archived`, `aw` | Show the archived workflow list |
+| `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
+| `all` | Toggle the all-namespaces view |
+| `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
+| `help` | Show every key |
+| `quit`, `q` | Quit |
+
+After `ns` and `profile` a space starts completing the argument from the
+namespaces and profiles the session knows. `ctrl+p` and `ctrl+n` step through
+the commands run earlier in the session.
+
+`0` on the workflow list, or `:all`, lists every namespace the token may read.
+The header shows the namespace as `all`, the list gains a NAMESPACE column,
+and the `/` filter matches `namespace/name`, so `team-a/` narrows it to one
+namespace. Detail, logs and actions use each row's own namespace. The token
+needs permission to list workflows cluster-wide; without it, and on a server
+started for one managed namespace, the pane says so, and `0` returns to the
+namespace you came from.
 
 ### Node view
 
@@ -261,6 +295,72 @@ keeps events for about an hour by default, so a workflow that finished
 earlier may have none. The account behind the token needs permission to
 watch events in the namespace.
 
+### Cron workflows
+
+`:cron` lists the namespace's CronWorkflows: the schedule (every entry of a
+v3.6+ `schedules` list, or the single `schedule` of older objects), the time
+zone when it is not UTC, whether it is suspended, how many runs are active,
+when it last ran, when it runs next, and its concurrency policy. The default
+order puts the next run first and suspended ones last; `s` also sorts by name
+and by last run.
+
+NEXT RUN is computed locally from the schedule the way the Argo controller
+reads it: five fields with ranges, steps, lists and month and weekday names,
+the `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly` and `@every`
+descriptors, day-of-month and day-of-week combined as the controller combines
+them, on the wall clock of `spec.timezone` across daylight-saving changes. An
+expression the controller would refuse shows `?`, and the info panel says why;
+a date that never comes shows `never`.
+
+`i` opens the info panel for the selected row, below the table or, on a pane at
+least 140 columns wide, beside it: every schedule, the time zone, the next five
+run times, the concurrency policy, the starting deadline, the history limits,
+the suspend state, the last run, the active runs, the controller's conditions,
+and the entrypoint and arguments of the workflow each run starts. Argument
+values are shown, and `v` hides them for the selected row; under
+`redactValues` they start hidden and `v` reveals that row only. `f` shows the
+whole manifest the same way.
+
+`enter` lists the workflows the cron workflow started: the workflow list,
+narrowed on the server by the `workflows.argoproj.io/cron-workflow` label the
+controller puts on each run. The pane title names the cron workflow, `esc`
+returns to the cron list with the cursor where it was, and a workflow opened
+from there returns to it with a second `esc`. The cron list refreshes on the
+list's poll interval while it is shown. Suspending, resuming and submitting a
+cron workflow are not available yet.
+
+### Workflow templates
+
+`:tmpl` lists the namespace's WorkflowTemplates and `:cwftmpl` the cluster's
+ClusterWorkflowTemplates: name, entrypoint, how many templates and parameters
+each defines, age, and on a wide pane the description the Argo UI shows. Cluster
+templates belong to no namespace, so the header reads `ns: (cluster-scoped)`
+there and `n` and `0` do nothing. The info panel (`i`) lists the entrypoint, the
+arguments with their defaults, allowed values and descriptions (`v` hides or
+reveals the values, as on the cron list), every template with its type (container, script, dag, steps,
+suspend, resource, data, http, plugin or containerSet), the service account and
+the labels. `enter` lists the workflows submitted from the template, by the
+`workflows.argoproj.io/workflow-template` or `cluster-workflow-template` label,
+and `esc` returns. Submitting a template is not available yet.
+
+### Archived workflows
+
+`:aw` (or `:archived`) lists the namespace's workflow archive: the runs the
+controller copied to its database, which may already be gone from the cluster.
+The columns are the workflow list's, newest first; `s` also sorts failures
+first or by name. The list reads the newest 300 runs and says so when the
+archive holds more. `enter` opens a run in the detail pane, read from the
+archive by its UID; the title and the summary say it is archived, it is not
+refreshed on the poll, and `a` explains that actions apply to live workflows
+only. Node logs are asked for as usual, but an archived run's pods are usually
+deleted with it: when nothing comes back, the log pane says so and names
+`archiveLogs`, the workflow setting that keeps logs past the pods.
+
+A server with no archive configured answers the list with an empty page, the
+same answer as an empty archive, so the empty list says that too. Opening a run
+on such a server, or listing on a server without the archive route, shows
+"the workflow archive is not enabled on this server".
+
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a
 configured profile can be chosen, because a name that is in no file names no
@@ -325,7 +425,7 @@ environment source from that profile before switching to a file.
   Argo auth mode for 401; check access to the selected namespace for 403.
 - A stale banner retains the last successful data while the connection recovers.
 - Search and sorting apply to the collected workflow snapshot, capped at 5,000
-  entries. Logs retain at most 10,000 lines or 8 MiB; pausing stops scrolling,
+  entries, in the all-namespaces view as well. Logs retain at most 10,000 lines or 8 MiB; pausing stops scrolling,
   not collection. Deleted pods or unavailable archived logs may prevent viewing logs.
 - Parameter and output values are shown. Set `redactValues: true` at the top
   of the config file or on a profile, or pass `--redact-values`, to open every
