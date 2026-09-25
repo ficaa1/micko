@@ -20,6 +20,10 @@ const (
 	markDropped
 	// markCanceled marks a user-canceled / disconnected stream.
 	markCanceled
+	// markTimestampsOn and markTimestampsOff mark where the stream was
+	// reopened with server timestamps switched on or off.
+	markTimestampsOn
+	markTimestampsOff
 )
 
 // entry is one retained item: a log line (kind == markOpen? no — kind ==
@@ -63,6 +67,10 @@ func markerText(kind markerKind, podName, container string) string {
 		return "── oversized lines dropped (per-record cap) ──"
 	case markCanceled:
 		return "── stream canceled ──"
+	case markTimestampsOn:
+		return "── server timestamps on: stream reopened from the start ──"
+	case markTimestampsOff:
+		return "── server timestamps off: stream reopened from the start ──"
 	default:
 		return ""
 	}

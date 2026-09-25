@@ -21,6 +21,7 @@
 package logs
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 
@@ -86,6 +87,9 @@ type Model struct {
 
 	phase   Phase  // stream lifecycle
 	errText string // sanitized error/unavailable explanation (LOG-12)
+	// notice explains a stream that ended cleanly with nothing to show when
+	// there is a known reason, so an empty pane never reads as a quiet pod.
+	notice string
 
 	search       searchState // committed search
 	searchBuf    string      // keystroke buffer while focused
@@ -105,9 +109,10 @@ type Model struct {
 
 	width, height int // last known terminal size (SetSize)
 	noColor       bool
-	// theme styles the search highlight. Nothing else in this pane is
-	// coloured, so it is the one channel that says "this is the word you
-	// searched for" without editing the line.
+	// theme styles the search highlight and mutes the pane's own
+	// annotations. Log lines are never coloured as a whole, so the highlight
+	// is the one channel that says "this is the word you searched for"
+	// without editing the line.
 	theme shared.Theme
 
 	// paneMode says a shell draws this pane's title and footer bands, so the
@@ -118,6 +123,34 @@ type Model struct {
 
 	// gPending is the armed half of vim's gg (see the list pane).
 	gPending bool
+
+	// wrap cuts long lines into screen lines instead of letting the pane
+	// clip them (w). The scroll position stays on logical lines either way.
+	wrap bool
+	// labels puts each line's source label in front of it (L). It starts on
+	// for workflow-wide logs, which mix pods, and off for one pod's log,
+	// where every line would carry the same label.
+	labels bool
+	// sources maps a pod name to the display name of the node that ran it,
+	// for the labels. A pod missing from it is labelled by its own name.
+	sources map[string]string
+	// filterOn shows only the lines matching the committed search (&).
+	// It hides lines from the view only: the buffer, its counts and its
+	// retention are the same with it on or off.
+	filterOn bool
+	// retainedLogs is the number of retained log lines in the last
+	// snapshot, before the filter: the "of" in "showing 12 of 840".
+	retainedLogs int
+	// timestamps asks the server to stamp each line (ctrl+t). Changing it
+	// reopens the stream, so the root reads it when it builds the request.
+	timestamps bool
+	// searchRe is the committed search term compiled for highlighting, and
+	// searchReFor the term it was compiled from.
+	searchRe    *regexp.Regexp
+	searchReFor string
+	// note is a one-key hint on the status line, such as why & did
+	// nothing. The next key clears it.
+	note string
 
 	mu sync.Mutex // guards Apply*/Clear for test/bench callers; the Tea
 	// update loop itself is serial.
@@ -141,6 +174,7 @@ func NewModel(ref core.Ref, podName, container string) *Model {
 		bottom:    -1, // pinned to tail
 		rowsFor:   -1,
 		phase:     PhaseStreaming,
+		labels:    podName == "",
 		// The stream's first line is annotated with its context header
 		// (pod:container) so provenance is visible in the transcript.
 	}
@@ -173,7 +207,7 @@ func (m *Model) SetNoColor(v bool) {
 	}
 }
 
-// SetTheme injects the style set used for the search highlight.
+// SetTheme injects the style set used for the highlight and annotations.
 func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
 // Ref returns the workflow the viewer is attached to.
@@ -196,6 +230,42 @@ func (m *Model) Following() bool { return m.follow }
 
 // EscapeConsumed reports whether Esc currently belongs to a text editor.
 func (m *Model) EscapeConsumed() bool { return m.searchOn || m.contextOn || m.pipeOn }
+
+// EscapeClears reports whether Esc clears something in the pane rather
+// than leaving it: the & filter. It is not text entry, so q and ? keep
+// their global meaning; only Esc stops meaning "back".
+func (m *Model) EscapeClears() bool { return m.filterOn }
+
+// Wrapping reports whether long lines are wrapped.
+func (m *Model) Wrapping() bool { return m.wrap }
+
+// Labelled reports whether lines carry their source label.
+func (m *Model) Labelled() bool { return m.labels }
+
+// Filtering reports whether the view shows only matching lines.
+func (m *Model) Filtering() bool { return m.filterOn }
+
+// Timestamps reports whether the stream is asked for server timestamps.
+func (m *Model) Timestamps() bool { return m.timestamps }
+
+// SetSources records which node each pod belongs to, as pod name to node
+// display name, for the source labels.
+func (m *Model) SetSources(sources map[string]string) { m.sources = sources }
+
+// KeepViewPrefs carries the reader's display choices over from the pane
+// this one replaces, so switching container does not undo them. Wrapping
+// and timestamps carry over always; the labels only between two
+// workflow-wide panes, since a pod-scoped pane starts without them.
+func (m *Model) KeepViewPrefs(prev *Model) {
+	if prev == nil {
+		return
+	}
+	m.wrap = prev.wrap
+	m.timestamps = prev.timestamps
+	if prev.podName == "" && m.podName == "" {
+		m.labels = prev.labels
+	}
+}
 
 // SetPipeCommand records the command the pipe editor prefills with. The
 // profile configures it; an empty value falls back to lnav, which is what the
@@ -225,6 +295,10 @@ func (m *Model) SetError(text string) {
 		m.phase = PhaseError
 	}
 }
+
+// SetNotice records why a stream may show nothing. The pane shows it below
+// the status line for as long as no line has been retained.
+func (m *Model) SetNotice(text string) { m.notice = strings.TrimSpace(text) }
 
 // ApplyRecords feeds one batch of records into the buffer (the root
 // delivers logRecordMsg batches — plan §5; the component owns no
@@ -318,6 +392,7 @@ func (m *Model) SetSize(w, h int) {
 // modes consume printable input and never interpret command keys).
 func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
+	m.note = ""
 	switch {
 	case m.searchOn:
 		return m.handleSearchKey(key)
@@ -342,8 +417,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // handleBrowseKey implements the log-viewer key matrix (plan §2 Logs row):
-// Space pauses, f follows, / searches, c edits context, pgup/pgdown and
-// j/k/arrows scroll. No transport is ever touched.
+// Space pauses, t follows, / searches, & filters to the search, w wraps,
+// L toggles the source labels, ctrl+t asks for server timestamps, c edits
+// context, pgup/pgdown and j/k/arrows scroll. No transport is ever touched:
+// ctrl+t returns an intent the root turns into a new stream.
 func (m *Model) handleBrowseKey(key string) tea.Cmd {
 	if key == "space" {
 		key = " " // uv renders Space's keystroke as "space"
@@ -426,6 +503,53 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 	case "N":
 		m.jumpToHit(-1)
 		return nil
+	case "w":
+		// Wrapping changes how many screen lines each row takes but not
+		// which row is at the bottom, so the reader stays on their line.
+		m.wrap = !m.wrap
+		return nil
+	case "L":
+		m.labels = !m.labels
+		return nil
+	case "&":
+		// less's &: show only the lines matching the / search. It needs a
+		// search to filter by; without one it says so rather than showing
+		// nothing.
+		if m.filterOn {
+			m.setFilter(false)
+			return nil
+		}
+		if m.search.term == "" {
+			m.note = "& shows the lines matching a / search; search first"
+			return nil
+		}
+		m.setFilter(true)
+		return nil
+	case "esc":
+		// The root routes esc here only while the filter is on (see
+		// EscapeClears); otherwise esc leaves the pane.
+		if m.filterOn {
+			m.setFilter(false)
+		}
+		return nil
+	case "ctrl+t":
+		// Server timestamps are a property of the request, so switching
+		// them reopens the stream. The lines already retained stay, and a
+		// marker shows where the new stream starts: it replays the log
+		// from the beginning with the new setting.
+		m.timestamps = !m.timestamps
+		m.mu.Lock()
+		kind := markTimestampsOff
+		if m.timestamps {
+			kind = markTimestampsOn
+		}
+		m.buf.PushMarker(kind, m.podName, m.container)
+		m.invalidateLocked()
+		m.mu.Unlock()
+		m.phase = PhaseStreaming
+		m.errText = ""
+		intent := TimestampsIntent{Ref: m.ref, PodName: m.podName, Container: m.container, On: m.timestamps}
+		return func() tea.Msg { return intent }
 	default:
 		// Everything else (q, ?, ...) belongs to the root (UI-04):
 		// the child must not shadow global keys.
@@ -434,13 +558,50 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 }
 
 // pageRows is the scroll step for pgup/pgdown (viewport minus one line of
-// overlap).
+// overlap). With wrapping on, the step is the rows on screen less one,
+// since a page of screen lines holds fewer rows than lines.
 func (m *Model) pageRows() int {
+	if m.wrap {
+		if n := len(m.window()); n > 1 {
+			return n - 1
+		}
+		return 1
+	}
 	h := m.viewRows()
 	if h < 1 {
 		return 1
 	}
 	return h - 1
+}
+
+// setFilter turns the & filter on or off and keeps the reader on the same
+// line: the row at the bottom of the pane stays at the bottom when it is
+// still shown, and otherwise the nearest line above it takes its place. A
+// following pane stays on the tail.
+func (m *Model) setFilter(on bool) {
+	m.ensureSnapshot()
+	anchor := -1
+	if m.bottom >= 0 && len(m.rows) > 0 {
+		for i := m.bottomAt(); i >= 0; i-- {
+			if m.rows[i].logIdx >= 0 {
+				anchor = m.rows[i].logIdx
+				break
+			}
+		}
+	}
+	m.filterOn = on
+	m.invalidateLocked()
+	m.ensureSnapshot()
+	if m.bottom < 0 {
+		return
+	}
+	m.bottom = 0
+	for i, r := range m.rows {
+		if r.logIdx >= 0 && r.logIdx <= anchor {
+			m.bottom = i
+		}
+	}
+	m.bottom = m.clampBottomRaw(m.bottom)
 }
 
 // jumpToTop pins the viewport to the oldest retained line and detaches
@@ -515,6 +676,9 @@ func (m *Model) applySearch(term string) {
 		m.hits = nil
 		m.hitRows = nil
 		m.searchScopeN = 0
+		// The filter shows the search's lines; with no search it has
+		// nothing to show.
+		m.filterOn = false
 	} else {
 		lines := m.buf.Lines()
 		m.searchScopeN = len(lines)
@@ -580,6 +744,8 @@ func (m *Model) hitRawRow() int {
 
 // ClearSearch drops the active search (root/test entry point).
 func (m *Model) ClearSearch() {
+	m.filterOn = false
+	m.invalidateLocked()
 	m.search = searchState{}
 	m.searchBuf = ""
 	m.hits = nil
@@ -695,6 +861,16 @@ func (m *Model) podRight() tea.Cmd {
 	// right at the pod field appends a space separator (editing aid).
 	m.podBuf += " "
 	return nil
+}
+
+// TimestampsIntent asks the root to reopen the stream with server
+// timestamps on or off. The component never dials anything (plan §4); it
+// has already marked the switch point in its buffer.
+type TimestampsIntent struct {
+	Ref       core.Ref
+	PodName   string
+	Container string
+	On        bool
 }
 
 // SwitchContextIntent is the pod/container context-switch intent (LOG-10).

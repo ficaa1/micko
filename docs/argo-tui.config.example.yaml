@@ -2,6 +2,20 @@
 # Actions require --allow-actions and confirmation for each request.
 currentProfile: dev
 refreshInterval: 5s
+# Colour skin: default (the terminal's own palette), auto (dark or light
+# from the terminal background), catppuccin-mocha, catppuccin-latte,
+# gruvbox-dark, gruvbox-light, nord, dracula, tokyo-night, solarized-dark,
+# solarized-light, one-dark, rose-pine, rose-pine-dawn or monokai.
+# --skin overrides it; a profile's own skin overrides it for that profile.
+# skin: default
+
+# Every write attempt is appended to $XDG_STATE_HOME/argo-tui/actions.jsonl
+# (default ~/.local/state/argo-tui/actions.jsonl). Uncomment to turn it off.
+# journal: false
+
+# Open every workflow with parameter and output values hidden (v reveals).
+# A profile can set it too, overriding this line either way.
+# redactValues: true
 
 profiles:
   dev:
@@ -26,3 +40,6 @@ profiles:
     # webURL: https://argo.example.com
     # Initial command in the log pipe editor; must be installed separately.
     # pipeCommand: lnav
+    # This profile's own skin, e.g. a warm one for production.
+    # skin: gruvbox-dark
+    # redactValues: true

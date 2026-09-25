@@ -95,6 +95,9 @@ func (m *Root) rawLines() []string {
 			return m.logsView.RawLines()
 		}
 	default:
+		if def := m.kind(m.route); def != nil {
+			return def.pane.RawLines()
+		}
 		return m.listRawLines()
 	}
 	return nil
@@ -102,12 +105,17 @@ func (m *Root) rawLines() []string {
 
 // listRawLines renders the visible list rows as plain "name phase age" text.
 // The table's padding is what makes it readable on screen and awkward in a
-// paste, so the raw form uses single spaces.
+// paste, so the raw form uses single spaces. Across namespaces each line
+// starts with the row's namespace, as the table does.
 func (m *Root) listRawLines() []string {
 	rows := m.listView.Rows()
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, shared.Sanitize(r.Ref.Name)+"\t"+
+		ns := ""
+		if m.listAcrossNamespaces() {
+			ns = shared.Sanitize(r.Ref.Namespace) + "\t"
+		}
+		out = append(out, ns+shared.Sanitize(r.Ref.Name)+"\t"+
 			shared.Sanitize(workflowlist.DisplayPhase(r))+"\t"+
 			shared.Sanitize(r.Ref.UID))
 	}
@@ -164,6 +172,8 @@ func (m *Root) copyText() string {
 		}
 	case m.route == RouteLogs && m.logsView != nil:
 		s = strings.Join(m.logsView.RawLines(), "\n")
+	case m.kind(m.route) != nil:
+		_, s = m.kind(m.route).pane.SelectedName()
 	default:
 		if ref := m.listView.SelectedRef(); ref.Name != "" {
 			s = ref.Name
@@ -196,12 +206,20 @@ func (m *Root) workflowURL() string {
 	if m.webURL == "" {
 		return ""
 	}
+	if m.kind(m.route) != nil {
+		return m.kindURL()
+	}
 	ref := m.selection
 	if m.route == RouteList {
 		ref = m.listView.SelectedRef()
 	}
 	if ref.Name == "" || ref.Namespace == "" {
 		return ""
+	}
+	// An archived run's page in the Argo UI is keyed by its UID: the name
+	// may belong to another run by now, or to none.
+	if m.detailState.archived && ref == m.detailState.ref && ref.UID != "" {
+		return strings.TrimSuffix(m.webURL, "/") + "/archived-workflows/" + ref.Namespace + "/" + ref.UID
 	}
 	return strings.TrimSuffix(m.webURL, "/") + "/workflows/" + ref.Namespace + "/" + ref.Name
 }

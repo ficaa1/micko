@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ficaa1/argo-tui/internal/core"
@@ -64,6 +65,12 @@ type Client struct {
 	userAgent string
 	// unaryTimeout bounds one non-streaming request end to end.
 	unaryTimeout time.Duration
+
+	// scopeMu guards the cached answer of serverScope. scopeKnown is set
+	// only by a successful answer, so a failed lookup is retried next time.
+	scopeMu    sync.Mutex
+	scopeKnown bool
+	scopeNS    string
 }
 
 // assert the frozen read contract is satisfied at compile time (A1 gate).
@@ -555,10 +562,13 @@ var listFields = strings.Join([]string{
 	"items.metadata.labels",
 	"items.metadata.annotations",
 	"items.metadata.creationTimestamp",
+	"items.spec.suspend",
 	"items.status.phase",
 	"items.status.message",
 	"items.status.startedAt",
 	"items.status.finishedAt",
+	"items.status.progress",
+	"items.status.estimatedDuration",
 }, ",")
 
 // gateFields is the projection of the gate scan: an identity and the node
@@ -579,9 +589,18 @@ const incompleteSelector = "workflows.argoproj.io/completed!=true"
 // the list shows as a plain Running row.
 const gateScanLimit = 500
 
+// List collects one page. An empty q.Namespace lists every namespace the
+// token may read: the path keeps its trailing slash, /api/v1/workflows/,
+// because Argo's route matches that with an empty namespace and does not
+// match /api/v1/workflows at all.
 func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
+	if q.Namespace == "" {
+		if err := c.checkClusterScope(ctx); err != nil {
+			return core.Page{}, err
+		}
+	}
 	path := "/api/v1/workflows/" + url.PathEscape(q.Namespace)
 	query := url.Values{}
 	if q.Limit > 0 {
@@ -681,8 +700,13 @@ func (c *Client) markSuspended(ctx context.Context, q core.Query, page *core.Pag
 	if err != nil {
 		return core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable gate scan (protocol mismatch; see docs/development.md)", err)
 	}
+	// The scan adds the gate half of the marker. The spec.suspend half came
+	// with the page itself and must survive a workflow the scan did not
+	// mark.
 	for i := range page.Items {
-		page.Items[i].Suspended = suspended[page.Items[i].Ref.UID]
+		if suspended[page.Items[i].Ref.UID] {
+			page.Items[i].Suspended = true
+		}
 	}
 	return nil
 }

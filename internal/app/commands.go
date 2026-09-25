@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/argo-tui/internal/journal"
 )
 
 // Clock abstracts time for deterministic tests (fake clock injection).
@@ -32,16 +33,64 @@ type deps struct {
 	// nsLister answers the namespace picker. It is optional: a Reader that
 	// cannot list namespaces simply does not implement it.
 	nsLister core.NamespaceLister
+	// eventWatcher streams Kubernetes events for the Events section. It is
+	// optional too: without it the section says the backend has none.
+	eventWatcher core.EventWatcher
+	// cronLister lists cron workflows. Optional like nsLister: without it the
+	// cron route says the connection cannot list them.
+	cronLister core.CronLister
+	// templateLister and clusterTemplateLister list the two template kinds,
+	// optional in the same way.
+	templateLister        core.TemplateLister
+	clusterTemplateLister core.ClusterTemplateLister
+	// archive reads the workflow archive, optional in the same way.
+	archive core.ArchiveReader
+	// journal records every write attempt. Nil records nothing.
+	journal  *journal.Journal
 	clock    Clock
 	interval time.Duration
 	// namespace is the active namespace; switching it bumps the connection
 	// generation (plan §2 journey 5).
 	namespace string
+	// allNamespaces widens the list and the watch to every namespace the
+	// token may read. namespace keeps the session's own namespace, which the
+	// toggle returns to.
+	allNamespaces bool
+	// drillNamespace and labelSelector narrow the workflow list to the runs
+	// one object owns (a cron workflow's, a template's). drillNamespace is
+	// that object's namespace, which the list asks for instead of the
+	// session's; empty keeps the session's scope. Both are empty outside a
+	// drill-down.
+	drillNamespace string
+	labelSelector  string
 	// snapshotCap bounds collected summaries per generation (plan §5:
 	// snapshot cap 5,000; tests/demo may lower it).
 	snapshotCap int
 	// pageSize is the requested page size (plan §5: default 100).
 	pageSize int64
+}
+
+// listNamespace is the namespace the list and the watch ask for. Empty is
+// Argo's "every namespace": the path becomes /api/v1/workflows/ with the
+// trailing slash, which the server's route matches with an empty namespace.
+//
+// In a drill-down the owner's namespace wins: a cron workflow's runs live in
+// its own namespace, so the list asks there even when the session is looking
+// at every namespace.
+func (d deps) listNamespace() string {
+	if d.drillNamespace != "" {
+		return d.drillNamespace
+	}
+	return d.scopeNamespace()
+}
+
+// scopeNamespace is the namespace the session looks at, ignoring any
+// drill-down: the one the kind lists ask for. Empty is every namespace.
+func (d deps) scopeNamespace() string {
+	if d.allNamespaces {
+		return ""
+	}
+	return d.namespace
 }
 
 // requestIDProvider hands out monotonically increasing request IDs.
@@ -81,9 +130,10 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 				return msg
 			}
 			page, err := d.reader.List(ctx, core.Query{
-				Namespace: d.namespace,
-				Continue:  cont,
-				Limit:     d.pageSize,
+				Namespace:     d.listNamespace(),
+				LabelSelector: d.labelSelector,
+				Continue:      cont,
+				Limit:         d.pageSize,
 			})
 			if err != nil {
 				if ctx.Err() != nil {
@@ -141,6 +191,32 @@ func (d deps) detailCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref
 		}
 		return detailLoadedMsg{genStamp: g, RequestID: id, Ref: ref, Workflow: wf}
 	}
+}
+
+// logSourcesCmd reads one workflow for its node map and answers with the
+// pod-to-step map the log pane labels its lines with. It reports nothing
+// on failure: the labels then stay on pod names, which is what they show
+// before the answer arrives anyway.
+func (d deps) logSourcesCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref) func() tea.Msg {
+	return func() tea.Msg {
+		wf, err := d.reader.Get(ctx, ref)
+		if err != nil || wf.Summary.Ref.UID != ref.UID || !wf.NodesAvailable {
+			return logSourcesMsg{genStamp: g, RequestID: id, Ref: ref}
+		}
+		return logSourcesMsg{genStamp: g, RequestID: id, Ref: ref, Sources: podSources(wf.Nodes)}
+	}
+}
+
+// podSources maps each pod name to the display name of the node that ran
+// it. Nodes without a resolved pod name are left out.
+func podSources(nodes map[string]core.Node) map[string]string {
+	out := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		if n.PodName != "" && n.DisplayName != "" {
+			out[n.PodName] = n.DisplayName
+		}
+	}
+	return out
 }
 
 // Log stream plumbing --------------------------------------------------------

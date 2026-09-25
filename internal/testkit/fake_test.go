@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -159,6 +160,23 @@ func TestFakeReaderStreamLogs(t *testing.T) {
 			t.Errorf("StreamCancels = %d, want 1", f.StreamCancels)
 		}
 	})
+	t.Run("timestamps are stamped the way the API stamps them", func(t *testing.T) {
+		at := time.Date(2026, 9, 7, 10, 0, 3, 137000000, time.UTC)
+		f := &FakeReader{StreamSequence: []core.LogRecord{{Content: "hello", ReceivedAt: at}}}
+		var got []string
+		for _, ts := range []bool{false, true} {
+			_ = f.StreamLogs(context.Background(), core.LogRequest{Timestamps: ts}, func(r core.LogRecord) error {
+				got = append(got, r.Content)
+				return nil
+			})
+		}
+		if len(got) != 2 || got[0] != "hello" || got[1] != "2026-09-07T10:00:03.137000000Z hello" {
+			t.Fatalf("contents = %q", got)
+		}
+		if f.StreamSequence[0].Content != "hello" {
+			t.Fatal("stamping changed the stored record")
+		}
+	})
 	t.Run("serial callback ordering", func(t *testing.T) {
 		f := &FakeReader{StreamSequence: []core.LogRecord{{Content: "1"}, {Content: "2"}, {Content: "3"}}}
 		var order []string
@@ -186,7 +204,7 @@ func TestFakeClockAdvance(t *testing.T) {
 func TestDemoDataIsSyntheticAndPaginates(t *testing.T) {
 	f := DemoReader(NewFakeClock(FixtureEpoch))
 	for ref := range f.Workflows {
-		if ref.Namespace != "demo" {
+		if ref.Namespace != DemoNamespace && ref.Namespace != DemoMLNamespace {
 			t.Fatalf("demo namespace drift: %v", ref)
 		}
 		if len(ref.Name) < 5 || ref.Name[:5] != "demo-" {
@@ -205,4 +223,58 @@ func TestDemoDataIsSyntheticAndPaginates(t *testing.T) {
 func isKind(err error, kind core.ErrorKind) bool {
 	ae := core.AsAPIError(err)
 	return ae != nil && ae.Kind == kind
+}
+
+// The demo node maps follow the controller's shapes, and every pod that ran
+// has its own log. Views are checked against the demo, so a demo that drifts
+// from those shapes would hide the cases they have to handle.
+func TestDemoCarriesTheShapesTheViewsHandle(t *testing.T) {
+	f := DemoReader(NewFakeClock(FixtureEpoch))
+	var suspended, stepGroups, retried, hooked, skipped, joins, noNodes int
+	for _, wf := range f.Workflows {
+		if wf.Summary.Suspended {
+			suspended++
+		}
+		if len(wf.Nodes) == 0 {
+			noNodes++
+		}
+		parents := map[string]int{}
+		for _, n := range wf.Nodes {
+			for _, c := range n.Children {
+				if _, ok := wf.Nodes[c]; !ok {
+					t.Errorf("%s: node %s names missing child %s", wf.Summary.Ref.Name, n.ID, c)
+				}
+				parents[c]++
+			}
+			switch {
+			case n.Type == "StepGroup":
+				stepGroups++
+			case n.Retried:
+				retried++
+			case n.Hooked:
+				hooked++
+			case n.Phase == "Skipped":
+				skipped++
+			}
+			if n.PodName != "" && n.StartedAt != nil && len(f.PodLogs[n.PodName]) == 0 {
+				t.Errorf("%s: pod %s ran but has no log", wf.Summary.Ref.Name, n.PodName)
+			}
+		}
+		for _, c := range parents {
+			if c > 1 {
+				joins++
+			}
+		}
+		if _, err := json.Marshal(wf.Resource); err != nil || !json.Valid(wf.Resource) {
+			t.Errorf("%s: resource is not valid JSON", wf.Summary.Ref.Name)
+		}
+	}
+	for what, n := range map[string]int{
+		"suspended workflow": suspended, "step group": stepGroups, "retry attempt": retried,
+		"exit handler": hooked, "skipped node": skipped, "DAG join": joins, "workflow without nodes": noNodes,
+	} {
+		if n == 0 {
+			t.Errorf("demo has no %s", what)
+		}
+	}
 }

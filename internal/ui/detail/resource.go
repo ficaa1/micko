@@ -22,12 +22,20 @@ import (
 // The function never echoes invalid JSON raw: it reports an explicit
 // protocol explanation instead.
 func RenderResource(wf core.Workflow, revealForSession bool) string {
-	if len(wf.Resource) == 0 {
+	return RenderManifest(wf.Resource, revealForSession)
+}
+
+// RenderManifest renders any Argo object's raw JSON — a cron workflow, a
+// template — exactly as the resource tab renders a workflow: normalized
+// YAML, the same redaction, the same sanitizing. The raw views of the other
+// resource kinds call it so there is one redaction rule, not one per view.
+func RenderManifest(raw []byte, revealForSession bool) string {
+	if len(raw) == 0 {
 		return "(no resource payload returned by the server)\n"
 	}
 
 	var doc any
-	if err := json.Unmarshal(wf.Resource, &doc); err != nil {
+	if err := json.Unmarshal(raw, &doc); err != nil {
 		return "(resource payload is not valid JSON; nothing to display " +
 			"— normalized rendering unavailable)\n"
 	}
@@ -42,6 +50,11 @@ func RenderResource(wf core.Workflow, revealForSession bool) string {
 	// preserving safe newlines and tabs (shared.Sanitize keeps \n and \t).
 	return shared.Sanitize(yamlOut)
 }
+
+// redactedMarker stands in for a value the reader has not revealed. The
+// resource tab and the node info panel use the same marker, so a reader
+// learns one sign for "hidden until v".
+const redactedMarker = "[REDACTED]"
 
 // sensitiveValueKeys are JSON keys whose string values are collapsed by
 // default wherever they appear: workflow arguments/outputs use "value" and
@@ -78,7 +91,7 @@ func redactValue(v any, reveal bool, sensitiveCtx bool) any {
 			lk := strings.ToLower(k)
 			ctx := sensitiveCtx || sensitiveContextKeys[lk]
 			if sensitiveValueKeys[lk] && !reveal {
-				out[k] = "[REDACTED]"
+				out[k] = redactedMarker
 				continue
 			}
 			out[k] = redactValue(val, reveal, ctx)
@@ -92,7 +105,7 @@ func redactValue(v any, reveal bool, sensitiveCtx bool) any {
 		return out
 	case string:
 		if !reveal && sensitiveCtx {
-			return "[REDACTED]"
+			return redactedMarker
 		}
 		if !reveal {
 			return shared.RedactTokens(tv)

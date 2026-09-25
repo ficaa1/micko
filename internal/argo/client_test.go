@@ -1136,9 +1136,12 @@ func TestListProjectionNamesEverySummaryField(t *testing.T) {
 		"items.metadata.namespace",
 		"items.metadata.uid",
 		"items.metadata.creationTimestamp",
+		"items.spec.suspend",
 		"items.status.phase",
 		"items.status.startedAt",
 		"items.status.finishedAt",
+		"items.status.progress",
+		"items.status.estimatedDuration",
 	}
 	have := map[string]bool{}
 	for _, f := range strings.Split(listFields, ",") {

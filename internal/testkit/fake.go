@@ -61,6 +61,24 @@ type FakeReader struct {
 	GetErr    error
 	StreamErr error
 
+	// CronWorkflows is what ListCronWorkflows answers from, filtered by
+	// namespace. CronErr fails the call instead.
+	CronWorkflows []core.CronWorkflow
+	CronErr       error
+
+	// WorkflowTemplates and ClusterWorkflowTemplates answer the template
+	// lists; TemplateErr and ClusterTemplateErr fail them instead.
+	WorkflowTemplates        []core.WorkflowTemplate
+	ClusterWorkflowTemplates []core.WorkflowTemplate
+	TemplateErr              error
+	ClusterTemplateErr       error
+
+	// ArchivedWorkflows is the workflow archive, newest first. ArchiveErr
+	// fails both archive calls, the way a server without an archive fails
+	// them.
+	ArchivedWorkflows []core.Workflow
+	ArchiveErr        error
+
 	// Namespaces is the extra namespace list ListNamespaces reports, on top
 	// of the namespaces the stored workflows are in. NamespacesErr fails the
 	// call instead.
@@ -77,12 +95,35 @@ type FakeReader struct {
 	// order; when empty, StreamLogs finishes immediately (clean EOF → nil).
 	StreamSequence []core.LogRecord
 
+	// PodLogs and WorkflowLogs, when they hold an entry for the request,
+	// replace StreamSequence: PodLogs by pod name for a pod-scoped stream,
+	// WorkflowLogs by workflow name for a workflow-wide one. The demo uses
+	// them so every pod shows its own log.
+	PodLogs      map[string][]core.LogRecord
+	WorkflowLogs map[string][]core.LogRecord
+
 	// StreamHook, when set, is invoked at stream start with the request;
 	// returning an error fails the stream before any record is delivered.
 	StreamHook func(core.LogRequest) error
 
+	// Events are the Kubernetes events WatchEvents serves, EventsErr fails
+	// every event stream, and EventHook sees each request first and can
+	// fail it. PublishEvent sends an event to the streams open at the time,
+	// for a test that needs a live stream. EventStarts, EventCancels and
+	// EventRequests record the streams opened.
+	Events        []core.Event
+	EventsErr     error
+	EventHook     func(core.EventWatchRequest) error
+	EventStarts   int
+	EventCancels  int
+	EventRequests []core.EventWatchRequest
+	// eventSubs are the open streams' queues for published events.
+	eventSubs map[chan core.Event]bool
+
 	// Call counters (guarded by mu) for test assertions.
 	ListCalls, GetCalls, StreamStarts int
+	// KindCalls counts the list calls of the other resource kinds.
+	KindCalls int
 	// StreamCancels counts streams that ended via context cancellation.
 	StreamCancels int
 }
@@ -130,6 +171,9 @@ func (f *FakeReader) collect(q core.Query) []core.Summary {
 		}
 		wf, ok := f.Workflows[ref]
 		if !ok {
+			continue
+		}
+		if !MatchLabels(q.LabelSelector, wf.Summary.Labels) {
 			continue
 		}
 		items = append(items, wf.Summary)
@@ -205,6 +249,13 @@ func (f *FakeReader) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 	streamErr, delay := f.StreamErr, f.StreamDelay
 	hook := f.StreamHook
 	seq := append([]core.LogRecord(nil), f.StreamSequence...)
+	if req.PodName != "" {
+		if recs, ok := f.PodLogs[req.PodName]; ok {
+			seq = append([]core.LogRecord(nil), recs...)
+		}
+	} else if recs, ok := f.WorkflowLogs[req.Ref.Name]; ok {
+		seq = append([]core.LogRecord(nil), recs...)
+	}
 	f.mu.Unlock()
 
 	if err := ctx.Err(); err != nil {
@@ -242,11 +293,22 @@ func (f *FakeReader) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 		if rec.PodName == "" {
 			rec.PodName = req.PodName
 		}
+		if req.Timestamps {
+			rec.Content = serverTimestamp(rec.ReceivedAt) + " " + rec.Content
+		}
 		if err := cb(rec); err != nil {
 			return err
 		}
 	}
 	return nil // clean finite EOF
+}
+
+// serverTimestamp is the stamp the Kubernetes API puts in front of each
+// line when a log request asks for timestamps: RFC 3339 in UTC with a fixed
+// nine-digit fraction. The fake stamps a record with its ReceivedAt, which
+// the demo sets to the moment the line was written.
+func serverTimestamp(t time.Time) string {
+	return t.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
 }
 
 // StreamCancelCount returns the number of streams ended via context
@@ -289,43 +351,6 @@ func SyntheticWorkflow(ns, name, phase string, created time.Time) core.Workflow 
 		Resource:       []byte(fmt.Sprintf(`{"metadata":{"name":%q,"namespace":%q},"synthetic":true}`, name, ns)),
 	}
 	return wf
-}
-
-// DemoReader returns a FakeReader seeded with a small, clearly synthetic
-// demo dataset for `--demo` (plan §8 F1 slice 6).
-func DemoReader(clock *FakeClock) *FakeReader {
-	now := clock.Now()
-	ns := "demo"
-	f := &FakeReader{
-		Workflows: map[core.Ref]core.Workflow{},
-		PageLimit: 2, // exercise pagination in demo
-	}
-	mk := func(name, phase string, age time.Duration) {
-		wf := SyntheticWorkflow(ns, name, phase, now.Add(-age))
-		wf.Summary.StartedAt = ptrTime(now.Add(-age))
-		if phase == "Succeeded" || phase == "Failed" {
-			wf.Summary.FinishedAt = ptrTime(now.Add(-age + 4*time.Minute))
-		}
-		wf.Nodes["root"] = core.Node{
-			ID: "root", Name: name, DisplayName: name, Type: "Steps", Phase: phase,
-		}
-		wf.Nodes["step-1"] = core.Node{
-			ID: "step-1", Name: name + ".step-1", DisplayName: "step-1",
-			Type: "Pod", Phase: phase, BoundaryID: "root",
-		}
-		f.Workflows[wf.Summary.Ref] = wf
-		f.Order = append(f.Order, wf.Summary.Ref)
-	}
-	mk("demo-hello-world", "Succeeded", 26*time.Minute)
-	mk("demo-nightly-report", "Failed", 2*time.Hour)
-	mk("demo-train-pipeline", "Running", 4*time.Minute)
-	mk("demo-data-pull", "Running", 40*time.Minute)
-	mk("demo-cleanup", "Pending", 1*time.Minute)
-	f.StreamSequence = []core.LogRecord{
-		{PodName: "demo-train-pipeline", Container: "main", Content: "epoch 1/10 loss=0.542", ReceivedAt: now},
-		{PodName: "demo-train-pipeline", Container: "main", Content: "epoch 2/10 loss=0.391", ReceivedAt: now},
-	}
-	return f
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }

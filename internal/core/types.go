@@ -50,12 +50,22 @@ type Summary struct {
 	StartedAt       *time.Time
 	FinishedAt      *time.Time
 	Labels          map[string]string
-	// Suspended reports that the workflow currently holds at least one
-	// Suspend node in a Running phase, i.e. it waits for a human Resume.
-	// It is derived from the node map the server sent with this summary;
-	// when the server sends no node data it stays false and the list says
-	// nothing rather than guessing (docs/development.md).
+	// Suspended reports that the workflow waits for a human Resume: it
+	// holds at least one Suspend node in a Running phase, or it has not
+	// finished and its spec.suspend is set (the state the suspend action
+	// leaves). These are the two conditions Argo's own resume clears. The
+	// node half is derived from the node map the server sent with this
+	// summary; when the server sends no node data that half stays false and
+	// the list says nothing rather than guessing (docs/development.md).
 	Suspended bool
+	// Progress is the server's "done/total" count of the workflow's pod
+	// nodes, verbatim (for example "3/7"). Empty means the server sent none;
+	// it is never computed locally, because only the controller knows the
+	// total of a workflow that has not expanded every step yet.
+	Progress string
+	// EstimatedDuration is the controller's estimate of the whole run, taken
+	// from previous runs of the same template. Zero means no estimate.
+	EstimatedDuration time.Duration
 }
 
 // Page is one result page plus list metadata.
@@ -95,6 +105,58 @@ type Node struct {
 	// PodName is populated only from verified version-aware resolution
 	// (docs/development.md; v0.1 policy: do not guess pod names).
 	PodName string
+
+	// Progress is the server's "done/total" count below this node, verbatim.
+	Progress string
+	// EstimatedDuration is the controller's estimate for this node from
+	// earlier runs. Zero means no estimate.
+	EstimatedDuration time.Duration
+	// ResourcesDuration is the resource usage the controller recorded for
+	// this node, keyed by resource name ("cpu", "memory", ...), in
+	// resource-seconds as Argo reports them.
+	ResourcesDuration map[string]int64
+	// HostNodeName is the Kubernetes node the pod ran on; empty for nodes
+	// that own no pod or have not been scheduled.
+	HostNodeName string
+	// ExitCode is the main container's exit code as the server reported it
+	// in outputs.exitCode. It is text on the wire and stays text here; empty
+	// means the server reported none.
+	ExitCode string
+	// Inputs and Outputs are the node's parameters and artifacts. Parameter
+	// values can hold secrets, so views redact them unless the reader asks
+	// to see them.
+	Inputs  NodeIO
+	Outputs NodeIO
+	// Retried is true for the retry attempts of a retryStrategy; Hooked for
+	// nodes run by a lifecycle hook. Both come from the node's nodeFlag.
+	Retried bool
+	Hooked  bool
+	// MemoizationHit reports that the node's result was served from the
+	// memoization cache instead of running.
+	MemoizationHit bool
+}
+
+// NodeIO is a node's inputs or outputs: named parameters, named artifacts,
+// and the script result.
+type NodeIO struct {
+	Parameters []Parameter
+	// Artifacts lists artifact names only. Their storage keys say where the
+	// data lives, which the resource view already shows in full.
+	Artifacts []string
+	// Result is a script template's captured stdout, set only on outputs.
+	Result string
+}
+
+// Parameter is one named parameter. Value is the resolved value; it is empty
+// when the parameter has none yet.
+type Parameter struct {
+	Name  string
+	Value string
+}
+
+// Empty reports whether there is nothing to show.
+func (io NodeIO) Empty() bool {
+	return len(io.Parameters) == 0 && len(io.Artifacts) == 0 && io.Result == ""
 }
 
 // Workflow is the detail-level view of one workflow.

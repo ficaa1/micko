@@ -23,6 +23,14 @@ const (
 	RouteDetail
 	// RouteLogs is the log view for the selected workflow.
 	RouteLogs
+	// RouteCron is the cron workflow list.
+	RouteCron
+	// RouteTemplates is the workflow template list.
+	RouteTemplates
+	// RouteClusterTemplates is the cluster workflow template list.
+	RouteClusterTemplates
+	// RouteArchived is the archived workflow list.
+	RouteArchived
 )
 
 // String implements fmt.Stringer.
@@ -32,6 +40,14 @@ func (r Route) String() string {
 		return "detail"
 	case RouteLogs:
 		return "logs"
+	case RouteCron:
+		return "cron"
+	case RouteTemplates:
+		return "templates"
+	case RouteClusterTemplates:
+		return "clustertemplates"
+	case RouteArchived:
+		return "archived"
 	default:
 		return "list"
 	}
@@ -103,6 +119,15 @@ type logRecordMsg struct {
 	// Canceled distinguishes cancellation from network failure (plan §4).
 	Canceled bool
 	Err      error
+}
+
+// logSourcesMsg carries the pod-to-step map for a workflow-wide log pane.
+// Sources is nil when the workflow could not be read.
+type logSourcesMsg struct {
+	genStamp
+	RequestID uint64
+	Ref       core.Ref
+	Sources   map[string]string
 }
 
 // tickMsg schedules the next poll only after the previous collection

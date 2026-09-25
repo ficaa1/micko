@@ -16,16 +16,26 @@ import (
 )
 
 // demoRows is the demo list in the order the default sort produces: phase
-// first (Failed, then Running, then Pending, then Succeeded), and newest
-// first inside a phase. Tests index into it instead of naming a workflow,
+// first (Suspended, then Failed and Error, then Running, then Pending, then
+// Succeeded), and newest first inside a phase. Tests index into it instead of naming a workflow,
 // so a change to the sort is one edit here.
 var demoRows = []string{
+	"demo-release-gate",
+	"demo-etl-hourly-1790000000",
 	"demo-nightly-report",
+	"demo-oom-backfill",
+	"demo-param-check",
 	"demo-train-pipeline",
 	"demo-data-pull",
 	"demo-cleanup",
 	"demo-hello-world",
+	"demo-etl-hourly-1789996400",
+	"demo-deploy-multi-layer",
+	"demo-etl-hourly-1789992800",
 }
+
+// demoListed is the list pane's count once the whole demo snapshot is in.
+const demoListed = "list: 12 workflows"
 
 // buildBinary compiles the real cmd/argo-tui binary once per test binary.
 func buildBinary(t *testing.T) string {
@@ -90,7 +100,7 @@ func TestPTYDemoJourney(t *testing.T) {
 	}()
 
 	ok := waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "ns: demo") && strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, "ns: demo") && strings.Contains(s, demoListed)
 	})
 	if !ok {
 		t.Fatalf("demo header/list never rendered; screen=%q", p.Screen())
@@ -122,7 +132,7 @@ func TestPTYDemoQuitViaCtrlC(t *testing.T) {
 		p.Close()
 	}()
 	waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	})
 	if err := p.Send("\x03"); err != nil { // Ctrl-C
 		t.Fatalf("send ctrl-c: %v", err)
@@ -237,7 +247,7 @@ func TestPTYTerminalRestoreMarkers(t *testing.T) {
 	}
 	defer p.Close()
 	waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	})
 	_ = p.Send("q")
 	if _, err := p.Wait(); err != nil {
@@ -301,7 +311,7 @@ func TestPTYNoEgressInDemo(t *testing.T) {
 		p.Close()
 	}()
 	waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	})
 
 	tcpEstablished := procTCPEstablished(p.Cmd.Process.Pid)
@@ -355,7 +365,7 @@ func TestPTYDemoAgeColumnNotEmpty(t *testing.T) {
 		p.Close()
 	}()
 	ok := waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows") && strings.Contains(s, "40m")
+		return strings.Contains(s, demoListed) && strings.Contains(s, "40m")
 	})
 	if !ok {
 		t.Fatalf("AGE column empty (baseline renders '-' for every row); screen=%q", p.Screen())
@@ -381,7 +391,7 @@ func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
 		p.Close()
 	}()
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
@@ -391,12 +401,10 @@ func TestPTYDemoKeysMoveAndOpenDetail(t *testing.T) {
 		t.Fatalf("send keys: %v", err)
 	}
 	ok := waitScreen(p, 10*time.Second, func(s string) bool {
-		// The detail pane titles the opened workflow; assert on that rendered
-		// title (the "route: detail" header prefix is unreliable here because
-		// the alternate-screen repaint overwrites it via C0 controls that the
-		// PTY harness's stripANSI discards, so the stream only carries the
-		// overwriting suffix).
-		return strings.Contains(s, "Detail "+demoRows[1]) && strings.Contains(s, "● Running")
+		// The summary's uid line names the opened workflow; see detailShows
+		// for why the border title is not used. demoRows[1] is a failed run,
+		// so its phase word is on the pane.
+		return detailShows(s, demoRows[1]) && strings.Contains(s, "✗ Failed")
 	})
 	if !ok {
 		t.Fatalf("j/enter did not open the second row's detail; screen=%q", p.Screen())
@@ -421,7 +429,7 @@ func TestPTYDemoEscFromListOpenedLogsReturnsToList(t *testing.T) {
 		p.Close()
 	}()
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
@@ -441,7 +449,7 @@ func TestPTYDemoEscFromListOpenedLogsReturnsToList(t *testing.T) {
 	}
 	ok := waitScreen(p, 10*time.Second, func(s string) bool {
 		screen := s
-		return strings.Contains(screen, "list: 5 workflows") &&
+		return strings.Contains(screen, demoListed) &&
 			!strings.Contains(screen, "(no workflow loaded)")
 	})
 	if !ok {
@@ -466,7 +474,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 		p.Close()
 	}()
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
@@ -485,7 +493,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 		t.Fatalf("send esc: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("did not return to list; screen=%q", p.Screen())
 	}
@@ -499,7 +507,7 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	}) {
 		t.Fatalf("logs B never rendered; screen=%q", p.Screen())
 	}
-	// Esc from logs B: must NOT show the stale demo-data-pull detail, and
+	// Esc from logs B: must NOT show the stale detail A, and
 	// must return to the list (the route logs B was opened from).
 	p.ClearScreen()
 	if err := p.Send("\x1b"); err != nil { // Esc
@@ -507,10 +515,10 @@ func TestPTYDemoEscFromLogsBNotStaleDetailA(t *testing.T) {
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
 		screen := s
-		return strings.Contains(screen, "list: 5 workflows") &&
+		return strings.Contains(screen, demoListed) &&
 			!detailShows(screen, demoRows[1])
 	}) {
-		t.Fatalf("Esc from logs B did not return to the list without stale Detail demo-data-pull (A); screen=%q", p.Screen())
+		t.Fatalf("Esc from logs B did not return to the list without the stale detail A; screen=%q", p.Screen())
 	}
 	_ = p.Send("q")
 	_, _ = p.Wait()
@@ -531,7 +539,7 @@ func TestPTYDemoResizeReacts(t *testing.T) {
 		p.Close()
 	}()
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
@@ -551,13 +559,16 @@ func TestPTYDemoResizeReacts(t *testing.T) {
 	// Drop the frames rendered at the old size. One more can still arrive
 	// after the clear, because the program was already writing it when the
 	// resize landed, so the assertion asks for order rather than absence:
-	// the full layout has to render after the last resize notice.
+	// the full layout has to render after the last resize notice. The cut
+	// falls after the notice's last line, so the stale frame's own text is
+	// not mistaken for a notice drawn after the layout.
 	p.ClearScreen()
+	const notice = "Resize to at least"
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		if last := strings.LastIndex(s, "too small"); last >= 0 {
-			s = s[last:]
+		if last := strings.LastIndex(s, notice); last >= 0 {
+			s = s[last+len(notice):]
 		}
-		return strings.Contains(s, "list: 5 workflows") && !strings.Contains(s, "Resize to at least")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("120x40 did not restore the full layout; screen=%q", p.Screen())
 	}
@@ -576,7 +587,7 @@ func TestPTYDemoUsesAltScreenAndRestores(t *testing.T) {
 	}
 	defer p.Close()
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("list never rendered: %q", p.Screen())
 	}
@@ -611,7 +622,7 @@ func startDemo(t *testing.T, cols, rows int) *PTYProcess {
 		p.Close()
 	})
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("list never rendered at %dx%d: %q", cols, rows, p.Screen())
 	}
@@ -643,7 +654,7 @@ func TestPTYDemoShrinkKeepsFooter(t *testing.T) {
 	}
 	p.ClearScreen()
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "? help") && strings.Contains(s, "list: 5 workflows")
+		return strings.Contains(s, "? help") && strings.Contains(s, demoListed)
 	}) {
 		t.Fatalf("shrink to 100x10 lost the footer; screen=%q", p.Screen())
 	}
@@ -672,7 +683,7 @@ func TestPTYDemoHelpOverlayOpensAndCloses(t *testing.T) {
 		t.Fatalf("send esc: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows") && !strings.Contains(s, "KEYS")
+		return strings.Contains(s, demoListed) && !strings.Contains(s, "KEYS")
 	}) {
 		t.Fatalf("Esc did not close the help overlay; screen=%q", p.Screen())
 	}
@@ -696,7 +707,7 @@ func TestPTYDemoHelpOverlayQClosesWithoutQuitting(t *testing.T) {
 		t.Fatalf("send q: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "list: 5 workflows") && !strings.Contains(s, "KEYS")
+		return strings.Contains(s, demoListed) && !strings.Contains(s, "KEYS")
 	}) {
 		t.Fatalf("q did not close the help overlay; screen=%q", p.Screen())
 	}
@@ -731,6 +742,105 @@ func TestPTYDemoEscClearsAppliedFilter(t *testing.T) {
 	}
 	_ = p.Send("q")
 	_, _ = p.Wait()
+}
+
+// Marking two rows reaches the terminal as two glyphs and a count, and a on
+// the list opens the bulk pane for them. The demo cannot write, so the pane
+// opens in its unavailable state and says why.
+func TestPTYDemoMarksTwoRowsAndOpensTheBulkMenu(t *testing.T) {
+	p := startDemo(t, 120, 30)
+	// The renderer repaints only the cells that change, so the capture is
+	// cleared before each step and each check is for text a step writes
+	// whole: the first mark adds the toolbar cell, and the second changes
+	// only its digit, which the bulk pane then states in full.
+	p.ClearScreen()
+	if err := p.Send(" "); err != nil {
+		t.Fatalf("send space: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "◆ 1 marked")
+	}) {
+		t.Fatalf("the first mark never rendered; screen=%q", p.Screen())
+	}
+	if err := p.SendKeys(40*time.Millisecond, "j", " "); err != nil {
+		t.Fatalf("send the second mark: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	p.ClearScreen()
+	if err := p.Send("a"); err != nil {
+		t.Fatalf("send a: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "Bulk action") && strings.Contains(s, "targets: 2 marked workflows") &&
+			strings.Contains(s, "demo mode: actions unavailable")
+	}) {
+		t.Fatalf("the bulk pane never opened; screen=%q", p.Screen())
+	}
+	// The pane is a dialog that owns q, so the way out is ctrl+c.
+	_ = p.Send("\x03")
+	if code, err := p.Wait(); err != nil || code != 0 {
+		t.Fatalf("exit: code=%d err=%v", code, err)
+	}
+}
+
+// typeKeys sends each rune of s as its own key press, the way a person
+// types, so the list re-filters once per key.
+func typeKeys(t *testing.T, p *PTYProcess, s string) {
+	t.Helper()
+	keys := make([]string, 0, len(s))
+	for _, r := range s {
+		keys = append(keys, string(r))
+	}
+	if err := p.SendKeys(15*time.Millisecond, keys...); err != nil {
+		t.Fatalf("type %q: %v", s, err)
+	}
+}
+
+// A query typed into the demo's filter reaches the terminal parsed: the
+// toolbar shows its canonical form and only the matching run is listed. A
+// term that does not parse shows its error and leaves the filter alone,
+// and w adds the wide columns.
+func TestPTYDemoTypesAFilterQuery(t *testing.T) {
+	p := startDemo(t, 140, 30)
+	typeKeys(t, p, "/phase=failed cron=demo-etl-hourly")
+	time.Sleep(200 * time.Millisecond)
+	// The renderer rewrites a line from its first changed cell, so the
+	// check after enter is for the part of the toolbar that changes: the
+	// typed "failed cron" becomes the parsed "Failed & cron".
+	p.ClearScreen()
+	if err := p.Send("\r"); err != nil {
+		t.Fatalf("send enter: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "Failed & cron=demo-etl-hourly [within 12 collected]")
+	}) {
+		t.Fatalf("the query never applied; screen=%q", p.Screen())
+	}
+	p.ClearScreen()
+	typeKeys(t, p, "/ age<2x")
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, `✗ bad duration "2x"`)
+	}) {
+		t.Fatalf("the parse error never showed; screen=%q", p.Screen())
+	}
+	// Esc cancels the edit and keeps the applied query.
+	if err := p.Send("\x1b"); err != nil {
+		t.Fatalf("send esc: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	p.ClearScreen()
+	if err := p.Send("w"); err != nil {
+		t.Fatalf("send w: %v", err)
+	}
+	if !waitScreen(p, 10*time.Second, func(s string) bool {
+		return strings.Contains(s, "STARTED") && strings.Contains(s, "TEMPLATE")
+	}) {
+		t.Fatalf("w did not add the wide columns; screen=%q", p.Screen())
+	}
+	_ = p.Send("q")
+	if code, err := p.Wait(); err != nil || code != 0 {
+		t.Fatalf("exit: code=%d err=%v", code, err)
+	}
 }
 
 // --- H: UI shell -----------------------------------------------------------
@@ -828,7 +938,7 @@ func TestPTYDemoDetailKeepsTheFrame(t *testing.T) {
 		t.Fatalf("send enter: %v", err)
 	}
 	if !waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "Detail "+demoRows[0]) &&
+		return detailShows(s, demoRows[0]) &&
 			strings.Contains(s, "tab section") &&
 			strings.Contains(s, "? help")
 	}) {

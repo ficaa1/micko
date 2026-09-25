@@ -43,27 +43,62 @@ func (c *Client) Watch(ctx context.Context, req core.WatchRequest, cb func(core.
 	if req.LabelSelector != "" {
 		query.Set("listOptions.labelSelector", req.LabelSelector)
 	}
-	httpReq, err := c.newRequest(ctx, path, query)
+	body, err := c.openWatch(ctx, path, query, req.ResourceVersion)
 	if err != nil {
 		return err
 	}
+	defer drainAndClose(body)
+	return readWatchStream(ctx, body, req.ResourceVersion, false, func(typ string, object json.RawMessage, lastRV string) (string, error) {
+		wf, err := decodeRawWorkflow(object)
+		if err != nil {
+			return "", core.NewWatchError(core.WatchProtocol, "watch workflow object is invalid", lastRV, err)
+		}
+		rv := wf.Summary.ResourceVersion
+		if rv == "" {
+			rv = lastRV
+		}
+		return rv, cb(core.WatchEvent{Type: typ, Summary: wf.Summary, ResourceVersion: rv})
+	})
+}
+
+// openWatch starts a gateway watch stream and returns its body. A transport
+// failure and an HTTP error both come back as a *core.WatchError that keeps
+// lastRV and, where one applies, the APIError the status maps to.
+func (c *Client) openWatch(ctx context.Context, path string, query url.Values, lastRV string) (io.ReadCloser, error) {
+	httpReq, err := c.newRequest(ctx, path, query)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := c.do(ctx, httpReq)
 	if err != nil {
-		return watchTransportError(ctx, req.ResourceVersion, err)
+		return nil, watchTransportError(ctx, lastRV, err)
 	}
-	defer drainAndClose(resp.Body)
 	if resp.StatusCode != http.StatusOK {
+		defer drainAndClose(resp.Body)
 		ae := mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
-		return classifyWatchHTTP(req.ResourceVersion, ae)
+		return nil, classifyWatchHTTP(lastRV, ae)
 	}
-	reader := bufio.NewReaderSize(resp.Body, 64*1024)
-	var lastRV = req.ResourceVersion
-	var line []byte
+	return resp.Body, nil
+}
+
+// readWatchStream reads one gateway watch stream until it ends: JSON lines
+// or SSE frames, one envelope per line, each line bounded by
+// MaxWatchEventBytes, keepalive comments skipped, and an in-band error or an
+// ERROR event turned into a *core.WatchError. Every object goes to onObject
+// with the type its envelope named; onObject returns the resource version
+// the object carried, which becomes the cursor a reconnect resumes from, or
+// an error that stops the stream as it is. bareResult accepts a result that
+// is the object itself rather than a {type, object} pair, which is how the
+// Kubernetes event stream sends its events. A clean end of the body is
+// WatchEnded: the stream stopping says nothing about what happened next.
+func readWatchStream(ctx context.Context, body io.Reader, lastRV string, bareResult bool,
+	onObject func(typ string, object json.RawMessage, lastRV string) (string, error)) error {
+	reader := bufio.NewReaderSize(body, 64*1024)
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		line, err = readWatchLine(reader)
+		line, err := readWatchLine(reader)
 		if len(line) > 0 {
 			line = stripWatchSSE(line)
 			trimmed := bytes.TrimSpace(line)
@@ -73,16 +108,17 @@ func (c *Client) Watch(ctx context.Context, req core.WatchRequest, cb func(core.
 				}
 				continue
 			}
-			event, parsedErr := decodeWatchEvent(line, lastRV)
+			typ, object, parsedErr := decodeWatchEnvelope(line, lastRV, bareResult)
 			if parsedErr != nil {
 				return parsedErr
 			}
-			if event != nil {
-				if event.ResourceVersion != "" {
-					lastRV = event.ResourceVersion
-				}
-				if cbErr := cb(*event); cbErr != nil {
+			if object != nil {
+				rv, cbErr := onObject(typ, object, lastRV)
+				if cbErr != nil {
 					return cbErr
+				}
+				if rv != "" {
+					lastRV = rv
 				}
 			}
 		}
@@ -133,38 +169,38 @@ func stripWatchSSE(line []byte) []byte {
 	return line
 }
 
-func decodeWatchEvent(line []byte, lastRV string) (*core.WatchEvent, error) {
+// decodeWatchEnvelope unwraps one stream line: {"type", "object"} bare or
+// inside "result", or with bareResult a result that is the object itself.
+// It returns the envelope's type and the raw object, or the error the line
+// carries in band.
+func decodeWatchEnvelope(line []byte, lastRV string, bareResult bool) (string, json.RawMessage, error) {
 	var env watchEnvelope
 	if err := json.Unmarshal(line, &env); err != nil {
-		return nil, core.NewWatchError(core.WatchProtocol, "watch event is not valid JSON", lastRV, err)
+		return "", nil, core.NewWatchError(core.WatchProtocol, "watch event is not valid JSON", lastRV, err)
 	}
 	if len(env.Result) > 0 {
-		if err := json.Unmarshal(env.Result, &env); err != nil {
-			return nil, core.NewWatchError(core.WatchProtocol, "watch result is not valid JSON", lastRV, err)
+		result := env.Result
+		if err := json.Unmarshal(result, &env); err != nil {
+			return "", nil, core.NewWatchError(core.WatchProtocol, "watch result is not valid JSON", lastRV, err)
+		}
+		if bareResult && env.Error == nil && len(env.Object) == 0 {
+			return "", result, nil
 		}
 	}
 	if env.Error != nil {
-		return nil, classifyWatchChunk(env.Error, lastRV)
+		return "", nil, classifyWatchChunk(env.Error, lastRV)
 	}
 	if len(env.Object) == 0 {
-		return nil, core.NewWatchError(core.WatchProtocol, "watch event has no object", lastRV, nil)
+		return "", nil, core.NewWatchError(core.WatchProtocol, "watch event has no object", lastRV, nil)
 	}
 	if env.Type == "ERROR" {
 		var obj watchErrorObject
 		if err := json.Unmarshal(env.Object, &obj); err != nil {
-			return nil, core.NewWatchError(core.WatchProtocol, "watch error object is invalid", lastRV, err)
+			return "", nil, core.NewWatchError(core.WatchProtocol, "watch error object is invalid", lastRV, err)
 		}
-		return nil, classifyWatchStatus(obj.Code, obj.Message, lastRV)
+		return "", nil, classifyWatchStatus(obj.Code, obj.Message, lastRV)
 	}
-	wf, err := decodeRawWorkflow(env.Object)
-	if err != nil {
-		return nil, core.NewWatchError(core.WatchProtocol, "watch workflow object is invalid", lastRV, err)
-	}
-	rv := wf.Summary.ResourceVersion
-	if rv == "" {
-		rv = lastRV
-	}
-	return &core.WatchEvent{Type: env.Type, Summary: wf.Summary, ResourceVersion: rv}, nil
+	return env.Type, env.Object, nil
 }
 
 func classifyWatchChunk(ec *errorChunk, lastRV string) error {
