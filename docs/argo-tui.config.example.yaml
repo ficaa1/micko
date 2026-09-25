@@ -5,6 +5,9 @@ refreshInterval: 5s
 # Every write attempt is appended to $XDG_STATE_HOME/argo-tui/actions.jsonl
 # (default ~/.local/state/argo-tui/actions.jsonl). Uncomment to turn it off.
 # journal: false
+# Open every workflow with parameter and output values hidden (v reveals).
+# A profile can set it too, overriding this line either way.
+# redactValues: true
 
 profiles:
   dev:
@@ -29,3 +32,4 @@ profiles:
     # webURL: https://argo.example.com
     # Initial command in the log pipe editor; must be installed separately.
     # pipeCommand: lnav
+    # redactValues: true

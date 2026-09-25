@@ -69,7 +69,7 @@ func helpLines() []string {
 		"",
 		"Detail    tab / shift+tab section  r refresh  a actions",
 		"          h show / hide skipped nodes  s sort nodes  p phase filter",
-		"          l logs for the selected node  v reveal redacted values",
+		"          l logs for the selected node  v hide or reveal values",
 		"",
 		"Logs      t follow (tail)  space pause  c container  G newest  esc back",
 		"          / search  n / N next / previous match  & only matching lines",

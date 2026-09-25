@@ -98,6 +98,7 @@ func (m *Root) switchNamespace(ns string) tea.Cmd {
 	m.logState = logState{}
 	m.logsView = nil
 	m.detailView = newDetailView()
+	m.detailView.SetRedactByDefault(m.redact)
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
 	// Marks name workflows of the namespace being left. None of them can
 	// be in the next snapshot, and a bulk action must never reach across
