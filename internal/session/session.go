@@ -50,6 +50,9 @@ type Options struct {
 	// Skins is the set of valid skin names. Every skin the file names is
 	// checked against it when the file is read.
 	Skins []string
+	// RedactValues is the --redact-values flag, passed through to every
+	// profile's configuration.
+	RedactValues bool
 	// Diagnostics receives sanitized forwarding lifecycle lines when Debug is
 	// set. Nil silences them.
 	Diagnostics io.Writer
@@ -168,6 +171,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		Debug:                 c.opts.Debug,
 		Skin:                  c.opts.Skin,
 		Skins:                 c.opts.Skins,
+		RedactValues:          c.opts.RedactValues,
 	})
 	if err != nil {
 		return nil, err
@@ -223,6 +227,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		WebURL:      cfg.WebURL,
 		PipeCommand: cfg.PipeCommand,
 		Skin:        cfg.Skin,
+		Redact:      cfg.RedactValues,
 		Namespaces:  cfg.Namespaces,
 		Interval:    cfg.RefreshInterval,
 		States:      states,

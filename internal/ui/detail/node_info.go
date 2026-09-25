@@ -62,9 +62,8 @@ type infoItem struct {
 
 // nodeInfoGroups collects the facts about one node in four groups: what the
 // node is, how it went, where it ran, and what went in and out. Parameter
-// values and the script result can hold secrets, so they show the resource
-// tab's redaction marker unless the reader revealed values with v; the
-// reveal is the same session-only state the resource tab uses.
+// values and the script result follow the same reveal state as the resource
+// tab: shown unless the profile sets redactValues, and flipped by v.
 func nodeInfoGroups(r FlatRow, n core.Node, found bool, now time.Time, reveal bool, t shared.Theme) [][]infoItem {
 	row := r.Row
 	text := t.Text
@@ -323,7 +322,7 @@ func infoTitle(r FlatRow, reveal bool, width int, t shared.Theme) string {
 	p.add("NODE ", t.TableHeader)
 	p.add(oneLine(rowDisplayName(r.Row)), t.Accent)
 	if reveal {
-		p.add("  values REVEALED (v redacts)", t.Warning)
+		p.add("  values shown (v redacts)", t.Muted)
 	} else {
 		p.add("  values redacted (v reveals)", t.Muted)
 	}

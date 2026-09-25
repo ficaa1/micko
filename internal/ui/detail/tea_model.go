@@ -31,6 +31,11 @@ type Model struct {
 
 	// tab is the active detail tab: "summary" | "nodes" | "resource".
 	tab string
+	// redactByDefault is the profile's redactValues setting: when set, each
+	// workflow opens with its values hidden. revealResource is what the
+	// reader sees now; it starts from the setting for every workflow and `v`
+	// flips it for the session.
+	redactByDefault bool
 	// revealResource is the session-only explicit reveal for the resource
 	// tab (DET-12 ⛨). It resets when the workflow (by UID) changes and is
 	// never persisted anywhere.
@@ -100,7 +105,7 @@ type Model struct {
 func New() *Model {
 	return &Model{
 		tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortPipeline,
-		theme: shared.NewTheme(false), folded: map[string]bool{}, autoFolded: map[string]bool{},
+		theme: shared.NewTheme(false), folded: map[string]bool{}, autoFolded: map[string]bool{}, revealResource: true,
 	}
 }
 
@@ -150,7 +155,7 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 	m.notFound = false
 	if !sameWorkflow {
 		// Reveal is session-only per workflow: a different UID resets it.
-		m.revealResource = false
+		m.revealResource = !m.redactByDefault
 	}
 }
 
@@ -176,6 +181,14 @@ func (m *Model) SetNotFound() {
 // SetSize implements the child view sizing contract (contracts §7).
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
+}
+
+// SetRedactByDefault applies the profile's redactValues setting. The
+// workflow on screen follows it at once, so switching to a profile that
+// redacts never leaves the previous profile's revealed values up.
+func (m *Model) SetRedactByDefault(redact bool) {
+	m.redactByDefault = redact
+	m.revealResource = !redact
 }
 
 // Reveal is the session-only reveal state accessor (for tests/root).
@@ -547,9 +560,9 @@ func (m *Model) tabStatusLine() string {
 	case "nodes":
 		return m.nodesStatusLine()
 	case "resource":
-		reveal := "redacted (v reveals)"
+		reveal := "values redacted (v reveals)"
 		if m.revealResource {
-			reveal = "REVEALED (v redacts)"
+			reveal = "values shown (v redacts)"
 		}
 		return m.theme.Dim.Render("resource · " + reveal + " · " +
 			itoaDetail(m.resourceTop+1) + "/" + itoaDetail(m.scrollLines()))

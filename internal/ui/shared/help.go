@@ -75,7 +75,7 @@ func helpLines() []string {
 		"          n switch namespace               esc clear filter",
 		"",
 		"Detail    tab next section  shift+tab previous",
-		"          v reveal redacted values (resource, node info)",
+		"          v hide or reveal values (resource, node info)",
 		"          r refresh this workflow now",
 		"          a actions (requires --allow-actions)",
 		"",
