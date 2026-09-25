@@ -1,4 +1,4 @@
 DETAIL wf-steps
- Summary  [Nodes]  Timeline   Resource 
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
 - wf-steps type=Steps phase=Succeeded
   - pod-1 type=Pod phase=Succeeded

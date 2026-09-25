@@ -1,4 +1,4 @@
 DETAIL fixture-dag
-[Summary]  Nodes   Timeline   Resource 
+[Summary]  Nodes   Timeline   Explain   Events   Resource 
 phase: Failed
 message: one task failed

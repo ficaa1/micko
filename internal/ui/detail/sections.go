@@ -3,6 +3,8 @@ package detail
 import (
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
@@ -23,6 +25,8 @@ var sections = []section{
 	{id: "summary", title: "Summary"},
 	{id: "nodes", title: "Nodes"},
 	{id: "timeline", title: "Timeline", key: "T"},
+	{id: "explain", title: "Explain", key: "X"},
+	{id: "events", title: "Events", key: "E"},
 	{id: "resource", title: "Resource"},
 }
 
@@ -88,4 +92,70 @@ func tabStrip(active string, t shared.Theme) string {
 		out = append(out, t.TabInactive.Render(" "+s.title+" "))
 	}
 	return strings.Join(out, " ")
+}
+
+// tabStripFit is the tab strip within width cells. The full strip is drawn
+// when it fits. Otherwise the tabs close up to one space apart, and when
+// even that is too wide, the strip shows the tabs around the active one
+// with "…" where tabs are left out, so the active tab is always on screen
+// and the strip never runs past the pane. A zero width is unbounded.
+func tabStripFit(active string, t shared.Theme, width int) string {
+	full := tabStrip(active, t)
+	if width <= 0 || cellWidth(full) <= width {
+		return full
+	}
+	type tab struct {
+		text  string
+		style lipgloss.Style
+	}
+	tabs := make([]tab, len(sections))
+	for i, s := range sections {
+		tabs[i] = tab{s.title, t.TabInactive}
+		if strings.EqualFold(s.id, active) {
+			tabs[i] = tab{"[" + s.title + "]", t.TabActive}
+		}
+	}
+	cur := max(sectionIndex(active), 0)
+	lo, hi := 0, len(tabs)-1
+	need := func(lo, hi int) int {
+		w := 0
+		for i := lo; i <= hi; i++ {
+			w += cellWidth(tabs[i].text) + 1
+		}
+		if lo > 0 {
+			w += 2
+		}
+		if hi < len(tabs)-1 {
+			w += 2
+		}
+		return w - 1
+	}
+	if need(lo, hi) > width {
+		lo, hi = cur, cur
+		for grown := true; grown; {
+			grown = false
+			if hi+1 < len(tabs) && need(lo, hi+1) <= width {
+				hi++
+				grown = true
+			}
+			if lo > 0 && need(lo-1, hi) <= width {
+				lo--
+				grown = true
+			}
+		}
+	}
+	var p pieces
+	if lo > 0 {
+		p.add("… ", t.TabInactive)
+	}
+	for i := lo; i <= hi; i++ {
+		if i > lo {
+			p.add(" ", lipgloss.NewStyle())
+		}
+		p.add(tabs[i].text, tabs[i].style)
+	}
+	if hi < len(tabs)-1 {
+		p.add(" …", t.TabInactive)
+	}
+	return p.truncate(width).render()
 }

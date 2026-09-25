@@ -10,7 +10,8 @@ import (
 // key jump nowhere.
 func TestSectionForKey(t *testing.T) {
 	cases := map[string]string{
-		"1": "summary", "2": "nodes", "3": "timeline", "4": "resource", "T": "timeline",
+		"1": "summary", "2": "nodes", "3": "timeline", "4": "explain", "5": "events", "6": "resource",
+		"T": "timeline", "X": "explain", "E": "events",
 		"9": "", "0": "", "t": "", "x": "", "enter": "",
 	}
 	for key, want := range cases {
@@ -32,10 +33,10 @@ func TestSectionCycleWraps(t *testing.T) {
 		cur = prevTab(cur)
 		back = append(back, cur)
 	}
-	if got := strings.Join(fwd, " "); got != "nodes timeline resource summary" {
+	if got := strings.Join(fwd, " "); got != "nodes timeline explain events resource summary" {
 		t.Errorf("forward %q", got)
 	}
-	if got := strings.Join(back, " "); got != "resource timeline nodes summary" {
+	if got := strings.Join(back, " "); got != "resource events explain timeline nodes summary" {
 		t.Errorf("backward %q", got)
 	}
 	if nextTab("bogus") != "summary" || prevTab("bogus") != "resource" {

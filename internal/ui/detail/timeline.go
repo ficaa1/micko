@@ -729,7 +729,7 @@ func (tr tlRenderer) line(r tlRow) pieces {
 		style := t.Muted
 		if r.Section == "" {
 			if d, ok := nodeDuration(r.Row, tr.now); ok {
-				txt = shortDuration(d)
+				txt = shared.ShortDuration(d)
 				if _, _, running, _ := nodeInterval(r.Row, tr.now); running && !r.heading {
 					style = t.PhaseRunning
 				}
@@ -806,7 +806,7 @@ func (tr tlRenderer) header() string {
 			end = "now"
 			w++
 		default:
-			end = shortDuration(tr.span.length())
+			end = shared.ShortDuration(tr.span.length())
 		}
 		p.add(axisLine(axisTicks(tr.span, c.chart, w, end), w), t.Muted)
 	}

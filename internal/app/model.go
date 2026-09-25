@@ -53,6 +53,10 @@ type Root struct {
 	// logState is the retained log state for the logs route.
 	logState logState
 
+	// events is the Kubernetes event streaming for the detail pane's
+	// Events section.
+	events eventsSession
+
 	// logsFrom records the route the logs pane was opened from (list via
 	// the 'l' key, or detail), so a single Esc returns to that route
 	// instead of dumping the user onto a never-loaded/stale detail pane.
@@ -223,18 +227,23 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	if n, ok := r.(core.NamespaceLister); ok {
 		nsLister = n
 	}
+	var eventWatcher core.EventWatcher
+	if e, ok := r.(core.EventWatcher); ok {
+		eventWatcher = e
+	}
 	theme := shared.NewTheme(false)
 	m := &Root{
 		deps: deps{
-			reader:      r,
-			watcher:     watcher,
-			actioner:    actioner,
-			nsLister:    nsLister,
-			clock:       clock,
-			interval:    interval,
-			namespace:   namespace,
-			snapshotCap: 5000,
-			pageSize:    100,
+			reader:       r,
+			watcher:      watcher,
+			actioner:     actioner,
+			nsLister:     nsLister,
+			eventWatcher: eventWatcher,
+			clock:        clock,
+			interval:     interval,
+			namespace:    namespace,
+			snapshotCap:  5000,
+			pageSize:     100,
 		},
 		inflight:        map[string]inflightOp{},
 		theme:           theme,
@@ -453,6 +462,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.openProfilePicker()
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
+			// On the Events section r also starts the streams over, which
+			// is the way back from a stream that stopped.
+			if m.detailView.Section() == shared.SectionEvents {
+				return m, tea.Batch(m.startDetailFetch(), m.restartEvents())
+			}
 			return m, m.startDetailFetch()
 		}
 		if m.route == RouteDetail && key == "a" && !m.textEntryActive() {
@@ -477,8 +491,14 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.route == RouteList {
 			return m, m.updateChild(msg)
 		}
-		// Detail/logs routes: the active child consumes non-global keys.
-		return m, m.updateChild(msg)
+		// Detail/logs routes: the active child consumes non-global keys. A
+		// key in the detail pane can open or leave the Explain section,
+		// which starts or cancels its log read.
+		cmd := m.updateChild(msg)
+		if m.route == RouteDetail {
+			return m, tea.Batch(cmd, m.syncSections())
+		}
+		return m, cmd
 
 	case tea.QuitMsg:
 		m.quitting = true
@@ -568,7 +588,19 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Section != "" {
 			m.detailView.SetSection(msg.Section)
 		}
-		return m, cmd
+		return m, tea.Batch(cmd, m.syncSections())
+
+	case explainLogMsg:
+		return m, m.handleExplainLog(msg)
+
+	case eventsMsg:
+		return m, m.handleEvents(msg)
+
+	case eventsDoneMsg:
+		return m, m.handleEventsDone(msg)
+
+	case eventsRetryMsg:
+		return m, m.handleEventsRetry(msg)
 
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)
@@ -956,9 +988,13 @@ func (m *Root) back() tea.Cmd {
 			target = RouteList
 		}
 		m.route = target
-		return nil
+		// Opening the log canceled an explain read and the event streams;
+		// back on the section they start again.
+		return m.syncSections()
 	case RouteDetail:
 		m.cancelInflight("detail")
+		m.stopExplainLog()
+		m.stopEvents()
 		m.detailState.loading = false
 		m.route = RouteList
 		// A Resume or a Stop changes the row the reader is about to look
@@ -1002,6 +1038,8 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if m.route != RouteLogs {
 		m.logsFrom = m.route
 	}
+	m.stopExplainLog()
+	m.stopEvents()
 	m.selection = msg.Ref
 	m.selGen++
 	m.route = RouteLogs
@@ -1164,7 +1202,7 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	st.lastErr = nil
 	st.notFound = false
 	m.detailView.SetWorkflow(msg.Workflow, m.deps.clock.Now())
-	return nil
+	return m.syncSections()
 }
 
 // handleLogRecord applies one batched delivery honoring staleness.
@@ -1305,4 +1343,5 @@ func (m *Root) cancelAll() {
 	for _, c := range cancels {
 		c()
 	}
+	m.events = eventsSession{}
 }
