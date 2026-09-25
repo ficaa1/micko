@@ -110,3 +110,46 @@ func TestDemoCronWorkflows(t *testing.T) {
 		t.Fatalf("demo namespace holds %d cron workflows, want 3", len(demo))
 	}
 }
+
+// Every template a demo workflow names in its label exists in that
+// workflow's namespace, with a manifest, and the cluster template is named
+// by the workflow submitted from it.
+func TestDemoTemplatesMatchTheRuns(t *testing.T) {
+	f := DemoReader(NewFakeClock(FixtureEpoch))
+	templates, err := f.ListWorkflowTemplates(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, wt := range templates {
+		have[wt.Namespace+"/"+wt.Name] = true
+		if !json.Valid(wt.Resource) || len(wt.Templates) == 0 || wt.Entrypoint == "" {
+			t.Errorf("%s is incomplete: %+v", wt.Name, wt)
+		}
+	}
+	named := 0
+	for ref, wf := range f.Workflows {
+		if name := wf.Summary.Labels["workflows.argoproj.io/workflow-template"]; name != "" {
+			named++
+			if !have[ref.Namespace+"/"+name] {
+				t.Errorf("%s names template %s, which the demo does not have", ref.Name, name)
+			}
+		}
+	}
+	if named == 0 {
+		t.Fatal("no demo workflow names a template")
+	}
+	cluster, err := f.ListClusterWorkflowTemplates(context.Background())
+	if err != nil || len(cluster) != 1 || cluster[0].Namespace != "" {
+		t.Fatalf("cluster templates = %+v, %v", cluster, err)
+	}
+	page, _ := f.List(context.Background(), core.Query{Namespace: DemoNamespace,
+		LabelSelector: "workflows.argoproj.io/cluster-workflow-template=" + cluster[0].Name})
+	if len(page.Items) != 1 {
+		t.Fatalf("the cluster template owns %d runs, want 1", len(page.Items))
+	}
+	demo, _ := f.ListWorkflowTemplates(context.Background(), DemoNamespace)
+	if len(demo) != 4 {
+		t.Fatalf("demo namespace holds %d templates, want 4", len(demo))
+	}
+}

@@ -66,6 +66,19 @@ type FakeReader struct {
 	CronWorkflows []core.CronWorkflow
 	CronErr       error
 
+	// WorkflowTemplates and ClusterWorkflowTemplates answer the template
+	// lists; TemplateErr and ClusterTemplateErr fail them instead.
+	WorkflowTemplates        []core.WorkflowTemplate
+	ClusterWorkflowTemplates []core.WorkflowTemplate
+	TemplateErr              error
+	ClusterTemplateErr       error
+
+	// ArchivedWorkflows is the workflow archive, newest first. ArchiveErr
+	// fails both archive calls, the way a server without an archive fails
+	// them.
+	ArchivedWorkflows []core.Workflow
+	ArchiveErr        error
+
 	// Namespaces is the extra namespace list ListNamespaces reports, on top
 	// of the namespaces the stored workflows are in. NamespacesErr fails the
 	// call instead.

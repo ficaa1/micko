@@ -67,6 +67,18 @@ func listKinds() []listKind {
 			name: "cronworkflows", aliases: []string{"cwf", "cron"}, desc: "the cron workflow list",
 			route: RouteCron, show: (*Root).showCron,
 		},
+		{
+			name: "workflowtemplates", aliases: []string{"wftmpl", "tmpl"}, desc: "the workflow template list",
+			route: RouteTemplates, show: (*Root).showTemplates,
+		},
+		{
+			name: "clusterworkflowtemplates", aliases: []string{"cwftmpl"}, desc: "the cluster workflow template list",
+			route: RouteClusterTemplates, show: (*Root).showClusterTemplates,
+		},
+		{
+			name: "archived", aliases: []string{"aw"}, desc: "the archived workflow list",
+			route: RouteArchived, show: (*Root).showArchived,
+		},
 	}
 }
 
