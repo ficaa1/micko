@@ -88,6 +88,20 @@ type FakeReader struct {
 	// returning an error fails the stream before any record is delivered.
 	StreamHook func(core.LogRequest) error
 
+	// Events are the Kubernetes events WatchEvents serves, EventsErr fails
+	// every event stream, and EventHook sees each request first and can
+	// fail it. PublishEvent sends an event to the streams open at the time,
+	// for a test that needs a live stream. EventStarts, EventCancels and
+	// EventRequests record the streams opened.
+	Events        []core.Event
+	EventsErr     error
+	EventHook     func(core.EventWatchRequest) error
+	EventStarts   int
+	EventCancels  int
+	EventRequests []core.EventWatchRequest
+	// eventSubs are the open streams' queues for published events.
+	eventSubs map[chan core.Event]bool
+
 	// Call counters (guarded by mu) for test assertions.
 	ListCalls, GetCalls, StreamStarts int
 	// StreamCancels counts streams that ended via context cancellation.
