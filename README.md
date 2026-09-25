@@ -129,11 +129,11 @@ check and the write remains possible.
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
 | Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `0` all namespaces |
-| Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
+| Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
 | Templates (`:tmpl`, `:cwftmpl`) | the same keys; `n` and `0` do not apply to cluster templates |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
-| Resource | `v` reveal hidden parameter/output values |
+| Resource | `v` hides or reveals parameter/output values |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
 | Command palette | `:` open, `tab` complete, `up`/`down` choose, `enter` run, `ctrl+p`/`ctrl+n` history, `esc` close |
@@ -195,8 +195,9 @@ least 140 columns wide, beside it: every schedule, the time zone, the next five
 run times, the concurrency policy, the starting deadline, the history limits,
 the suspend state, the last run, the active runs, the controller's conditions,
 and the entrypoint and arguments of the workflow each run starts. Argument
-values are redacted until `v`, which reveals them for the selected row only.
-`f` shows the whole manifest, redacted the same way.
+values are shown, and `v` hides them for the selected row; under
+`redactValues` they start hidden and `v` reveals that row only. `f` shows the
+whole manifest the same way.
 
 `enter` lists the workflows the cron workflow started: the workflow list,
 narrowed on the server by the `workflows.argoproj.io/cron-workflow` label the
@@ -213,8 +214,8 @@ ClusterWorkflowTemplates: name, entrypoint, how many templates and parameters
 each defines, age, and on a wide pane the description the Argo UI shows. Cluster
 templates belong to no namespace, so the header reads `ns: (cluster-scoped)`
 there and `n` and `0` do nothing. The info panel (`i`) lists the entrypoint, the
-arguments with their defaults, allowed values and descriptions (values redacted
-until `v`), every template with its type (container, script, dag, steps,
+arguments with their defaults, allowed values and descriptions (`v` hides or
+reveals the values, as on the cron list), every template with its type (container, script, dag, steps,
 suspend, resource, data, http, plugin or containerSet), the service account and
 the labels. `enter` lists the workflows submitted from the template, by the
 `workflows.argoproj.io/workflow-template` or `cluster-workflow-template` label,
@@ -246,6 +247,7 @@ command (default `lnav`). Install that program separately.
 | `--allow-actions` | Enable confirmed Resume, Retry, Resubmit and Stop |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--debug` | Emit sanitized lifecycle diagnostics |
+| `--redact-values` | Open every workflow with parameter and output values hidden |
 | `--demo` | Run the offline, read-only demo |
 | `--version` | Print version and exit |
 
@@ -263,8 +265,11 @@ environment source from that profile before switching to a file.
 - Search and sorting apply to the collected workflow snapshot, capped at 5,000
   entries, in the all-namespaces view as well. Logs retain at most 10,000 lines or 8 MiB; pausing stops scrolling,
   not collection. Deleted pods or unavailable archived logs may prevent viewing logs.
-- Resource values are hidden until explicitly revealed. Log text, copied text
-  and pipe output may contain sensitive application data.
+- Parameter and output values are shown. Set `redactValues: true` at the top
+  of the config file or on a profile, or pass `--redact-values`, to open every
+  workflow with them hidden; `v` reveals them for the session. Log text,
+  copied text and pipe output may contain sensitive application data either
+  way.
 - Terminate exists in the transport but has no UI shortcut. Workflow submission,
   bulk actions and parameter editing are not exposed in the UI.
 

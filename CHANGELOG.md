@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Parameter and output values are now shown by default. The redaction they
+  used to open with hid what a reader opens a workflow to see. A cluster
+  whose parameters carry secrets can turn it back on with `redactValues: true`
+  at the top of the config file or on a profile, or with `--redact-values`;
+  `v` still hides or reveals them for the session.
 - Added a command palette. `:` opens it on every route; typing ranks the
   commands and their aliases, `tab` completes the highlighted one, and `enter`
   runs exactly what was typed. `wf` shows the workflow list, `ns [name]` and
@@ -24,7 +29,7 @@
   reads it, in the object's time zone and across daylight-saving changes; a
   schedule the controller would refuse shows `?` with the reason. `i` opens
   an info panel with the next five runs, the policy, the history limits, the
-  last and active runs and the arguments, whose values `v` reveals. `enter`
+  last and active runs and the arguments, whose values `v` hides or reveals. `enter`
   lists the workflows the cron workflow started, and `esc` returns. Both the
   v3.5 `schedule` field and the v3.6+ `schedules` list are read. The demo has
   four cron workflows, one of them owning the demo's hourly ETL runs.
@@ -32,7 +37,7 @@
   `:wftmpl`, `:workflowtemplates`) and `:cwftmpl` (or
   `:clusterworkflowtemplates`). They show each template's entrypoint, how many
   templates and parameters it defines, its age and its description. `i` opens
-  an info panel with the arguments (values redacted until `v`, with their
+  an info panel with the arguments (values follow `redactValues`, with their
   defaults and allowed values), each template and its type, the service
   account and the labels, and `enter` lists the workflows submitted from the
   template. Cluster templates belong to no namespace, so `n` and `0` say so

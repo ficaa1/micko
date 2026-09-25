@@ -284,10 +284,11 @@ func TestInfoPanelPlacement(t *testing.T) {
 	}
 }
 
-// v reveals the selected row's values in the panel and the manifest, and only
-// that row's: moving the cursor redacts again.
+// With redaction on, v reveals the selected row's values in the panel and the
+// manifest, and only that row's: moving the cursor redacts again.
 func TestRevealBelongsToOneRow(t *testing.T) {
 	m := newThings(t)
+	m.SetRedact(true)
 	key(m, "i")
 	if strings.Contains(body(m), "s2") {
 		t.Fatal("a value shown before v")
@@ -296,7 +297,7 @@ func TestRevealBelongsToOneRow(t *testing.T) {
 		t.Fatalf("the manifest shows a value before v:\n%s", raw)
 	}
 	key(m, "v")
-	if !strings.Contains(body(m), "s2") || !strings.Contains(body(m), "values REVEALED") {
+	if !strings.Contains(body(m), "s2") || !strings.Contains(body(m), "values shown") {
 		t.Fatalf("v did not reveal:\n%s", body(m))
 	}
 	if raw := strings.Join(m.RawLines(), "\n"); !strings.Contains(raw, "s2") {
@@ -428,5 +429,23 @@ func TestWindow(t *testing.T) {
 	m.BodyLines(epoch)
 	if got := m.WindowStatus(); got != "25-30/30" {
 		t.Fatalf("window after G = %q", got)
+	}
+}
+
+// Values are shown by default. v hides them on the selected row only, and
+// moving the cursor shows them again.
+func TestValuesShownByDefault(t *testing.T) {
+	m := newThings(t)
+	key(m, "i")
+	if !m.Revealed() || !strings.Contains(body(m), "s2") {
+		t.Fatalf("values hidden by default:\n%s", body(m))
+	}
+	key(m, "v")
+	if m.Revealed() || strings.Contains(body(m), "s2") {
+		t.Fatalf("v did not hide the row's values:\n%s", body(m))
+	}
+	key(m, "j")
+	if !m.Revealed() {
+		t.Fatal("the next row must show its values")
 	}
 }
