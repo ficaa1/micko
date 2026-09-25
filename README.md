@@ -184,7 +184,7 @@ footer reports the first failure of the session. Sessions without
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `y` confirms, `D` finishes a delete |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
-| Resource | `v` reveal hidden parameter/output values |
+| Resource | `v` hides or reveals parameter/output values |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `&` only matching lines, `w` wrap, `L` source labels, `ctrl+t` server timestamps, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
@@ -274,6 +274,7 @@ command (default `lnav`). Install that program separately.
 | `--allow-actions` | Enable confirmed workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete) |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--debug` | Emit sanitized lifecycle diagnostics |
+| `--redact-values` | Open every workflow with parameter and output values hidden |
 | `--demo` | Run the offline, read-only demo |
 | `--version` | Print version and exit |
 
@@ -291,8 +292,11 @@ environment source from that profile before switching to a file.
 - Search and sorting apply to the collected workflow snapshot, capped at 5,000
   entries. Logs retain at most 10,000 lines or 8 MiB; pausing stops scrolling,
   not collection. Deleted pods or unavailable archived logs may prevent viewing logs.
-- Resource values are hidden until explicitly revealed. Log text, copied text
-  and pipe output may contain sensitive application data.
+- Parameter and output values are shown. Set `redactValues: true` at the top
+  of the config file or on a profile, or pass `--redact-values`, to open every
+  workflow with them hidden; `v` reveals them for the session. Log text,
+  copied text and pipe output may contain sensitive application data either
+  way.
 - Workflow submission and parameter editing are not exposed in the UI.
 
 Project history records live testing of v0.2.0 on macOS arm64 against Argo

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Parameter and output values are now shown by default. The redaction they
+  used to open with hid what a reader opens a workflow to see. A cluster
+  whose parameters carry secrets can turn it back on with `redactValues: true`
+  at the top of the config file or on a profile, or with `--redact-values`;
+  `v` still hides or reveals them for the session.
 - Workflow-wide logs now label each line with the step that wrote it, or the
   pod when the step is not known, coloured per source. `L` turns the labels
   off and on.
