@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - Parameter and output values are now shown by default. The redaction they
   used to open with hid what a reader opens a workflow to see. A cluster
@@ -43,7 +43,6 @@
   workflow on it from the list. The demo serves synthetic events.
 - The detail tab strip closes up, and then shows the tabs around the active
   one, when the terminal is too narrow for all of them.
-
 - The Nodes tab reads like the pipeline it shows. Steps are listed under
   their Steps node in group order instead of as a staircase of step groups;
   DAG tasks are listed in dependency order with what each waits for
@@ -143,7 +142,6 @@
 - `ctrl+t` in the log pane reopens the stream with server timestamps on or
   off. The retained lines stay, and a marker shows where the new stream
   starts.
-
 - The list filter now reads a small query language. Spaces separate terms
   that must all match, `|` offers alternatives, `!` negates, `/.../` is a
   regular expression and `~` a fuzzy match. `phase=`, `age<`, `dur>`,
@@ -159,7 +157,6 @@
   more shows the progress column without `w`.
 - The space bar now types a space in the list filter instead of being
   dropped.
-
 - Added marks and bulk actions. `space` marks the selected workflow and `esc`
   clears the marks before it clears the filter. Marks follow their workflow
   through refreshes, sorting and filtering, and the toolbar counts them,
@@ -181,7 +178,6 @@
 - Every write attempt is now recorded in
   `~/.local/state/argo-tui/actions.jsonl` (or under `$XDG_STATE_HOME`), one
   JSON line per attempt. `journal: false` in the config file turns it off.
-
 - The demo dataset now has twelve workflows whose node maps follow the
   shapes the Argo controller writes: chained step groups, DAG tasks that list
   their dependents as children, retry attempts, an exit handler, a fan-out in
