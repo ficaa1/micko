@@ -67,6 +67,8 @@ func RenderDetailBody(state DetailViewState, active string) string {
 		for _, l := range renderExplainText(state) {
 			b.WriteString(l + "\n")
 		}
+	case "events":
+		b.WriteString("(events are streamed live; a static render has none)\n")
 	case "resource":
 		b.WriteString(state.Resource)
 	default:

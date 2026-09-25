@@ -34,6 +34,13 @@
   channel.
 - `X` jumps to the Explain section in the detail pane, and `X` on the
   workflow list opens the selected workflow straight on it.
+- An Events section, after Explain, streams the Kubernetes events about the
+  workflow and its pods while it is open: age, type (as a glyph and a word),
+  reason, the workflow or the node, count and message. `s` puts warnings
+  first and `/` filters. A dropped stream reconnects with back-off, and a
+  permission error or a server without Argo's event stream is said on the
+  status line. `E` jumps to it in the detail pane and opens the selected
+  workflow on it from the list. The demo serves synthetic events.
 - The detail tab strip closes up, and then shows the tabs around the active
   one, when the terminal is too narrow for all of them.
 

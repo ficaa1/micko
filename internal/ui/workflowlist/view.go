@@ -98,6 +98,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			return func() tea.Msg { return intent }
 		}
 		return nil
+	case "E":
+		// Open the workflow straight on its Kubernetes events: a pod that
+		// cannot be scheduled or pulled says why only there.
+		if intent := m.OpenSectionIntent(shared.SectionEvents); intent != nil {
+			return func() tea.Msg { return intent }
+		}
+		return nil
 	case "/":
 		m.SearchOn = true
 		m.queryBefore = m.query
