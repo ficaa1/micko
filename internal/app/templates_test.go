@@ -132,15 +132,19 @@ func TestClusterTemplatesIgnoreNamespaceKeys(t *testing.T) {
 	}
 }
 
-// f shows a template's manifest redacted; o links to the right Argo UI page
-// for each kind.
+// f shows a template's manifest with its values, redacted under
+// redactValues; o links to the right Argo UI page for each kind.
 func TestTemplateManifestAndLinks(t *testing.T) {
 	m, _ := templateRoot(t)
 	m.SetWebURL("https://argo.example")
 	runLine(m, "tmpl")
 	raw := strings.Join(m.rawLines(), "\n")
-	if !strings.Contains(raw, "kind: WorkflowTemplate") || !strings.Contains(raw, "[REDACTED]") {
+	if !strings.Contains(raw, "kind: WorkflowTemplate") || strings.Contains(raw, "[REDACTED]") {
 		t.Fatalf("manifest:\n%s", raw)
+	}
+	m.SetRedactValues(true)
+	if raw := strings.Join(m.rawLines(), "\n"); !strings.Contains(raw, "[REDACTED]") {
+		t.Fatalf("manifest under redactValues:\n%s", raw)
 	}
 	if got := m.workflowURL(); got != "https://argo.example/workflow-templates/demo/deploy" {
 		t.Fatalf("url = %q", got)

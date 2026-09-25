@@ -286,10 +286,16 @@ func (o onlyReader) StreamLogs(ctx context.Context, req core.LogRequest, cb func
 	return o.r.StreamLogs(ctx, req, cb)
 }
 
-// f shows the selected cron workflow's manifest, redacted; v on the row
-// reveals it; y copies the name.
+// f shows the selected cron workflow's manifest with its values; under
+// redactValues it is redacted and v on the row reveals it; y copies the name.
 func TestCronRawManifest(t *testing.T) {
 	m, _ := cronRoot(t)
+	typeKeys(m, "f")
+	if raw := strings.Join(m.rawLines(), "\n"); !strings.Contains(raw, "demo-token-not-a-real-secret") {
+		t.Fatalf("values hidden by default:\n%s", raw)
+	}
+	typeKeys(m, "f")
+	m.SetRedactValues(true)
 	typeKeys(m, "f")
 	raw := strings.Join(m.rawLines(), "\n")
 	if !strings.Contains(raw, "kind: CronWorkflow") || !strings.Contains(raw, "name: demo-etl-hourly") {
