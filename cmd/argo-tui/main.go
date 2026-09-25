@@ -46,6 +46,7 @@ func run(args []string) int {
 	insecure := fs.Bool("insecure-skip-tls-verify", false, "disable TLS verification (unsafe)")
 	allowActions := fs.Bool("allow-actions", false, "enable explicitly confirmed workflow actions")
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
+	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2
@@ -70,6 +71,7 @@ func run(args []string) int {
 	if *demo {
 		opts.Server, opts.Profile = "synthetic demo", "demo"
 		root = app.NewRootWithOptions(testkit.DemoReader(demoClock), clock, "demo", config.DefaultRefreshInterval, opts)
+		root.SetRedactValues(*redactValues)
 	} else {
 		connector, err := session.NewConnector(session.Options{
 			ConfigPath:            *configPath,
@@ -80,6 +82,7 @@ func run(args []string) int {
 			RefreshInterval:       *refresh,
 			InsecureSkipTLSVerify: *insecure,
 			Debug:                 *debug,
+			RedactValues:          *redactValues,
 			Diagnostics:           os.Stderr,
 		})
 		if err != nil {
