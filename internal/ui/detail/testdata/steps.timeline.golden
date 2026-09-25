@@ -1,5 +1,5 @@
 DETAIL wf-steps
- Summary   Nodes  [Timeline]  Explain   Resource 
+ Summary   Nodes  [Timeline]  Explain   Events   Resource 
 NAME                DURATION
 ▾ ✓ wf-steps Steps
 └─ ✓ pod-1                     ------------------------------------------------------------

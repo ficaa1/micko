@@ -15,6 +15,7 @@ type OpenWorkflowMsg struct {
 const (
 	SectionTimeline = "timeline"
 	SectionExplain  = "explain"
+	SectionEvents   = "events"
 )
 
 // OpenLogsMsg asks the root to attach a log stream.
