@@ -98,6 +98,11 @@ func Sort(items []core.Summary, key SortKey) []core.Summary {
 			if c := cmp.Compare(toLower(a.Ref.Name), toLower(b.Ref.Name)); c != 0 {
 				return c < 0
 			}
+			// The same name in two namespaces is two workflows; the
+			// namespace orders them before the arbitrary UID does.
+			if a.Ref.Namespace != b.Ref.Namespace {
+				return a.Ref.Namespace < b.Ref.Namespace
+			}
 			return a.Ref.UID < b.Ref.UID
 		case SortTime:
 			// Rule: rows with a CreatedAt sort newest-first; rows with
@@ -130,6 +135,9 @@ func Sort(items []core.Summary, key SortKey) []core.Summary {
 			}
 			if c := cmp.Compare(toLower(a.Ref.Name), toLower(b.Ref.Name)); c != 0 {
 				return c < 0
+			}
+			if a.Ref.Namespace != b.Ref.Namespace {
+				return a.Ref.Namespace < b.Ref.Namespace
 			}
 			return a.Ref.UID < b.Ref.UID
 		}

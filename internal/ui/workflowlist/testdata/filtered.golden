@@ -8,4 +8,4 @@ Search: fixture-wf-0 [within 6 collected]  Phase: All  Sort: phase, newest first
   fixture-wf-0002               ✓ Succeeded         4m  -        
   fixture-wf-0005               • WeirdFutu…        1m  -        
 
-enter open  l logs  / search  s sort  p phase  space mark  a actions  n namespace  r refresh  w wide  ? help
+enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  a actions  n namespace  0 all ns  r refresh  w wide  ? help

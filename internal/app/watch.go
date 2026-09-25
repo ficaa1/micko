@@ -42,7 +42,8 @@ func (m *Root) startWatch() tea.Cmd {
 	// reading them in the goroutine is a data race and can open the watch
 	// against the namespace the reader just left.
 	req := core.WatchRequest{
-		Namespace:       m.deps.namespace,
+		Namespace:       m.deps.listNamespace(),
+		LabelSelector:   m.deps.labelSelector,
 		ResourceVersion: m.watchRV,
 	}
 	watcher := m.deps.watcher

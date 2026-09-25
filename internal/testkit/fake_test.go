@@ -204,7 +204,7 @@ func TestFakeClockAdvance(t *testing.T) {
 func TestDemoDataIsSyntheticAndPaginates(t *testing.T) {
 	f := DemoReader(NewFakeClock(FixtureEpoch))
 	for ref := range f.Workflows {
-		if ref.Namespace != "demo" {
+		if ref.Namespace != DemoNamespace && ref.Namespace != DemoMLNamespace {
 			t.Fatalf("demo namespace drift: %v", ref)
 		}
 		if len(ref.Name) < 5 || ref.Name[:5] != "demo-" {

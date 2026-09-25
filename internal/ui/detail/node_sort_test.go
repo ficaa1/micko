@@ -82,7 +82,7 @@ func TestSortOutlineKeepsTheTreeShape(t *testing.T) {
 	base := BuildNodeOutline(sortWorkflow(), OutlineOptions{})
 	baseRows, _ := FlattenOutline(base, false)
 
-	for _, key := range []NodeSort{NodeSortName, NodeSortPhase, NodeSortStarted} {
+	for _, key := range []NodeSort{NodeSortName, NodeSortPhase, NodeSortStarted, NodeSortPipeline} {
 		out := BuildNodeOutline(sortWorkflow(), OutlineOptions{})
 		SortOutline(&out, key)
 		rows, _ := FlattenOutline(out, false)
@@ -97,16 +97,16 @@ func TestSortOutlineKeepsTheTreeShape(t *testing.T) {
 	}
 }
 
-// s is a rotation: three distinct orders, then back to the first.
+// s is a rotation: four distinct orders, then back to the first.
 func TestNodeSortCycleReturnsToStart(t *testing.T) {
-	k := NodeSortStarted
+	k := NodeSortPipeline
 	seen := []NodeSort{k}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		k = k.Next()
 		seen = append(seen, k)
 	}
-	if k.Next() != NodeSortStarted {
-		t.Errorf("cycle ends at %q, want %q", k.Next(), NodeSortStarted)
+	if k.Next() != NodeSortPipeline {
+		t.Errorf("cycle ends at %q, want %q", k.Next(), NodeSortPipeline)
 	}
 	for i := range seen {
 		for j := i + 1; j < len(seen); j++ {
@@ -114,5 +114,20 @@ func TestNodeSortCycleReturnsToStart(t *testing.T) {
 				t.Fatalf("%q appears twice in the cycle", seen[i])
 			}
 		}
+	}
+}
+
+// The pipeline order is the build's own order, so it survives a round trip
+// through every other order: sorting by name and then by pipeline gives the
+// tree the build returned.
+func TestSortOutlinePipelineRestoresTheBuildOrder(t *testing.T) {
+	built := BuildNodeOutline(sortWorkflow(), OutlineOptions{})
+	want := renderOutlineShape(built)
+	out := BuildNodeOutline(sortWorkflow(), OutlineOptions{})
+	for _, key := range []NodeSort{NodeSortName, NodeSortPhase, NodeSortStarted, NodeSortPipeline} {
+		SortOutline(&out, key)
+	}
+	if got := renderOutlineShape(out); got != want {
+		t.Fatalf("pipeline order after other sorts =\n%s\nwant\n%s", got, want)
 	}
 }

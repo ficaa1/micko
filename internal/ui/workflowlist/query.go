@@ -42,6 +42,9 @@ import (
 // Matcher is a parsed filter. The zero Matcher matches every workflow.
 type Matcher struct {
 	terms [][]alt // AND of ORs
+	// acrossNS is set while the list spans namespaces. A name predicate then
+	// also sees the row as "namespace/name".
+	acrossNS bool
 }
 
 // alt is one alternative of a term: a predicate, possibly negated.
@@ -65,7 +68,7 @@ func (q Matcher) Match(s core.Summary, now time.Time) bool {
 	for _, term := range q.terms {
 		ok := false
 		for _, a := range term {
-			if a.pred.match(s, now) != a.neg {
+			if q.test(a.pred, s, now) != a.neg {
 				ok = true
 				break
 			}
@@ -75,6 +78,33 @@ func (q Matcher) Match(s core.Summary, now time.Time) bool {
 		}
 	}
 	return true
+}
+
+// AcrossNamespaces returns the matcher set for a list that spans every
+// namespace, or for one that does not.
+func (q Matcher) AcrossNamespaces(on bool) Matcher {
+	q.acrossNS = on
+	return q
+}
+
+// test runs one predicate. Across namespaces a name predicate matches the
+// bare name or "namespace/name", so "team-a/" narrows the list to one
+// namespace while an anchored regex such as /^demo-/ still matches names.
+// Within one namespace every row shares the namespace, and matching it
+// would match everything.
+func (q Matcher) test(p predicate, s core.Summary, now time.Time) bool {
+	if p.match(s, now) {
+		return true
+	}
+	if !q.acrossNS {
+		return false
+	}
+	switch p.(type) {
+	case nameSubstring, nameRegex, nameFuzzy:
+		s.Ref.Name = s.Ref.Namespace + "/" + s.Ref.Name
+		return p.match(s, now)
+	}
+	return false
 }
 
 // String is the parsed filter in canonical form: terms joined by " & ",

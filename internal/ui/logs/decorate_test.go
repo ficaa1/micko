@@ -229,7 +229,7 @@ func TestSearchHighlightSurvivesWrapping(t *testing.T) {
 		t.Fatalf("the highlight did not follow the wrap:\n%q", lines)
 	}
 	for _, l := range lines {
-		if w := ansi.StringWidth(l); w > 20 && !strings.HasPrefix(l, "──") {
+		if w := ansi.StringWidth(l); w > 20 && !strings.HasPrefix(ansi.Strip(l), "──") {
 			t.Fatalf("a wrapped line is %d cells: %q", w, l)
 		}
 	}

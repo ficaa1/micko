@@ -42,6 +42,18 @@ func runCmd(cmd tea.Cmd) []tea.Msg {
 	}
 }
 
+// workflowsIn counts the fake's workflows in namespace ns: what a list of that
+// namespace collects.
+func workflowsIn(f *testkit.FakeReader, ns string) int {
+	n := 0
+	for ref := range f.Workflows {
+		if ref.Namespace == ns {
+			n++
+		}
+	}
+	return n
+}
+
 func workflowFixture(name string) core.Workflow {
 	wf := testkit.SyntheticWorkflow("ns", name, "Running", testkit.FixtureEpoch)
 	wf.Nodes["root"] = core.Node{ID: "root", Name: name, DisplayName: name, Type: "Steps", Phase: "Running"}
@@ -216,7 +228,7 @@ func TestListSnapshotCollectionViaFakePagination(t *testing.T) {
 	}
 	// Page size 2 splits the demo dataset over several pages; every page
 	// must be collected into the one snapshot.
-	want := len(f.Workflows)
+	want := workflowsIn(f, "demo")
 	if len(lm.Page.Items) != want {
 		t.Fatalf("items = %d, want %d (all pages collected)", len(lm.Page.Items), want)
 	}
@@ -500,7 +512,7 @@ func loadDemoList(t *testing.T) *Root {
 		next, _ := m.Update(msg)
 		m = next.(*Root)
 	}
-	if len(m.listState.items) != len(f.Workflows) {
+	if len(m.listState.items) != workflowsIn(f, "demo") {
 		t.Fatalf("precondition: list not loaded (%d items)", len(m.listState.items))
 	}
 	return m
@@ -584,13 +596,13 @@ func TestListResizePropagatesToChild(t *testing.T) {
 
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
 	m = next.(*Root)
-	if v := m.View().Content; !strings.Contains(v, "too small") {
+	if v := screen(m); !strings.Contains(v, "too small") {
 		t.Fatalf("40x10 must propagate to the list child and show the resize notice; view=%q", v)
 	}
 
 	next, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = next.(*Root)
-	if v := m.View().Content; strings.Contains(v, "too small") {
+	if v := screen(m); strings.Contains(v, "too small") {
 		t.Fatalf("resize to 100x40 must clear the notice: %q", v)
 	}
 }
@@ -600,7 +612,7 @@ func TestListResizePropagatesToChild(t *testing.T) {
 func TestListAgeRendersUsingInjectedClock(t *testing.T) {
 	m := loadDemoList(t)
 	// demo-data-pull started FixtureEpoch-40m → AGE "40m".
-	if v := m.View().Content; !strings.Contains(v, "40m") {
+	if v := screen(m); !strings.Contains(v, "40m") {
 		t.Fatalf("AGE must render from the injected clock; no '40m' found:\n%s", v)
 	}
 }
@@ -705,7 +717,7 @@ func TestListErrorTextWrapsAtWidth(t *testing.T) {
 	})
 	m = next.(*Root)
 
-	v := m.View().Content
+	v := screen(m)
 	if !strings.Contains(v, "tail-marker") {
 		t.Fatalf("long error text is clipped/absent; full message must be reachable:\n%s", v)
 	}

@@ -1,0 +1,22 @@
+DETAIL fixture-dag
+ Summary   Nodes   Timeline  [Explain]  Events   Resource 
+Explain fixture-dag in ns: Failed after 5m00s
+2 errors · 1 info
+
+✗ ERROR  task-b failed: synthetic exit code 1
+  node        task-b · Pod
+  path        fixture-dag › task-b
+  when        failed 2m00s into the run, after running 1m00s; the first failure
+  message     synthetic exit code 1
+  next        Read the node's message and its log (enter on the node in Nodes) for what stopped it. Then retry the workflow (a, r) to rerun only what failed.
+
+✗ ERROR  task-retry failed all 2 attempts
+  node        task-retry(1) · Pod
+  path        fixture-dag › task-retry › task-retry(1)
+  when        never started
+  attempts    task-retry(0) failed · task-retry(1) failed
+  next        Read the node's message and its log (enter on the node in Nodes) for what stopped it. Then retry the workflow (a, r) to rerun only what failed.
+
+◇ INFO  1 node did not run because of the failure: task-c
+  not started task-c
+  next        It runs once the failure is fixed: retrying the workflow (a, r) reruns the failed steps and everything after them.

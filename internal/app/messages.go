@@ -23,6 +23,14 @@ const (
 	RouteDetail
 	// RouteLogs is the log view for the selected workflow.
 	RouteLogs
+	// RouteCron is the cron workflow list.
+	RouteCron
+	// RouteTemplates is the workflow template list.
+	RouteTemplates
+	// RouteClusterTemplates is the cluster workflow template list.
+	RouteClusterTemplates
+	// RouteArchived is the archived workflow list.
+	RouteArchived
 )
 
 // String implements fmt.Stringer.
@@ -32,6 +40,14 @@ func (r Route) String() string {
 		return "detail"
 	case RouteLogs:
 		return "logs"
+	case RouteCron:
+		return "cron"
+	case RouteTemplates:
+		return "templates"
+	case RouteClusterTemplates:
+		return "clustertemplates"
+	case RouteArchived:
+		return "archived"
 	default:
 		return "list"
 	}

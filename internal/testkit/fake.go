@@ -61,6 +61,24 @@ type FakeReader struct {
 	GetErr    error
 	StreamErr error
 
+	// CronWorkflows is what ListCronWorkflows answers from, filtered by
+	// namespace. CronErr fails the call instead.
+	CronWorkflows []core.CronWorkflow
+	CronErr       error
+
+	// WorkflowTemplates and ClusterWorkflowTemplates answer the template
+	// lists; TemplateErr and ClusterTemplateErr fail them instead.
+	WorkflowTemplates        []core.WorkflowTemplate
+	ClusterWorkflowTemplates []core.WorkflowTemplate
+	TemplateErr              error
+	ClusterTemplateErr       error
+
+	// ArchivedWorkflows is the workflow archive, newest first. ArchiveErr
+	// fails both archive calls, the way a server without an archive fails
+	// them.
+	ArchivedWorkflows []core.Workflow
+	ArchiveErr        error
+
 	// Namespaces is the extra namespace list ListNamespaces reports, on top
 	// of the namespaces the stored workflows are in. NamespacesErr fails the
 	// call instead.
@@ -88,8 +106,24 @@ type FakeReader struct {
 	// returning an error fails the stream before any record is delivered.
 	StreamHook func(core.LogRequest) error
 
+	// Events are the Kubernetes events WatchEvents serves, EventsErr fails
+	// every event stream, and EventHook sees each request first and can
+	// fail it. PublishEvent sends an event to the streams open at the time,
+	// for a test that needs a live stream. EventStarts, EventCancels and
+	// EventRequests record the streams opened.
+	Events        []core.Event
+	EventsErr     error
+	EventHook     func(core.EventWatchRequest) error
+	EventStarts   int
+	EventCancels  int
+	EventRequests []core.EventWatchRequest
+	// eventSubs are the open streams' queues for published events.
+	eventSubs map[chan core.Event]bool
+
 	// Call counters (guarded by mu) for test assertions.
 	ListCalls, GetCalls, StreamStarts int
+	// KindCalls counts the list calls of the other resource kinds.
+	KindCalls int
 	// StreamCancels counts streams that ended via context cancellation.
 	StreamCancels int
 }
@@ -137,6 +171,9 @@ func (f *FakeReader) collect(q core.Query) []core.Summary {
 		}
 		wf, ok := f.Workflows[ref]
 		if !ok {
+			continue
+		}
+		if !MatchLabels(q.LabelSelector, wf.Summary.Labels) {
 			continue
 		}
 		items = append(items, wf.Summary)

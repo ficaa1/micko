@@ -151,8 +151,8 @@ func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 	if m.route != RouteDetail {
 		t.Fatalf("route = %v, want the detail view back", m.route)
 	}
-	if !strings.Contains(m.View().Content, "resume confirmed") {
-		t.Fatalf("view did not report the outcome: %s", m.View().Content)
+	if !strings.Contains(screen(m), "resume confirmed") {
+		t.Fatalf("view did not report the outcome: %s", screen(m))
 	}
 }
 

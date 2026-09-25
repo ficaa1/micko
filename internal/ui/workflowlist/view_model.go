@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/argo-tui/internal/core"
@@ -73,7 +74,7 @@ func (m *Model) WindowStatus() string {
 
 // Hints are the list key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	return "enter open  l logs  / search  s sort  p phase  space mark  a actions  n namespace  r refresh  w wide"
+	return "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  a actions  n namespace  0 all ns  r refresh  w wide"
 }
 
 // footerPosition is the window indicator appended to the standalone footer.
@@ -112,7 +113,7 @@ func (m *Model) frameLines(now time.Time, reserve int) []string {
 			head.WriteString(padRight(title, c.width))
 		}
 	}
-	lines = append(lines, m.theme.Header.Render(head.String()))
+	lines = append(lines, m.theme.TableHeader.Render(head.String()))
 
 	if len(m.rows) == 0 {
 		m.winStart, m.winEnd = 0, 0
@@ -165,8 +166,12 @@ func (m *Model) window(chromeLines int) (start, end int) {
 	return start, start + budget
 }
 
-// rowLine renders one table row with its phase styling (or the selection
-// highlight, which must win so the selected row is never ambiguous).
+// rowLine renders one table row. The phase cell carries the phase colour,
+// the name and namespace keep the ordinary text colour so they read first,
+// and the times, the metadata and the message are muted. A marked row is
+// drawn in the Marked style instead, and the selected row is one highlight
+// bar: it must win so the selection is never ambiguous, and its glyph and
+// phase word still say what the colour would have.
 func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	// Symbol AND word AND color: a mono terminal, NO_COLOR and a color-blind
 	// reader all keep two of the three channels (UI-03/07). A workflow parked
@@ -181,52 +186,62 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	if marked {
 		gutter = markGlyph + " "
 	}
-	var b strings.Builder
-	b.WriteString(gutter)
+	// plain is the row as text, for the two states that style it whole;
+	// styled is the same text with each cell in its own style.
+	var plain, styled strings.Builder
+	none := lipgloss.NewStyle()
+	add := func(text string, style lipgloss.Style) {
+		plain.WriteString(text)
+		styled.WriteString(style.Render(text))
+	}
+	add(gutter, none)
+	gap := strings.Repeat(" ", colGap)
 	for i, c := range m.columns() {
 		if c.key == colMessage {
 			// The message is the last column and is not padded out; an
 			// empty one adds nothing, not even its gap.
 			if msg := sanitizeOne(r.Message); msg != "" {
-				b.WriteString(strings.Repeat(" ", colGap) + truncateRight(msg, c.width))
+				add(gap, none)
+				add(truncateRight(msg, c.width), m.theme.Muted)
 			}
 			continue
 		}
 		if i > 0 {
-			b.WriteString(strings.Repeat(" ", colGap))
+			add(gap, none)
 		}
 		switch c.key {
+		case colNamespace:
+			add(padRight(truncateRight(sanitizeOne(r.Ref.Namespace), c.width), c.width), none)
 		case colName:
-			b.WriteString(padRight(truncateRight(sanitizeOne(r.Ref.Name), c.width), c.width))
+			add(padRight(truncateRight(sanitizeOne(r.Ref.Name), c.width), c.width), none)
 		case colPhase:
 			phase := shared.PhaseSymbol(shown) + " " + m.rowPhaseText(sanitizeOne(shown))
-			b.WriteString(padRight(truncateRight(phase, c.width), c.width))
+			add(padRight(truncateRight(phase, c.width), c.width), m.theme.PhaseStyle(shown))
 		case colAge:
-			b.WriteString(padLeft(ageText(r, now), c.width))
+			add(padLeft(ageText(r, now), c.width), m.theme.Muted)
 		case colDuration:
-			b.WriteString(padRight(durationText(r), c.width))
+			add(padRight(durationText(r), c.width), m.theme.Muted)
 		case colProgress:
-			b.WriteString(padRight(progressCell(r.Progress, c.width), c.width))
+			add(padRight(progressCell(r.Progress, c.width), c.width), m.theme.Muted)
 		case colStarted:
-			b.WriteString(padRight(m.clockText(r.StartedAt), c.width))
+			add(padRight(m.clockText(r.StartedAt), c.width), m.theme.Muted)
 		case colFinished:
-			b.WriteString(padRight(m.clockText(r.FinishedAt), c.width))
+			add(padRight(m.clockText(r.FinishedAt), c.width), m.theme.Muted)
 		case colTemplate:
-			b.WriteString(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, templateLabels...))), c.width), c.width))
+			add(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, templateLabels...))), c.width), c.width), m.theme.Muted)
 		case colCron:
-			b.WriteString(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, cronLabel))), c.width), c.width))
+			add(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, cronLabel))), c.width), c.width), m.theme.Muted)
 		case colLabels:
-			b.WriteString(padRight(truncateRight(orDash(sanitizeOne(otherLabels(r))), c.width), c.width))
+			add(padRight(truncateRight(orDash(sanitizeOne(otherLabels(r))), c.width), c.width), m.theme.Muted)
 		}
 	}
-	line := b.String()
-	if selected {
-		return m.theme.Selected.Render(line)
+	switch {
+	case selected:
+		return m.theme.SelectRow(plain.String(), m.width)
+	case marked:
+		return m.theme.Marked.Render(plain.String())
 	}
-	if marked {
-		return m.theme.Marked.Render(line)
-	}
-	return m.theme.PhaseStyle(shown).Render(line)
+	return styled.String()
 }
 
 // markGutter is the width of the column left of NAME that holds the mark
@@ -272,14 +287,14 @@ func (m *Model) toolbarView() string {
 
 	parts = append(parts, m.searchCell())
 
-	phaseCell := "Phase: " + string(m.phase)
+	phaseCell := m.theme.Muted.Render("Phase:") + " " + string(m.phase)
 	if n := m.suspendedCount(); n > 0 && m.phase != PhaseSuspended {
 		// The count is the whole point of the marker: an operator wants to
 		// know a gate is open without reading every row.
 		phaseCell += "  " + m.theme.Warning.Render(itoa(n)+" awaiting resume")
 	}
 	parts = append(parts, phaseCell)
-	parts = append(parts, "Sort: "+sortLabel(m.sort))
+	parts = append(parts, m.theme.Muted.Render("Sort:")+" "+sortLabel(m.sort))
 
 	// Long, untrusted-derived error reasons (the stale / unauthenticated /
 	// forbidden message) are word-wrapped to fit the remaining width instead
@@ -344,12 +359,16 @@ func (m *Model) toolbarPrefixParts() []string {
 // is shown whenever a query is active or the snapshot is known incomplete
 // (LIST-05/09).
 func (m *Model) searchCell() string {
-	cell := "Search: (none)  / to filter by name"
+	label := m.theme.Muted.Render("Search:")
+	cell := label + " (none)  / to filter by name"
+	if m.allNS {
+		cell = label + " (none)  / to filter by namespace/name"
+	}
 	switch {
 	case m.SearchOn:
-		cell = "Search: " + m.searchLineView()
+		cell = label + " " + m.searchLineView()
 	case m.query != "":
-		cell = "Search: " + sanitizeOne(m.match.String())
+		cell = label + " " + sanitizeOne(m.match.String())
 	}
 	if m.total > m.visible || m.query != "" || m.status == StatusIncomplete {
 		cell += " [within " + itoa(m.total) + " collected]"
@@ -441,12 +460,13 @@ const (
 	colCron
 	colLabels
 	colMessage
+	colNamespace
 )
 
 // title is the column head.
 func (k colKey) title() string {
 	return [...]string{"NAME", "PHASE", "AGE", "DURATION", "PROGRESS", "STARTED", "FINISHED",
-		"TEMPLATE", "CRON", "LABELS", "MESSAGE"}[k]
+		"TEMPLATE", "CRON", "LABELS", "MESSAGE", "NAMESPACE"}[k]
 }
 
 // column is one laid-out column: what it holds and how many cells it gets.
@@ -507,10 +527,27 @@ func (m *Model) columns() []column {
 	case m.width >= 100:
 		name = 44
 	}
-	base := []column{{colName, name}, {colPhase, phase}, {colAge, age}, {colDuration, dur}}
 	// The mark gutter comes first and a gap separates each column from the
 	// one before it.
 	room := m.width - markGutter - (name + phase + age + dur + colGap*3)
+	// The all-namespaces view leads with NAMESPACE, since two workflows in
+	// different namespaces may share a name. On a pane too narrow for it
+	// beside the fixed columns, NAME gives up the difference: it is the one
+	// fixed column whose cells are still readable when clipped.
+	var lead []column
+	if ns := m.nsWidth(); ns > 0 {
+		lead = []column{{colNamespace, ns}}
+		room -= ns + colGap
+		if m.width > 0 && room < 0 {
+			cut := -room
+			if name-cut < minNameWidth {
+				cut = name - minNameWidth
+			}
+			name -= cut
+			room += cut
+		}
+	}
+	base := append(lead, column{colName, name}, column{colPhase, phase}, column{colAge, age}, column{colDuration, dur})
 
 	var optional []column
 	switch {
@@ -568,6 +605,37 @@ func (m *Model) columnWidth(k colKey) int {
 	return 0
 }
 
+// nsWidth is the NAMESPACE column's width: zero outside the all-namespaces
+// view, otherwise the longest namespace in the snapshot, bounded so a long
+// namespace cannot take the NAME column's room. It is measured over the whole
+// snapshot rather than the visible window, so scrolling never moves the
+// columns.
+func (m *Model) nsWidth() int {
+	if !m.allNS {
+		return 0
+	}
+	limit := 16
+	switch {
+	case m.width >= 100:
+		limit = 20
+	case m.width > 0 && m.width < 80:
+		limit = 12
+	}
+	w := len("NAMESPACE")
+	for _, it := range m.items {
+		if n := ansi.StringWidth(sanitizeOne(it.Ref.Namespace)); n > w {
+			w = n
+		}
+	}
+	if w > limit {
+		w = limit
+	}
+	return w
+}
+
+// minNameWidth is the narrowest NAME column the namespace column may leave.
+const minNameWidth = 12
+
 // colGap is the run of spaces between two columns.
 const colGap = 2
 
@@ -591,8 +659,14 @@ func (m *Model) emptyStateView() string {
 		return m.theme.ErrorText.Render("no workflows visible: list forbidden (" + m.errMsg + ")")
 	case m.status == StatusUnauthenticated:
 		return m.theme.ErrorText.Render("no workflows visible: not authenticated (" + m.errMsg + ")")
+	case m.status == StatusStale && m.total == 0:
+		// A failed first collection has nothing to be stale against; the
+		// failure is all there is to show.
+		return m.theme.ErrorText.Render("no workflows visible: " + m.errMsg)
 	case m.total > 0 && m.visible == 0:
 		return m.theme.Dim.Render("no workflows match the current filter (search is local to the collected snapshot)")
+	case m.allNS:
+		return m.theme.Dim.Render("no workflows in any namespace this token can read")
 	default:
 		return m.theme.Dim.Render("no workflows in this namespace yet")
 	}
