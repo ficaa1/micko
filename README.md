@@ -128,9 +128,12 @@ check and the write remains possible.
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
-| Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
+| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline, Explain, Events and Resource; `1`–`9` jump to a section by position; `T` timeline; `X` explain; `E` events; `r` refresh; `a` actions |
 | Nodes | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info, `/` find by name, `n`/`N` next/previous match, `h` show skipped nodes, `s` sort, `p` phase filter |
+| Timeline | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info |
+| Explain | `y` copy the report, `l` the failing pod's full log, `v` hides or reveals parameter values |
+| Events | `s` warnings first or newest first, `/` filter, `y` copy the table, `r` refresh and restart the stream |
 | Resource | `v` hides or reveals parameter/output values (also in the node info panel) |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
@@ -177,6 +180,86 @@ comes from the workflow already loaded.
 opening folds on the way, and `n`/`N` step through the rest. The status line
 says what the tab is not showing: skipped rows, rows in folds, the phase
 filter and the match.
+
+### Timeline
+
+The Timeline section (`T` in the detail pane, or `T` on the list to open a
+workflow straight onto it) draws the workflow's work as a Gantt chart against
+a time axis. Pods and approval gates are bars, coloured by phase, placed
+exactly as the Nodes tab's timing bars place them; DAG, Steps and Retry nodes
+group them as a bracket over the time the group took. The axis picks its
+step from the span, from seconds for a quick run to hours or days for a long
+one, and a running workflow's chart ends at a `now` line that its running
+bars reach.
+
+A shaded stretch (`░`) before a bar is time the node spent waiting: from the
+moment what it waited for finished (the previous step group, its DAG
+dependencies, the previous retry attempt) to the moment it started. A retry's
+backoff and a queue for a free slot both show up there.
+
+Nodes marked `◆` are the critical path: the chain of work that set the end
+time, found by walking back from the work that finished last through
+whatever each piece waited for longest. Shortening anything else would not
+have finished the run sooner. While a workflow runs, the chain is the one its
+end waits on so far.
+
+Rows follow the Nodes tab's pipeline order and share its folds: `space`,
+`left` and `right` fold groups the same way, `i` opens the same info panel,
+and `enter` or `l` opens the selected pod's log. Skipped branches have no
+time to place and are left out; the status line counts them.
+
+### Explain
+
+The Explain section (`X` in the detail pane, or `X` on the list to open a
+workflow straight onto it) says why the workflow ended the way it did. It
+applies fixed rules to what the workflow records and to the end of the
+failing pod's log; nothing leaves the terminal and no model is asked, so the
+same workflow always gets the same explanation.
+
+Each finding is a card: a severity (`✗ ERROR`, `▲ WARNING`, `◇ INFO`, as a
+glyph and a word), a headline, the evidence it rests on, and a next step.
+The rules find the node that failed first on its own, rather than the DAG or
+Steps nodes that failed because of it or the steps that failed after it;
+the attempts of an exhausted retry and whether they failed the same way; an
+out-of-memory kill; what exit codes 1, 2, 126, 127, 137, 139 and 143 mean;
+image pull errors and other reasons a pod never started; a deadline; a spec
+the controller rejected before any node ran; the nodes that did not run
+because of the failure; how the exit handler went; a gate waiting for a
+person, and for how long; a run past its estimate; a workflow the controller
+has not started; and, for a run that succeeded, any step that needed a retry
+or failed without stopping it.
+
+When a pod failed, the section reads the last 200 lines of its `main`
+container's log while it is open and quotes up to eight of them: lines with
+an error word, whole tracebacks, and the line before each for context. The
+status line says while it reads. A log the server no longer has is a
+finding of its own. `y` copies the whole explanation as plain text, ready to
+paste into an incident channel, and `l` opens the failing pod's full log.
+Parameter values in the evidence follow the same reveal setting as the
+Resource tab.
+
+### Events
+
+The Events section (`E` in the detail pane, or `E` on the list) streams the
+Kubernetes events about the workflow and its pods while it is open: the
+controller's `WorkflowRunning`, `WorkflowNodeFailed` and `WorkflowFailed`,
+and the scheduler's and kubelet's `Scheduled`, `Pulled`, `BackOff`,
+`FailedScheduling` and the like. Each row gives the time since it was last
+seen, the type as a glyph and a word (`▲ Warning`, `◇ Normal`), the reason,
+the object (`workflow`, or the node's name for a pod), the count and the
+message. `s` puts warnings first, `/` filters as you type, `y` copies the
+table and `f` shows it full screen.
+
+It reads Argo's event stream (`/api/v1/stream/events/{namespace}`) twice:
+once for the workflow's own events and once for the namespace's pod events,
+which are matched to the workflow's pods by name, because Kubernetes cannot
+select a workflow and its pods in one query. A dropped stream reconnects
+with back-off from where it stopped; a permission error or a server without
+the stream stops it with the reason on the status line, and `r` tries again.
+The streams close when you leave the section or the workflow. Kubernetes
+keeps events for about an hour by default, so a workflow that finished
+earlier may have none. The account behind the token needs permission to
+watch events in the namespace.
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a

@@ -120,9 +120,9 @@ func elapsedText(s core.Summary, estimate time.Duration, now time.Time) string {
 		return ""
 	}
 	if s.FinishedAt != nil {
-		return "took " + shortDuration(s.FinishedAt.Sub(*s.StartedAt))
+		return "took " + shared.ShortDuration(s.FinishedAt.Sub(*s.StartedAt))
 	}
-	out := "elapsed " + shortDuration(now.Sub(*s.StartedAt))
+	out := "elapsed " + shared.ShortDuration(now.Sub(*s.StartedAt))
 	if estimate > 0 {
 		out += " of ~" + humanDuration(estimate)
 	}

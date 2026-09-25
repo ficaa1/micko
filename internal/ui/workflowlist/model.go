@@ -299,6 +299,16 @@ func (m *Model) OpenIntent() tea.Msg {
 	return shared.OpenWorkflowMsg{Ref: sel.Ref}
 }
 
+// OpenSectionIntent returns the intent that opens the selected workflow on
+// one detail section, or nil when nothing is selected.
+func (m *Model) OpenSectionIntent(section string) tea.Msg {
+	sel := m.Selected()
+	if sel.Ref.UID == "" {
+		return nil
+	}
+	return shared.OpenWorkflowMsg{Ref: sel.Ref, Section: section}
+}
+
 // LogsIntent returns the open-logs intent for the selected row, or nil.
 // Container defaults to "main" visibly (plan §2; the UI for editing the
 // container lives in the logs view, D1).
