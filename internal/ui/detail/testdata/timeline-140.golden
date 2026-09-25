@@ -62,7 +62,7 @@ NAME                             DURATION   0       1m      2m       3m      4m 
 == demo-nightly-report, info on transform(1)
  Summary   Nodes  [Timeline]  Resource 
 8 rows · 5/8 · l logs · * critical path: the 4 nodes that set the end time
-NAME                         DURATION   0         1m        2m        3m    4m00s │ NODE transform(1)  values redacted (v reveals)
+NAME                         DURATION   0         1m        2m        3m    4m00s │ NODE transform(1)  values shown (v redacts)
 ▾ ✗ demo-nightly-report DAG     4m00s   |---------------------------------------| │ name      transform(1)
 ├─ ✓ extract                      50s * =========-------------------------------- │ full name demo-nightly-report.extract.transform.tran
 ├▾ ✗ transform Retry            2m30s            ~|------------------------|      │           sform(1)
@@ -84,7 +84,7 @@ NAME                         DURATION   0         1m        2m        3m    4m00
                                                                                   │ memory    2m16s × 100Mi
                                                                                   │ flags     retried
                                                                                   │
-                                                                                  │ inputs    rows = [REDACTED]
+                                                                                  │ inputs    rows = 184022
                                                                                   │           artifact raw-extract
                                                                                   │
                                                                                   │

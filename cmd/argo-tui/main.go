@@ -48,6 +48,7 @@ func run(args []string) int {
 	allowActions := fs.Bool("allow-actions", false, "enable explicitly confirmed workflow actions")
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
+	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2
@@ -82,6 +83,7 @@ func run(args []string) int {
 		root = app.NewRootWithOptions(testkit.DemoReader(demoClock), clock, "demo", config.DefaultRefreshInterval, opts)
 		// The demo reads no config file, so the flag is its only skin.
 		_, _ = root.ApplySkin(demoSkin(*skin))
+		root.SetRedactValues(*redactValues)
 	} else {
 		connector, err := session.NewConnector(session.Options{
 			ConfigPath:            *configPath,
@@ -94,6 +96,7 @@ func run(args []string) int {
 			Debug:                 *debug,
 			Skin:                  *skin,
 			Skins:                 shared.SkinNames(),
+			RedactValues:          *redactValues,
 			Diagnostics:           os.Stderr,
 		})
 		if err != nil {

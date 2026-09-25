@@ -91,6 +91,7 @@ func (m *Root) Adopt(c *Connection) {
 		// refusing a connection over a colour.
 		_, _ = m.ApplySkin(c.Skin)
 	}
+	m.SetRedactValues(c.Redact)
 	m.nsSeed = c.Namespaces
 	m.actionOpts.Server = c.Server
 	m.actionOpts.Profile = c.Profile

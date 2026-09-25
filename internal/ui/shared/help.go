@@ -75,7 +75,7 @@ func helpLines() []string {
 		"          T open on the timeline",
 		"",
 		"Detail    tab / shift+tab section   1-9 section by position",
-		"          T timeline   r refresh   v reveal redacted values",
+		"          T timeline   r refresh   v hide/reveal values",
 		"          a actions (requires --allow-actions)",
 		"",
 		"Nodes     enter / l logs   space fold   left fold or parent",

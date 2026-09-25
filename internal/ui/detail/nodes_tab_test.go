@@ -262,6 +262,7 @@ func TestInfoPanelPlacement(t *testing.T) {
 // and the same session-only reveal.
 func TestInfoPanelFactsAndRedaction(t *testing.T) {
 	m := demoModel(t, "demo-nightly-report", 160, 40)
+	m.SetRedactByDefault(true)
 	cursorTo(t, m, "extract")
 	m.handleKey("i")
 	b := body(m)
@@ -284,7 +285,7 @@ func TestInfoPanelFactsAndRedaction(t *testing.T) {
 
 	m.handleKey("v")
 	b = body(m)
-	for _, want := range []string{"date = 2026-09-07", "source = warehouse", "rows = 184022", "values REVEALED (v redacts)"} {
+	for _, want := range []string{"date = 2026-09-07", "source = warehouse", "rows = 184022", "values shown (v redacts)"} {
 		if !strings.Contains(b, want) {
 			t.Errorf("revealed panel lacks %q:\n%s", want, b)
 		}
@@ -547,5 +548,18 @@ func TestNodesRawLines(t *testing.T) {
 	}
 	if !strings.Contains(joined, "=>") {
 		t.Errorf("raw bars are not ASCII:\n%s", joined)
+	}
+}
+
+// Without redactValues the panel shows the node's values from the start.
+func TestInfoPanelShowsValuesByDefault(t *testing.T) {
+	m := demoModel(t, "demo-nightly-report", 160, 40)
+	cursorTo(t, m, "extract")
+	m.handleKey("i")
+	b := body(m)
+	for _, want := range []string{"date = 2026-09-07", "source = warehouse", "rows = 184022", "values shown (v redacts)"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("panel lacks %q:\n%s", want, b)
+		}
 	}
 }

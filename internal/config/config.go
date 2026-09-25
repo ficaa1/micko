@@ -66,6 +66,9 @@ type Profile struct {
 	// file's top-level skin. It helps tell a production cluster from a
 	// scratch one at a glance; the header still names the server.
 	Skin string `yaml:"skin,omitempty"`
+	// RedactValues overrides the file's top-level redactValues for this
+	// profile. Nil means the profile does not say.
+	RedactValues *bool `yaml:"redactValues,omitempty"`
 }
 
 // File mirrors the on-disk config (plan §3 example).
@@ -78,6 +81,11 @@ type File struct {
 	// Skin is the palette for every profile that names none of its own, and
 	// for the profile picker before any profile is chosen.
 	Skin string `yaml:"skin,omitempty"`
+	// RedactValues hides parameter and output values until `v` reveals
+	// them. It is off unless set: the values are what a reader opens a
+	// workflow to see, and a cluster whose parameters carry secrets turns
+	// it on here or per profile.
+	RedactValues bool `yaml:"redactValues,omitempty"`
 }
 
 // refreshInterval parses RefreshIntervalRaw; empty means "not set".
@@ -111,7 +119,10 @@ type Config struct {
 	PipeCommand string
 	// Skin is the palette this session is drawn in: the --skin flag, else
 	// the profile's skin, else the file's, else DefaultSkin.
-	Skin            string
+	Skin string
+	// RedactValues starts every workflow with its parameter and output
+	// values hidden; `v` still reveals them for the session.
+	RedactValues    bool
 	TokenEnv        string
 	TokenFile       string
 	CAFile          string
@@ -151,6 +162,10 @@ type Options struct {
 	// the palettes, so the caller supplies their names; an empty list skips
 	// the check.
 	Skins []string
+	// RedactValues is the --redact-values flag. It can only turn redaction
+	// on: a flag that could turn it off would override a profile that asks
+	// for it, and that profile is the one with something to hide.
+	RedactValues bool
 }
 
 // Load reads, merges and validates configuration. cfgData may be empty
@@ -191,6 +206,10 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	if err := CheckSkin("skin", cfg.Skin, opts.Skins); err != nil {
 		return Config{}, err
 	}
+	cfg.RedactValues = opts.RedactValues || f.RedactValues
+	if prof.RedactValues != nil {
+		cfg.RedactValues = opts.RedactValues || *prof.RedactValues
+	}
 	cfg.Namespace = firstNonEmpty(opts.Namespace, prof.Namespace)
 	cfg.TokenEnv = prof.TokenEnv
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)
@@ -203,7 +222,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 		if name != "" || opts.Server != "" || opts.Namespace != "" || opts.TokenFile != "" || opts.CAFile != "" || opts.InsecureSkipTLSVerify || opts.Debug {
 			return Config{}, fmt.Errorf("config: --demo cannot be combined with profile, connection, TLS, or debug options")
 		}
-		return Config{Demo: true}, nil
+		return Config{Demo: true, RedactValues: opts.RedactValues}, nil
 	}
 
 	// Secret-source exclusivity (plan §3): tokenEnv and tokenFile together
