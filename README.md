@@ -128,11 +128,12 @@ check and the write remains possible.
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
-| Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline, Explain and Resource; `1`–`9` jump to a section by position; `T` timeline; `X` explain; `r` refresh; `a` actions |
+| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline, Explain, Events and Resource; `1`–`9` jump to a section by position; `T` timeline; `X` explain; `E` events; `r` refresh; `a` actions |
 | Nodes | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info, `/` find by name, `n`/`N` next/previous match, `h` show skipped nodes, `s` sort, `p` phase filter |
 | Timeline | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info |
 | Explain | `y` copy the report, `l` the failing pod's full log, `v` hides or reveals parameter values |
+| Events | `s` warnings first or newest first, `/` filter, `y` copy the table, `r` refresh and restart the stream |
 | Resource | `v` hides or reveals parameter/output values (also in the node info panel) |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
@@ -236,6 +237,29 @@ finding of its own. `y` copies the whole explanation as plain text, ready to
 paste into an incident channel, and `l` opens the failing pod's full log.
 Parameter values in the evidence follow the same reveal setting as the
 Resource tab.
+
+### Events
+
+The Events section (`E` in the detail pane, or `E` on the list) streams the
+Kubernetes events about the workflow and its pods while it is open: the
+controller's `WorkflowRunning`, `WorkflowNodeFailed` and `WorkflowFailed`,
+and the scheduler's and kubelet's `Scheduled`, `Pulled`, `BackOff`,
+`FailedScheduling` and the like. Each row gives the time since it was last
+seen, the type as a glyph and a word (`▲ Warning`, `◇ Normal`), the reason,
+the object (`workflow`, or the node's name for a pod), the count and the
+message. `s` puts warnings first, `/` filters as you type, `y` copies the
+table and `f` shows it full screen.
+
+It reads Argo's event stream (`/api/v1/stream/events/{namespace}`) twice:
+once for the workflow's own events and once for the namespace's pod events,
+which are matched to the workflow's pods by name, because Kubernetes cannot
+select a workflow and its pods in one query. A dropped stream reconnects
+with back-off from where it stopped; a permission error or a server without
+the stream stops it with the reason on the status line, and `r` tries again.
+The streams close when you leave the section or the workflow. Kubernetes
+keeps events for about an hour by default, so a workflow that finished
+earlier may have none. The account behind the token needs permission to
+watch events in the namespace.
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a
