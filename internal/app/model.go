@@ -128,6 +128,11 @@ type Root struct {
 	// pipeCommand prefills the log pane's pipe editor.
 	pipeCommand string
 
+	// redact is the profile's redactValues setting. The detail view is
+	// rebuilt on every namespace and profile switch, so the root holds it
+	// and hands it to each new one.
+	redact bool
+
 	// nsView is the namespace picker dialog; nsSeed is the namespace list the
 	// profile configured, offered alongside whatever the server reports.
 	nsView *namespaces.Model
@@ -152,6 +157,13 @@ func (m *Root) SetWebURL(u string) { m.webURL = u }
 // SetPipeCommand records the command the log pipe editor prefills with. The
 // log pane is rebuilt on every open, so the root holds it.
 func (m *Root) SetPipeCommand(cmd string) { m.pipeCommand = cmd }
+
+// SetRedactValues records whether workflows open with their parameter and
+// output values hidden, and applies it to the detail view now on screen.
+func (m *Root) SetRedactValues(redact bool) {
+	m.redact = redact
+	m.detailView.SetRedactByDefault(redact)
+}
 
 // listState is the list route's data + status.
 type listState struct {
@@ -246,6 +258,7 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 func (m *Root) newDetailView() *detail.Model {
 	d := detail.New()
 	d.SetTheme(m.theme)
+	d.SetRedactByDefault(m.redact)
 	return d
 }
 

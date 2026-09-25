@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Parameter and output values are now shown by default. The redaction they
+  used to open with hid what a reader opens a workflow to see. A cluster
+  whose parameters carry secrets can turn it back on with `redactValues: true`
+  at the top of the config file or on a profile, or with `--redact-values`;
+  `v` still hides or reveals them for the session.
 - The Nodes tab reads like the pipeline it shows. Steps are listed under
   their Steps node in group order instead of as a staircase of step groups;
   DAG tasks are listed in dependency order with what each waits for
@@ -19,7 +24,7 @@
   attempts start folded.
 - `i` opens a node info panel with everything the workflow says about the
   node under the cursor: times, pod and host, exit code, resource usage,
-  flags, and inputs and outputs, with parameter values redacted until `v`.
+  flags, and inputs and outputs, with parameter values that `v` hides or reveals.
   It sits to the right on a wide terminal and under the tree otherwise.
 - `/` finds a node by name; `n` and `N` step through the matches, opening
   folds on the way. While the find input is open every letter types, `q`

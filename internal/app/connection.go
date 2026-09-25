@@ -30,6 +30,9 @@ type Connection struct {
 	// Skin is the palette this profile is drawn in, already resolved from
 	// the flag, the profile and the file. Empty leaves the current skin.
 	Skin string
+	// Redact starts every workflow with its values hidden, as the profile
+	// or the --redact-values flag asks.
+	Redact bool
 	// Namespaces are the namespaces the profile names, offered by the `n`
 	// picker alongside whatever the server reports.
 	Namespaces []string
