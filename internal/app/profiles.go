@@ -94,6 +94,7 @@ func (m *Root) Adopt(c *Connection) {
 	}
 	m.webURL = c.WebURL
 	m.pipeCommand = c.PipeCommand
+	m.SetRedactValues(c.Redact)
 	m.nsSeed = c.Namespaces
 	m.actionOpts.Server = c.Server
 	m.actionOpts.Profile = c.Profile
@@ -209,6 +210,7 @@ func (m *Root) resetRoutes() {
 	m.logState = logState{}
 	m.logsView = nil
 	m.detailView = newDetailView()
+	m.detailView.SetRedactByDefault(m.redact)
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
 	m.drill = nil
 	m.deps.drillNamespace, m.deps.labelSelector = "", ""
