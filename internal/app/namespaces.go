@@ -159,7 +159,13 @@ func (m *Root) restartList(flash string) tea.Cmd {
 // namespaceLabel is the namespace the header shows: the session's, or "all"
 // in the all-namespaces view. A drill-down shows the owner's namespace, which
 // is the one its list asks for.
+//
+// A cluster-scoped kind's route shows that instead: its list ignores the
+// namespace.
 func (m *Root) namespaceLabel() string {
+	if m.clusterScopedRoute() {
+		return "(cluster-scoped)"
+	}
 	if m.drill != nil && m.deps.drillNamespace != "" {
 		return m.deps.drillNamespace
 	}

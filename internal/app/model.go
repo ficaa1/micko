@@ -10,6 +10,7 @@ import (
 
 	"github.com/ficaa1/argo-tui/internal/core"
 	"github.com/ficaa1/argo-tui/internal/ui/actions"
+	"github.com/ficaa1/argo-tui/internal/ui/archivedlist"
 	"github.com/ficaa1/argo-tui/internal/ui/detail"
 	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
 	"github.com/ficaa1/argo-tui/internal/ui/logs"
@@ -161,10 +162,18 @@ type Root struct {
 	kindDefs   map[Route]*kindDef
 	kindStates map[Route]*kindState
 	cronView   *kindlist.Model[core.CronWorkflow]
+	tmplView   *kindlist.Model[core.WorkflowTemplate]
+	ctmplView  *kindlist.Model[core.WorkflowTemplate]
+	archView   *kindlist.Model[core.Workflow]
 
 	// drill is the active drill-down from a kind's row to the workflows it
 	// owns; nil outside one.
 	drill *drillState
+
+	// detailFrom is the route the detail pane was opened from, which esc
+	// returns to: the workflow list, or the archive list for an archived
+	// run.
+	detailFrom Route
 }
 
 // SetWebURL records the Argo UI address links are built from.
@@ -206,6 +215,9 @@ type detailState struct {
 	loading  bool
 	lastErr  *core.APIError
 	notFound bool
+	// archived marks a workflow read from the workflow archive rather than
+	// the live route.
+	archived bool
 }
 
 // logState is the logs route's data + status.
@@ -220,6 +232,9 @@ type logState struct {
 	running  bool
 	lastErr  error
 	canceled bool
+	// archived marks a stream of an archived run's logs, whose pods are
+	// often gone; an empty or failed stream then says so.
+	archived bool
 }
 
 // NewRoot constructs the root model.
@@ -243,18 +258,24 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 		nsLister = n
 	}
 	cronLister, _ := r.(core.CronLister)
+	templateLister, _ := r.(core.TemplateLister)
+	clusterTemplateLister, _ := r.(core.ClusterTemplateLister)
+	archive, _ := r.(core.ArchiveReader)
 	m := &Root{
 		deps: deps{
-			reader:      r,
-			watcher:     watcher,
-			actioner:    actioner,
-			nsLister:    nsLister,
-			cronLister:  cronLister,
-			clock:       clock,
-			interval:    interval,
-			namespace:   namespace,
-			snapshotCap: 5000,
-			pageSize:    100,
+			reader:                r,
+			watcher:               watcher,
+			actioner:              actioner,
+			nsLister:              nsLister,
+			cronLister:            cronLister,
+			templateLister:        templateLister,
+			clusterTemplateLister: clusterTemplateLister,
+			archive:               archive,
+			clock:                 clock,
+			interval:              interval,
+			namespace:             namespace,
+			snapshotCap:           5000,
+			pageSize:              100,
 		},
 		inflight:        map[string]inflightOp{},
 		theme:           shared.NewTheme(false),
@@ -272,7 +293,12 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	}
 	m.palView.SetCommands(paletteSpecs(m.registry))
 	m.palView.SetArgSource(m.paletteArgs)
-	m.kindDefs = map[Route]*kindDef{RouteCron: m.newCronKind()}
+	m.kindDefs = map[Route]*kindDef{
+		RouteCron:             m.newCronKind(),
+		RouteTemplates:        m.newTemplateKind(),
+		RouteClusterTemplates: m.newClusterTemplateKind(),
+		RouteArchived:         m.newArchivedKind(),
+	}
 	m.kindStates = map[Route]*kindState{}
 	for r := range m.kindDefs {
 		m.kindStates[r] = &kindState{}
@@ -454,6 +480,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.openInBrowser()
 			}
 		}
+		// A cluster-scoped kind belongs to no namespace, so the namespace
+		// keys have nothing to change there. They say so rather than switch
+		// a scope the pane does not show.
+		if m.clusterScopedRoute() && (key == "n" || key == "0") && !m.textEntryActive() {
+			m.flash = "cluster workflow templates belong to no namespace: n and 0 do not apply here"
+			return m, nil
+		}
 		// `n` switches namespace. It is bound on the list because that is the
 		// route the namespace describes; in the logs pane `n` is the next
 		// search match, which is the vim meaning a reader expects there.
@@ -479,7 +512,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.route == RouteDetail && key == "a" {
 			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
 			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
-			if m.connectionReady && m.connectionFresh {
+			if m.detailState.archived {
+				// The archive holds a record, not a workflow: every action
+				// endpoint addresses the live object, which may be gone or
+				// may be another run of the same name.
+				m.actionView.OpenUnavailable("this workflow is archived: actions apply to live workflows only")
+			} else if m.connectionReady && m.connectionFresh {
 				m.actionView.OpenMenu()
 			} else {
 				m.actionView.OpenUnavailable(staleActionReason(m.connectionReady))
@@ -543,7 +581,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// refresh stops for the rest of the session. The detail route also
 		// refetches, so an open workflow tracks its own phase.
 		var cmds []tea.Cmd
-		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" {
+		// An archived run is fixed, so its detail is read once and not
+		// polled.
+		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" && !m.detailState.archived {
 			cmds = append(cmds, m.startDetailFetch())
 		}
 		// A stale snapshot blocks every mutation, and only an accepted list
@@ -602,6 +642,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case OpenWorkflowMsg:
 		return m, m.openWorkflow(msg.Ref)
+
+	case archivedlist.OpenMsg:
+		return m, m.openArchived(msg.Ref)
 
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)
@@ -776,7 +819,7 @@ func (m *Root) View() tea.View {
 			f.Status = m.logsView.PaneStatus()
 			f.Body = m.logsView.BodyLines()
 		}
-	case RouteCron:
+	case RouteCron, RouteTemplates, RouteClusterTemplates, RouteArchived:
 		def := m.kind(m.route)
 		def.pane.SetSize(f.BodyWidth(), bodyH)
 		f.Title = def.pane.PaneTitle()
@@ -1008,7 +1051,11 @@ func (m *Root) detailSummary() string {
 		return "detail error: " + st.lastErr.Message
 	default:
 		wf := st.workflow
-		return "workflow " + wf.Summary.Ref.Name + " phase=" + wf.Summary.Phase
+		s := "workflow " + wf.Summary.Ref.Name + " phase=" + wf.Summary.Phase
+		if st.archived {
+			s += " (archived)"
+		}
+		return s
 	}
 }
 
@@ -1062,6 +1109,12 @@ func (m *Root) back() tea.Cmd {
 	case RouteDetail:
 		m.cancelInflight("detail")
 		m.detailState.loading = false
+		if m.kind(m.detailFrom) != nil {
+			// An archived run returns to the archive list, which keeps its
+			// rows and cursor; nothing it shows changed.
+			m.route = m.detailFrom
+			return nil
+		}
 		m.route = RouteList
 		// A Resume or a Stop changes the row the reader is about to look
 		// at. Waiting for the next poll shows the old phase first, which
@@ -1078,13 +1131,17 @@ func (m *Root) back() tea.Cmd {
 // openWorkflow handles the list→detail intent.
 func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 	// Same workflow re-selected: no generation bump.
-	if m.route == RouteDetail && m.selection == ref {
+	if m.route == RouteDetail && m.selection == ref && !m.detailState.archived {
 		return nil
+	}
+	if m.route != RouteDetail {
+		m.detailFrom = m.route
 	}
 	m.selection = ref
 	m.selGen++
 	m.route = RouteDetail
 	m.detailState = detailState{ref: ref, loading: true}
+	m.detailView.SetArchived(false)
 	m.detailView.SetLoading()
 	return m.startDetailFetch()
 }
@@ -1104,10 +1161,14 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if m.route != RouteLogs {
 		m.logsFrom = m.route
 	}
+	// Logs opened from an archived run's detail, or a pod switch inside
+	// them, belong to that archived run.
+	archived := m.detailState.archived && m.detailState.ref.UID == msg.Ref.UID &&
+		(m.route == RouteDetail || (m.route == RouteLogs && m.logState.archived))
 	m.selection = msg.Ref
 	m.selGen++
 	m.route = RouteLogs
-	m.logState = logState{ref: msg.Ref, container: msg.Container, running: true}
+	m.logState = logState{ref: msg.Ref, container: msg.Container, running: true, archived: archived}
 	m.logsView = logs.NewModel(msg.Ref, msg.PodName, msg.Container)
 	m.logsView.SetTheme(m.theme)
 	m.logsView.SetPipeCommand(m.pipeCommand)
@@ -1143,6 +1204,9 @@ func (m *Root) startDetailFetch() tea.Cmd {
 	// due. Setting it here keeps it true for exactly as long as a fetch is
 	// running, whichever key or timer started it.
 	m.detailState.loading = true
+	if m.detailState.archived {
+		return m.deps.archivedDetailCmd(ctx, g, id, m.selection)
+	}
 	return m.deps.detailCmd(ctx, g, id, m.selection)
 }
 
@@ -1317,6 +1381,7 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 			switch {
 			case msg.Canceled:
 				m.logsView.SetPhase(logs.PhaseCanceled)
+			case m.archivedLogOutcome(msg.Err):
 			case msg.Err != nil:
 				m.logsView.SetError(msg.Err.Error())
 			default:

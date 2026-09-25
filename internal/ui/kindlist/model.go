@@ -90,8 +90,13 @@ type Spec[T any] struct {
 	// Namespaced is false for a cluster-scoped kind: no NAMESPACE column,
 	// and the namespace keys do not apply.
 	Namespaced bool
-	// Key is the row's identity. Selection follows it across refreshes.
+	// Key is the row's namespace and name. It is the row's identity too,
+	// unless ID is set.
 	Key func(T) (namespace, name string)
+	// ID is the row's identity, for a kind where two rows can share a
+	// namespace and name (archived runs of a reused name). Selection and
+	// reveal follow it across refreshes.
+	ID func(T) string
 	// Columns lays the table out for a table width.
 	Columns func(width int) []Column
 	// Cell is the text of one cell. The list sanitizes it.
@@ -105,8 +110,16 @@ type Spec[T any] struct {
 	Info func(item T, reveal bool, now time.Time) []Field
 	// Manifest is the row's object as the server sent it, for the raw view.
 	Manifest func(T) []byte
-	// Drill is where enter leads. Nil makes enter do nothing.
+	// Drill is where enter leads for a kind that owns workflows: the
+	// workflow list narrowed to them.
 	Drill func(T) DrillMsg
+	// Open is where enter leads for a kind whose rows are themselves
+	// something to open, used when Drill is nil. With neither, enter does
+	// nothing.
+	Open func(T) tea.Msg
+	// EmptyNote is added to the empty-namespace line, for a kind whose
+	// empty answer can mean more than one thing.
+	EmptyNote string
 }
 
 // Model is the list of one kind.
@@ -131,6 +144,9 @@ type Model[T any] struct {
 	status Status
 	errMsg string
 	errAge time.Duration
+	// note is a standing remark about the snapshot, shown in the toolbar:
+	// that it holds only the newest rows, for example.
+	note string
 
 	allNS bool
 	info  bool
@@ -177,6 +193,7 @@ func (m *Model[T]) Reset() {
 	m.scrollTop = 0
 	m.status = StatusLoading
 	m.errMsg, m.errAge = "", 0
+	m.note = ""
 }
 
 // SetStatus records the collection state and its sanitized reason.
@@ -185,6 +202,10 @@ func (m *Model[T]) SetStatus(s Status, msg string, age time.Duration) {
 	m.errMsg = shared.Sanitize(msg)
 	m.errAge = age
 }
+
+// SetNote sets the toolbar's standing remark about the snapshot; empty
+// clears it.
+func (m *Model[T]) SetNote(note string) { m.note = note }
 
 // SetAllNamespaces says whether the snapshot spans namespaces.
 func (m *Model[T]) SetAllNamespaces(on bool) {
@@ -266,16 +287,18 @@ func (m *Model[T]) SelectedName() (string, string) {
 
 // Select moves the cursor to the named row when it is listed.
 func (m *Model[T]) Select(namespace, name string) {
-	k := namespace + "/" + name
 	for _, r := range m.rows {
-		if m.key(r) == k {
-			m.selKey = k
+		if ns, n := m.spec.Key(r); ns == namespace && n == name {
+			m.setSel(m.key(r))
 			return
 		}
 	}
 }
 
 func (m *Model[T]) key(item T) string {
+	if m.spec.ID != nil {
+		return m.spec.ID(item)
+	}
 	ns, name := m.spec.Key(item)
 	return ns + "/" + name
 }
@@ -418,11 +441,14 @@ func (m *Model[T]) handleKey(key string) tea.Cmd {
 	case "G", "end":
 		m.moveTo(len(m.rows) - 1)
 	case "enter":
-		if m.spec.Drill == nil {
-			return nil
-		}
-		if sel, ok := m.Selected(); ok {
+		sel, ok := m.Selected()
+		switch {
+		case !ok:
+		case m.spec.Drill != nil:
 			intent := m.spec.Drill(sel)
+			return func() tea.Msg { return intent }
+		case m.spec.Open != nil:
+			intent := m.spec.Open(sel)
 			return func() tea.Msg { return intent }
 		}
 	case "/":
@@ -524,9 +550,12 @@ func (m *Model[T]) PaneTitle() string { return m.spec.Title }
 
 // Hints are the list's keys for the footer.
 func (m *Model[T]) Hints() string {
-	h := "enter workflows  i info  / search  s sort"
-	if m.spec.Drill == nil {
-		h = "i info  / search  s sort"
+	h := "i info  / search  s sort"
+	switch {
+	case m.spec.Drill != nil:
+		h = "enter workflows  " + h
+	case m.spec.Open != nil:
+		h = "enter open  " + h
 	}
 	if m.info {
 		if m.Revealed() {

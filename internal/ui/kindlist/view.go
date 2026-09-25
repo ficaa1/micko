@@ -161,36 +161,44 @@ func (m *Model[T]) toolbarLines() []string {
 		}
 		parts = append(parts, reveal)
 	}
-	var reason string
+	// The note and a failure's reason are the toolbar's messages. Each
+	// follows on the line when it fits whole and gets wrapped lines of its
+	// own when it does not, because either one cut short would hide what it
+	// says about the rows below.
+	type message struct {
+		text  string
+		style func(...string) string
+	}
+	var msgs []message
+	if m.note != "" {
+		msgs = append(msgs, message{shared.Sanitize(m.note), m.theme.Warning.Render})
+	}
 	switch m.status {
 	case StatusLoading:
 		parts = append(parts, m.theme.Warning.Render("loading…"))
 	case StatusStale:
-		reason = "stale " + humanDuration(m.errAge) + " — " + m.errMsg
+		msgs = append(msgs, message{"stale " + humanDuration(m.errAge) + " — " + m.errMsg, m.theme.Warning.Render})
 	case StatusForbidden:
-		reason = "forbidden: " + m.errMsg
+		msgs = append(msgs, message{"forbidden: " + m.errMsg, m.theme.ErrorText.Render})
 	case StatusUnauthenticated:
-		reason = "unauthenticated: " + m.errMsg
+		msgs = append(msgs, message{"unauthenticated: " + m.errMsg, m.theme.ErrorText.Render})
 	case StatusUnsupported:
-		reason = m.errMsg
+		msgs = append(msgs, message{m.errMsg, m.theme.ErrorText.Render})
 	}
 	line := strings.Join(parts, "  ")
 	if m.width > 0 {
 		line = ansi.Truncate(line, m.width, "…")
 	}
-	if reason == "" {
-		return []string{line}
-	}
-	style := m.theme.Warning.Render
-	if m.status != StatusStale {
-		style = m.theme.ErrorText.Render
-	}
-	if m.width <= 0 || ansi.StringWidth(line)+2+ansi.StringWidth(reason) <= m.width {
-		return []string{line + "  " + style(reason)}
-	}
 	out := []string{line}
-	for _, l := range strings.Split(shared.Wrap(reason, m.width), "\n") {
-		out = append(out, style(l))
+	for _, msg := range msgs {
+		last := out[len(out)-1]
+		if m.width <= 0 || ansi.StringWidth(last)+2+ansi.StringWidth(msg.text) <= m.width {
+			out[len(out)-1] = last + "  " + msg.style(msg.text)
+			continue
+		}
+		for _, l := range strings.Split(shared.Wrap(msg.text, m.width), "\n") {
+			out = append(out, msg.style(l))
+		}
 	}
 	return out
 }
@@ -214,7 +222,7 @@ func (m *Model[T]) tableLines(width, height int, now time.Time) []string {
 	lines := []string{m.theme.Header.Render(head)}
 	if len(m.rows) == 0 {
 		m.winStart, m.winEnd = 0, 0
-		return append(lines, m.emptyState())
+		return append(lines, m.emptyState(width)...)
 	}
 	start, end := m.window(height - 1)
 	m.winStart, m.winEnd = start, end
@@ -331,31 +339,46 @@ func (m *Model[T]) window(budget int) (int, int) {
 	return start, start + budget
 }
 
-// emptyState is the line a table with no rows shows. Loading, a refusal, a
-// filter that matches nothing and a namespace with none of the kind each say
-// which they are.
-func (m *Model[T]) emptyState() string {
+// emptyState is what a table with no rows shows, wrapped to width. Loading,
+// a refusal, a filter that matches nothing and a namespace with none of the
+// kind each say which they are.
+func (m *Model[T]) emptyState(width int) []string {
 	noun := m.spec.Noun
+	style := m.theme.Dim
+	var line string
 	switch {
 	case m.status == StatusLoading:
-		return m.theme.Dim.Render("loading " + noun + "…")
+		line = "loading " + noun + "…"
 	case m.status == StatusForbidden:
-		return m.theme.ErrorText.Render("no " + noun + " visible: list forbidden")
+		style, line = m.theme.ErrorText, "no "+noun+" visible: list forbidden"
 	case m.status == StatusUnauthenticated:
-		return m.theme.ErrorText.Render("no " + noun + " visible: not authenticated")
+		style, line = m.theme.ErrorText, "no "+noun+" visible: not authenticated"
 	case m.status == StatusUnsupported:
-		return m.theme.ErrorText.Render("no " + noun + " on this server")
+		style, line = m.theme.ErrorText, "no "+noun+" on this server"
 	case m.status == StatusStale && len(m.items) == 0:
-		return m.theme.ErrorText.Render("no " + noun + " visible: the list failed")
+		style, line = m.theme.ErrorText, "no "+noun+" visible: the list failed"
 	case len(m.items) > 0:
-		return m.theme.Dim.Render("no " + noun + " match the current filter")
+		line = "no " + noun + " match the current filter"
 	case !m.spec.Namespaced:
-		return m.theme.Dim.Render("no " + noun + " on this cluster")
+		line = "no " + noun + " on this cluster"
 	case m.allNS:
-		return m.theme.Dim.Render("no " + noun + " in any namespace this token can read")
+		line = "no " + noun + " in any namespace this token can read"
+		if m.spec.EmptyNote != "" {
+			line += " " + m.spec.EmptyNote
+		}
 	default:
-		return m.theme.Dim.Render("no " + noun + " in this namespace")
+		line = "no " + noun + " in this namespace"
+		if m.spec.EmptyNote != "" {
+			line += " " + m.spec.EmptyNote
+		}
 	}
+	// The line is wrapped rather than clipped: its end is often the part
+	// that says what an empty list means.
+	var out []string
+	for _, l := range strings.Split(shared.Wrap(line, width), "\n") {
+		out = append(out, style.Render(l))
+	}
+	return out
 }
 
 // infoFields is the panel content for the selected row.

@@ -35,8 +35,14 @@ type deps struct {
 	// cronLister lists cron workflows. Optional like nsLister: without it the
 	// cron route says the connection cannot list them.
 	cronLister core.CronLister
-	clock      Clock
-	interval   time.Duration
+	// templateLister and clusterTemplateLister list the two template kinds,
+	// optional in the same way.
+	templateLister        core.TemplateLister
+	clusterTemplateLister core.ClusterTemplateLister
+	// archive reads the workflow archive, optional in the same way.
+	archive  core.ArchiveReader
+	clock    Clock
+	interval time.Duration
 	// namespace is the active namespace; switching it bumps the connection
 	// generation (plan §2 journey 5).
 	namespace string
