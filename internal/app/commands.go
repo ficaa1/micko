@@ -32,6 +32,9 @@ type deps struct {
 	// nsLister answers the namespace picker. It is optional: a Reader that
 	// cannot list namespaces simply does not implement it.
 	nsLister core.NamespaceLister
+	// eventWatcher streams Kubernetes events for the Events section. It is
+	// optional too: without it the section says the backend has none.
+	eventWatcher core.EventWatcher
 	// cronLister lists cron workflows. Optional like nsLister: without it the
 	// cron route says the connection cannot list them.
 	cronLister core.CronLister

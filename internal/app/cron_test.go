@@ -8,7 +8,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/argo-tui/internal/core"
 	"github.com/ficaa1/argo-tui/internal/testkit"
@@ -51,8 +50,6 @@ func cronRoot(t *testing.T) (*Root, *queryRecorder) {
 	}
 	return m, rec
 }
-
-func screen(m *Root) string { return ansi.Strip(m.View().Content) }
 
 func cronCursor(m *Root) string {
 	_, name := m.cronView.SelectedName()

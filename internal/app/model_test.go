@@ -596,13 +596,13 @@ func TestListResizePropagatesToChild(t *testing.T) {
 
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
 	m = next.(*Root)
-	if v := m.View().Content; !strings.Contains(v, "too small") {
+	if v := screen(m); !strings.Contains(v, "too small") {
 		t.Fatalf("40x10 must propagate to the list child and show the resize notice; view=%q", v)
 	}
 
 	next, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = next.(*Root)
-	if v := m.View().Content; strings.Contains(v, "too small") {
+	if v := screen(m); strings.Contains(v, "too small") {
 		t.Fatalf("resize to 100x40 must clear the notice: %q", v)
 	}
 }
@@ -612,7 +612,7 @@ func TestListResizePropagatesToChild(t *testing.T) {
 func TestListAgeRendersUsingInjectedClock(t *testing.T) {
 	m := loadDemoList(t)
 	// demo-data-pull started FixtureEpoch-40m → AGE "40m".
-	if v := m.View().Content; !strings.Contains(v, "40m") {
+	if v := screen(m); !strings.Contains(v, "40m") {
 		t.Fatalf("AGE must render from the injected clock; no '40m' found:\n%s", v)
 	}
 }
@@ -717,7 +717,7 @@ func TestListErrorTextWrapsAtWidth(t *testing.T) {
 	})
 	m = next.(*Root)
 
-	v := m.View().Content
+	v := screen(m)
 	if !strings.Contains(v, "tail-marker") {
 		t.Fatalf("long error text is clipped/absent; full message must be reachable:\n%s", v)
 	}

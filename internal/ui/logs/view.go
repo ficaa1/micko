@@ -18,8 +18,10 @@ import (
 //   - search scope is stated: "search scope: retained buffer only"
 //   - the viewport never scrolls on its own while paused; following pins
 //     to the tail (LOG-07/08)
-//   - no ANSI of its own reaches the terminal; text accompanies every
-//     state so color is never the only carrier (plan §2)
+//   - the only styling is the theme's: stream markers and the retention
+//     count are muted so the log lines read first, and search hits are
+//     highlighted; text accompanies every state so color is never the only
+//     carrier (plan §2)
 
 // rowKind distinguishes rendered row provenance.
 type rowKind int
@@ -344,7 +346,7 @@ func (m *Model) bodyLines() []string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(m.countView())
+	b.WriteString(m.theme.Muted.Render(m.countView()))
 	b.WriteString("\n")
 	rows, top := m.windowAt()
 	cur := m.currentHitRow()
@@ -352,6 +354,9 @@ func (m *Model) bodyLines() []string {
 		text := r.text
 		if r.kind == rowLog {
 			text = m.highlight(text, top+i == cur)
+		} else {
+			// A marker is the pane's own annotation, not server output.
+			text = m.theme.Muted.Render(text)
 		}
 		b.WriteString(text)
 		if i < len(rows)-1 {

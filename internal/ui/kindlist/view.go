@@ -219,7 +219,7 @@ func (m *Model[T]) tableLines(width, height int, now time.Time) []string {
 		}
 		head += pad(cell, c.Width, c.Right)
 	}
-	lines := []string{m.theme.Header.Render(head)}
+	lines := []string{m.theme.TableHeader.Render(head)}
 	if len(m.rows) == 0 {
 		m.winStart, m.winEnd = 0, 0
 		return append(lines, m.emptyState(width)...)
@@ -250,7 +250,7 @@ func (m *Model[T]) tableLines(width, height int, now time.Time) []string {
 		}
 		switch {
 		case i == sel:
-			line = m.theme.Selected.Render(line)
+			line = m.theme.SelectRow(line, width)
 		case m.spec.RowStyle != nil:
 			line = m.spec.RowStyle(r, m.theme).Render(line)
 		}

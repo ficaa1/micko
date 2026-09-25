@@ -44,13 +44,15 @@ func TestPTYPaletteRunsCommands(t *testing.T) {
 		t.Fatal("q typed into the palette quit the program")
 	}
 
-	// ns, a space, a fragment, tab, enter: the namespace switches.
+	// ns, a space, a fragment, tab, enter: the namespace switches. The
+	// footer's flash and a row only demo-ml holds are written whole; the pane
+	// title is repainted cell by cell and cannot be matched as one string.
 	p.ClearScreen()
 	if err := p.SendKeys(50*time.Millisecond, ":", "n", "s", " ", "m", "l", "\t", "\r"); err != nil {
 		t.Fatal(err)
 	}
 	if !waitScreen(p, 5*time.Second, func(s string) bool {
-		return strings.Contains(s, "namespace: demo-ml") && strings.Contains(s, "list: 2 workflows")
+		return strings.Contains(s, "namespace: demo-ml") && strings.Contains(s, "ml-batch-infer")
 	}) {
 		t.Fatalf("ns demo-ml did not switch; screen=%q", p.Screen())
 	}

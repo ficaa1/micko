@@ -10,6 +10,11 @@ import (
 type NodeSort string
 
 const (
+	// NodeSortPipeline is the order the tree is built in: steps in group
+	// order, DAG tasks after the tasks they wait for, retry attempts in
+	// the order they ran. It is the default, because it reads the way the
+	// workflow runs.
+	NodeSortPipeline NodeSort = "pipeline"
 	// NodeSortStarted orders by start time, then node ID. Nodes without a
 	// start time come last.
 	NodeSortStarted NodeSort = "started"
@@ -22,12 +27,14 @@ const (
 // Next returns the next order in the s rotation.
 func (k NodeSort) Next() NodeSort {
 	switch k {
+	case NodeSortPipeline:
+		return NodeSortStarted
 	case NodeSortStarted:
 		return NodeSortName
 	case NodeSortName:
 		return NodeSortPhase
 	default:
-		return NodeSortStarted
+		return NodeSortPipeline
 	}
 }
 
@@ -52,7 +59,8 @@ func nodePhaseRank(p string) int {
 
 // SortOutline reorders every sibling group in the outline by key. It sorts
 // in place, and each order is total, so a later call with another key gives
-// the same result as sorting the original.
+// the same result as sorting the original. The pipeline order is total
+// because the build numbers every sibling group from zero.
 func SortOutline(out *Outline, key NodeSort) {
 	var walk func(rows []OutlineRow)
 	walk = func(rows []OutlineRow) {
@@ -65,7 +73,8 @@ func SortOutline(out *Outline, key NodeSort) {
 }
 
 // sortOutlineRowsBy orders one sibling group. Every comparator falls back to
-// the node ID so the result never depends on the input order.
+// the node ID, or is the build's own numbering, so the result never depends
+// on the input order.
 func sortOutlineRowsBy(rows []OutlineRow, key NodeSort) {
 	switch key {
 	case NodeSortName:
@@ -90,7 +99,9 @@ func sortOutlineRowsBy(rows []OutlineRow, key NodeSort) {
 			}
 			return a.NodeID < b.NodeID
 		})
-	default:
+	case NodeSortStarted:
 		sortOutlineRows(rows)
+	default:
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Seq < rows[j].Seq })
 	}
 }

@@ -45,6 +45,7 @@ type kindPane interface {
 	Reset()
 	Len() int
 	SetRedact(bool)
+	SetTheme(shared.Theme)
 }
 
 // kindState is one kind's collection state.
