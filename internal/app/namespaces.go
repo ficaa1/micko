@@ -138,18 +138,37 @@ func (m *Root) toggleAllNamespaces() tea.Cmd {
 // the old workflows, and the generation bump is what makes the update loop
 // discard it. The snapshot is dropped for the same reason: rows from the old
 // scope under the new header would be a lie until the first list lands.
+//
+// A kind's route stays where it is and collects its own list in the new
+// scope; a drill-down ends, since its owner belongs to the old scope.
 func (m *Root) restartList(flash string) tea.Cmd {
+	from := m.route
 	m.cancelAll()
 	m.connGen++
 	m.selGen++
 	m.resetRoutes()
 	m.flash = flash
-	return m.startListGeneration()
+	cmds := []tea.Cmd{m.startListGeneration()}
+	if m.kind(from) != nil {
+		m.route = from
+		cmds = append(cmds, m.startKindFetch(from))
+	}
+	return tea.Batch(cmds...)
 }
 
 // namespaceLabel is the namespace the header shows: the session's, or "all"
-// in the all-namespaces view.
+// in the all-namespaces view. A drill-down shows the owner's namespace, which
+// is the one its list asks for.
+//
+// A cluster-scoped kind's route shows that instead: its list ignores the
+// namespace.
 func (m *Root) namespaceLabel() string {
+	if m.clusterScopedRoute() {
+		return "(cluster-scoped)"
+	}
+	if m.drill != nil && m.deps.drillNamespace != "" {
+		return m.deps.drillNamespace
+	}
 	if m.deps.allNamespaces {
 		return "all"
 	}

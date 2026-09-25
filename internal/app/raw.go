@@ -95,6 +95,9 @@ func (m *Root) rawLines() []string {
 			return m.logsView.RawLines()
 		}
 	default:
+		if def := m.kind(m.route); def != nil {
+			return def.pane.RawLines()
+		}
 		return m.listRawLines()
 	}
 	return nil
@@ -109,7 +112,7 @@ func (m *Root) listRawLines() []string {
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
 		ns := ""
-		if m.deps.allNamespaces {
+		if m.listAcrossNamespaces() {
 			ns = shared.Sanitize(r.Ref.Namespace) + "\t"
 		}
 		out = append(out, ns+shared.Sanitize(r.Ref.Name)+"\t"+
@@ -169,6 +172,8 @@ func (m *Root) copyText() string {
 		}
 	case m.route == RouteLogs && m.logsView != nil:
 		s = strings.Join(m.logsView.RawLines(), "\n")
+	case m.kind(m.route) != nil:
+		_, s = m.kind(m.route).pane.SelectedName()
 	default:
 		if ref := m.listView.SelectedRef(); ref.Name != "" {
 			s = ref.Name
@@ -201,12 +206,20 @@ func (m *Root) workflowURL() string {
 	if m.webURL == "" {
 		return ""
 	}
+	if m.kind(m.route) != nil {
+		return m.kindURL()
+	}
 	ref := m.selection
 	if m.route == RouteList {
 		ref = m.listView.SelectedRef()
 	}
 	if ref.Name == "" || ref.Namespace == "" {
 		return ""
+	}
+	// An archived run's page in the Argo UI is keyed by its UID: the name
+	// may belong to another run by now, or to none.
+	if m.detailState.archived && ref == m.detailState.ref && ref.UID != "" {
+		return strings.TrimSuffix(m.webURL, "/") + "/archived-workflows/" + ref.Namespace + "/" + ref.UID
 	}
 	return strings.TrimSuffix(m.webURL, "/") + "/workflows/" + ref.Namespace + "/" + ref.Name
 }

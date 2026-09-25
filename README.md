@@ -129,6 +129,9 @@ check and the write remains possible.
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
 | Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `0` all namespaces |
+| Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
+| Templates (`:tmpl`, `:cwftmpl`) | the same keys; `n` and `0` do not apply to cluster templates |
+| Archived workflows (`:aw`) | `enter` open the run, `i` info panel, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` record |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
 | Resource | `v` hides or reveals parameter/output values |
@@ -150,6 +153,10 @@ runs a guess: a word that names no command is reported in the footer.
 | Command | Does |
 | --- | --- |
 | `workflows`, `wf` | Show the workflow list |
+| `cronworkflows`, `cwf`, `cron` | Show the cron workflow list |
+| `workflowtemplates`, `wftmpl`, `tmpl` | Show the workflow template list |
+| `clusterworkflowtemplates`, `cwftmpl` | Show the cluster workflow template list |
+| `archived`, `aw` | Show the archived workflow list |
 | `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
 | `all` | Toggle the all-namespaces view |
 | `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
@@ -167,6 +174,72 @@ namespace. Detail, logs and actions use each row's own namespace. The token
 needs permission to list workflows cluster-wide; without it, and on a server
 started for one managed namespace, the pane says so, and `0` returns to the
 namespace you came from.
+
+### Cron workflows
+
+`:cron` lists the namespace's CronWorkflows: the schedule (every entry of a
+v3.6+ `schedules` list, or the single `schedule` of older objects), the time
+zone when it is not UTC, whether it is suspended, how many runs are active,
+when it last ran, when it runs next, and its concurrency policy. The default
+order puts the next run first and suspended ones last; `s` also sorts by name
+and by last run.
+
+NEXT RUN is computed locally from the schedule the way the Argo controller
+reads it: five fields with ranges, steps, lists and month and weekday names,
+the `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly` and `@every`
+descriptors, day-of-month and day-of-week combined as the controller combines
+them, on the wall clock of `spec.timezone` across daylight-saving changes. An
+expression the controller would refuse shows `?`, and the info panel says why;
+a date that never comes shows `never`.
+
+`i` opens the info panel for the selected row, below the table or, on a pane at
+least 140 columns wide, beside it: every schedule, the time zone, the next five
+run times, the concurrency policy, the starting deadline, the history limits,
+the suspend state, the last run, the active runs, the controller's conditions,
+and the entrypoint and arguments of the workflow each run starts. Argument
+values are shown, and `v` hides them for the selected row; under
+`redactValues` they start hidden and `v` reveals that row only. `f` shows the
+whole manifest the same way.
+
+`enter` lists the workflows the cron workflow started: the workflow list,
+narrowed on the server by the `workflows.argoproj.io/cron-workflow` label the
+controller puts on each run. The pane title names the cron workflow, `esc`
+returns to the cron list with the cursor where it was, and a workflow opened
+from there returns to it with a second `esc`. The cron list refreshes on the
+list's poll interval while it is shown. Suspending, resuming and submitting a
+cron workflow are not available yet.
+
+### Workflow templates
+
+`:tmpl` lists the namespace's WorkflowTemplates and `:cwftmpl` the cluster's
+ClusterWorkflowTemplates: name, entrypoint, how many templates and parameters
+each defines, age, and on a wide pane the description the Argo UI shows. Cluster
+templates belong to no namespace, so the header reads `ns: (cluster-scoped)`
+there and `n` and `0` do nothing. The info panel (`i`) lists the entrypoint, the
+arguments with their defaults, allowed values and descriptions (`v` hides or
+reveals the values, as on the cron list), every template with its type (container, script, dag, steps,
+suspend, resource, data, http, plugin or containerSet), the service account and
+the labels. `enter` lists the workflows submitted from the template, by the
+`workflows.argoproj.io/workflow-template` or `cluster-workflow-template` label,
+and `esc` returns. Submitting a template is not available yet.
+
+### Archived workflows
+
+`:aw` (or `:archived`) lists the namespace's workflow archive: the runs the
+controller copied to its database, which may already be gone from the cluster.
+The columns are the workflow list's, newest first; `s` also sorts failures
+first or by name. The list reads the newest 300 runs and says so when the
+archive holds more. `enter` opens a run in the detail pane, read from the
+archive by its UID; the title and the summary say it is archived, it is not
+refreshed on the poll, and `a` explains that actions apply to live workflows
+only. Node logs are asked for as usual, but an archived run's pods are usually
+deleted with it: when nothing comes back, the log pane says so and names
+`archiveLogs`, the workflow setting that keeps logs past the pods.
+
+A server with no archive configured answers the list with an empty page, the
+same answer as an empty archive, so the empty list says that too. Opening a run
+on such a server, or listing on a server without the archive route, shows
+"the workflow archive is not enabled on this server".
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a

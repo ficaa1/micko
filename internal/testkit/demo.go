@@ -332,7 +332,8 @@ const running = time.Duration(-2)
 // out-of-memory kill, a fan-out still in progress, a validation error with no
 // nodes at all, a deploy tree that is mostly skipped branches, and runs a
 // CronWorkflow started. Two more runs live in a second namespace,
-// DemoMLNamespace.
+// DemoMLNamespace. The CronWorkflows beside them are linked to those runs by
+// the controller's labels.
 func DemoReader(clock *FakeClock) *FakeReader {
 	now := clock.Now()
 	f := &FakeReader{
@@ -379,16 +380,27 @@ func DemoReader(clock *FakeClock) *FakeReader {
 	}
 	put(demoHParamSweep(now.Add(-18 * time.Minute)))
 	put(demoBatchInfer(now.Add(-7 * time.Hour)))
+
+	runs := make([]core.Workflow, 0, len(f.Order))
+	for _, ref := range f.Order {
+		runs = append(runs, f.Workflows[ref])
+	}
+	f.CronWorkflows = demoCronWorkflows(now, runs)
+	f.WorkflowTemplates, f.ClusterWorkflowTemplates = demoTemplates(now)
+	demoArchive(f, now)
 	return f
 }
 
-// demoHelloWorld is the smallest workflow: one pod, done.
+// demoHelloWorld is the smallest workflow: one pod, done, submitted from the
+// demo's cluster workflow template.
 func demoHelloWorld(start time.Time) core.Workflow {
 	b := newDemo("demo-hello-world", "Succeeded", start)
 	b.add("", "", demoNode{display: "demo-hello-world", typ: "Pod", phase: "Succeeded",
 		template: "whalesay", dur: 4 * time.Minute, exit: "0",
 		in: core.NodeIO{Parameters: params("message", "hello argo-tui")}})
-	return b.finish(4*time.Minute, "", nil)
+	return b.finish(4*time.Minute, "", map[string]string{
+		"workflows.argoproj.io/cluster-workflow-template": "whalesay",
+	})
 }
 
 // demoNightlyReport is a DAG whose transform task exhausted its retries.
