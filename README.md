@@ -180,14 +180,68 @@ footer reports the first failure of the session. Sessions without
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace, `space` mark, `a` actions, `esc` clear marks then filter |
+| Workflow list | `enter` open, `l` workflow logs, `/` filter, `s` sort, `p` phase, `n` namespace, `space` mark, `a` actions, `w` wide columns, `esc` clear marks then filter |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes and Resource; `r` refresh; `a` actions |
 | Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `y` confirms, `D` finishes a delete |
 | Nodes | `l` selected node's logs, `h` show skipped nodes, `p` phase filter |
 | Resource | `v` hides or reveals parameter/output values |
-| Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
+| Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `&` only matching lines, `w` wrap, `L` source labels, `ctrl+t` server timestamps, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
+
+### Filtering and wide columns
+
+`/` filters the list as you type. A plain word matches workflow names; the
+rest is a small query language:
+
+| Query | Matches |
+| --- | --- |
+| `etl report` | names containing `etl` and `report` (spaces separate terms; every term must match) |
+| `etl\|report` | names containing either (`\|` joins alternatives within a term) |
+| `!etl` | names not containing `etl`; `!` negates one alternative, so `!a\|b` is "not a, or b" |
+| `/^demo-.*-\d+$/` | names matching a Go regular expression, case-insensitive |
+| `~ddp` | names containing `d`, `d`, `p` in that order (fuzzy) |
+| `phase=failed`, `phase!=succeeded` | the phase, case-insensitive; `suspended` is a phase here, and `running` includes it |
+| `age<2h`, `age>1d` | time since the workflow started, or was created if it has not |
+| `dur>10m` | run time; a running workflow counts until now |
+| `label:team=data`, `label:team`, `label:!team` | a label's exact value, its presence, its absence |
+| `tmpl=nightly` | started from this WorkflowTemplate or ClusterWorkflowTemplate |
+| `cron=etl-hourly` | started by this CronWorkflow |
+
+Durations take `s`, `m`, `h` and `d`, combined as in `1d12h`. A workflow with
+no timestamp matches neither side of an `age` or `dur` bound. A term that does
+not parse leaves the previous filter applied and shows its error in the
+toolbar, and `enter` will not apply it; `esc` cancels the edit. Once applied,
+the toolbar shows the filter as it was read, such as `phase=Failed & age<2h`.
+Like the rest of the list, the filter runs on the collected snapshot, not on
+the server.
+
+`w` toggles wide columns: PROGRESS (the server's done/total count of pods, with
+a bar), STARTED and FINISHED in local time, TEMPLATE, CRON and LABELS (the
+labels no other column shows). As the pane narrows they drop in this order:
+LABELS, CRON, FINISHED, MESSAGE, TEMPLATE, STARTED, PROGRESS. Without `w`, a
+pane of 120 columns or more shows PROGRESS as well.
+
+### Reading logs
+
+A workflow's logs mix every pod, so each line starts with a label naming the
+step it came from, or the pod when the step is not known yet, coloured per
+source. `L` hides or shows the labels; a single pod's log starts without them.
+`w` wraps long lines, keeping your place: the line at the bottom of the pane
+stays there. A line whose first word after its timestamps is `ERROR`, `WARN`,
+`DEBUG` or a similar level, or a JSON line whose `level` or `severity` field
+names one, gets that word coloured; the rest of the line is left alone.
+
+`&` shows only the lines matching the current `/` search, as in `less`; `&`
+again or `esc` shows everything. The status line says how many lines are
+shown out of how many are retained. Collection carries on underneath and the
+retention limits are unchanged.
+
+`ctrl+t` asks the server to put its own timestamp in front of every line. The
+stream is reopened with the new setting, which replays the log from the start;
+the lines already on screen stay, and a marker shows where the new stream
+begins. `t` (follow) and `T` (the timeline elsewhere) were taken, so the
+timestamp toggle is `t` with control.
 
 Suspended workflows sort first by default and their waiting nodes are marked
 `AWAITING RESUME`. Node logs require a known pod name: the adapter uses the

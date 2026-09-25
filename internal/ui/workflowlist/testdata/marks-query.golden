@@ -1,0 +1,7 @@
+WORKFLOWS
+◆ 3 marked (1 hidden by filter)  Search: phase=Failed & tmpl=nightly-report|cron=demo-etl-hourly [within 12 collected]  Phase: All  1 awaiting resume  Sort: phase, newest first
+  NAME                                          PHASE              AGE  DURATION   PROGRESS      MESSAGE
+◆ demo-etl-hourly-1790000000                    ✗ Failed          1h5m  6m           2/2 ██████  child 'quality-check' …
+◆ demo-nightly-report                           ✗ Failed            2h  4m           5/6 █████░  child 'transform' fail…
+
+enter open  l logs  / search  s sort  p phase  space mark  a actions  n namespace  r refresh  w wide  ? help
