@@ -19,6 +19,23 @@
   Timeline. `T` on the workflow list opens the selected workflow straight on
   its Timeline.
 - The help overlay is tighter, so it fits a 40-row, 80-column terminal whole.
+- An Explain section, after Timeline, says why a workflow ended the way it
+  did, from what the workflow records and nothing else: no network service,
+  no model, the same answer every time. Each finding is a card with a
+  severity, a headline, its evidence and a next step. It finds the node
+  that failed first on its own, explains exhausted retries, out-of-memory
+  kills, well-known exit codes, image pull errors and pods that never
+  started, deadlines and rejected specs, lists what did not run because of
+  the failure, and reports the exit handler, a gate waiting for a person, a
+  run past its estimate, a workflow the controller has not started, and
+  steps that needed a retry in a run that succeeded. For a failed pod it
+  reads the end of the log and quotes the lines that matter; a log that is
+  gone is said so. `y` copies the explanation as text for an incident
+  channel.
+- `X` jumps to the Explain section in the detail pane, and `X` on the
+  workflow list opens the selected workflow straight on it.
+- The detail tab strip closes up, and then shows the tabs around the active
+  one, when the terminal is too narrow for all of them.
 
 - The Nodes tab reads like the pipeline it shows. Steps are listed under
   their Steps node in group order instead of as a staircase of step groups;

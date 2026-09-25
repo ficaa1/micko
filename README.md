@@ -128,10 +128,11 @@ check and the write remains possible.
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `T` open on its timeline, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
-| Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline and Resource; `1`–`9` jump to a section by position; `T` timeline; `r` refresh; `a` actions |
+| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `l` workflow logs, `/` search, `s` sort, `p` phase, `n` namespace |
+| Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline, Explain and Resource; `1`–`9` jump to a section by position; `T` timeline; `X` explain; `r` refresh; `a` actions |
 | Nodes | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info, `/` find by name, `n`/`N` next/previous match, `h` show skipped nodes, `s` sort, `p` phase filter |
 | Timeline | `enter`/`l` selected node's logs, `space` fold/unfold, `left`/`right` fold or climb/unfold, `i` node info |
+| Explain | `y` copy the report, `l` the failing pod's full log, `v` hides or reveals parameter values |
 | Resource | `v` hides or reveals parameter/output values (also in the node info panel) |
 | Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
@@ -205,6 +206,36 @@ Rows follow the Nodes tab's pipeline order and share its folds: `space`,
 `left` and `right` fold groups the same way, `i` opens the same info panel,
 and `enter` or `l` opens the selected pod's log. Skipped branches have no
 time to place and are left out; the status line counts them.
+
+### Explain
+
+The Explain section (`X` in the detail pane, or `X` on the list to open a
+workflow straight onto it) says why the workflow ended the way it did. It
+applies fixed rules to what the workflow records and to the end of the
+failing pod's log; nothing leaves the terminal and no model is asked, so the
+same workflow always gets the same explanation.
+
+Each finding is a card: a severity (`✗ ERROR`, `▲ WARNING`, `◇ INFO`, as a
+glyph and a word), a headline, the evidence it rests on, and a next step.
+The rules find the node that failed first on its own, rather than the DAG or
+Steps nodes that failed because of it or the steps that failed after it;
+the attempts of an exhausted retry and whether they failed the same way; an
+out-of-memory kill; what exit codes 1, 2, 126, 127, 137, 139 and 143 mean;
+image pull errors and other reasons a pod never started; a deadline; a spec
+the controller rejected before any node ran; the nodes that did not run
+because of the failure; how the exit handler went; a gate waiting for a
+person, and for how long; a run past its estimate; a workflow the controller
+has not started; and, for a run that succeeded, any step that needed a retry
+or failed without stopping it.
+
+When a pod failed, the section reads the last 200 lines of its `main`
+container's log while it is open and quotes up to eight of them: lines with
+an error word, whole tracebacks, and the line before each for context. The
+status line says while it reads. A log the server no longer has is a
+finding of its own. `y` copies the whole explanation as plain text, ready to
+paste into an incident channel, and `l` opens the failing pod's full log.
+Parameter values in the evidence follow the same reveal setting as the
+Resource tab.
 
 The profile picker (`P`, and the start screen) lists the profiles in your
 config file with their server and namespace. Type to narrow the list; only a
