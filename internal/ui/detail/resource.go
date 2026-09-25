@@ -43,6 +43,11 @@ func RenderResource(wf core.Workflow, revealForSession bool) string {
 	return shared.Sanitize(yamlOut)
 }
 
+// redactedMarker stands in for a value the reader has not revealed. The
+// resource tab and the node info panel use the same marker, so a reader
+// learns one sign for "hidden until v".
+const redactedMarker = "[REDACTED]"
+
 // sensitiveValueKeys are JSON keys whose string values are collapsed by
 // default wherever they appear: workflow arguments/outputs use "value" and
 // "result", and credential-shaped names are redacted unconditionally
@@ -78,7 +83,7 @@ func redactValue(v any, reveal bool, sensitiveCtx bool) any {
 			lk := strings.ToLower(k)
 			ctx := sensitiveCtx || sensitiveContextKeys[lk]
 			if sensitiveValueKeys[lk] && !reveal {
-				out[k] = "[REDACTED]"
+				out[k] = redactedMarker
 				continue
 			}
 			out[k] = redactValue(val, reveal, ctx)
@@ -92,7 +97,7 @@ func redactValue(v any, reveal bool, sensitiveCtx bool) any {
 		return out
 	case string:
 		if !reveal && sensitiveCtx {
-			return "[REDACTED]"
+			return redactedMarker
 		}
 		if !reveal {
 			return shared.RedactTokens(tv)

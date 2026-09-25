@@ -79,12 +79,19 @@ func (m *Root) Adopt(c *Connection) {
 	m.deps.watcher, _ = c.Reader.(core.Watcher)
 	m.deps.actioner, _ = c.Reader.(core.Actioner)
 	m.deps.nsLister, _ = c.Reader.(core.NamespaceLister)
+	m.deps.eventWatcher, _ = c.Reader.(core.EventWatcher)
 	m.deps.namespace = c.Namespace
 	if c.Interval > 0 {
 		m.deps.interval = c.Interval
 	}
 	m.webURL = c.WebURL
 	m.pipeCommand = c.PipeCommand
+	if c.Skin != "" {
+		// The name was checked when the config file was read. Should it
+		// still be unknown, the session keeps the skin it has rather than
+		// refusing a connection over a colour.
+		_, _ = m.ApplySkin(c.Skin)
+	}
 	m.SetRedactValues(c.Redact)
 	m.nsSeed = c.Namespaces
 	m.actionOpts.Server = c.Server
@@ -141,7 +148,7 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	old := m.conn
 	m.conn = nil
 	m.deps.reader = nil
-	m.deps.watcher, m.deps.actioner, m.deps.nsLister = nil, nil, nil
+	m.deps.watcher, m.deps.actioner, m.deps.nsLister, m.deps.eventWatcher = nil, nil, nil, nil
 	m.resetRoutes()
 	if m.profView != nil {
 		m.profView.SetConnecting(name)
@@ -185,7 +192,7 @@ func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 		m.profView.Close()
 	}
 	m.flash = "profile: " + msg.Profile
-	return tea.Batch(m.startListGeneration(), m.waitConnStates())
+	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery())
 }
 
 // resetRoutes drops everything the previous connection produced and returns
@@ -198,8 +205,7 @@ func (m *Root) resetRoutes() {
 	m.detailState = detailState{}
 	m.logState = logState{}
 	m.logsView = nil
-	m.detailView = newDetailView()
-	m.detailView.SetRedactByDefault(m.redact)
+	m.detailView = m.newDetailView()
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0
 	m.listView.SetItems(nil, m.deps.clock.Now())
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)

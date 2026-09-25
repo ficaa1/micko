@@ -3,4 +3,4 @@ Search: (none)  / to filter by name [within 6 collected]  Phase: Failed  Sort: p
 NAME                            PHASE              AGE  DURATION   MESSAGE
 fixture-wf-0003                 ✗ Failed            3m  -          synthetic fa…
 
-enter open  l logs  / search  s sort  p phase  n namespace  r refresh  ? help
+enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  n namespace  r refresh  ? help

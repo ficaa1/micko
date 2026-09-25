@@ -53,6 +53,10 @@ type Root struct {
 	// logState is the retained log state for the logs route.
 	logState logState
 
+	// events is the Kubernetes event streaming for the detail pane's
+	// Events section.
+	events eventsSession
+
 	// logsFrom records the route the logs pane was opened from (list via
 	// the 'l' key, or detail), so a single Esc returns to that route
 	// instead of dumping the user onto a never-loaded/stale detail pane.
@@ -72,8 +76,13 @@ type Root struct {
 	help shared.HelpOverlay
 
 	// theme styles the shell chrome. The children keep their own copies for
-	// row-level styling; this one is only for the frame.
+	// row-level styling; SetTheme replaces all of them together.
 	theme shared.Theme
+
+	// skin is the skin name last applied. bgKnown and bgDark are the
+	// terminal's reported background, which the auto skin chooses by.
+	skin            string
+	bgKnown, bgDark bool
 
 	// version is the build version shown in the context band.
 	version string
@@ -218,38 +227,55 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 	if n, ok := r.(core.NamespaceLister); ok {
 		nsLister = n
 	}
-	return &Root{
+	var eventWatcher core.EventWatcher
+	if e, ok := r.(core.EventWatcher); ok {
+		eventWatcher = e
+	}
+	theme := shared.NewTheme(false)
+	m := &Root{
 		deps: deps{
-			reader:      r,
-			watcher:     watcher,
-			actioner:    actioner,
-			nsLister:    nsLister,
-			clock:       clock,
-			interval:    interval,
-			namespace:   namespace,
-			snapshotCap: 5000,
-			pageSize:    100,
+			reader:       r,
+			watcher:      watcher,
+			actioner:     actioner,
+			nsLister:     nsLister,
+			eventWatcher: eventWatcher,
+			clock:        clock,
+			interval:     interval,
+			namespace:    namespace,
+			snapshotCap:  5000,
+			pageSize:     100,
 		},
 		inflight:        map[string]inflightOp{},
-		theme:           shared.NewTheme(false),
-		nsView:          namespaces.New(shared.NewTheme(false)),
-		profView:        profiles.New(shared.NewTheme(false)),
-		listView:        workflowlist.New(shared.NewTheme(false), false),
-		detailView:      newDetailView(),
-		actionView:      actions.NewWithOptions(core.Ref{}, opts),
+		theme:           theme,
+		skin:            shared.SkinDefault,
+		nsView:          namespaces.New(theme),
+		profView:        profiles.New(theme),
+		listView:        workflowlist.New(theme, false),
 		actionOpts:      opts,
 		profileCurrent:  opts.Profile,
 		connectionReady: true,
 		connectionFresh: true,
 	}
+	m.detailView = m.newDetailView()
+	m.actionView = m.newActionView(core.Ref{})
+	m.help.SetTheme(theme)
+	return m
 }
 
-// newDetailView builds the detail pane with the shared theme, so node rows
+// newDetailView builds the detail pane with the root's theme, so node rows
 // are styled from the same palette as every other pane.
-func newDetailView() *detail.Model {
+func (m *Root) newDetailView() *detail.Model {
 	d := detail.New()
-	d.SetTheme(shared.NewTheme(false))
+	d.SetTheme(m.theme)
+	d.SetRedactByDefault(m.redact)
 	return d
+}
+
+// newActionView builds the action pane for ref with the root's theme.
+func (m *Root) newActionView(ref core.Ref) *actions.Model {
+	a := actions.NewWithOptions(ref, m.actionOpts)
+	a.SetTheme(m.theme)
+	return a
 }
 
 // ConnectionStateMsg carries transport lifecycle changes into the update loop.
@@ -290,9 +316,9 @@ var _ tea.Model = (*Root)(nil)
 // with a config file of several clusters has to answer is which one.
 func (m *Root) Init() tea.Cmd {
 	if !m.connected() {
-		return m.openProfilePicker()
+		return tea.Batch(m.openProfilePicker(), m.backgroundQuery())
 	}
-	return tea.Batch(m.startListGeneration(), m.waitConnStates())
+	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery())
 }
 
 // armTick schedules the next poll unless one is already scheduled. Every
@@ -305,6 +331,20 @@ func (m *Root) armTick() tea.Cmd {
 	return m.deps.tickCmd()
 }
 
+// escLeavesRoute reports whether esc goes back from the active route. A
+// child that is using esc itself, to close its own input or clear its own
+// search, keeps it.
+func (m *Root) escLeavesRoute() bool {
+	switch m.route {
+	case RouteDetail:
+		return m.detailView == nil || !m.detailView.EscapeConsumed()
+	case RouteLogs:
+		return m.logsView == nil || !m.logsView.EscapeConsumed()
+	default:
+		return false
+	}
+}
+
 // textEntryActive reports whether the active route owns printable keys.
 func (m *Root) textEntryActive() bool {
 	switch m.route {
@@ -312,6 +352,8 @@ func (m *Root) textEntryActive() bool {
 		return m.listView.SearchOn
 	case RouteLogs:
 		return m.logsView != nil && m.logsView.EscapeConsumed()
+	case RouteDetail:
+		return m.detailView != nil && m.detailView.TextEntry()
 	default:
 		return false
 	}
@@ -420,10 +462,15 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.openProfilePicker()
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
+			// On the Events section r also starts the streams over, which
+			// is the way back from a stream that stopped.
+			if m.detailView.Section() == shared.SectionEvents {
+				return m, tea.Batch(m.startDetailFetch(), m.restartEvents())
+			}
 			return m, m.startDetailFetch()
 		}
-		if m.route == RouteDetail && key == "a" {
-			m.actionView = actions.NewWithOptions(m.selection, m.actionOpts)
+		if m.route == RouteDetail && key == "a" && !m.textEntryActive() {
+			m.actionView = m.newActionView(m.selection)
 			m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 			if m.connectionReady && m.connectionFresh {
 				m.actionView.OpenMenu()
@@ -432,7 +479,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if key == "esc" && (m.route == RouteDetail || (m.route == RouteLogs && (m.logsView == nil || !m.logsView.EscapeConsumed()))) {
+		if key == "esc" && m.escLeavesRoute() {
 			return m, m.back()
 		}
 		// List route: route the keyboard into the list child (j/k/arrows/Enter/
@@ -444,11 +491,21 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.route == RouteList {
 			return m, m.updateChild(msg)
 		}
-		// Detail/logs routes: the active child consumes non-global keys.
-		return m, m.updateChild(msg)
+		// Detail/logs routes: the active child consumes non-global keys. A
+		// key in the detail pane can open or leave the Explain section,
+		// which starts or cancels its log read.
+		cmd := m.updateChild(msg)
+		if m.route == RouteDetail {
+			return m, tea.Batch(cmd, m.syncSections())
+		}
+		return m, cmd
 
 	case tea.QuitMsg:
 		m.quitting = true
+		return m, nil
+
+	case tea.BackgroundColorMsg:
+		m.handleBackground(msg)
 		return m, nil
 
 	case tickMsg:
@@ -527,7 +584,23 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startListGeneration()
 
 	case OpenWorkflowMsg:
-		return m, m.openWorkflow(msg.Ref)
+		cmd := m.openWorkflow(msg.Ref)
+		if msg.Section != "" {
+			m.detailView.SetSection(msg.Section)
+		}
+		return m, tea.Batch(cmd, m.syncSections())
+
+	case explainLogMsg:
+		return m, m.handleExplainLog(msg)
+
+	case eventsMsg:
+		return m, m.handleEvents(msg)
+
+	case eventsDoneMsg:
+		return m, m.handleEventsDone(msg)
+
+	case eventsRetryMsg:
+		return m, m.handleEventsRetry(msg)
 
 	case OpenLogsMsg:
 		return m, m.openLogs(msg)
@@ -605,6 +678,8 @@ func (m *Root) View() tea.View {
 		Server:    m.serverLabel(),
 		Namespace: m.deps.namespace,
 		Mode:      m.modeLabel(),
+		// The badge colour repeats what the mode words say.
+		ActionsEnabled: m.actionsEnabled(),
 	}
 
 	// An action modal is a dialog: it takes the pane so the route behind it
@@ -621,6 +696,10 @@ func (m *Root) View() tea.View {
 		f.Title = "Profile"
 		f.Route = "profile"
 		f.Hints = m.profView.Hints()
+		if m.profView.Connecting() {
+			// While connecting the hint line is a sentence, not keys.
+			f.Hints, f.Notice = "", m.profView.Hints()
+		}
 		f.Help = ""
 		m.profView.SetSize(f.BodyWidth(), f.BodyHeight())
 		f.Body = m.profView.BodyLines()
@@ -650,6 +729,7 @@ func (m *Root) View() tea.View {
 		f.Route = "detail"
 		if m.detailView != nil {
 			m.detailView.SetSize(f.BodyWidth(), f.BodyHeight())
+			m.detailView.SetNow(m.deps.clock.Now())
 			f.Hints = m.detailView.Hints()
 			f.Status = m.detailView.PaneStatus()
 			f.Body = m.detailView.BodyLines()
@@ -690,10 +770,15 @@ func splitLines(s string) []string {
 // modeLabel is the safety state: the single word that says whether this
 // session can mutate anything. It is always shown.
 func (m *Root) modeLabel() string {
-	if m.actionOpts.AllowActions && !m.actionOpts.ReadOnly && !m.actionOpts.Demo {
+	if m.actionsEnabled() {
 		return "ACTIONS ENABLED"
 	}
 	return "READ ONLY"
+}
+
+// actionsEnabled reports whether this session may send a mutation at all.
+func (m *Root) actionsEnabled() bool {
+	return m.actionOpts.AllowActions && !m.actionOpts.ReadOnly && !m.actionOpts.Demo
 }
 
 // serverLabel names where the data comes from. The demo must never claim a
@@ -746,7 +831,7 @@ func (m *Root) finishView(f shell.Frame) tea.View {
 		// The result of the last explicit command replaces the route hints
 		// for one screen: it answers the key the reader just pressed, and it
 		// disappears on their next key.
-		f.Hints = m.flash
+		f.Notice = m.flash
 	}
 	content := f.Render(m.theme)
 	if m.height > 0 {
@@ -903,9 +988,13 @@ func (m *Root) back() tea.Cmd {
 			target = RouteList
 		}
 		m.route = target
-		return nil
+		// Opening the log canceled an explain read and the event streams;
+		// back on the section they start again.
+		return m.syncSections()
 	case RouteDetail:
 		m.cancelInflight("detail")
+		m.stopExplainLog()
+		m.stopEvents()
 		m.detailState.loading = false
 		m.route = RouteList
 		// A Resume or a Stop changes the row the reader is about to look
@@ -949,6 +1038,8 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if m.route != RouteLogs {
 		m.logsFrom = m.route
 	}
+	m.stopExplainLog()
+	m.stopEvents()
 	m.selection = msg.Ref
 	m.selGen++
 	m.route = RouteLogs
@@ -1111,7 +1202,7 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	st.lastErr = nil
 	st.notFound = false
 	m.detailView.SetWorkflow(msg.Workflow, m.deps.clock.Now())
-	return nil
+	return m.syncSections()
 }
 
 // handleLogRecord applies one batched delivery honoring staleness.
@@ -1252,4 +1343,5 @@ func (m *Root) cancelAll() {
 	for _, c := range cancels {
 		c()
 	}
+	m.events = eventsSession{}
 }

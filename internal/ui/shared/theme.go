@@ -1,18 +1,28 @@
 package shared
 
 import (
+	"image/color"
 	"os"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 )
 
-// Theme is the frozen styling surface for view packages. Colors are
-// dark-friendly but never assume a black background; every colored status
-// is also carried by text (plan §2: "Status text accompanies colors").
+// Theme is the styling surface for view packages: one semantic token per
+// role, so a view asks for "the accent" or "a muted label" and never names a
+// colour. A skin (skins.go) fills every token from one palette.
+//
+// Colour is never the only carrier of a status. Every coloured phase is also
+// a glyph and a word, and every badge is also a word, so a mono terminal,
+// NO_COLOR and a colour-blind reader lose nothing but the hue.
 //
 // NO_COLOR (https://no-color.org) is respected: when set to any non-empty
-// value, all styles degrade to plain text.
+// value, every style degrades to plain text whatever skin was asked for.
 type Theme struct {
+	// Skin names the palette this theme was built from. The plain theme
+	// reports "plain".
+	Skin string
+
 	// Phase accent colors.
 	PhaseRunning   lipgloss.Style
 	PhaseSucceeded lipgloss.Style
@@ -21,26 +31,75 @@ type Theme struct {
 	PhaseOther     lipgloss.Style
 
 	// Structure.
+	//
+	// Header styles standalone pane headings. Dim is the same style as Muted;
+	// both names stay because both read naturally at their call sites.
 	Header    lipgloss.Style
 	Selected  lipgloss.Style
 	Dim       lipgloss.Style
 	Warning   lipgloss.Style
 	ErrorText lipgloss.Style
 
+	// Text roles. Text is ordinary body text; it matters where a background
+	// is painted underneath (the header band), because the terminal's own
+	// foreground may not suit the skin's band colour. Muted is secondary
+	// text: labels, hint descriptions, annotations. Accent is the skin's
+	// signature colour.
+	Text   lipgloss.Style
+	Muted  lipgloss.Style
+	Accent lipgloss.Style
+
+	// Tables and rows. TableHeader styles column heads. Marked styles a row
+	// the reader has marked for a bulk operation; a mark is also a glyph, so
+	// the style only repeats it. TreeGuide styles the connectors of a tree
+	// (├─ └─ │), which must read dimmer than the names they join.
+	TableHeader lipgloss.Style
+	Marked      lipgloss.Style
+	TreeGuide   lipgloss.Style
+
+	// Bars. BarFill is the finished part of a progress or timeline bar,
+	// BarRunning the part still in progress, and BarEmpty the track behind
+	// both. Bars are drawn with glyphs, so these set foregrounds.
+	BarFill    lipgloss.Style
+	BarEmpty   lipgloss.Style
+	BarRunning lipgloss.Style
+
 	// Shell chrome: the frame border, the pane title inside it, and the
 	// key-hint footer band. Kept separate from Header so the pane title can
-	// be emphasised without restyling table column heads.
-	Border lipgloss.Style
-	Title  lipgloss.Style
-	Footer lipgloss.Style
+	// be emphasised without restyling table column heads. BorderShape holds
+	// the border's characters; a zero value draws square corners.
+	Border      lipgloss.Style
+	BorderShape lipgloss.Border
+	Title       lipgloss.Style
+	Footer      lipgloss.Style
+
+	// Band is the header band's base: when it sets a background, the whole
+	// row is painted and every segment on it keeps that background.
+	// AppName styles the program name and version at its left end.
+	Band    lipgloss.Style
+	AppName lipgloss.Style
+
+	// The safety-mode badge at the right of the header band. Actions
+	// enabled is the state that can change a cluster, so it gets the louder
+	// style; the words READ ONLY and ACTIONS ENABLED carry the meaning.
+	BadgeReadOnly lipgloss.Style
+	BadgeActions  lipgloss.Style
+
+	// Key hints: the key a reader presses and what it does.
+	HintKey  lipgloss.Style
+	HintDesc lipgloss.Style
+
+	// Section tabs, such as the detail pane's Summary / Nodes / Resource.
+	TabActive   lipgloss.Style
+	TabInactive lipgloss.Style
 }
 
-// NewTheme builds the default theme; noColor forces plain output.
+// NewTheme builds the default skin's theme; noColor forces plain output.
 func NewTheme(noColor bool) Theme {
 	if noColor || hasNoColorEnv() {
 		return plainTheme()
 	}
-	return coloredTheme()
+	return defaultTheme()
 }
 
 func hasNoColorEnv() bool {
@@ -48,40 +107,141 @@ func hasNoColorEnv() bool {
 	return ok && v != ""
 }
 
-func coloredTheme() Theme {
+// defaultTheme is the ANSI-16 skin. It names palette indexes rather than
+// colours, so the terminal's own palette decides the actual hues and the
+// skin suits a dark or a light background alike.
+func defaultTheme() Theme {
+	ansi := func(n string) lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(n)) }
+	faint := lipgloss.NewStyle().Faint(true)
 	return Theme{
-		PhaseRunning:   lipgloss.NewStyle().Foreground(lipgloss.Color("6")), // cyan
-		PhaseSucceeded: lipgloss.NewStyle().Foreground(lipgloss.Color("2")), // green
-		PhaseFailed:    lipgloss.NewStyle().Foreground(lipgloss.Color("1")), // red
-		PhasePending:   lipgloss.NewStyle().Foreground(lipgloss.Color("7")), // light gray
-		PhaseOther:     lipgloss.NewStyle().Foreground(lipgloss.Color("5")), // magenta
+		Skin:           SkinDefault,
+		PhaseRunning:   ansi("6"), // cyan
+		PhaseSucceeded: ansi("2"), // green
+		PhaseFailed:    ansi("1"), // red
+		PhasePending:   ansi("7"), // light gray
+		PhaseOther:     ansi("5"), // magenta
 		Header:         lipgloss.NewStyle().Bold(true),
 		Selected:       lipgloss.NewStyle().Reverse(true),
-		Dim:            lipgloss.NewStyle().Faint(true),
-		Warning:        lipgloss.NewStyle().Foreground(lipgloss.Color("3")), // yellow
-		ErrorText:      lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true),
-		Border:         lipgloss.NewStyle().Foreground(lipgloss.Color("8")), // dim gray
-		Title:          lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true),
-		Footer:         lipgloss.NewStyle().Faint(true),
+		Dim:            faint,
+		Warning:        ansi("3"), // yellow
+		ErrorText:      ansi("1").Bold(true),
+		// Text is the terminal's own foreground: the default skin paints no
+		// background, so there is nothing for the text to be matched to.
+		Text:          lipgloss.NewStyle(),
+		Muted:         faint,
+		Accent:        ansi("6"),
+		TableHeader:   lipgloss.NewStyle().Bold(true),
+		Marked:        ansi("5").Bold(true),
+		TreeGuide:     ansi("8"),
+		BarFill:       ansi("2"),
+		BarEmpty:      ansi("8"),
+		BarRunning:    ansi("6"),
+		Border:        ansi("8"), // dim gray
+		BorderShape:   lipgloss.NormalBorder(),
+		Title:         ansi("6").Bold(true),
+		Footer:        faint,
+		Band:          lipgloss.NewStyle(),
+		AppName:       ansi("6").Bold(true),
+		BadgeReadOnly: ansi("2").Bold(true),
+		BadgeActions:  ansi("1").Bold(true).Reverse(true),
+		HintKey:       ansi("6").Bold(true),
+		HintDesc:      faint,
+		TabActive:     ansi("6").Bold(true),
+		TabInactive:   faint,
 	}
 }
 
 func plainTheme() Theme {
+	none := lipgloss.NewStyle()
 	return Theme{
-		PhaseRunning:   lipgloss.NewStyle(),
-		PhaseSucceeded: lipgloss.NewStyle(),
-		PhaseFailed:    lipgloss.NewStyle(),
-		PhasePending:   lipgloss.NewStyle(),
-		PhaseOther:     lipgloss.NewStyle(),
-		Header:         lipgloss.NewStyle(),
-		Selected:       lipgloss.NewStyle(),
-		Dim:            lipgloss.NewStyle(),
-		Warning:        lipgloss.NewStyle(),
-		ErrorText:      lipgloss.NewStyle(),
-		Border:         lipgloss.NewStyle(),
-		Title:          lipgloss.NewStyle(),
-		Footer:         lipgloss.NewStyle(),
+		Skin:           "plain",
+		PhaseRunning:   none,
+		PhaseSucceeded: none,
+		PhaseFailed:    none,
+		PhasePending:   none,
+		PhaseOther:     none,
+		Header:         none,
+		Selected:       none,
+		Dim:            none,
+		Warning:        none,
+		ErrorText:      none,
+		Text:           none,
+		Muted:          none,
+		Accent:         none,
+		TableHeader:    none,
+		Marked:         none,
+		TreeGuide:      none,
+		BarFill:        none,
+		BarEmpty:       none,
+		BarRunning:     none,
+		Border:         none,
+		BorderShape:    lipgloss.NormalBorder(),
+		Title:          none,
+		Footer:         none,
+		Band:           none,
+		AppName:        none,
+		BadgeReadOnly:  none,
+		BadgeActions:   none,
+		HintKey:        none,
+		HintDesc:       none,
+		TabActive:      none,
+		TabInactive:    none,
 	}
+}
+
+// Borders returns the border characters to draw. A theme built without a
+// shape (a zero Theme in a test) gets square corners rather than a border
+// made of empty strings, which would shift every body line left.
+func (t Theme) Borders() lipgloss.Border {
+	if t.BorderShape.TopLeft == "" {
+		return lipgloss.NormalBorder()
+	}
+	return t.BorderShape
+}
+
+// IsBlock reports whether s paints the cells behind its text, with a
+// background colour or with reverse video. A block style needs its row
+// padded to the full width, or the highlight stops where the text does.
+func IsBlock(s lipgloss.Style) bool {
+	return s.GetReverse() || HasBackground(s)
+}
+
+// HasBackground reports whether s sets a background colour.
+func HasBackground(s lipgloss.Style) bool {
+	return isColor(s.GetBackground())
+}
+
+// HasForeground reports whether s sets a foreground colour.
+func HasForeground(s lipgloss.Style) bool {
+	return isColor(s.GetForeground())
+}
+
+func isColor(c color.Color) bool {
+	if c == nil {
+		return false
+	}
+	_, none := c.(lipgloss.NoColor)
+	return !none
+}
+
+// SelectRow styles the selected row of a list. When the selection is a
+// block the row is padded to width first, so the highlight is a bar across
+// the pane instead of a patch behind the text. A plain selection is left
+// unpadded: trailing spaces would change nothing on screen but would be
+// copied by a mouse selection.
+func (t Theme) SelectRow(line string, width int) string {
+	if width > 0 && IsBlock(t.Selected) {
+		line = padCells(line, width)
+	}
+	return t.Selected.Render(line)
+}
+
+// padCells pads s with spaces to width terminal cells.
+func padCells(s string, width int) string {
+	if w := lipgloss.Width(s); w < width {
+		return s + strings.Repeat(" ", width-w)
+	}
+	return s
 }
 
 // PhaseStyle returns the style for a workflow/node phase string. Unknown
@@ -119,17 +279,17 @@ func PhaseSymbol(phase string) string {
 	case "Suspended":
 		// A workflow parked on a manual gate. It is running, but nothing
 		// moves until a person resumes it, so it gets its own glyph.
-		return "\u25d0" // half-filled circle: waiting on a person
+		return "◐" // half-filled circle: waiting on a person
 	case "Running":
-		return "\u25cf" // filled circle: work in progress
+		return "●" // filled circle: work in progress
 	case "Succeeded":
-		return "\u2713" // check
+		return "✓" // check
 	case "Failed", "Error":
-		return "\u2717" // ballot X
+		return "✗" // ballot X
 	case "Pending":
-		return "\u25cb" // hollow circle: not started
+		return "○" // hollow circle: not started
 	default:
 		// LIST-11: a phase the server invented still needs a visible cell.
-		return "\u2022"
+		return "•"
 	}
 }

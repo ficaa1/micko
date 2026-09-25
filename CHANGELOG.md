@@ -7,6 +7,83 @@
   whose parameters carry secrets can turn it back on with `redactValues: true`
   at the top of the config file or on a profile, or with `--redact-values`;
   `v` still hides or reveals them for the session.
+- A Timeline section, after Nodes, draws the workflow as a Gantt chart: pods
+  and approval gates as bars coloured by phase on a time axis whose ticks
+  step in seconds, minutes, hours or days as the run requires, with a `now`
+  line while the workflow runs. Groups are brackets over the time they took,
+  shading marks the time a step waited before it started, and `◆` marks the
+  critical path, the chain of work that set the end time. Rows follow the
+  pipeline order and folds of the Nodes tab, `i` shows the node info panel
+  and `enter` opens the pod's log.
+- `1` to `9` jump to a detail section by its position, and `T` jumps to the
+  Timeline. `T` on the workflow list opens the selected workflow straight on
+  its Timeline.
+- The help overlay is tighter, so it fits a 40-row, 80-column terminal whole.
+- An Explain section, after Timeline, says why a workflow ended the way it
+  did, from what the workflow records and nothing else: no network service,
+  no model, the same answer every time. Each finding is a card with a
+  severity, a headline, its evidence and a next step. It finds the node
+  that failed first on its own, explains exhausted retries, out-of-memory
+  kills, well-known exit codes, image pull errors and pods that never
+  started, deadlines and rejected specs, lists what did not run because of
+  the failure, and reports the exit handler, a gate waiting for a person, a
+  run past its estimate, a workflow the controller has not started, and
+  steps that needed a retry in a run that succeeded. For a failed pod it
+  reads the end of the log and quotes the lines that matter; a log that is
+  gone is said so. `y` copies the explanation as text for an incident
+  channel.
+- `X` jumps to the Explain section in the detail pane, and `X` on the
+  workflow list opens the selected workflow straight on it.
+- An Events section, after Explain, streams the Kubernetes events about the
+  workflow and its pods while it is open: age, type (as a glyph and a word),
+  reason, the workflow or the node, count and message. `s` puts warnings
+  first and `/` filters. A dropped stream reconnects with back-off, and a
+  permission error or a server without Argo's event stream is said on the
+  status line. `E` jumps to it in the detail pane and opens the selected
+  workflow on it from the list. The demo serves synthetic events.
+- The detail tab strip closes up, and then shows the tabs around the active
+  one, when the terminal is too narrow for all of them.
+
+- The Nodes tab reads like the pipeline it shows. Steps are listed under
+  their Steps node in group order instead of as a staircase of step groups;
+  DAG tasks are listed in dependency order with what each waits for
+  (`← extract`), so a join appears once; retry attempts nest under their
+  Retry node; and the exit handler is its own labelled tree. The default
+  `s` order follows the pipeline, and start time, name and phase remain.
+- Each node row now carries its run: the template on a wide terminal, the
+  duration (elapsed while it runs), a timing bar that places it on the
+  workflow's clock, and the message. Structural nodes are tagged with their
+  type, a Retry node shows its retry count and a failing pod its exit code.
+  Above the tree, a progress line shows the workflow's progress with a bar,
+  a count of the work by state, and the elapsed time against the estimate.
+- Subtrees fold: `space` folds or unfolds, `left` folds or climbs to the
+  parent, `right` unfolds. Folds survive refreshes, and earlier retry
+  attempts start folded.
+- `i` opens a node info panel with everything the workflow says about the
+  node under the cursor: times, pod and host, exit code, resource usage,
+  flags, and inputs and outputs, with parameter values that `v` hides or reveals.
+  It sits to the right on a wide terminal and under the tree otherwise.
+- `/` finds a node by name; `n` and `N` step through the matches, opening
+  folds on the way. While the find input is open every letter types, `q`
+  included, and `esc` clears the find before it leaves the workflow.
+- Added skins. `default` keeps the terminal's own 16-colour palette; the
+  truecolor skins are catppuccin-mocha, catppuccin-latte, gruvbox-dark,
+  gruvbox-light, nord, dracula, tokyo-night, solarized-dark, solarized-light,
+  one-dark, rose-pine, rose-pine-dawn and monokai; `auto` picks a dark or
+  light skin from the terminal's background colour. Choose one with `skin:`
+  in the config file, per profile, or with `--skin`, which also works in the
+  demo. An unknown name stops the program at startup and lists the valid
+  ones. `NO_COLOR` still gives plain text.
+- The screen chrome is drawn with more care. The header band shows the
+  program, server and namespace in separate styles and the safety mode as a
+  badge, louder when actions are enabled. Footer keys stand out from their
+  descriptions. The selected row is a bar across the pane, the list colours
+  only the phase cell and mutes the times and message, table heads and tree
+  connectors are styled, and the detail tabs, pickers, action pane, help
+  overlay and log annotations use the same palette. Truecolor skins round
+  the border corners. The text on screen is unchanged: every phase keeps its
+  glyph and word.
+
 - The demo dataset now has twelve workflows whose node maps follow the
   shapes the Argo controller writes: chained step groups, DAG tasks that list
   their dependents as children, retry attempts, an exit handler, a fan-out in
