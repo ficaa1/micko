@@ -79,7 +79,7 @@ func helpLines() []string {
 		"          s sort the nodes tab (started / name / phase)",
 		"          p filter the nodes tab by phase",
 		"          l logs for the selected node",
-		"          v reveal redacted resource values",
+		"          v hide or reveal parameter and output values",
 		"          r refresh this workflow now",
 		"          a actions (requires --allow-actions)",
 		"",

@@ -24,28 +24,56 @@ func TestTeaModelTabCycles(t *testing.T) {
 	}
 }
 
-func TestTeaModelRevealSessionOnly(t *testing.T) {
+// Values are shown by default. `v` hides them for the workflow on screen,
+// and the next workflow opens shown again.
+func TestTeaModelShowsValuesByDefault(t *testing.T) {
 	m := New()
-	wf := resourceFixture()
-	m.SetWorkflow(wf, testkit.FixtureEpoch)
+	m.SetWorkflow(resourceFixture(), testkit.FixtureEpoch)
+	if !m.revealResource {
+		t.Fatal("values must be shown by default")
+	}
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'v', Text: "v"})
+	mm := updated.(*Model)
+	if mm.revealResource {
+		t.Fatal("v must hide the values")
+	}
+	// The same workflow refreshed keeps the reader's choice.
+	mm.SetWorkflow(resourceFixture(), testkit.FixtureEpoch)
+	if mm.revealResource {
+		t.Fatal("a refresh of the same workflow must keep v's choice")
+	}
+	next := resourceFixture()
+	next.Summary.Ref.UID = "other-uid"
+	mm.SetWorkflow(next, testkit.FixtureEpoch)
+	if !mm.revealResource {
+		t.Fatal("another workflow must open with values shown")
+	}
+}
 
-	// Reveal toggles on explicitly.
+// With redactValues set, each workflow opens redacted, `v` reveals for the
+// session, and a different workflow starts redacted again.
+func TestTeaModelRedactByDefault(t *testing.T) {
+	m := New()
+	m.SetRedactByDefault(true)
+	m.SetWorkflow(resourceFixture(), testkit.FixtureEpoch)
+	if m.revealResource {
+		t.Fatal("redactValues must open the workflow redacted")
+	}
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'v', Text: "v"})
 	mm := updated.(*Model)
 	if !mm.revealResource {
-		t.Fatal("v must enable session reveal")
+		t.Fatal("v must reveal the values")
 	}
-	// Reveal must reset when a different workflow (new UID) is applied.
 	next := resourceFixture()
 	next.Summary.Ref.UID = "other-uid"
 	mm.SetWorkflow(next, testkit.FixtureEpoch)
 	if mm.revealResource {
-		t.Fatal("reveal must reset on workflow change (session-only, DET-12)")
+		t.Fatal("another workflow must open redacted again")
 	}
-	// Applying the SAME workflow again keeps the reveal off (it was reset).
-	mm.SetWorkflow(next, testkit.FixtureEpoch)
-	if mm.revealResource {
-		t.Fatal("reveal stays off after reset")
+	// Turning the setting off shows the workflow on screen at once.
+	mm.SetRedactByDefault(false)
+	if !mm.revealResource {
+		t.Fatal("clearing redactValues must show the values")
 	}
 }
 
