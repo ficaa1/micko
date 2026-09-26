@@ -27,8 +27,8 @@ source and the shared engine, so a re-run only redoes what changed.
 | 8 | palette | 6.5 | `:` command palette typing, cron list | written |
 | 9 | filter | 5.5 | query language `phase=Failed age<3h` | written |
 | 10 | skins | 7 | wall of 14 skins | written |
-| 11 | actions | 6 | marks + bulk actions, 4 outcomes | todo |
-| 12 | outro | 7 | feature ticker, install, v0.5.0 | todo |
+| 11 | actions | 6.5 | marks + bulk actions, 4 outcomes | written |
+| 12 | outro | 7 | feature ticker, install, v0.5.0 | written |
 
 ## Steps
 
