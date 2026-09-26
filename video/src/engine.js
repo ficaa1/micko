@@ -143,12 +143,21 @@
     const api = {
       win, body, w, h, skin: sk, current: null,
       layer(n) { // one child per screen so switching is an opacity change
-        if (!layers[n]) { const d = E.el('div', '', body); E.css(d, { left: 0, top: 0 }); d.innerHTML = E.screenHTML(n); layers[n] = d; }
+        if (!layers[n]) { const d = E.el('div', '', body); E.css(d, { left: 0, top: 0, width: cols * E.CW, height: E.ROWS * E.LH, background: sk.bg }); d.innerHTML = E.screenHTML(n); layers[n] = d; }
         return layers[n];
       },
       show(n, o = 1) { api.layer(n); for (const k in layers) E.set(layers[k], { o: k === n ? o : 0 }); api.current = n; },
       // Crossfade from a to b by p.
       mix(a, b, p) { api.layer(a); api.layer(b); for (const k in layers) E.set(layers[k], { o: k === a ? 1 : k === b ? p : 0 }); layers[b].style.zIndex = 2; layers[a].style.zIndex = 1; },
+      // Wipe from a to b by p, left to right (b is revealed behind a moving edge).
+      wipe(a, b, p) {
+        api.layer(a); api.layer(b);
+        for (const k in layers) { E.set(layers[k], { o: k === a || k === b ? 1 : 0 }); layers[k].style.clipPath = ''; }
+        layers[a].style.zIndex = 1; layers[b].style.zIndex = 2;
+        layers[b].style.clipPath = `inset(0 ${(1 - p) * 100}% 0 0)`;
+        if (p <= 0) E.set(layers[b], { o: 0 });
+        api.current = p >= 1 ? b : a;
+      },
       // Cell rectangle in window coordinates.
       cell(row, col, row2 = row, col2 = col) {
         return { x: E.PAD + col * E.CW, y: E.BAR + E.PAD + row * E.LH, w: (col2 - col + 1) * E.CW, h: (row2 - row + 1) * E.LH };
@@ -165,6 +174,8 @@
     n.style.transform = tr;
     if (o !== undefined) { n.style.opacity = o; n.style.visibility = o <= 0.001 ? 'hidden' : 'visible'; }
   };
+  // Stage position of window point (wx, wy) under camera c (no rotation).
+  E.toStage = (c, wx, wy) => ({ x: (c.X ?? E.W / 2) + (wx - c.fx) * (c.s ?? 1), y: (c.Y ?? E.H / 2) + (wy - c.fy) * (c.s ?? 1) });
   E.mixCam = (a, b, p) => { const o = {}; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) o[k] = E.lerp(a[k] ?? b[k], b[k] ?? a[k], p); return o; };
 
   // Highlight box around a rect in a window's coordinates (added to the window).
