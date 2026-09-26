@@ -178,6 +178,14 @@
   E.toStage = (c, wx, wy) => ({ x: (c.X ?? E.W / 2) + (wx - c.fx) * (c.s ?? 1), y: (c.Y ?? E.H / 2) + (wy - c.fy) * (c.s ?? 1) });
   E.mixCam = (a, b, p) => { const o = {}; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) o[k] = E.lerp(a[k] ?? b[k], b[k] ?? a[k], p); return o; };
 
+  // Keyframed camera: keys = [[time, cam], ...]; eased moves between them.
+  E.camPath = (t, keys, ease = 'inOut') => {
+    if (t <= keys[0][0]) return { ...keys[0][1] };
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i][0]) return E.mixCam(keys[i - 1][1], keys[i][1], E.ease[ease]((t - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0])));
+    }
+    return { ...keys[keys.length - 1][1] };
+  };
   // Highlight box around a rect in a window's coordinates (added to the window).
   E.hl = (term, rect, color = '#7dcfff') => {
     const n = E.el('div', 'hl', term.win);
