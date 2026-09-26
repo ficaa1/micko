@@ -32,9 +32,9 @@ source and the shared engine, so a re-run only redoes what changed.
 
 ## Steps
 
-- [ ] 1. Skeleton + this log committed
-- [ ] 2. `capture/capture.sh`: drive `argo-tui --demo` in tmux, save ANSI screens to `screens/*.ans`
-- [ ] 3. `capture/ansi2json.mjs`: ANSI -> `screens/*.json` (runs of text + colours)
+- [x] 1. Skeleton + this log committed
+- [x] 2. `capture/capture.sh`: drive `argo-tui --demo` in tmux, save ANSI screens to `screens/*.ans`
+- [x] 3. `capture/ansi2json.mjs`: ANSI -> `screens/*.json` (runs of text + colours)
 - [ ] 4. Engine: `src/index.html`, `src/engine.js` (deterministic `renderAt(sceneId, t)`)
 - [ ] 5. `render.mjs`: Playwright frames piped to ffmpeg per scene; `concat` to final mp4
 - [ ] 6. Scenes 1..12 (tick the table above as each renders cleanly)
@@ -43,5 +43,5 @@ source and the shared engine, so a re-run only redoes what changed.
 ## Notes / decisions
 
 - Terminal screens are real captures of `./dist/argo-tui --demo --skin tokyo-night`
-  at 120x34, so the video shows what the binary actually draws.
+  at 124x32 (the list shows its PROGRESS column from 120 pane columns), so the video shows what the binary actually draws.
 - Frames and per-scene mp4s live in `out/` (gitignored); only the final video is committed.

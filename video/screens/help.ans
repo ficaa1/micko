@@ -1,0 +1,32 @@
+[38;2;192;202;245m[48;2;41;46;66m [1m[38;2;122;162;247margo-tui 0.5.0 @ 12c81bc[0m[38;2;192;202;245m[48;2;41;46;66m   [38;2;86;95;137mserver: [38;2;192;202;245msynthetic demo   [38;2;86;95;137mns: [38;2;192;202;245mdemo[39m                                                   [1m[38;2;26;27;38m[48;2;158;206;106m READ ONLY [0m[48;2;41;46;66m
+[38;2;65;72;104m[49m╭─[39m [1m[38;2;122;162;247mHelp[0m [38;2;65;72;104m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│[39m [1m[38;2;122;162;247mKEYS[0m                                       [38;2;86;95;137m? or esc to close[39m                                                             [38;2;65;72;104m│
+│[39m                                                                                                                          [38;2;65;72;104m│
+│[39m [38;2;122;162;247mGlobal[39m    q quit  ctrl+c quit  ? help  esc back / close  : command                                                       [38;2;65;72;104m│
+│[39m           P profile  f raw full screen  y copy  o open in Argo UI                                                        [38;2;65;72;104m│
+│[39m [38;2;122;162;247mMove[39m      j / k  pgup / pgdn  gg / home top  G / end bottom                                                              [38;2;65;72;104m│
+│[39m                                                                                                                          [38;2;65;72;104m│
+│[39m [38;2;122;162;247mList[39m      enter open  l logs  s sort  p phase  r refresh  n namespace                                                    [38;2;65;72;104m│
+│[39m           0 all ns  T / X / E open on the timeline / explanation / events                                                [38;2;65;72;104m│
+│[39m           space mark  a actions (marked, or selected)  w wide columns                                                    [38;2;65;72;104m│
+│[39m           esc clear marks, then filter                                                                                   [38;2;65;72;104m│
+│[39m           / filter: word  a|b  !word  /regex/  ~fuzzy  (spaces: AND)                                                     [38;2;65;72;104m│
+│[39m           phase=failed  age<2h  dur>10m  tmpl=x  cron=x  label:k=v  label:!k                                             [38;2;65;72;104m│
+│[39m [38;2;122;162;247mCommand[39m   : then a command; tab completes, enter runs, ctrl+p / n history                                                [38;2;65;72;104m│
+│[39m           wf  cron  tmpl  cwftmpl  aw  ns [name]  all  ctx [name]  help  q                                               [38;2;65;72;104m│
+│[39m [38;2;122;162;247mKinds[39m     :cron :tmpl :cwftmpl :aw take the list keys; enter lists runs                                                  [38;2;65;72;104m│
+│[39m           i info panel  v hide / reveal values  f manifest                                                               [38;2;65;72;104m│
+│[39m                                                                                                                          [38;2;65;72;104m│
+│[39m [38;2;122;162;247mDetail[39m    tab / shift+tab section  1-9 section  T / X / E jump  r refresh                                                [38;2;65;72;104m│
+│[39m           a actions  v hide / reveal values  y copy  f raw                                                               [38;2;65;72;104m│
+│[39m [38;2;122;162;247mNodes[39m     enter / l logs  space fold  left / right fold, parent, unfold                                                  [38;2;65;72;104m│
+│[39m           i info  / find  n / N next / previous  h skipped  s sort  p phase                                              [38;2;65;72;104m│
+│[39m [38;2;122;162;247mTimeline[39m  ◆ critical path  ░ waited  │ now  l logs  i info  space fold                                                   [38;2;65;72;104m│
+│[39m [38;2;122;162;247mExplain[39m   why it ended, as findings  y copy report  l failing log                                                        [38;2;65;72;104m│
+│[39m [38;2;122;162;247mEvents[39m    live Kubernetes events  s warnings first  / filter                                                             [38;2;65;72;104m│
+│[39m                                                                                                                          [38;2;65;72;104m│
+│[39m [38;2;122;162;247mLogs[39m      t follow  space pause  c container  G newest  esc back                                                         [38;2;65;72;104m│
+│[39m           / search  n / N next / previous match  & only matching lines                                                   [38;2;65;72;104m│
+│[39m           w wrap long lines  L source labels  | pipe to a program                                                        [38;2;65;72;104m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[38;2;122;162;247mhelp[39m                                                                                                               [1m[38;2;122;162;247mesc[0m[38;2;86;95;137m close
