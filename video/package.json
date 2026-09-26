@@ -1,0 +1,19 @@
+{
+  "name": "argo-tui-video",
+  "private": true,
+  "type": "module",
+  "description": "Motion graphic for the argo-tui 0.5 release. See PROGRESS.md.",
+  "scripts": {
+    "capture": "bash capture/capture.sh && node capture/ansi2json.mjs",
+    "screens": "node capture/ansi2json.mjs",
+    "render": "node render.mjs",
+    "all": "npm run capture && npm run render"
+  },
+  "devDependencies": {
+    "@fontsource/inter": "^5.1.1",
+    "@fontsource/jetbrains-mono": "^5.1.1",
+    "@fontsource/space-grotesk": "^5.1.1",
+    "ffmpeg-static": "^5.2.0",
+    "playwright": "1.56.1"
+  }
+}
