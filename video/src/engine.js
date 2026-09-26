@@ -44,7 +44,7 @@
     if (v.r) tr.push(`rotate(${v.r}deg)`);
     if (v.s !== undefined) tr.push(`scale(${v.s})`);
     if (v.sx !== undefined || v.sy !== undefined) tr.push(`scale(${v.sx ?? 1},${v.sy ?? 1})`);
-    n.style.transform = tr.join(' ');
+    if (tr.length) n.style.transform = tr.join(' ');
     if (v.o !== undefined) { n.style.opacity = v.o; n.style.visibility = v.o <= 0.001 ? 'hidden' : 'visible'; }
     if (v.blur !== undefined) n.style.filter = v.blur > 0.05 ? `blur(${v.blur}px)` : 'none';
     return n;
