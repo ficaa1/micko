@@ -111,10 +111,15 @@ const missing = scenes.filter((s) => !fs.existsSync(path.join(out, 'scenes', `${
 if (missing.length) { console.log(`not joined yet; missing: ${missing.map((s) => s.id).join(', ')}`); process.exit(0); }
 const list = path.join(out, 'concat.txt');
 fs.writeFileSync(list, scenes.map((s) => `file 'scenes/${s.id}.mp4'`).join('\n') + '\n');
+// Join losslessly into out/master.mp4 (with the soundtrack if it exists),
+// then encode the committed, smaller argo-tui-0.5.mp4 from it.
+const master = path.join(out, 'master.mp4');
 const final = path.join(dir, 'argo-tui-0.5.mp4');
 const audio = path.join(dir, 'audio', 'soundtrack.m4a');
 const joinArgs = ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list];
 if (fs.existsSync(audio)) joinArgs.push('-i', audio, '-map', '0:v', '-map', '1:a', '-shortest', '-c:a', 'copy');
-joinArgs.push('-c:v', 'copy', '-movflags', '+faststart', final);
+joinArgs.push('-c:v', 'copy', '-movflags', '+faststart', master);
 await run(joinArgs);
+await run(['-y', '-loglevel', 'error', '-i', master, '-c:v', 'libx264', '-preset', 'slow', '-crf', '22', '-tune', 'animation',
+  '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', final]);
 console.log('wrote', path.relative(dir, final), (fs.statSync(final).size / 1e6).toFixed(1) + ' MB');
