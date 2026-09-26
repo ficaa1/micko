@@ -23,7 +23,7 @@ source and the shared engine, so a re-run only redoes what changed.
 | 4 | timeline | 8 | Gantt timeline, critical path ◆, now line | written |
 | 5 | explain | 7.5 | Explain cards: why a run failed, offline | written |
 | 6 | nodes | 6.5 | pipeline tree, folds, info panel | written |
-| 7 | logs | 6 | per-step labels, level colours, events | todo |
+| 7 | logs | 6.5 | per-step labels, level colours, events | written |
 | 8 | palette | 6 | `:` command palette typing, cron list | todo |
 | 9 | filter | 5 | query language `phase=Failed age<3h` | todo |
 | 10 | skins | 7 | wall of 14 skins | todo |
