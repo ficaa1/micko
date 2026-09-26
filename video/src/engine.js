@@ -54,7 +54,12 @@
   // Split text into word spans for staggered reveals. Returns the spans.
   E.words = (parent, text, cls = '') => {
     parent.innerHTML = '';
-    return text.split(/(\s+)/).filter(Boolean).map((w) => E.el('span', 'w ' + cls, parent, E.esc(w)));
+    const out = [];
+    text.split('\n').forEach((line, i) => {
+      if (i) E.el('br', '', parent).style.position = 'static';
+      line.split(/( +)/).filter(Boolean).forEach((w) => out.push(E.el('span', 'w ' + cls, parent, E.esc(w))));
+    });
+    return out;
   };
   // Reveal word spans from time a, one every `gap` seconds.
   E.revealWords = (spans, t, a, gap = 0.06, d = 0.5) => spans.forEach((s, i) => {
@@ -87,6 +92,14 @@
   // ---- terminal ----------------------------------------------------------
   E.CW = 9; E.LH = 20; E.BAR = 38; E.PAD = 14;
   const htmlCache = {};
+  // Block elements drawn as cell backgrounds, so bars are gapless at any scale.
+  const lg = (dir, a, b) => `linear-gradient(${dir},${a},${b})`;
+  const cut = (dir, pct) => `linear-gradient(${dir},currentColor ${pct}%,transparent ${pct}%)`;
+  const BLOCKS = { '█': 'currentColor', '▀': cut('180deg', 50), '▄': cut('0deg', 50), '▐': cut('270deg', 50), '▕': cut('270deg', 12.5), '▔': cut('180deg', 12.5), '▁': cut('0deg', 12.5) };
+  ['▏', '▎', '▍', '▌', '▋', '▊', '▉'].forEach((ch, i) => (BLOCKS[ch] = cut('90deg', (i + 1) * 12.5)));
+  BLOCKS['░'] = lg('0deg', 'color-mix(in srgb,currentColor 28%,transparent)', 'color-mix(in srgb,currentColor 28%,transparent)');
+  BLOCKS['▒'] = lg('0deg', 'color-mix(in srgb,currentColor 50%,transparent)', 'color-mix(in srgb,currentColor 50%,transparent)');
+  BLOCKS['▓'] = lg('0deg', 'color-mix(in srgb,currentColor 75%,transparent)', 'color-mix(in srgb,currentColor 75%,transparent)');
   E.screenHTML = (name) => {
     if (htmlCache[name]) return htmlCache[name];
     const sc = window.SCREENS[name];
@@ -105,7 +118,8 @@
         for (const ch of text) {
           const c = ch.codePointAt(0);
           if (c < 128) inner += E.esc(ch);
-          else if (c >= 0x2500 && c <= 0x259f) inner += ch; // box drawing + blocks: in the font
+          else if (BLOCKS[ch]) inner += `<i class="${'░▒▓'.includes(ch) ? 'k s' : 'k'}" style="background:${BLOCKS[ch]}"></i>`;
+          else if (c >= 0x2500 && c <= 0x257f) inner += ch; // box drawing: in the font
           else inner += `<i>${ch}</i>`;
         }
         h += `<span${bg ? ' class="b"' : ''} style="${st}">${inner}</span>`;

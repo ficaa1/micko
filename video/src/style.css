@@ -45,6 +45,9 @@ body.preview { display: flex; flex-direction: column; align-items: center; backg
 #scene .term .r, #scene .term span, #scene .term i { position: static; }
 .term .r { display: block; height: 20px; }
 .term span.b { display: inline-block; height: 20px; vertical-align: top; }
+.term i.k { width: calc(1ch + 0.6px); margin-right: -0.6px; height: 20.6px; margin-bottom: -0.6px; vertical-align: top; }
+.term i.k.s { width: 1ch; margin-right: 0; height: 20px; margin-bottom: 0; }
+.g { font-family: JBM, monospace; }
 .term i { font-style: normal; display: inline-block; width: 1ch; text-align: center; overflow: visible; }
 
 /* Typography. */

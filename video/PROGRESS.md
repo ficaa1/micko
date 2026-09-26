@@ -18,8 +18,8 @@ source and the shared engine, so a re-run only redoes what changed.
 | # | id | seconds | content | status |
 |---|----|---------|---------|--------|
 | 1 | intro | 6 | typed `argo-tui --demo`, logo build, tagline | written |
-| 2 | release | 4 | big "0.5" reveal, "what's new" | todo |
-| 3 | list | 7 | real workflow list, phase glyphs, progress | todo |
+| 2 | release | 4.5 | big "0.5" reveal, "what's new" | written |
+| 3 | list | 7 | real workflow list, phase glyphs, progress | written |
 | 4 | timeline | 8 | Gantt timeline, critical path ◆, now line | todo |
 | 5 | explain | 7 | Explain cards: why a run failed, offline | todo |
 | 6 | nodes | 6 | pipeline tree, folds, info panel | todo |
