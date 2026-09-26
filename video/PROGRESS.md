@@ -38,7 +38,8 @@ source and the shared engine, so a re-run only redoes what changed.
 - [x] 4. Engine: `src/index.html`, `src/engine.js` (deterministic `renderAt(sceneId, t)`)
 - [x] 5. `render.mjs`: Playwright frames piped to ffmpeg per scene; `concat` to final mp4
 - [ ] 6. Scenes 1..12 (tick the table above as each renders cleanly)
-- [ ] 7. Final `argo-tui-0.5.mp4` encoded + committed (and a GIF preview?)
+- [ ] 7. Soundtrack: `node audio/soundtrack.mjs` (synthesized, timed from scene durations; render.mjs muxes it)
+- [ ] 8. Final `argo-tui-0.5.mp4` encoded + committed (and a GIF preview?)
 
 ## Notes / decisions
 
