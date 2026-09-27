@@ -13,7 +13,7 @@ Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
 resubmit or stop a run with explicit confirmation. It was called argo-tui
 until 0.5.0.
 
-It is named after Mićko, an eastern rosella, who is also its mascot. Turn him
+It is named after Mićko, my eastern rosella, who is also its mascot. Turn him
 on with `mascot: true` in the config file, `--mascot`, or `:mascot` at any
 time, and on a terminal of 80×40 or larger he perches on top of the pane, the
 way he rests his beak on a monitor. He is off by default: he costs the pane

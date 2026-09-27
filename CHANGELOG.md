@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- argo-tui is now micko, after Mićko the eastern rosella, so it is no longer
+- argo-tui is now micko, after Mićko, my eastern rosella, so it is no longer
   mistaken for a tool for Argo CD. The binary, the command in `cmd/micko`,
   the module path `github.com/ficaa1/micko`, the release archives
   (`micko_<version>_<os>_<arch>.tar.gz`), the Homebrew formula
@@ -12,7 +12,7 @@
   action journal to `~/.local/state/micko/actions.jsonl`; files under
   `argo-tui/` are no longer read, so move them there. The end-to-end gate
   reads `MICKO_E2E` and `MICKO_E2E_CONFIG`.
-- Mićko, an eastern rosella, is the mascot. He is off by default; turn him
+- Mićko, my eastern rosella, is the mascot. He is off by default; turn him
   on with `mascot: true` at the top of the config file, `--mascot`, or the
   `:mascot` command, which toggles him for the session. On a terminal of
   80×40 or larger he then perches on the pane's top border on every screen,
