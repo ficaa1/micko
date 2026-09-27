@@ -27,11 +27,12 @@ func TestFrameFillsTheWholeWindow(t *testing.T) {
 }
 
 // Pane geometry must not move between routes. A reader who presses enter
-// should find the footer and the border in the same rows. On a terminal
-// large enough for Micko's perch, he perches on every route.
+// should find the footer and the border in the same rows. With Micko on, on
+// a terminal large enough for his perch, he perches on every route.
 func TestPaneGeometryIsStableAcrossRoutes(t *testing.T) {
 	for _, h := range []int{24, 40} {
 		m := loadDemoList(t)
+		m.SetMicko(true)
 		m = resize(t, m, 100, h)
 		listRows := borderRows(viewLines(m))
 
@@ -136,5 +137,43 @@ func TestResizePropagatesToTheActivePane(t *testing.T) {
 	short := len(viewLines(m))
 	if tall != 40 || short != 12 {
 		t.Fatalf("resize not honoured: %d then %d", tall, short)
+	}
+}
+
+// Micko is off until asked for. `:micko` perches him and says so, a second
+// `:micko` sends him off, and on a terminal too small for him the notice
+// says why he does not show.
+func TestMickoCommandTogglesThePerch(t *testing.T) {
+	m, _ := demoRoot(t)
+	m = resize(t, m, 100, 40)
+	perched := func() bool { return strings.Contains(screen(m), "^v^v^v") }
+	if perched() {
+		t.Fatal("Micko perched before being turned on")
+	}
+	top := borderRows(viewLines(m))
+
+	runLine(m, "micko")
+	if !perched() {
+		t.Fatalf(":micko did not perch him:\n%s", screen(m))
+	}
+	if !strings.Contains(screen(m), "Micko is perched") {
+		t.Fatalf("no notice after :micko:\n%s", screen(m))
+	}
+	if borderRows(viewLines(m)) == top {
+		t.Fatal("the pane did not make room for him")
+	}
+
+	runLine(m, "micko")
+	if perched() || !strings.Contains(screen(m), "Micko flew off") {
+		t.Fatalf("second :micko did not send him off:\n%s", screen(m))
+	}
+	if got := borderRows(viewLines(m)); got != top {
+		t.Fatalf("border rows %q after he left, want %q", got, top)
+	}
+
+	m = resize(t, m, 100, 24)
+	runLine(m, "micko")
+	if perched() || !strings.Contains(screen(m), "80x40") {
+		t.Fatalf("small terminal: want no perch and a notice naming the size:\n%s", screen(m))
 	}
 }

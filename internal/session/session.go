@@ -47,6 +47,9 @@ type Options struct {
 	Debug                 bool
 	// Skin is the --skin flag, which outranks every skin in the file.
 	Skin string
+	// Micko is the --micko flag. It can only turn the mascot on; the
+	// file's micko key turns him on too.
+	Micko bool
 	// Skins is the set of valid skin names. Every skin the file names is
 	// checked against it when the file is read.
 	Skins []string
@@ -136,6 +139,10 @@ func (c *Connector) Skin() string {
 	}
 	return config.DefaultSkin
 }
+
+// Micko reports whether the mascot is turned on: the --micko flag, else the
+// config file's top-level micko key.
+func (c *Connector) Micko() bool { return c.opts.Micko || config.FileMicko(c.data) }
 
 // JournalEnabled reports whether the config file leaves the action journal
 // on (the top-level `journal` key).

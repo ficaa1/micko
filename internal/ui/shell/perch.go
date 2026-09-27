@@ -10,10 +10,11 @@ import (
 // it, and his feet and bowed head are drawn into the border line, so he is
 // resting his beak on the edge of the screen he is looking into.
 //
-// His rows are chrome like the header, so they belong to the frame, not to a
-// route. Whether he perches depends only on the terminal size, which keeps
-// the border and the footer in the same rows on every route: opening a
-// workflow never moves the pane. Where on the border he sits may change with
+// He is opt-in (Frame.Micko). His rows are chrome like the header, so they
+// belong to the frame, not to a route. Whether he perches depends only on
+// the setting and the terminal size, never on the route, which keeps the
+// border and the footer in the same rows on every route: opening a workflow
+// never moves the pane. Where on the border he sits may change with
 // the title and the count, because he never covers either.
 
 // perchMinWidth and perchMinHeight are the smallest terminal Micko perches
@@ -30,9 +31,15 @@ const (
 // put while the count changes.
 const perchRight = 30
 
-// perched reports whether this frame has room for Micko.
+// perched reports whether Micko is asked for and this frame has room for him.
 func (f Frame) perched() bool {
-	return f.bordered() && f.Width >= perchMinWidth && f.Height >= perchMinHeight
+	return f.Micko && f.bordered() && PerchFits(f.Width, f.Height)
+}
+
+// PerchFits reports whether a terminal of width by height has room for
+// Micko's perch.
+func PerchFits(width, height int) bool {
+	return width >= perchMinWidth && height >= perchMinHeight
 }
 
 // perchRows is the vertical cost of Micko: the rows above the border. His

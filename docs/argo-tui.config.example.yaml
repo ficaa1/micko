@@ -17,6 +17,10 @@ refreshInterval: 5s
 # A profile can set it too, overriding this line either way.
 # redactValues: true
 
+# Perch Micko, the mascot, on the pane on terminals of 80x40 and larger. He
+# costs three rows. --micko turns him on too, and :micko toggles him.
+# micko: true
+
 profiles:
   dev:
     # Omit these four fields to connect directly to server instead.

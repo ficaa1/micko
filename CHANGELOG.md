@@ -2,12 +2,15 @@
 
 ## Unreleased
 
-- Micko, a crimson rosella, is the mascot. On a terminal of 80×40 or larger
-  he perches on the pane's top border on every screen, so the pane starts
-  three rows lower there and stays put between screens. He takes his
-  colours from the skin and draws as plain text under `NO_COLOR`. The help
-  overlay drops three blank lines so it still fits whole on a perched 80×40
-  terminal, and is signed with Micko and the name when the pane has room.
+- Micko, a crimson rosella, is the mascot. He is off by default; turn him
+  on with `micko: true` at the top of the config file, `--micko`, or the
+  `:micko` command, which toggles him for the session. On a terminal of
+  80×40 or larger he then perches on the pane's top border on every screen,
+  so the pane starts three rows lower and stays put between screens. He
+  takes his colours from the skin and draws as plain text under
+  `NO_COLOR`. The help overlay drops three blank lines so it still fits
+  whole on a perched 80×40 terminal, and with Micko on it is signed with his
+  wordmark when the pane has room.
 
 ## 0.5.0
 

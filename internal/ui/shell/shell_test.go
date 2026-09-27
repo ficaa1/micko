@@ -142,9 +142,12 @@ func TestNarrowTerminalDropsTheBorder(t *testing.T) {
 // BodyHeight is the contract children size themselves against. If it
 // disagrees with Render the pane scrolls or leaves a gap.
 func TestBodyHeightMatchesWhatRenderAccepts(t *testing.T) {
-	for _, tc := range []struct{ w, h int }{{80, 12}, {48, 12}, {100, 6}, {80, 40}, {120, 50}} {
+	for _, tc := range []struct {
+		w, h  int
+		micko bool
+	}{{80, 12, false}, {48, 12, false}, {100, 6, false}, {80, 40, true}, {120, 50, true}, {120, 50, false}} {
 		f := base()
-		f.Width, f.Height = tc.w, tc.h
+		f.Width, f.Height, f.Micko = tc.w, tc.h, tc.micko
 		n := f.BodyHeight()
 		f.Body = make([]string, n)
 		for i := range f.Body {

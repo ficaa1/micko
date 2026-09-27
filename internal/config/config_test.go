@@ -438,6 +438,31 @@ func TestJournalIsOnUnlessTurnedOff(t *testing.T) {
 	}
 }
 
+// Micko is off unless the file turns him on. A missing file and a file that
+// does not parse leave him off, and the key must not trip profile loading.
+func TestMickoIsOffUnlessTurnedOn(t *testing.T) {
+	cases := []struct {
+		name string
+		data string
+		want bool
+	}{
+		{"no file", "", false},
+		{"key absent", "currentProfile: dev\n", false},
+		{"turned on", "micko: true\n", true},
+		{"turned off", "micko: false\n", false},
+		{"broken file", "micko: [\n", false},
+	}
+	for _, tc := range cases {
+		if got := FileMicko([]byte(tc.data)); got != tc.want {
+			t.Errorf("%s: FileMicko = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+	data := []byte("micko: true\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: ARGO_TUI_TOKEN_MICKO\n")
+	if _, err := Load(data, Options{}); err != nil {
+		t.Fatalf("Load with micko set: %v", err)
+	}
+}
+
 // The journal key is a top-level setting and must not trip profile loading.
 func TestJournalKeyLoadsAlongsideProfiles(t *testing.T) {
 	data := []byte("journal: false\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: ARGO_TUI_TOKEN_JOURNAL\n")

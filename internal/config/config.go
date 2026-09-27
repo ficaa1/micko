@@ -90,6 +90,19 @@ type File struct {
 	// workflow to see, and a cluster whose parameters carry secrets turns
 	// it on here or per profile.
 	RedactValues bool `yaml:"redactValues,omitempty"`
+	// Micko perches the mascot on the pane on terminals of 80x40 and
+	// larger. It is off unless set: he costs three rows.
+	Micko bool `yaml:"micko,omitempty"`
+}
+
+// FileMicko reports whether the config file turns the mascot on. A file
+// that is absent, or that does not parse, leaves him off.
+func FileMicko(cfgData []byte) bool {
+	var f File
+	if len(cfgData) == 0 || yaml.Unmarshal(cfgData, &f) != nil {
+		return false
+	}
+	return f.Micko
 }
 
 // JournalEnabled reports whether the config file leaves the action journal

@@ -50,6 +50,7 @@ func run(args []string) int {
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
 	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
+	micko := fs.Bool("micko", false, "perch Micko, the mascot, on the pane (terminals of 80x40 and larger)")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2
@@ -85,6 +86,7 @@ func run(args []string) int {
 		// The demo reads no config file, so the flag is its only skin.
 		_, _ = root.ApplySkin(demoSkin(*skin))
 		root.SetRedactValues(*redactValues)
+		root.SetMicko(*micko)
 	} else {
 		connector, err := session.NewConnector(session.Options{
 			ConfigPath:            *configPath,
@@ -98,6 +100,7 @@ func run(args []string) int {
 			Skin:                  *skin,
 			Skins:                 shared.SkinNames(),
 			RedactValues:          *redactValues,
+			Micko:                 *micko,
 			Diagnostics:           os.Stderr,
 		})
 		if err != nil {
@@ -117,6 +120,7 @@ func run(args []string) int {
 		}
 		root.SetConnector(connector)
 		root.SetProfiles(connector.ProfileList())
+		root.SetMicko(connector.Micko())
 		// The picker is drawn before any profile is chosen, so it takes the
 		// flag or the file's top-level skin. A profile's own skin arrives
 		// with its connection. The auto skin's background query is started

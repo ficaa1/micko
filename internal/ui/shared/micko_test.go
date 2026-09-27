@@ -67,18 +67,23 @@ func TestMickoRenderRowOnlyStyles(t *testing.T) {
 	}
 }
 
-// The wordmark signs the help overlay only when the whole of it fits below
-// the keys: never on the 80x40 body the keys are written for, never cut.
+// The wordmark signs the help overlay only with Micko turned on, and only
+// when the whole of it fits below the keys: never on the 80x40 body the keys
+// are written for, never cut.
 func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
 	var h HelpOverlay
 	h.Toggle()
+	room := len(helpLines()) + 1 + len(MickoWordmark.Lines)
+	if strings.Contains(h.View(100, room), "_ __ ___") {
+		t.Error("wordmark drawn with Micko off")
+	}
+	h.SetMicko(true)
 	if strings.Contains(h.View(helpFitWidth, helpFitHeight), "_ __ ___") {
 		t.Error("wordmark drawn on the 80x40 body, where the keys need the room")
 	}
 	if strings.Contains(h.View(0, 0), "_ __ ___") {
 		t.Error("wordmark drawn on an unsized overlay")
 	}
-	room := len(helpLines()) + 1 + len(MickoWordmark.Lines)
 	v := h.View(100, room)
 	for _, l := range MickoWordmark.Lines {
 		if !strings.Contains(v, l) {

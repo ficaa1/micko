@@ -102,6 +102,13 @@ func builtinCommands() []command {
 			run:  (*Root).runProfile,
 		},
 		{
+			Command: palette.Command{Name: "micko", Desc: "toggle Micko, the mascot"},
+			run: func(m *Root, _ string) tea.Cmd {
+				m.toggleMicko()
+				return nil
+			},
+		},
+		{
 			Command: palette.Command{Name: "help", Desc: "show every key"},
 			run: func(m *Root, _ string) tea.Cmd {
 				m.help.Open()

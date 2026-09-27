@@ -12,8 +12,10 @@ A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/wor
 Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
 resubmit or stop a run with explicit confirmation.
 
-Micko, a crimson rosella, is the mascot. On a terminal of 80×40 or larger he
-perches on top of the pane, the way he rests his beak on a monitor.
+Micko, a crimson rosella, is the mascot. Turn him on with `micko: true` in
+the config file, `--micko`, or `:micko` at any time, and on a terminal of
+80×40 or larger he perches on top of the pane, the way he rests his beak on a
+monitor. He is off by default: he costs the pane three rows.
 
 ![argo-tui browsing the demo dataset](docs/demo.gif)
 
@@ -281,6 +283,7 @@ runs a guess: a word that names no command is reported in the footer.
 | `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
 | `all` | Toggle the all-namespaces view |
 | `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
+| `micko` | Toggle Micko, the mascot |
 | `help` | Show every key |
 | `quit`, `q` | Quit |
 
@@ -528,6 +531,7 @@ spells out `READ ONLY` or `ACTIONS ENABLED`.
 | `--debug` | Emit sanitized lifecycle diagnostics |
 | `--skin NAME` | Colour skin, overriding the config file (see [Skins](#skins)) |
 | `--redact-values` | Open every workflow with parameter and output values hidden |
+| `--micko` | Perch Micko, the mascot, on the pane (terminals of 80×40 and larger) |
 | `--demo` | Run the offline, read-only demo |
 | `--version` | Print version and exit |
 

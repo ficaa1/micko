@@ -9,11 +9,29 @@ import (
 	"github.com/ficaa1/argo-tui/internal/ui/shared"
 )
 
-// perchedFrame is base() on a terminal large enough for Micko.
+// perchedFrame is base() with Micko on, on a terminal large enough for him.
 func perchedFrame() Frame {
 	f := base()
 	f.Width, f.Height = 80, 40
+	f.Micko = true
 	return f
+}
+
+// Micko is opt-in: a frame that does not ask for him keeps his rows as
+// content however large the terminal.
+func TestMickoIsOffUnlessAskedFor(t *testing.T) {
+	f := perchedFrame()
+	f.Micko = false
+	ls := lines(f.Render(plain()))
+	if top := topRow(t, ls); top != 1 {
+		t.Fatalf("top border on row %d, want 1", top)
+	}
+	if strings.Contains(strings.Join(ls, "\n"), "^v^v^v") {
+		t.Fatal("Micko drawn without being asked for")
+	}
+	if got, want := f.BodyHeight(), perchedFrame().BodyHeight()+len(shared.MickoPerch.Lines)-1; got != want {
+		t.Fatalf("BodyHeight() = %d without Micko, want %d", got, want)
+	}
 }
 
 // topRow is the index of the pane's top border.
@@ -61,7 +79,7 @@ func TestMickoPerchesOnTheBorder(t *testing.T) {
 // sits right above the border.
 func TestMickoStaysOffSmallTerminals(t *testing.T) {
 	for _, tc := range []struct{ w, h int }{{80, 39}, {79, 40}, {120, 24}} {
-		f := base()
+		f := perchedFrame()
 		f.Width, f.Height = tc.w, tc.h
 		ls := lines(f.Render(plain()))
 		if top := topRow(t, ls); top != 1 {

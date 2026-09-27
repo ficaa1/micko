@@ -1,6 +1,7 @@
 // Package shell composes the three bands every route shares: a context
-// header, a bordered content pane, and a key-hint footer. On a large enough
-// terminal Micko, the mascot, perches on the pane's top border (perch.go).
+// header, a bordered content pane, and a key-hint footer. When asked, and on
+// a large enough terminal, Micko the mascot perches on the pane's top border
+// (perch.go).
 //
 // The point of the package is stable geometry. The alternate screen has no
 // scrollback, so a frame that changes height between renders does not scroll
@@ -50,6 +51,10 @@ type Frame struct {
 	// ActionsEnabled draws the mode badge in the theme's armed style. The
 	// Mode words carry the meaning; the badge colour only repeats it.
 	ActionsEnabled bool
+
+	// Micko asks for the mascot to perch on the pane (perch.go). He only
+	// perches on a terminal with room for him.
+	Micko bool
 
 	// Pane.
 	Title      string   // left of the top border, e.g. "Workflows"

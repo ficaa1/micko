@@ -143,6 +143,9 @@ type Root struct {
 	// pipeCommand prefills the log pane's pipe editor.
 	pipeCommand string
 
+	// micko perches the mascot on the pane when the terminal has room.
+	micko bool
+
 	// redact is the profile's redactValues setting. The detail view is
 	// rebuilt on every namespace and profile switch, so the root holds it
 	// and hands it to each new one.
@@ -199,6 +202,27 @@ func (m *Root) SetWebURL(u string) { m.webURL = u }
 // SetPipeCommand records the command the log pipe editor prefills with. The
 // log pane is rebuilt on every open, so the root holds it.
 func (m *Root) SetPipeCommand(cmd string) { m.pipeCommand = cmd }
+
+// SetMicko turns the mascot on or off: his perch on the pane and his
+// wordmark in the help overlay.
+func (m *Root) SetMicko(on bool) {
+	m.micko = on
+	m.help.SetMicko(on)
+}
+
+// toggleMicko flips the mascot and says what happened, including when the
+// terminal is too small for him to show.
+func (m *Root) toggleMicko() {
+	m.SetMicko(!m.micko)
+	switch {
+	case !m.micko:
+		m.flash = "Micko flew off"
+	case shell.PerchFits(m.width, m.height):
+		m.flash = "Micko is perched"
+	default:
+		m.flash = "Micko is on; he perches on terminals of 80x40 and larger"
+	}
+}
 
 // SetRedactValues records whether workflows open with their parameter and
 // output values hidden, and applies it to the detail view now on screen.
@@ -853,6 +877,7 @@ func (m *Root) View() tea.View {
 		Mode:      m.modeLabel(),
 		// The badge colour repeats what the mode words say.
 		ActionsEnabled: m.actionsEnabled(),
+		Micko:          m.micko,
 	}
 
 	// An action modal is a dialog: it takes the pane so the route behind it
