@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - argo-tui is now micko, after Mićko, my eastern rosella, so it is no longer
   mistaken for a tool for Argo CD. The binary, the command in `cmd/micko`,
