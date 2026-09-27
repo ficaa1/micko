@@ -21,8 +21,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/ficaa1/argo-tui/internal/ui/detail"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/detail"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // Status is the list-level state, mirrored from the root's collection state.

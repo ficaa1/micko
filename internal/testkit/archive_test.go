@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // The archive pages by offset, filters by namespace and label, and answers

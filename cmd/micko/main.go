@@ -1,4 +1,4 @@
-// Command argo-tui is a keyboard-first TUI for Argo Workflows.
+// Command micko is a keyboard-first TUI for Argo Workflows.
 //
 // Mutations stay explicitly opt-in and confirmation-gated behind
 // --allow-actions; --demo remains offline and never performs writes.
@@ -14,14 +14,14 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/app"
-	"github.com/ficaa1/argo-tui/internal/buildinfo"
-	"github.com/ficaa1/argo-tui/internal/config"
-	"github.com/ficaa1/argo-tui/internal/journal"
-	"github.com/ficaa1/argo-tui/internal/session"
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/actions"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/app"
+	"github.com/ficaa1/micko/internal/buildinfo"
+	"github.com/ficaa1/micko/internal/config"
+	"github.com/ficaa1/micko/internal/journal"
+	"github.com/ficaa1/micko/internal/session"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/actions"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // mainVersion and mainCommit expose the build identity to the smoke test
@@ -34,7 +34,7 @@ func main() {
 }
 
 func run(args []string) int {
-	fs := flag.NewFlagSet("argo-tui", flag.ContinueOnError)
+	fs := flag.NewFlagSet("micko", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	demo := fs.Bool("demo", false, "run against the built-in synthetic demo dataset (no network, no writes)")
 	versionFlag := fs.Bool("version", false, "print version and exit")
@@ -50,24 +50,24 @@ func run(args []string) int {
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
 	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
-	micko := fs.Bool("micko", false, "perch Micko, the mascot, on the pane (terminals of 80x40 and larger)")
+	mascot := fs.Bool("mascot", false, "perch Micko, the mascot, on the pane (terminals of 80x40 and larger)")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2
 	}
 	if *versionFlag {
-		fmt.Printf("argo-tui %s (%s)\n", mainVersion, mainCommit)
+		fmt.Printf("micko %s (%s)\n", mainVersion, mainCommit)
 		return 0
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "argo-tui: unexpected argument %q\n", fs.Arg(0))
+		fmt.Fprintf(os.Stderr, "micko: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
 	// A misspelled skin is a usage error like a misspelled flag: it is
 	// reported before anything connects, with every name that would work.
 	if *skin != "" {
 		if err := shared.CheckSkin(*skin); err != nil {
-			fmt.Fprintln(os.Stderr, "argo-tui: --skin:", err)
+			fmt.Fprintln(os.Stderr, "micko: --skin:", err)
 			return 2
 		}
 	}
@@ -86,7 +86,7 @@ func run(args []string) int {
 		// The demo reads no config file, so the flag is its only skin.
 		_, _ = root.ApplySkin(demoSkin(*skin))
 		root.SetRedactValues(*redactValues)
-		root.SetMicko(*micko)
+		root.SetMascot(*mascot)
 	} else {
 		connector, err := session.NewConnector(session.Options{
 			ConfigPath:            *configPath,
@@ -100,11 +100,11 @@ func run(args []string) int {
 			Skin:                  *skin,
 			Skins:                 shared.SkinNames(),
 			RedactValues:          *redactValues,
-			Micko:                 *micko,
+			Mascot:                *mascot,
 			Diagnostics:           os.Stderr,
 		})
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "argo-tui:", err)
+			fmt.Fprintln(os.Stderr, "micko:", err)
 			return 1
 		}
 		// The connector owns the port-forward of whatever connection is live.
@@ -120,13 +120,13 @@ func run(args []string) int {
 		}
 		root.SetConnector(connector)
 		root.SetProfiles(connector.ProfileList())
-		root.SetMicko(connector.Micko())
+		root.SetMascot(connector.Mascot())
 		// The picker is drawn before any profile is chosen, so it takes the
 		// flag or the file's top-level skin. A profile's own skin arrives
 		// with its connection. The auto skin's background query is started
 		// by the root's Init, so the command returned here is not needed.
 		if _, err := root.ApplySkin(connector.Skin()); err != nil {
-			fmt.Fprintln(os.Stderr, "argo-tui:", err)
+			fmt.Fprintln(os.Stderr, "micko:", err)
 			return 1
 		}
 
@@ -137,7 +137,7 @@ func run(args []string) int {
 		if directConnect(*profile, *server) {
 			conn, err := connector.Connect(context.Background(), *profile)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "argo-tui:", err)
+				fmt.Fprintln(os.Stderr, "micko:", err)
 				return 1
 			}
 			root.Adopt(conn)
@@ -146,7 +146,7 @@ func run(args []string) int {
 	root.SetVersion(mainVersion + " @ " + mainCommit)
 
 	if _, err := tea.NewProgram(root).Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "argo-tui: %v\n", err)
+		fmt.Fprintf(os.Stderr, "micko: %v\n", err)
 		return 1
 	}
 	return 0

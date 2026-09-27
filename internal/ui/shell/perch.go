@@ -3,14 +3,14 @@ package shell
 import (
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // Micko perches on the pane's top border: his body sits in the rows above
 // it, and his feet and bowed head are drawn into the border line, so he is
 // resting his beak on the edge of the screen he is looking into.
 //
-// He is opt-in (Frame.Micko). His rows are chrome like the header, so they
+// He is opt-in (Frame.Mascot). His rows are chrome like the header, so they
 // belong to the frame, not to a route. Whether he perches depends only on
 // the setting and the terminal size, never on the route, which keeps the
 // border and the footer in the same rows on every route: opening a workflow
@@ -33,7 +33,7 @@ const perchRight = 30
 
 // perched reports whether Micko is asked for and this frame has room for him.
 func (f Frame) perched() bool {
-	return f.Micko && f.bordered() && PerchFits(f.Width, f.Height)
+	return f.Mascot && f.bordered() && PerchFits(f.Width, f.Height)
 }
 
 // PerchFits reports whether a terminal of width by height has room for

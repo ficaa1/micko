@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // FakeWatcher is an in-memory watcher for deterministic cursor, cancellation,

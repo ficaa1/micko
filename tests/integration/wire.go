@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // WireClientConfig configures the test wire client.
@@ -85,7 +85,7 @@ func (c *WireClient) List(ctx context.Context, q core.Query) (core.Page, error) 
 }
 
 // Get implements core.Reader over the pinned detail endpoint (§5), always
-// passing the UID (argo-tui policy: UID on every detail GET).
+// passing the UID (micko policy: UID on every detail GET).
 func (c *WireClient) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	u := c.url("/api/v1/workflows/" + url.PathEscape(ref.Namespace) + "/" + url.PathEscape(ref.Name))
 	if ref.UID != "" {

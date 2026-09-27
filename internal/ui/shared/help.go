@@ -18,16 +18,16 @@ import (
 type HelpOverlay struct {
 	open  bool
 	theme Theme
-	// micko signs the overlay with the mascot's wordmark when there is room.
-	micko bool
+	// mascot signs the overlay with the mascot's wordmark when there is room.
+	mascot bool
 }
 
 // SetTheme replaces the style set the overlay is drawn in. The zero theme
 // draws plain text.
 func (h *HelpOverlay) SetTheme(t Theme) { h.theme = t }
 
-// SetMicko turns the mascot's wordmark at the foot of the overlay on or off.
-func (h *HelpOverlay) SetMicko(on bool) { h.micko = on }
+// SetMascot turns the mascot's wordmark at the foot of the overlay on or off.
+func (h *HelpOverlay) SetMascot(on bool) { h.mascot = on }
 
 // IsOpen reports whether the overlay is currently shown.
 func (h *HelpOverlay) IsOpen() bool { return h.open }
@@ -163,7 +163,7 @@ func (h *HelpOverlay) View(width, height int) string {
 // overlay gets none, so unsized renders stay the key text alone.
 func (h *HelpOverlay) wordmark(width, room int) []string {
 	art := MickoWordmark
-	if !h.micko || width < art.Width() || room < len(art.Lines)+1 {
+	if !h.mascot || width < art.Width() || room < len(art.Lines)+1 {
 		return nil
 	}
 	out := []string{""}

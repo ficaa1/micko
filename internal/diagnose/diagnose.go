@@ -17,8 +17,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // Severity is how much a finding matters to someone asking why a workflow

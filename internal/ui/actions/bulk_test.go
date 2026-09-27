@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 func summary(name, phase string, suspended bool) core.Summary {

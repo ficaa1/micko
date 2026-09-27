@@ -77,7 +77,7 @@ func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
 	if strings.Contains(h.View(100, room), "_ __ ___") {
 		t.Error("wordmark drawn with Micko off")
 	}
-	h.SetMicko(true)
+	h.SetMascot(true)
 	if strings.Contains(h.View(helpFitWidth, helpFitHeight), "_ __ ___") {
 		t.Error("wordmark drawn on the 80x40 body, where the keys need the room")
 	}

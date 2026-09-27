@@ -6,14 +6,14 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // perchedFrame is base() with Micko on, on a terminal large enough for him.
 func perchedFrame() Frame {
 	f := base()
 	f.Width, f.Height = 80, 40
-	f.Micko = true
+	f.Mascot = true
 	return f
 }
 
@@ -21,7 +21,7 @@ func perchedFrame() Frame {
 // content however large the terminal.
 func TestMickoIsOffUnlessAskedFor(t *testing.T) {
 	f := perchedFrame()
-	f.Micko = false
+	f.Mascot = false
 	ls := lines(f.Render(plain()))
 	if top := topRow(t, ls); top != 1 {
 		t.Fatalf("top border on row %d, want 1", top)

@@ -7,8 +7,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // View renders the full list pane. Layout (plan §2):
@@ -259,14 +259,14 @@ const minUsableWidth = 60
 // resizeNotice renders the <60-col notice while preserving quit/help (UI-01).
 func (m *Model) resizeNotice() string {
 	var b strings.Builder
-	b.WriteString("argo-tui: terminal too small (" + itoa(m.width) + "x" + itoa(m.height) + ")\n")
+	b.WriteString("micko: terminal too small (" + itoa(m.width) + "x" + itoa(m.height) + ")\n")
 	b.WriteString("Resize to at least 60 columns to show the workflow list.\n")
 	b.WriteString("q quit  ? help  ctrl+c quit\n")
 	return b.String()
 }
 
 func (m *Model) headerView() string {
-	title := "argo-tui"
+	title := "micko"
 	if m.total > 0 || m.status != StatusLoading {
 		// namespace is owned by the root; the list title carries state only.
 		title = "WORKFLOWS"

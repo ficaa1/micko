@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // treeFixture assembles a node map the way the controller writes it:

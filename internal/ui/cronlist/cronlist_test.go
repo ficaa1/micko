@@ -7,9 +7,9 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/kindlist"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // now is a Tuesday, 12:00 UTC.

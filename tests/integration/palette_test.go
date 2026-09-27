@@ -33,7 +33,7 @@ func TestPTYPaletteRunsCommands(t *testing.T) {
 	if err := p.SendKeys(50*time.Millisecond, ":", "q"); err != nil {
 		t.Fatal(err)
 	}
-	if !waitScreen(p, 5*time.Second, func(s string) bool { return strings.Contains(s, "leave argo-tui") }) {
+	if !waitScreen(p, 5*time.Second, func(s string) bool { return strings.Contains(s, "leave micko") }) {
 		t.Fatalf("the palette did not suggest quit for q; screen=%q", p.Screen())
 	}
 	if err := p.SendKeys(50*time.Millisecond, "\x1b"); err != nil {

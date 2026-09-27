@@ -7,9 +7,9 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/diagnose"
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/diagnose"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // explainModel is the Explain section of one demo workflow in the plain

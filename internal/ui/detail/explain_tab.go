@@ -6,8 +6,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/diagnose"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/diagnose"
 )
 
 // explain_tab.go is the Explain section's state: the report, the log

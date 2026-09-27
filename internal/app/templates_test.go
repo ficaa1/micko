@@ -7,8 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // templateRoot is a demo root with the workflow list loaded, the reads

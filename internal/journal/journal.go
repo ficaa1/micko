@@ -71,19 +71,37 @@ func (j *Journal) Path() string {
 	return j.path
 }
 
-// DefaultPath is $XDG_STATE_HOME/argo-tui/actions.jsonl, or
-// ~/.local/state/argo-tui/actions.jsonl when XDG_STATE_HOME is unset. The
+// DefaultPath is $XDG_STATE_HOME/micko/actions.jsonl, or
+// ~/.local/state/micko/actions.jsonl when XDG_STATE_HOME is unset. The
 // XDG spec defines the state directory as the place for exactly this kind
 // of history: kept across runs, not configuration, not cache.
+//
+// A journal kept under argo-tui/, the tool's former name, goes on being
+// appended to while no micko/ journal exists, so the record of writes is
+// not split in two by the rename.
 func DefaultPath() (string, error) {
+	var state string
 	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" && filepath.IsAbs(dir) {
-		return filepath.Join(dir, "argo-tui", "actions.jsonl"), nil
+		state = dir
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return "", errors.New("no state directory: XDG_STATE_HOME and the home directory are both unset")
+		}
+		state = filepath.Join(home, ".local", "state")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return "", errors.New("no state directory: XDG_STATE_HOME and the home directory are both unset")
+	path := filepath.Join(state, "micko", "actions.jsonl")
+	legacy := filepath.Join(state, "argo-tui", "actions.jsonl")
+	if !exists(path) && exists(legacy) {
+		return legacy, nil
 	}
-	return filepath.Join(home, ".local", "state", "argo-tui", "actions.jsonl"), nil
+	return path, nil
+}
+
+// exists reports whether path names a regular file.
+func exists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.Mode().IsRegular()
 }
 
 // Record appends e as one line. It is safe for concurrent use; each line is

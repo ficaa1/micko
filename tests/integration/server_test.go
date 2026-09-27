@@ -15,8 +15,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/app"
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/app"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 const testNS = "synthetic-ns"
@@ -134,7 +134,7 @@ func isTickMsg(msg tea.Msg) bool {
 	}
 	typ := reflect.TypeOf(msg)
 	return typ.Kind() == reflect.Struct && typ.NumField() == 0 &&
-		typ.Name() == "tickMsg" && typ.PkgPath() == "github.com/ficaa1/argo-tui/internal/app"
+		typ.Name() == "tickMsg" && typ.PkgPath() == "github.com/ficaa1/micko/internal/app"
 }
 
 // settle stops the poll cycle and drains the queue so the model rests at

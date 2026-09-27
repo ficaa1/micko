@@ -8,10 +8,10 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/journal"
-	"github.com/ficaa1/argo-tui/internal/ui/actions"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/journal"
+	"github.com/ficaa1/micko/internal/ui/actions"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 type actionResultMsg struct {

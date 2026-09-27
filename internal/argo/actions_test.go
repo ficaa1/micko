@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // recordedRequest is what a test server saw of one action request.

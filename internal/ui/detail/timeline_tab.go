@@ -3,7 +3,7 @@ package detail
 import (
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // timeline_tab.go is the Timeline section's state: its cursor, its keys, and

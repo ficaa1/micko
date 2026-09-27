@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // FixtureEpoch re-exports the shared synthetic epoch.

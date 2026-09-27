@@ -38,9 +38,9 @@ jobs:
         with:
           go-version: "${{ env.GO_VERSION }}"
 
-      # The tape runs ./dist/argo-tui, which is what `make build` produces.
+      # The tape runs ./dist/micko, which is what `make build` produces.
       - name: Build
-        run: go build -o dist/argo-tui ./cmd/argo-tui
+        run: go build -o dist/micko ./cmd/micko
 
       # The toolchain is installed by hand rather than through vhs-action,
       # because that action fetches the newest ffmpeg. vhs 0.12.0 writes no
@@ -61,7 +61,7 @@ jobs:
           ttyd --version
           # The released binary, not `go install`: vhs 0.12.0 needs a newer Go
           # than the one this repository builds with, and the version of Go
-          # that compiles the recorder has nothing to do with argo-tui.
+          # that compiles the recorder has nothing to do with micko.
           curl -fsSL -o /tmp/vhs.tar.gz \
             https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/vhs_${VHS_VERSION}_Linux_x86_64.tar.gz
           tar -xzf /tmp/vhs.tar.gz -C /tmp

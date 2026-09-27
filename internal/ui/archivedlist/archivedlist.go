@@ -12,9 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/kindlist"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // OpenMsg asks the root to open an archived workflow in the detail route,

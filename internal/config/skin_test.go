@@ -16,11 +16,11 @@ profiles:
   dev:
     server: https://dev.example.test/argo
     namespace: workflows
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
   prod:
     server: https://prod.example.test/argo
     namespace: prod-wf
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
     skin: dracula
 `
 

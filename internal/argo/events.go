@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // events.go streams Kubernetes events through the Argo server:

@@ -7,8 +7,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // events.go streams the Kubernetes events of the workflow on screen into the

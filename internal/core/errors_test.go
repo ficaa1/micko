@@ -39,7 +39,7 @@ func TestAPIErrorMessageSanitized(t *testing.T) {
 	// must not append wrapped causes (which could smuggle secrets in).
 	e := WrapAPIError(ErrUnauthenticated, 401, "get /api/v1/workflows/ns1/w1: unauthorized", nil)
 	got := e.Error()
-	for _, bad := range []string{"ARGO_TUI_TOKEN", "secret-value"} {
+	for _, bad := range []string{"MICKO_TOKEN", "secret-value"} {
 		if contains(got, bad) {
 			t.Fatalf("APIError.Error() contains %q: %q", bad, got)
 		}

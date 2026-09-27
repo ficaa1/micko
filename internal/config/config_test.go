@@ -15,7 +15,7 @@ profiles:
   dev:
     server: https://argo.example.test/argo
     namespace: workflows
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 `
 
 const yamlTwoProfiles = `
@@ -47,7 +47,7 @@ func TestPrecedenceCLIOverProfileOverDefault(t *testing.T) {
 	if cfg.RefreshInterval != DefaultRefreshInterval {
 		t.Errorf("refresh default = %v, want %v", cfg.RefreshInterval, DefaultRefreshInterval)
 	}
-	if cfg.TokenEnv != "ARGO_TUI_TOKEN" {
+	if cfg.TokenEnv != "MICKO_TOKEN" {
 		t.Errorf("tokenEnv from profile = %q", cfg.TokenEnv)
 	}
 	if cfg.ProfileName != "dev" {
@@ -91,7 +91,7 @@ currentProfile: dev
 profiles:
   dev:
     server: https://argo.example.test
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 `
 	_, err := Load([]byte(y), Options{})
 	if err == nil || !strings.Contains(err.Error(), "namespace missing") {
@@ -105,7 +105,7 @@ currentProfile: dev
 profiles:
   dev:
     namespace: workflows
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 `
 	_, err := Load([]byte(y), Options{})
 	if err == nil || !strings.Contains(err.Error(), "endpoint missing") {
@@ -120,7 +120,7 @@ profiles:
   dev:
     server: https://argo.example.test
     namespace: workflows
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
     tokenFile: /run/secrets/token
 `
 	_, err := Load([]byte(y), Options{})
@@ -155,7 +155,7 @@ func TestURLValidation(t *testing.T) {
 		{"ipv6 loopback http allowed", "http://[::1]:2746", ""},
 	}
 	for _, c := range cases {
-		y := "currentProfile: dev\nprofiles:\n  dev:\n    server: \"" + c.server + "\"\n    namespace: workflows\n    tokenEnv: ARGO_TUI_TOKEN\n"
+		y := "currentProfile: dev\nprofiles:\n  dev:\n    server: \"" + c.server + "\"\n    namespace: workflows\n    tokenEnv: MICKO_TOKEN\n"
 		_, err := Load([]byte(y), Options{})
 		if c.want == "" {
 			if err != nil {
@@ -176,7 +176,7 @@ profiles:
   dev:
     server: https://argo.example.test
     namespace: workflows
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 `
 	cases := []struct {
 		name    string
@@ -256,7 +256,7 @@ profiles:
   dev:
     server: https://user:hunter2@argo.example.test
     namespace: workflows
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 `
 	_, err := Load([]byte(y), Options{})
 	if err == nil {
@@ -280,7 +280,7 @@ profiles:
     remotePort: 2746
     server: http://127.0.0.1:2746
     namespace: nightly-backup-tst
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 `)
 	cfg, err := Load(data, Options{})
 	if err != nil {
@@ -305,7 +305,7 @@ profiles:
     remotePort: 2746
     server: http://127.0.0.1:2746
     namespace: argo
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 `)
 	cfg, err := Load(data, Options{})
 	if err != nil {
@@ -323,7 +323,7 @@ func TestDefaultConfigPathFindsAnExistingFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", "")
-	want := filepath.Join(home, ".config", "argo-tui", "config.yaml")
+	want := filepath.Join(home, ".config", "micko", "config.yaml")
 	if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -339,6 +339,37 @@ func TestDefaultConfigPathFindsAnExistingFile(t *testing.T) {
 	}
 }
 
+// A config file written under argo-tui/, the tool's former name, is still
+// found. A micko/ file beats it wherever the two live.
+func TestDefaultConfigPathFindsALegacyFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	legacy := filepath.Join(home, ".config", "argo-tui", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("currentProfile: p\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := DefaultConfigPath(); err != nil || got != legacy {
+		t.Fatalf("DefaultConfigPath = %q, %v; want the legacy %q", got, err, legacy)
+	}
+
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	current := filepath.Join(xdg, "micko", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte("currentProfile: p\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := DefaultConfigPath(); err != nil || got != current {
+		t.Fatalf("DefaultConfigPath = %q, %v; want the micko file %q", got, err, current)
+	}
+}
+
 // XDG_CONFIG_HOME wins when it is set.
 func TestDefaultConfigPathPrefersXDG(t *testing.T) {
 	home := t.TempDir()
@@ -349,7 +380,7 @@ func TestDefaultConfigPathPrefersXDG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(xdg, "argo-tui", "config.yaml"); got != want {
+	if want := filepath.Join(xdg, "micko", "config.yaml"); got != want {
 		t.Fatalf("DefaultConfigPath = %q, want %q", got, want)
 	}
 }
@@ -448,24 +479,24 @@ func TestMickoIsOffUnlessTurnedOn(t *testing.T) {
 	}{
 		{"no file", "", false},
 		{"key absent", "currentProfile: dev\n", false},
-		{"turned on", "micko: true\n", true},
-		{"turned off", "micko: false\n", false},
-		{"broken file", "micko: [\n", false},
+		{"turned on", "mascot: true\n", true},
+		{"turned off", "mascot: false\n", false},
+		{"broken file", "mascot: [\n", false},
 	}
 	for _, tc := range cases {
-		if got := FileMicko([]byte(tc.data)); got != tc.want {
-			t.Errorf("%s: FileMicko = %v, want %v", tc.name, got, tc.want)
+		if got := FileMascot([]byte(tc.data)); got != tc.want {
+			t.Errorf("%s: FileMascot = %v, want %v", tc.name, got, tc.want)
 		}
 	}
-	data := []byte("micko: true\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: ARGO_TUI_TOKEN_MICKO\n")
+	data := []byte("mascot: true\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: MICKO_TOKEN_MASCOT\n")
 	if _, err := Load(data, Options{}); err != nil {
-		t.Fatalf("Load with micko set: %v", err)
+		t.Fatalf("Load with mascot set: %v", err)
 	}
 }
 
 // The journal key is a top-level setting and must not trip profile loading.
 func TestJournalKeyLoadsAlongsideProfiles(t *testing.T) {
-	data := []byte("journal: false\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: ARGO_TUI_TOKEN_JOURNAL\n")
+	data := []byte("journal: false\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: MICKO_TOKEN_JOURNAL\n")
 	if _, err := Load(data, Options{}); err != nil {
 		t.Fatalf("Load: %v", err)
 	}

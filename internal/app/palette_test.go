@@ -9,9 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/palette"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/palette"
 )
 
 // demoRoot is a root on the demo dataset with the "demo" namespace's list

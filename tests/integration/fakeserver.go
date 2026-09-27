@@ -334,7 +334,7 @@ func (fs *FixtureServer) routeWorkflows(w http.ResponseWriter, r *http.Request) 
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/workflows/")
 	if path == "" {
-		// /api/v1/workflows without a namespace — argo-tui never scans all
+		// /api/v1/workflows without a namespace — micko never scans all
 		// namespaces (plan §3); the fixture rejects it.
 		writeUnaryError(w, http.StatusNotFound, grpcNotFound, "namespace required")
 		return
@@ -468,7 +468,7 @@ func (fs *FixtureServer) handleList(w http.ResponseWriter, r *http.Request, ns s
 	})
 }
 
-// selectorMatches implements the exact-match selector form argo-tui v0.1
+// selectorMatches implements the exact-match selector form micko v0.1
 // sends (`key=value`, comma-joined pairs are ANDed).
 func selectorMatches(selector string, labels map[string]string) bool {
 	if selector == "" {

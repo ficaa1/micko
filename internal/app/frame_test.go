@@ -32,7 +32,7 @@ func TestFrameFillsTheWholeWindow(t *testing.T) {
 func TestPaneGeometryIsStableAcrossRoutes(t *testing.T) {
 	for _, h := range []int{24, 40} {
 		m := loadDemoList(t)
-		m.SetMicko(true)
+		m.SetMascot(true)
 		m = resize(t, m, 100, h)
 		listRows := borderRows(viewLines(m))
 
@@ -140,8 +140,8 @@ func TestResizePropagatesToTheActivePane(t *testing.T) {
 	}
 }
 
-// Micko is off until asked for. `:micko` perches him and says so, a second
-// `:micko` sends him off, and on a terminal too small for him the notice
+// Micko is off until asked for. `:mascot` perches him and says so, a second
+// `:mascot` sends him off, and on a terminal too small for him the notice
 // says why he does not show.
 func TestMickoCommandTogglesThePerch(t *testing.T) {
 	m, _ := demoRoot(t)
@@ -152,27 +152,27 @@ func TestMickoCommandTogglesThePerch(t *testing.T) {
 	}
 	top := borderRows(viewLines(m))
 
-	runLine(m, "micko")
+	runLine(m, "mascot")
 	if !perched() {
-		t.Fatalf(":micko did not perch him:\n%s", screen(m))
+		t.Fatalf(":mascot did not perch him:\n%s", screen(m))
 	}
 	if !strings.Contains(screen(m), "Micko is perched") {
-		t.Fatalf("no notice after :micko:\n%s", screen(m))
+		t.Fatalf("no notice after :mascot:\n%s", screen(m))
 	}
 	if borderRows(viewLines(m)) == top {
 		t.Fatal("the pane did not make room for him")
 	}
 
-	runLine(m, "micko")
+	runLine(m, "mascot")
 	if perched() || !strings.Contains(screen(m), "Micko flew off") {
-		t.Fatalf("second :micko did not send him off:\n%s", screen(m))
+		t.Fatalf("second :mascot did not send him off:\n%s", screen(m))
 	}
 	if got := borderRows(viewLines(m)); got != top {
 		t.Fatalf("border rows %q after he left, want %q", got, top)
 	}
 
 	m = resize(t, m, 100, 24)
-	runLine(m, "micko")
+	runLine(m, "mascot")
 	if perched() || !strings.Contains(screen(m), "80x40") {
 		t.Fatalf("small terminal: want no perch and a notice naming the size:\n%s", screen(m))
 	}

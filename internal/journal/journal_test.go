@@ -13,7 +13,7 @@ import (
 // Each record is one JSON line with every field of the format, appended in
 // order.
 func TestRecordAppendsOneJSONLinePerEntry(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state", "argo-tui", "actions.jsonl")
+	path := filepath.Join(t.TempDir(), "state", "micko", "actions.jsonl")
 	j := New(path)
 	at := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
 	first := Entry{Time: at, Profile: "dev", Server: "https://argo.test", Namespace: "ns", Name: "wf-a", UID: "uid-a", Verb: "retry", Outcome: "confirmed"}
@@ -107,7 +107,7 @@ func TestDefaultPathFollowsXDGStateHome(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
 	got, err := DefaultPath()
-	if err != nil || got != filepath.Join(state, "argo-tui", "actions.jsonl") {
+	if err != nil || got != filepath.Join(state, "micko", "actions.jsonl") {
 		t.Fatalf("path = %q, err = %v", got, err)
 	}
 
@@ -115,14 +115,42 @@ func TestDefaultPathFollowsXDGStateHome(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("HOME", home)
 	got, err = DefaultPath()
-	if err != nil || got != filepath.Join(home, ".local", "state", "argo-tui", "actions.jsonl") {
+	if err != nil || got != filepath.Join(home, ".local", "state", "micko", "actions.jsonl") {
 		t.Fatalf("fallback path = %q, err = %v", got, err)
 	}
 
 	// The XDG spec says a relative value is invalid and must be ignored.
 	t.Setenv("XDG_STATE_HOME", "relative/state")
 	got, _ = DefaultPath()
-	if got != filepath.Join(home, ".local", "state", "argo-tui", "actions.jsonl") {
+	if got != filepath.Join(home, ".local", "state", "micko", "actions.jsonl") {
 		t.Fatalf("relative XDG_STATE_HOME was used: %q", got)
+	}
+}
+
+// A journal kept under the tool's former name is appended to until a micko
+// journal exists, so the rename does not split the record of writes.
+func TestDefaultPathKeepsALegacyJournal(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	legacy := filepath.Join(state, "argo-tui", "actions.jsonl")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := DefaultPath(); err != nil || got != legacy {
+		t.Fatalf("path = %q, err = %v; want the legacy journal %q", got, err, legacy)
+	}
+
+	current := filepath.Join(state, "micko", "actions.jsonl")
+	if err := os.MkdirAll(filepath.Dir(current), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := DefaultPath(); err != nil || got != current {
+		t.Fatalf("path = %q, err = %v; want the micko journal %q once it exists", got, err, current)
 	}
 }

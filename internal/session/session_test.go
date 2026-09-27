@@ -94,7 +94,7 @@ func TestConnectRejectsAProfileThatIsNotConfigured(t *testing.T) {
 // connection then has no transport lifecycle to report.
 func TestAProfileWithNoForwardConnectsDirectly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	body := "profiles:\n  dev:\n    server: https://argo.example.com\n    namespace: argo\n    tokenEnv: ARGO_TUI_TEST_TOKEN\n"
+	body := "profiles:\n  dev:\n    server: https://argo.example.com\n    namespace: argo\n    tokenEnv: MICKO_TEST_TOKEN\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}

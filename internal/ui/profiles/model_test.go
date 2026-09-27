@@ -6,12 +6,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 func testModel(items ...Item) *Model {
 	m := New(shared.NewTheme(true))
-	m.SetItems(items, "/home/x/.config/argo-tui/config.yaml")
+	m.SetItems(items, "/home/x/.config/micko/config.yaml")
 	return m
 }
 
@@ -93,12 +93,12 @@ func TestFilterNarrowsAndKeepsTheCurrentMark(t *testing.T) {
 // empty box would look like a broken program rather than a missing file.
 func TestEmptyStateNamesThePathAndASampleFile(t *testing.T) {
 	m := New(shared.NewTheme(true))
-	m.SetItems(nil, "/home/x/.config/argo-tui/config.yaml")
+	m.SetItems(nil, "/home/x/.config/micko/config.yaml")
 	m.Open("", "")
 	got := body(m)
 	for _, want := range []string{
 		"no profiles configured",
-		"/home/x/.config/argo-tui/config.yaml",
+		"/home/x/.config/micko/config.yaml",
 		"profiles:",
 		"tokenEnv: ARGO_TOKEN",
 		"--demo",

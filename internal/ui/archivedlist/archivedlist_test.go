@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/kindlist"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 var now = time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // The profile's redactValues setting reaches the detail view on screen and

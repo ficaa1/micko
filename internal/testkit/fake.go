@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // FakeClock is a controllable time source for deterministic tests. Zero

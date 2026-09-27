@@ -6,7 +6,7 @@ package testkit
 import (
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // FixtureEpoch is a fixed reference time so every fixture is deterministic.

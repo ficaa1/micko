@@ -24,7 +24,7 @@ env:
 
 jobs:
   check:
-    # argo-tui is a terminal program, and the two terminals it has to work in
+    # micko is a terminal program, and the two terminals it has to work in
     # are Linux and macOS. Building only on Linux left every macOS-specific
     # path — the config directory, the PTY, the clipboard write — untested
     # until someone ran the binary.
@@ -64,16 +64,16 @@ jobs:
         run: go test -tags=integration ./tests/integration/... -count=1
 
       - name: build
-        run: go build -o dist/argo-tui ./cmd/argo-tui
+        run: go build -o dist/micko ./cmd/micko
 
       # Starting with no arguments opens the profile picker, which needs a
       # terminal. This runner has none, so the smoke check is the path that
       # refuses before anything starts: a profile no config file names.
       - name: smoke
         run: |
-          ./dist/argo-tui --version
+          ./dist/micko --version
           set +e
-          ./dist/argo-tui --config /dev/null --profile no-such-profile >/dev/null 2>&1
+          ./dist/micko --config /dev/null --profile no-such-profile >/dev/null 2>&1
           status=$?
           set -e
           if [ "$status" -ne 1 ]; then
@@ -112,5 +112,5 @@ jobs:
             exit 0
           fi
           echo "$E2E_CONFIG_B64" | base64 -d > e2e-config.yaml
-          ARGO_TUI_E2E=1 ARGO_TUI_E2E_CONFIG=./e2e-config.yaml \
+          MICKO_E2E=1 MICKO_E2E_CONFIG=./e2e-config.yaml \
             go test -tags=e2e ./tests/e2e/... -count=1 -v

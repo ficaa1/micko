@@ -3,10 +3,10 @@ package diagnose_test
 import (
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/diagnose"
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/detail"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/diagnose"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/detail"
 )
 
 // wfBuilder builds a synthetic DAG workflow named "wf" in the controller's

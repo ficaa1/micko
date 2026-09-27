@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // demoSummaries is the demo namespace's list, as the demo serves it, with the

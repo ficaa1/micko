@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // Payloads below follow io.k8s.api.core.v1.Event as the Argo server's

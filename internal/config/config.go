@@ -1,4 +1,4 @@
-// Package config loads and validates argo-tui connection configuration
+// Package config loads and validates micko connection configuration
 // (plan §3 "Connection and authentication contract").
 //
 // Precedence: explicit CLI flag > selected profile value > config default;
@@ -53,7 +53,7 @@ type Profile struct {
 	Namespaces       []string `yaml:"namespaces,omitempty"`
 	// WebURL is the browser address of this cluster's Argo UI, for example
 	// "https://argo.example.com". It is used only to build a link to open or
-	// copy; argo-tui never sends a request to it. Leave it out and the open
+	// copy; micko never sends a request to it. Leave it out and the open
 	// key says the profile has no web address instead of guessing one, since
 	// the forwarded loopback port is not reachable from a browser session
 	// that outlives the program.
@@ -90,19 +90,19 @@ type File struct {
 	// workflow to see, and a cluster whose parameters carry secrets turns
 	// it on here or per profile.
 	RedactValues bool `yaml:"redactValues,omitempty"`
-	// Micko perches the mascot on the pane on terminals of 80x40 and
+	// Mascot perches Micko, the mascot, on the pane on terminals of 80x40 and
 	// larger. It is off unless set: he costs three rows.
-	Micko bool `yaml:"micko,omitempty"`
+	Mascot bool `yaml:"mascot,omitempty"`
 }
 
-// FileMicko reports whether the config file turns the mascot on. A file
+// FileMascot reports whether the config file turns the mascot on. A file
 // that is absent, or that does not parse, leaves him off.
-func FileMicko(cfgData []byte) bool {
+func FileMascot(cfgData []byte) bool {
 	var f File
 	if len(cfgData) == 0 || yaml.Unmarshal(cfgData, &f) != nil {
 		return false
 	}
-	return f.Micko
+	return f.Mascot
 }
 
 // JournalEnabled reports whether the config file leaves the action journal
@@ -466,27 +466,42 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
+// appDir is the directory name the config file lives under.
+const appDir = "micko"
+
+// legacyAppDir is the directory name the tool used before it was named
+// micko. A file there is still found, so a config written for the old name
+// keeps working until it is moved.
+const legacyAppDir = "argo-tui"
+
 // DefaultConfigPath resolves the configuration file location. It returns the
 // first candidate that exists, so an existing file is always found:
 //
-//  1. $XDG_CONFIG_HOME/argo-tui/config.yaml, when that variable is set
-//  2. ~/.config/argo-tui/config.yaml, the conventional location on every
+//  1. $XDG_CONFIG_HOME/micko/config.yaml, when that variable is set
+//  2. ~/.config/micko/config.yaml, the conventional location on every
 //     platform and the one this tool documents
-//  3. os.UserConfigDir()/argo-tui/config.yaml, which on macOS is
+//  3. os.UserConfigDir()/micko/config.yaml, which on macOS is
 //     ~/Library/Application Support
+//  4. the same three places under argo-tui/, the tool's former name
 //
 // When none exists it returns the first candidate, which is where a new file
 // should be written.
 func DefaultConfigPath() (string, error) {
-	var candidates []string
+	var bases []string
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		candidates = append(candidates, filepath.Join(xdg, "argo-tui", "config.yaml"))
+		bases = append(bases, xdg)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".config", "argo-tui", "config.yaml"))
+		bases = append(bases, filepath.Join(home, ".config"))
 	}
 	if dir, err := os.UserConfigDir(); err == nil {
-		candidates = append(candidates, filepath.Join(dir, "argo-tui", "config.yaml"))
+		bases = append(bases, dir)
+	}
+	var candidates []string
+	for _, name := range []string{appDir, legacyAppDir} {
+		for _, b := range bases {
+			candidates = append(candidates, filepath.Join(b, name, "config.yaml"))
+		}
 	}
 	if len(candidates) == 0 {
 		return "", fmt.Errorf("config: resolve user config dir: no home or config directory")

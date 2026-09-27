@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/diagnose"
+	"github.com/ficaa1/micko/internal/diagnose"
 )
 
 // picked renders picked lines as "N>text" for a match and "N text" for

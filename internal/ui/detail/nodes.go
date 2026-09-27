@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // OutlineRow is one node row in the hierarchical outline.

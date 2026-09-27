@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // Only the header timeout was bounded, so a server that flushed headers and

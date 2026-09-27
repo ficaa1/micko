@@ -27,8 +27,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // Phase is the stream lifecycle surfaced by the status row (distinguishable
@@ -454,7 +454,7 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 	case "|":
 		// `|` hands the retained lines to another program. The command is
 		// editable every time: the reader knows what they want to look at
-		// with far better than argo-tui does.
+		// with far better than micko does.
 		m.pipeOn = true
 		m.pipeBuf = m.pipeDefault()
 		return nil

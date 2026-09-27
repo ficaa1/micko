@@ -2,9 +2,20 @@
 
 ## Unreleased
 
+- argo-tui is now micko, after Micko the crimson rosella, so it is no longer
+  mistaken for a tool for Argo CD. The binary, the command in `cmd/micko`,
+  the module path `github.com/ficaa1/micko`, the release archives
+  (`micko_<version>_<os>_<arch>.tar.gz`), the Homebrew formula
+  (`ficaa1/tap/micko`), the header, `--version` and the User-Agent
+  (`micko/<version>`) all carry the new name. The config file moves to
+  `~/.config/micko/config.yaml` (or `$XDG_CONFIG_HOME/micko/`), and the
+  action journal to `~/.local/state/micko/actions.jsonl`. An existing
+  `argo-tui/` config file is still found, and an existing `argo-tui/`
+  journal is still appended to, until a `micko/` one exists. The end-to-end
+  gate reads `MICKO_E2E` and `MICKO_E2E_CONFIG`.
 - Micko, a crimson rosella, is the mascot. He is off by default; turn him
-  on with `micko: true` at the top of the config file, `--micko`, or the
-  `:micko` command, which toggles him for the session. On a terminal of
+  on with `mascot: true` at the top of the config file, `--mascot`, or the
+  `:mascot` command, which toggles him for the session. On a terminal of
   80×40 or larger he then perches on the pane's top border on every screen,
   so the pane starts three rows lower and stays put between screens. He
   takes his colours from the skin and draws as plain text under

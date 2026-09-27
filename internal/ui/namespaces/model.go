@@ -1,7 +1,7 @@
 // Package namespaces is the namespace picker: the dialog behind the `n` key.
 //
 // The namespace was fixed at startup by the config file, so looking at another
-// one meant quitting argo-tui and starting it again. That is the wrong shape
+// one meant quitting micko and starting it again. That is the wrong shape
 // for a tool people leave open all day.
 //
 // The picker is a dialog (shared.KeyCtxDialog): while it is open it owns every
@@ -15,7 +15,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // SwitchMsg is the picker's only output: the namespace the reader chose.

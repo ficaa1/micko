@@ -21,7 +21,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // minBorderWidth is the narrowest terminal that still gets a border. Below
@@ -52,9 +52,9 @@ type Frame struct {
 	// Mode words carry the meaning; the badge colour only repeats it.
 	ActionsEnabled bool
 
-	// Micko asks for the mascot to perch on the pane (perch.go). He only
-	// perches on a terminal with room for him.
-	Micko bool
+	// Mascot asks for Micko, the mascot, to perch on the pane (perch.go).
+	// He only perches on a terminal with room for him.
+	Mascot bool
 
 	// Pane.
 	Title      string   // left of the top border, e.g. "Workflows"
