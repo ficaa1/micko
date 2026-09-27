@@ -27,16 +27,19 @@ func TestFrameFillsTheWholeWindow(t *testing.T) {
 }
 
 // Pane geometry must not move between routes. A reader who presses enter
-// should find the footer and the border in the same rows.
+// should find the footer and the border in the same rows. On a terminal
+// large enough for Micko's perch, he perches on every route.
 func TestPaneGeometryIsStableAcrossRoutes(t *testing.T) {
-	m := loadDemoList(t)
-	m = resize(t, m, 100, 24)
-	listRows := borderRows(viewLines(m))
+	for _, h := range []int{24, 40} {
+		m := loadDemoList(t)
+		m = resize(t, m, 100, h)
+		listRows := borderRows(viewLines(m))
 
-	for _, route := range []Route{RouteDetail, RouteLogs} {
-		m.route = route
-		if got := borderRows(viewLines(m)); got != listRows {
-			t.Fatalf("border moved on route %v: list %q, got %q", route, listRows, got)
+		for _, route := range []Route{RouteDetail, RouteLogs, RouteCron, RouteArchived} {
+			m.route = route
+			if got := borderRows(viewLines(m)); got != listRows {
+				t.Fatalf("100x%d: border moved on route %v: list %q, got %q", h, route, listRows, got)
+			}
 		}
 	}
 }

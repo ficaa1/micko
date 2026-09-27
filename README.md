@@ -1,8 +1,19 @@
 # argo-tui
 
+```text
+    .---.                _        _
+   ( o o )    _ __ ___  (_)  ___ | | __  ___
+  ((  V  ))  | '_ ` _ \ | | / __|| |/ / / _ \
+   (     )   | | | | | || || (__ |   < | (_) |
+  ~~"~~~"~~  |_| |_| |_||_| \___||_|\_\ \___/
+```
+
 A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/workflows/).
 Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
 resubmit or stop a run with explicit confirmation.
+
+Micko, a crimson rosella, is the mascot. On a terminal of 80×40 or larger he
+perches on top of the pane, the way he rests his beak on a monitor.
 
 ![argo-tui browsing the demo dataset](docs/demo.gif)
 

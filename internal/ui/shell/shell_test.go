@@ -142,7 +142,7 @@ func TestNarrowTerminalDropsTheBorder(t *testing.T) {
 // BodyHeight is the contract children size themselves against. If it
 // disagrees with Render the pane scrolls or leaves a gap.
 func TestBodyHeightMatchesWhatRenderAccepts(t *testing.T) {
-	for _, tc := range []struct{ w, h int }{{80, 12}, {48, 12}, {100, 6}} {
+	for _, tc := range []struct{ w, h int }{{80, 12}, {48, 12}, {100, 6}, {80, 40}, {120, 50}} {
 		f := base()
 		f.Width, f.Height = tc.w, tc.h
 		n := f.BodyHeight()
@@ -202,7 +202,7 @@ func TestLongTitleRightIsTruncatedNotDropped(t *testing.T) {
 		Title:      "Workflows",
 		TitleRight: "list: STALE (last good 19 workflows): dial tcp 127.0.0.1:50422: connect: connection refused",
 	}
-	got := f.topBorder(shared.NewTheme(false))
+	got, _ := f.topBorder(shared.NewTheme(false))
 	if !strings.Contains(got, "Workflows") {
 		t.Fatalf("title lost: %q", got)
 	}
@@ -217,7 +217,7 @@ func TestLongTitleRightIsTruncatedNotDropped(t *testing.T) {
 // When the pane is too narrow for any useful status, the title wins.
 func TestVeryNarrowTitleKeepsTheTitle(t *testing.T) {
 	f := Frame{Width: 20, Height: 4, Title: "Workflows", TitleRight: "list: STALE (last good 19): connection refused"}
-	got := f.topBorder(shared.NewTheme(false))
+	got, _ := f.topBorder(shared.NewTheme(false))
 	if w := ansi.StringWidth(got); w != 20 {
 		t.Fatalf("border width = %d, want 20: %q", w, got)
 	}

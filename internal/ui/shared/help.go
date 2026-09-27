@@ -61,11 +61,10 @@ func ClampLines(lines []string, height int) []string {
 // as tea.KeyPressMsg.String() reports them, so the text matches what a reader
 // must actually press. The whole body fits the pane of a 40-row terminal and
 // every line the pane of an 80-column one, so a common terminal shows the
-// overlay without clipping it.
+// overlay without clipping it. That pane is the one left under Micko's perch.
 func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
-		"",
 		"Global    q quit  ctrl+c quit  ? help  esc back / close  : command",
 		"          P profile  f raw full screen  y copy  o open in Argo UI",
 		"Move      j / k  pgup / pgdn  gg / home top  G / end bottom",
@@ -88,12 +87,10 @@ func helpLines() []string {
 		"Timeline  ◆ critical path  ░ waited  │ now  l logs  i info  space fold",
 		"Explain   why it ended, as findings  y copy report  l failing log",
 		"Events    live Kubernetes events  s warnings first  / filter",
-		"",
 		"Logs      t follow  space pause  c container  G newest  esc back",
 		"          / search  n / N next / previous match  & only matching lines",
 		"          w wrap long lines  L source labels  | pipe to a program",
 		"          ctrl+t server timestamps (reopens the stream, keeps the lines)",
-		"",
 		"Actions   a opens the pane; only verbs that apply are offered",
 		"          u resume  z suspend  r retry  b resubmit  s stop",
 		"          t terminate (type the name)  d delete (then only D deletes)",
@@ -121,12 +118,12 @@ func (h *HelpOverlay) styleLine(i int, l string) string {
 }
 
 // helpFitWidth and helpFitHeight are the body of an 80x40 terminal inside
-// the shell's border: the smallest common terminal the overlay is written
-// to fit whole. Help that clips there hides keys from the reader who most
-// needs them.
+// the shell's border, under the three rows Micko perches in: the smallest
+// common terminal the overlay is written to fit whole. Help that clips there
+// hides keys from the reader who most needs them.
 const (
 	helpFitWidth  = 76
-	helpFitHeight = 36
+	helpFitHeight = 33
 )
 
 // View renders the overlay clipped to the given box. A closed overlay renders
@@ -151,5 +148,21 @@ func (h *HelpOverlay) View(width, height int) string {
 		}
 		styled[i] = h.styleLine(i, l)
 	}
-	return strings.Join(styled, "\n")
+	return strings.Join(append(styled, h.wordmark(width, height-len(lines))...), "\n")
+}
+
+// wordmark signs the overlay with Micko and the project name, below the
+// keys and a blank line, when the pane has room left for all of it. It is
+// never clipped: a part of the drawing is worth less than none. An unsized
+// overlay gets none, so unsized renders stay the key text alone.
+func (h *HelpOverlay) wordmark(width, room int) []string {
+	art := MickoWordmark
+	if width < art.Width() || room < len(art.Lines)+1 {
+		return nil
+	}
+	out := []string{""}
+	for row := range art.Lines {
+		out = append(out, art.RenderRow(h.theme, row, h.theme.Title))
+	}
+	return out
 }
