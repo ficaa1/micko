@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // The demo dataset is synthetic, but its node maps follow the shapes the Argo
@@ -398,7 +398,7 @@ func demoHelloWorld(start time.Time) core.Workflow {
 	b := newDemo("demo-hello-world", "Succeeded", start)
 	b.add("", "", demoNode{display: "demo-hello-world", typ: "Pod", phase: "Succeeded",
 		template: "whalesay", dur: 4 * time.Minute, exit: "0",
-		in: core.NodeIO{Parameters: params("message", "hello argo-tui")}})
+		in: core.NodeIO{Parameters: params("message", "hello micko")}})
 	return b.finish(4*time.Minute, "", map[string]string{
 		"workflows.argoproj.io/cluster-workflow-template": "whalesay",
 	})

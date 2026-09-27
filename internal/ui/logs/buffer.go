@@ -3,8 +3,8 @@ package logs
 import (
 	"sync"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // buffer.go — bounded memory representation for retained log entries

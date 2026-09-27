@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // plain builds a frame with a no-color theme so tests compare visible cells
@@ -20,7 +20,7 @@ func base() Frame {
 	return Frame{
 		Width:      80,
 		Height:     12,
-		App:        "argo-tui 0.2.0-beta.1",
+		App:        "micko 0.2.0-beta.1",
 		Server:     "synthetic demo",
 		Namespace:  "demo",
 		Mode:       "READ ONLY",
@@ -142,9 +142,12 @@ func TestNarrowTerminalDropsTheBorder(t *testing.T) {
 // BodyHeight is the contract children size themselves against. If it
 // disagrees with Render the pane scrolls or leaves a gap.
 func TestBodyHeightMatchesWhatRenderAccepts(t *testing.T) {
-	for _, tc := range []struct{ w, h int }{{80, 12}, {48, 12}, {100, 6}} {
+	for _, tc := range []struct {
+		w, h   int
+		mascot bool
+	}{{80, 12, false}, {48, 12, false}, {100, 6, false}, {80, 40, true}, {120, 50, true}, {120, 50, false}} {
 		f := base()
-		f.Width, f.Height = tc.w, tc.h
+		f.Width, f.Height, f.Mascot = tc.w, tc.h, tc.mascot
 		n := f.BodyHeight()
 		f.Body = make([]string, n)
 		for i := range f.Body {
@@ -202,7 +205,7 @@ func TestLongTitleRightIsTruncatedNotDropped(t *testing.T) {
 		Title:      "Workflows",
 		TitleRight: "list: STALE (last good 19 workflows): dial tcp 127.0.0.1:50422: connect: connection refused",
 	}
-	got := f.topBorder(shared.NewTheme(false))
+	got, _ := f.topBorder(shared.NewTheme(false))
 	if !strings.Contains(got, "Workflows") {
 		t.Fatalf("title lost: %q", got)
 	}
@@ -217,7 +220,7 @@ func TestLongTitleRightIsTruncatedNotDropped(t *testing.T) {
 // When the pane is too narrow for any useful status, the title wins.
 func TestVeryNarrowTitleKeepsTheTitle(t *testing.T) {
 	f := Frame{Width: 20, Height: 4, Title: "Workflows", TitleRight: "list: STALE (last good 19): connection refused"}
-	got := f.topBorder(shared.NewTheme(false))
+	got, _ := f.topBorder(shared.NewTheme(false))
 	if w := ansi.StringWidth(got); w != 20 {
 		t.Fatalf("border width = %d, want 20: %q", w, got)
 	}

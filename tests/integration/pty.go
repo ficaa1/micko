@@ -41,7 +41,7 @@ func getWinsize(fd uintptr) (cols, rows uint16, err error) {
 	return ws.Col, ws.Row, nil
 }
 
-// PTYProcess is one running argo-tui under a pseudo-terminal.
+// PTYProcess is one running micko under a pseudo-terminal.
 type PTYProcess struct {
 	Cmd     *exec.Cmd
 	master  *os.File
@@ -127,14 +127,14 @@ func StartPTYSize(cols, rows int, binPath string, args ...string) (*PTYProcess, 
 	return p, nil
 }
 
-// emptyConfigHome returns a directory that holds no argo-tui config, created
+// emptyConfigHome returns a directory that holds no micko config, created
 // once per test binary.
 func emptyConfigHome() string {
 	configHomeOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "argo-tui-noconfig-")
+		dir, err := os.MkdirTemp("", "micko-noconfig-")
 		if err != nil {
 			// Fall back to a path that cannot hold a config either.
-			dir = filepath.Join(os.TempDir(), "argo-tui-noconfig-missing")
+			dir = filepath.Join(os.TempDir(), "micko-noconfig-missing")
 		}
 		configHome = dir
 	})

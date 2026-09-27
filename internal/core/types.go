@@ -1,5 +1,5 @@
 // Package core defines the frozen, transport-independent data contracts for
-// argo-tui (plan §4 "Frozen contract surface"). These types are consumed by
+// micko (plan §4 "Frozen contract surface"). These types are consumed by
 // UI workers (B1/C1/D1) and implemented by the transport adapter (A1, in
 // package internal/argo) and the fake backend (internal/testkit).
 //

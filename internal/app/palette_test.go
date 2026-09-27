@@ -9,9 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/palette"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/palette"
 )
 
 // demoRoot is a root on the demo dataset with the "demo" namespace's list
@@ -119,8 +119,10 @@ func TestPaletteRendersAboveThePane(t *testing.T) {
 	if len(lines) != 40 {
 		t.Fatalf("frame is %d lines, want the terminal's 40", len(lines))
 	}
-	if !strings.Contains(lines[2], ": w_") || !strings.Contains(lines[3], "› workflows") {
-		t.Fatalf("palette not at the top of the pane:\n%s", strings.Join(lines[:6], "\n"))
+	top := strings.Index(v, "┌")
+	first := strings.Count(v[:top], "\n") + 1 // the pane's first body row
+	if !strings.Contains(lines[first], ": w_") || !strings.Contains(lines[first+1], "› workflows") {
+		t.Fatalf("palette not at the top of the pane:\n%s", strings.Join(lines[:first+3], "\n"))
 	}
 	if !strings.Contains(v, "demo-release-gate") {
 		t.Fatal("the list under the palette disappeared")

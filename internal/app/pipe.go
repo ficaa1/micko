@@ -7,12 +7,12 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/ui/logs"
+	"github.com/ficaa1/micko/internal/ui/logs"
 )
 
 // pipe.go hands the retained log lines to another program.
 //
-// argo-tui is a reader, not a pager: lnav, grep, less and jq are better at
+// micko is a reader, not a pager: lnav, grep, less and jq are better at
 // what they do than any pane this program could grow. The pipe is how the
 // buffer leaves without a copy-paste round trip.
 //
@@ -20,7 +20,7 @@ import (
 // the reader types it and the lines only ever arrive on standard input, so
 // nothing in a log line can become part of a command. And the lines go to a
 // private temporary file rather than an inherited pipe, so the child reads a
-// real file and argo-tui never has to keep a writer goroutine alive across
+// real file and micko never has to keep a writer goroutine alive across
 // the screen handover.
 
 // pipeDoneMsg reports the finished run back into the update loop.
@@ -70,9 +70,9 @@ func (m *Root) startPipe(intent logs.PipeIntent) tea.Cmd {
 
 // writeLinesToTemp puts the lines in a private temporary file and returns its
 // path. The file is the child's standard input, so the child reads a real
-// file and argo-tui keeps no writer alive across the screen handover.
+// file and micko keeps no writer alive across the screen handover.
 func writeLinesToTemp(lines []string) (string, error) {
-	f, err := os.CreateTemp("", "argo-tui-logs-*.log")
+	f, err := os.CreateTemp("", "micko-logs-*.log")
 	if err != nil {
 		return "", err
 	}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // kinds.go holds what the resource kinds beside workflows share on the wire:

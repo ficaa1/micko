@@ -1,16 +1,16 @@
-# argo-tui developer commands.
+# micko developer commands.
 # Go toolchain: pinned go 1.25.x (go.mod toolchain go1.25.4). This Makefile
 # covers local builds and tests only.
 
 GO ?= go
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
-LDFLAGS ?= -X github.com/ficaa1/argo-tui/internal/buildinfo.Commit=$(COMMIT)
+LDFLAGS ?= -X github.com/ficaa1/micko/internal/buildinfo.Commit=$(COMMIT)
 
 .PHONY: build test test-race vet lint-fmt smoke demo clean
 
 # Build the binary into dist/.
 build:
-	$(GO) build -ldflags "$(LDFLAGS)" -o dist/ ./cmd/argo-tui
+	$(GO) build -ldflags "$(LDFLAGS)" -o dist/ ./cmd/micko
 
 # Focused developer test set.
 test:
@@ -30,9 +30,9 @@ lint-fmt:
 # this runs without a terminal. Starting with no arguments opens the profile
 # picker, which needs one.
 smoke: build
-	./dist/argo-tui --version
-	@printf 'argo-tui: an unknown profile must be refused\n'; \
-	./dist/argo-tui --config /dev/null --profile no-such-profile >/dev/null 2>&1; \
+	./dist/micko --version
+	@printf 'micko: an unknown profile must be refused\n'; \
+	./dist/micko --config /dev/null --profile no-such-profile >/dev/null 2>&1; \
 	if [ $$? -ne 1 ]; then echo "expected exit 1 for an unknown profile"; exit 1; fi; \
 	echo "smoke OK"
 

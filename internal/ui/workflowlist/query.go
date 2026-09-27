@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // The list filter is a small query language, parsed once per keystroke into

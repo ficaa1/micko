@@ -1,23 +1,38 @@
-# argo-tui
+# micko
 
-A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/workflows/).
+```text
+    .---.                _        _
+   ( o o )    _ __ ___  (_)  ___ | | __  ___
+  ((  V  ))  | '_ ` _ \ | | / __|| |/ / / _ \
+   (     )   | | | | | || || (__ |   < | (_) |
+  ~~"~~~"~~  |_| |_| |_||_| \___||_|\_\ \___/
+```
+
+micko is a keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/workflows/).
 Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
-resubmit or stop a run with explicit confirmation.
+resubmit or stop a run with explicit confirmation. It was called argo-tui
+until 0.5.0.
 
-![argo-tui browsing the demo dataset](docs/demo.gif)
+It is named after Mićko, my eastern rosella, who is also its mascot. Turn him
+on with `mascot: true` in the config file, `--mascot`, or `:mascot` at any
+time, and on a terminal of 80×40 or larger he perches on top of the pane, the
+way he rests his beak on a monitor. He is off by default: he costs the pane
+three rows.
+
+![micko browsing the demo dataset](docs/demo.gif)
 
 ## Build and try it
 
 Requires Go 1.25 or later; the module selects Go 1.25.4 as its toolchain.
 
 ```sh
-git clone https://github.com/ficaa1/argo-tui.git
-cd argo-tui
+git clone https://github.com/ficaa1/micko.git
+cd micko
 make build
-./dist/argo-tui --demo
+./dist/micko --demo
 ```
 
-Without Make, use `go build -o dist/argo-tui ./cmd/argo-tui`. `make build`
+Without Make, use `go build -o dist/micko ./cmd/micko`. `make build`
 also stamps the Git commit into the binary. `--version` prints both version
 and commit. The demo uses synthetic data without connecting to a cluster or
 reading credentials. Press `?` for help and `q` to quit.
@@ -30,20 +45,24 @@ checksums and the tap formula, so both paths start working on the day the
 repository becomes public.
 
 Until then, download a binary from
-[the releases page](https://github.com/ficaa1/argo-tui/releases) while signed
+[the releases page](https://github.com/ficaa1/micko/releases) while signed
 in, verify it and put it on your PATH:
 
 ```sh
-gh release download v0.5.0 --repo ficaa1/argo-tui \
+VERSION=0.6.0   # the release you want
+gh release download "v$VERSION" --repo ficaa1/micko \
   --pattern '*_darwin_arm64.tar.gz' --pattern checksums.txt
 shasum -a 256 -c checksums.txt --ignore-missing   # sha256sum -c on Linux
-tar -xzf argo-tui_0.5.0_darwin_arm64.tar.gz
+tar -xzf "micko_${VERSION}_darwin_arm64.tar.gz"
 ```
+
+Releases up to 0.5.0 were published as `argo-tui_<version>_<os>_<arch>.tar.gz`,
+with a binary named `argo-tui`.
 
 ## Connect
 
-Copy [the example config](docs/argo-tui.config.example.yaml) to
-`~/.config/argo-tui/config.yaml` and edit it for your cluster. A minimal
+Copy [the example config](docs/micko.config.example.yaml) to
+`~/.config/micko/config.yaml` and edit it for your cluster. A minimal
 profile for managed forwarding is:
 
 ```yaml
@@ -56,32 +75,32 @@ profiles:
     remotePort: 2746
     server: http://127.0.0.1:2746
     namespace: workflows
-    tokenEnv: ARGO_TUI_TOKEN
+    tokenEnv: MICKO_TOKEN
 ```
 
 Start it with no arguments and it opens the profile picker:
 
 ```sh
-./dist/argo-tui
+./dist/micko
 ```
 
 Or name the profile to connect to it directly:
 
 ```sh
-./dist/argo-tui --profile dev
+./dist/micko --profile dev
 ```
 
 Managed forwarding requires `kubectl` on PATH and access through the named
-Kubernetes context. argo-tui starts its own forward on a free loopback port
+Kubernetes context. micko starts its own forward on a free loopback port
 and closes it on exit. The profile's `server` supplies the scheme and path
 prefix; the forward supplies the host and port. Use HTTPS if the Argo Server
 expects TLS. For an already reachable endpoint, omit `kubeContext`, `service`,
 `serviceNamespace` and `remotePort`; `server` is then used directly.
 
-Configuration lookup checks `$XDG_CONFIG_HOME/argo-tui/config.yaml`, then
-`~/.config/argo-tui/config.yaml`, then the OS user config directory, using
+Configuration lookup checks `$XDG_CONFIG_HOME/micko/config.yaml`, then
+`~/.config/micko/config.yaml`, then the OS user config directory, using
 the first existing file. `--config PATH` selects a file explicitly.
-With no `--profile` and no `--server`, argo-tui opens the profile picker and
+With no `--profile` and no `--server`, micko opens the profile picker and
 connects to nothing until you choose. `currentProfile` places the cursor on a
 row; it does not connect by itself. `P` reopens the picker at any time, and
 switching profile is a full reconnection: in-flight requests are canceled, the
@@ -93,7 +112,7 @@ With no config file the picker shows the path to write and a sample profile.
 Configure exactly one of `tokenEnv` (an environment variable name) or
 `tokenFile` (an absolute file path). The source is read for each request.
 The current config validator requires a source even when no token is needed:
-for Argo's server auth mode, keep `tokenEnv: ARGO_TUI_TOKEN` and leave that
+for Argo's server auth mode, keep `tokenEnv: MICKO_TOKEN` and leave that
 variable unset or empty. An empty token sends no Authorization header.
 For client auth, supply an accepted bearer token through that source;
 the Kubernetes context does not provide an Argo token automatically.
@@ -109,7 +128,7 @@ rejected. Never put literal tokens in command arguments or committed config.
 Actions are disabled by default. Enable them for a session with:
 
 ```sh
-./dist/argo-tui --profile dev --allow-actions
+./dist/micko --profile dev --allow-actions
 ```
 
 Press `a` on the workflow list or in a workflow's detail view. The menu offers
@@ -167,8 +186,8 @@ the marks and refreshes the list.
 #### Action journal
 
 Every write attempt, refused ones included, appends one JSON line to
-`$XDG_STATE_HOME/argo-tui/actions.jsonl` (by default
-`~/.local/state/argo-tui/actions.jsonl`): time, profile, server, namespace,
+`$XDG_STATE_HOME/micko/actions.jsonl` (by default
+`~/.local/state/micko/actions.jsonl`): time, profile, server, namespace,
 name, UID, verb, outcome and error text. The file is created readable by you
 only. A journal that cannot be written never blocks or changes an action; the
 footer reports the first failure of the session. Sessions without
@@ -270,6 +289,7 @@ runs a guess: a word that names no command is reported in the footer.
 | `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
 | `all` | Toggle the all-namespaces view |
 | `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
+| `mascot` | Toggle Mićko, the mascot |
 | `help` | Show every key |
 | `quit`, `q` | Quit |
 
@@ -484,7 +504,7 @@ command (default `lnav`). Install that program separately.
 
 ## Skins
 
-argo-tui draws in the `default` skin unless told otherwise. It uses the
+micko draws in the `default` skin unless told otherwise. It uses the
 terminal's own 16-colour palette, so your terminal theme still applies. The
 other skins set their own truecolor palettes:
 
@@ -517,6 +537,7 @@ spells out `READ ONLY` or `ACTIONS ENABLED`.
 | `--debug` | Emit sanitized lifecycle diagnostics |
 | `--skin NAME` | Colour skin, overriding the config file (see [Skins](#skins)) |
 | `--redact-values` | Open every workflow with parameter and output values hidden |
+| `--mascot` | Perch Mićko on the pane (terminals of 80×40 and larger) |
 | `--demo` | Run the offline, read-only demo |
 | `--version` | Print version and exit |
 
@@ -556,5 +577,5 @@ and the changes made during live use.
 
 ## License
 
-argo-tui is free software under the GNU General Public License version 3; see
+micko is free software under the GNU General Public License version 3; see
 [LICENSE](LICENSE). Copyright (C) 2026 Filip Biljic.

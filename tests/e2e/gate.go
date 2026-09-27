@@ -1,5 +1,5 @@
 // Package e2e contains opt-in disposable-cluster tests. The journey requires
-// ARGO_TUI_E2E=1 and an endpoint/namespace allowlist with allowActions=true.
+// MICKO_E2E=1 and an endpoint/namespace allowlist with allowActions=true.
 // See docs/development.md for invocation and cleanup limits.
 //go:build e2e
 
@@ -27,7 +27,7 @@ type e2eConfig struct {
 	// temp file path instead — never a literal in config).
 	Token string
 	// AllowActions must be true because the workflow journey submits and
-	// deletes synthetic resources; it is never inferred from ARGO_TUI_E2E.
+	// deletes synthetic resources; it is never inferred from MICKO_E2E.
 	AllowActions bool
 }
 
@@ -66,17 +66,17 @@ func loadE2EConfig(path string) (e2eConfig, error) {
 // e2eGate reports whether the REAL-tier harness may run, with the reason
 // it may not.
 func e2eGate() (allowed bool, reason string) {
-	if os.Getenv("ARGO_TUI_E2E") != "1" {
-		return false, "ARGO_TUI_E2E != 1 (REAL-tier tests are opt-in; environment flag alone is not permission)"
+	if os.Getenv("MICKO_E2E") != "1" {
+		return false, "MICKO_E2E != 1 (REAL-tier tests are opt-in; environment flag alone is not permission)"
 	}
-	cfg := os.Getenv("ARGO_TUI_E2E_CONFIG")
+	cfg := os.Getenv("MICKO_E2E_CONFIG")
 	if cfg == "" {
 		cfg = "e2e-config.yaml"
 	}
 	data, err := os.ReadFile(cfg)
 	if err != nil {
 		return false, "e2e config " + cfg + " not found: " + err.Error() +
-			" (provide ARGO_TUI_E2E_CONFIG with endpoint/namespace allowlist)"
+			" (provide MICKO_E2E_CONFIG with endpoint/namespace allowlist)"
 	}
 	parsed := parseAllowlist(string(data))
 	if parsed.Server == "" || parsed.Namespace == "" {
@@ -99,7 +99,7 @@ func requireGate(t *testing.T) e2eConfig {
 	if !allowed {
 		t.Skipf("E2E gate closed: %s", reason)
 	}
-	cfgPath := os.Getenv("ARGO_TUI_E2E_CONFIG")
+	cfgPath := os.Getenv("MICKO_E2E_CONFIG")
 	if cfgPath == "" {
 		cfgPath = "e2e-config.yaml"
 	}

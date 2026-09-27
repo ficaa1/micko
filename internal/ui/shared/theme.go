@@ -92,6 +92,14 @@ type Theme struct {
 	// Section tabs, such as the detail pane's Summary / Nodes / Resource.
 	TabActive   lipgloss.Style
 	TabInactive lipgloss.Style
+
+	// Mićko, the mascot (micko.go): his body, his wings and tail, the dark
+	// of his scallops, eye and feet, and his beak and cheek. He is
+	// decoration, so these tokens carry no meaning a mono terminal loses.
+	MickoBody lipgloss.Style
+	MickoWing lipgloss.Style
+	MickoDark lipgloss.Style
+	MickoBeak lipgloss.Style
 }
 
 // NewTheme builds the default skin's theme; noColor forces plain output.
@@ -148,6 +156,10 @@ func defaultTheme() Theme {
 		HintDesc:      faint,
 		TabActive:     ansi("6").Bold(true),
 		TabInactive:   faint,
+		MickoBody:     ansi("1"), // red
+		MickoWing:     ansi("4"), // blue
+		MickoDark:     ansi("8"), // dark gray: black would vanish on a dark terminal
+		MickoBeak:     ansi("7"), // light gray
 	}
 }
 
@@ -186,6 +198,10 @@ func plainTheme() Theme {
 		HintDesc:       none,
 		TabActive:      none,
 		TabInactive:    none,
+		MickoBody:      none,
+		MickoWing:      none,
+		MickoDark:      none,
+		MickoBeak:      none,
 	}
 }
 

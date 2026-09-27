@@ -3,7 +3,7 @@ package testkit
 import (
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // demoTemplates are the demo's WorkflowTemplates and its one
@@ -108,7 +108,7 @@ func demoTemplate(t core.WorkflowTemplate) core.WorkflowTemplate {
 	}
 	t.UID = "synthetic-uid-template-" + t.Name
 	t.ServiceAccount = "demo-runner"
-	t.Labels = map[string]string{"app.kubernetes.io/part-of": "argo-tui-demo"}
+	t.Labels = map[string]string{"app.kubernetes.io/part-of": "micko-demo"}
 	spec := demoWorkflowSpec(t.Entrypoint, "", t.Arguments)
 	spec["serviceAccountName"] = t.ServiceAccount
 	var templates []map[string]any

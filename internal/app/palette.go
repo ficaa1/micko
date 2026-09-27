@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/ui/palette"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/palette"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // palette.go owns the `:` key: the command registry and what each command
@@ -102,6 +102,13 @@ func builtinCommands() []command {
 			run:  (*Root).runProfile,
 		},
 		{
+			Command: palette.Command{Name: "mascot", Desc: "toggle Mićko, the mascot"},
+			run: func(m *Root, _ string) tea.Cmd {
+				m.toggleMascot()
+				return nil
+			},
+		},
+		{
 			Command: palette.Command{Name: "help", Desc: "show every key"},
 			run: func(m *Root, _ string) tea.Cmd {
 				m.help.Open()
@@ -109,7 +116,7 @@ func builtinCommands() []command {
 			},
 		},
 		{
-			Command: palette.Command{Name: "quit", Aliases: []string{"q"}, Desc: "leave argo-tui"},
+			Command: palette.Command{Name: "quit", Aliases: []string{"q"}, Desc: "leave micko"},
 			run:     func(m *Root, _ string) tea.Cmd { return m.quit() },
 		},
 	}

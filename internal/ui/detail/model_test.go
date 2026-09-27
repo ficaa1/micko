@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // Summary/timestamp tests (DET-01): phase, age/duration, message, labels

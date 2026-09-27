@@ -27,16 +27,20 @@ func TestFrameFillsTheWholeWindow(t *testing.T) {
 }
 
 // Pane geometry must not move between routes. A reader who presses enter
-// should find the footer and the border in the same rows.
+// should find the footer and the border in the same rows. With Mićko on, on
+// a terminal large enough for his perch, he perches on every route.
 func TestPaneGeometryIsStableAcrossRoutes(t *testing.T) {
-	m := loadDemoList(t)
-	m = resize(t, m, 100, 24)
-	listRows := borderRows(viewLines(m))
+	for _, h := range []int{24, 40} {
+		m := loadDemoList(t)
+		m.SetMascot(true)
+		m = resize(t, m, 100, h)
+		listRows := borderRows(viewLines(m))
 
-	for _, route := range []Route{RouteDetail, RouteLogs} {
-		m.route = route
-		if got := borderRows(viewLines(m)); got != listRows {
-			t.Fatalf("border moved on route %v: list %q, got %q", route, listRows, got)
+		for _, route := range []Route{RouteDetail, RouteLogs, RouteCron, RouteArchived} {
+			m.route = route
+			if got := borderRows(viewLines(m)); got != listRows {
+				t.Fatalf("100x%d: border moved on route %v: list %q, got %q", h, route, listRows, got)
+			}
 		}
 	}
 }
@@ -133,5 +137,43 @@ func TestResizePropagatesToTheActivePane(t *testing.T) {
 	short := len(viewLines(m))
 	if tall != 40 || short != 12 {
 		t.Fatalf("resize not honoured: %d then %d", tall, short)
+	}
+}
+
+// Mićko is off until asked for. `:mascot` perches him and says so, a second
+// `:mascot` sends him off, and on a terminal too small for him the notice
+// says why he does not show.
+func TestMickoCommandTogglesThePerch(t *testing.T) {
+	m, _ := demoRoot(t)
+	m = resize(t, m, 100, 40)
+	perched := func() bool { return strings.Contains(screen(m), "^v^v^v") }
+	if perched() {
+		t.Fatal("Mićko perched before being turned on")
+	}
+	top := borderRows(viewLines(m))
+
+	runLine(m, "mascot")
+	if !perched() {
+		t.Fatalf(":mascot did not perch him:\n%s", screen(m))
+	}
+	if !strings.Contains(screen(m), "Mićko is perched") {
+		t.Fatalf("no notice after :mascot:\n%s", screen(m))
+	}
+	if borderRows(viewLines(m)) == top {
+		t.Fatal("the pane did not make room for him")
+	}
+
+	runLine(m, "mascot")
+	if perched() || !strings.Contains(screen(m), "Mićko flew off") {
+		t.Fatalf("second :mascot did not send him off:\n%s", screen(m))
+	}
+	if got := borderRows(viewLines(m)); got != top {
+		t.Fatalf("border rows %q after he left, want %q", got, top)
+	}
+
+	m = resize(t, m, 100, 24)
+	runLine(m, "mascot")
+	if perched() || !strings.Contains(screen(m), "80x40") {
+		t.Fatalf("small terminal: want no perch and a notice naming the size:\n%s", screen(m))
 	}
 }

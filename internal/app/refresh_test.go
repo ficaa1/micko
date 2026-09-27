@@ -3,8 +3,8 @@ package app
 import (
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // The tick carries the only poll chain, so dropping it off the list route

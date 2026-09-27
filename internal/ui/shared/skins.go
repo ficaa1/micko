@@ -268,5 +268,11 @@ func (p palette) theme(name string) Theme {
 		HintDesc:       muted,
 		TabActive:      fg(p.accent).Bold(true).Underline(true),
 		TabInactive:    muted,
+		// Mićko takes the skin's nearest hues to his own, so he sits in the
+		// scheme rather than on top of it.
+		MickoBody: fg(p.failed),
+		MickoWing: fg(p.running),
+		MickoDark: fg(p.muted),
+		MickoBeak: fg(p.text),
 	}
 }

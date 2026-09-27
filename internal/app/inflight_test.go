@@ -3,8 +3,8 @@ package app
 import (
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // The poll tick refetches the open workflow only while no fetch is running.

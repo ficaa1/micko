@@ -6,10 +6,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
-	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/kindlist"
+	"github.com/ficaa1/micko/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
 // kinds.go runs the list routes of the resource kinds beside workflows —

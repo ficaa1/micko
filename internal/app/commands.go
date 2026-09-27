@@ -7,8 +7,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/journal"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/journal"
 )
 
 // Clock abstracts time for deterministic tests (fake clock injection).
@@ -175,7 +175,7 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 
 // detailCmd fetches one workflow detail. The request carries the UID so the
 // server can fall back to the archive for same-name replacements
-// (docs/development.md; argo-tui always passes UID on detail GET).
+// (docs/development.md; micko always passes UID on detail GET).
 func (d deps) detailCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref) func() tea.Msg {
 	return func() tea.Msg {
 		wf, err := d.reader.Get(ctx, ref)

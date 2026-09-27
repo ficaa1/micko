@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // listEnvelope mirrors GET /api/v1/workflows/{namespace}. metadata.continue
@@ -234,7 +234,7 @@ func wfFromRaw(raw json.RawMessage, rawForDetail []byte) (core.Workflow, error) 
 
 // podNameFormatAnnotation is the annotation Argo writes on every workflow it
 // creates to record which pod naming scheme that workflow uses. The server is
-// the only authority on this; argo-tui never assumes a default.
+// the only authority on this; micko never assumes a default.
 const podNameFormatAnnotation = "workflows.argoproj.io/pod-name-format"
 
 // hasRunningSuspendNode reports whether the workflow is parked on a manual

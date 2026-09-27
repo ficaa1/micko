@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // loadedModel is a detail pane with a workflow applied at a known size.

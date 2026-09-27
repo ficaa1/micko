@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // cronV35Body is a v3.5 cron workflow list: one spec.schedule, the status

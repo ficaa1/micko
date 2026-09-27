@@ -30,7 +30,7 @@ func TestCommitIsNeverEmpty(t *testing.T) {
 // The User-Agent names the program and its version and nothing else, so it
 // stays low-cardinality in a server's logs.
 func TestUserAgentCarriesOnlyTheVersion(t *testing.T) {
-	if got, want := UserAgent(), "argo-tui/"+Version; got != want {
+	if got, want := UserAgent(), "micko/"+Version; got != want {
 		t.Errorf("UserAgent() = %q, want %q", got, want)
 	}
 }

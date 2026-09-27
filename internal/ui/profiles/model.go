@@ -1,7 +1,7 @@
 // Package profiles is the profile picker: the dialog that chooses which
 // cluster this session talks to.
 //
-// argo-tui starts in it when no --profile was given, so the first screen asks
+// micko starts in it when no --profile was given, so the first screen asks
 // which cluster rather than assuming one, and the P key reopens it at any
 // time. A profile carries the server, the credentials and the port-forward
 // target, so choosing one is a reconnection, not a filter.
@@ -22,7 +22,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // SwitchMsg is the picker's only output: the profile the reader chose.
@@ -283,13 +283,13 @@ func (m *Model) BodyLines() []string {
 func (m *Model) emptyLines() []string {
 	path := m.configPath
 	if path == "" {
-		path = "~/.config/argo-tui/config.yaml"
+		path = "~/.config/micko/config.yaml"
 	}
 	lines := []string{"", "no profiles configured", "", "write them to:", "  " + shared.Sanitize(path), "", "a file that connects:"}
 	for _, l := range strings.Split(sampleConfig, "\n") {
 		lines = append(lines, "  "+l)
 	}
-	return append(lines, "", m.theme.Dim.Render("argo-tui --demo looks around without a cluster"))
+	return append(lines, "", m.theme.Dim.Render("micko --demo looks around without a cluster"))
 }
 
 // sampleConfig is the smallest config file that connects. It is duplicated

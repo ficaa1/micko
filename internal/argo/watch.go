@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // MaxWatchEventBytes bounds one wire event so a peer cannot grow the stream

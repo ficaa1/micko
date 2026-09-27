@@ -3,7 +3,7 @@ package logs
 import (
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // view.go — renders the retained buffer into terminal-safe text (the only

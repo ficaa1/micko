@@ -1,4 +1,4 @@
-module github.com/ficaa1/argo-tui
+module github.com/ficaa1/micko
 
 go 1.25.0
 

@@ -1,6 +1,6 @@
 package shared
 
-import "github.com/ficaa1/argo-tui/internal/core"
+import "github.com/ficaa1/micko/internal/core"
 
 // OpenWorkflowMsg asks the root to load a workflow detail. Section names the
 // detail section to open it on; empty keeps the section the pane last

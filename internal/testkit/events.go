@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // events.go is the fake backend's Kubernetes event stream, and the demo's

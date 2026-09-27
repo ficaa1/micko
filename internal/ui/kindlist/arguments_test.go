@@ -3,7 +3,7 @@ package kindlist
 import (
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // Each argument form renders on one line: values and defaults redacted until

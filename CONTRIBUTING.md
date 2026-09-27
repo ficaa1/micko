@@ -1,4 +1,4 @@
-# Contributing to argo-tui
+# Contributing to micko
 
 ## Comments
 

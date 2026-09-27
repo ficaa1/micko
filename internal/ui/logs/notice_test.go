@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // A notice explains an empty stream, wrapped to the pane, and disappears as

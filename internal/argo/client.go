@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // Client is the production core.Reader. It is safe for concurrent use.
@@ -112,7 +112,7 @@ type Options struct {
 }
 
 // defaultUserAgent carries no version: a wrong version is worse than none.
-const defaultUserAgent = "argo-tui"
+const defaultUserAgent = "micko"
 
 // NewClient validates the URL contract and builds the transport.
 func NewClient(opts Options) (*Client, error) {

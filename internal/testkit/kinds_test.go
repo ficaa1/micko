@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/cronexpr"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/cronexpr"
 )
 
 // The equality-based selector forms the drill-down and the gate scan send

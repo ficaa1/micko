@@ -7,8 +7,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
-	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/micko/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
 // raw.go holds the three commands that take content OUT of the program: the
@@ -16,7 +16,7 @@ import (
 //
 // None of them mutates anything on the server. The browser link is the only
 // one that leaves the process, and it opens a page the user already has
-// access to — argo-tui never sends a request to the web address itself.
+// access to — micko never sends a request to the web address itself.
 
 // maxCopyBytes bounds one clipboard write. The copy travels to the terminal
 // as an escape sequence, and terminals refuse or truncate very large ones, so

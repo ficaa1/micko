@@ -20,13 +20,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/app"
-	"github.com/ficaa1/argo-tui/internal/argo"
-	"github.com/ficaa1/argo-tui/internal/buildinfo"
-	"github.com/ficaa1/argo-tui/internal/config"
-	"github.com/ficaa1/argo-tui/internal/diagnostics"
-	"github.com/ficaa1/argo-tui/internal/portforward"
-	"github.com/ficaa1/argo-tui/internal/ui/profiles"
+	"github.com/ficaa1/micko/internal/app"
+	"github.com/ficaa1/micko/internal/argo"
+	"github.com/ficaa1/micko/internal/buildinfo"
+	"github.com/ficaa1/micko/internal/config"
+	"github.com/ficaa1/micko/internal/diagnostics"
+	"github.com/ficaa1/micko/internal/portforward"
+	"github.com/ficaa1/micko/internal/ui/profiles"
 )
 
 // readyTimeout bounds the wait for a port-forward to announce its local port.
@@ -47,6 +47,9 @@ type Options struct {
 	Debug                 bool
 	// Skin is the --skin flag, which outranks every skin in the file.
 	Skin string
+	// Mascot is the --mascot flag. It can only turn the mascot on; the
+	// file's mascot key turns him on too.
+	Mascot bool
 	// Skins is the set of valid skin names. Every skin the file names is
 	// checked against it when the file is read.
 	Skins []string
@@ -136,6 +139,10 @@ func (c *Connector) Skin() string {
 	}
 	return config.DefaultSkin
 }
+
+// Mascot reports whether the mascot is turned on: the --mascot flag, else the
+// config file's top-level mascot key.
+func (c *Connector) Mascot() bool { return c.opts.Mascot || config.FileMascot(c.data) }
 
 // JournalEnabled reports whether the config file leaves the action journal
 // on (the top-level `journal` key).

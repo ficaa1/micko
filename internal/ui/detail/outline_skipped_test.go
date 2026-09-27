@@ -3,7 +3,7 @@ package detail
 import (
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // runningUnderSkippedWorkflow has a Skipped step whose subtree still holds

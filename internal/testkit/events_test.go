@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // collect reads a fake event stream until it has been quiet for a moment.

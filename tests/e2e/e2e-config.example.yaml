@@ -1,6 +1,6 @@
 # Disposable test environment only. See docs/development.md.
 # This is key=value syntax, despite the .yaml suffix.
-# Copy to an untracked file and set ARGO_TUI_E2E_CONFIG to its absolute path.
+# Copy to an untracked file and set MICKO_E2E_CONFIG to its absolute path.
 server=http://127.0.0.1:2746
 namespace=argo-tui-e2e
 # The journey submits and deletes synthetic workflows.
