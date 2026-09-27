@@ -339,37 +339,6 @@ func TestDefaultConfigPathFindsAnExistingFile(t *testing.T) {
 	}
 }
 
-// A config file written under argo-tui/, the tool's former name, is still
-// found. A micko/ file beats it wherever the two live.
-func TestDefaultConfigPathFindsALegacyFile(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	legacy := filepath.Join(home, ".config", "argo-tui", "config.yaml")
-	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(legacy, []byte("currentProfile: p\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := DefaultConfigPath(); err != nil || got != legacy {
-		t.Fatalf("DefaultConfigPath = %q, %v; want the legacy %q", got, err, legacy)
-	}
-
-	xdg := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", xdg)
-	current := filepath.Join(xdg, "micko", "config.yaml")
-	if err := os.MkdirAll(filepath.Dir(current), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(current, []byte("currentProfile: p\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := DefaultConfigPath(); err != nil || got != current {
-		t.Fatalf("DefaultConfigPath = %q, %v; want the micko file %q", got, err, current)
-	}
-}
-
 // XDG_CONFIG_HOME wins when it is set.
 func TestDefaultConfigPathPrefersXDG(t *testing.T) {
 	home := t.TempDir()
@@ -469,7 +438,7 @@ func TestJournalIsOnUnlessTurnedOff(t *testing.T) {
 	}
 }
 
-// Micko is off unless the file turns him on. A missing file and a file that
+// Mićko is off unless the file turns him on. A missing file and a file that
 // does not parse leave him off, and the key must not trip profile loading.
 func TestMickoIsOffUnlessTurnedOn(t *testing.T) {
 	cases := []struct {

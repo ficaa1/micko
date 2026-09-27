@@ -9,7 +9,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// perchedFrame is base() with Micko on, on a terminal large enough for him.
+// perchedFrame is base() with Mićko on, on a terminal large enough for him.
 func perchedFrame() Frame {
 	f := base()
 	f.Width, f.Height = 80, 40
@@ -17,7 +17,7 @@ func perchedFrame() Frame {
 	return f
 }
 
-// Micko is opt-in: a frame that does not ask for him keeps his rows as
+// Mićko is opt-in: a frame that does not ask for him keeps his rows as
 // content however large the terminal.
 func TestMickoIsOffUnlessAskedFor(t *testing.T) {
 	f := perchedFrame()
@@ -27,10 +27,10 @@ func TestMickoIsOffUnlessAskedFor(t *testing.T) {
 		t.Fatalf("top border on row %d, want 1", top)
 	}
 	if strings.Contains(strings.Join(ls, "\n"), "^v^v^v") {
-		t.Fatal("Micko drawn without being asked for")
+		t.Fatal("Mićko drawn without being asked for")
 	}
 	if got, want := f.BodyHeight(), perchedFrame().BodyHeight()+len(shared.MickoPerch.Lines)-1; got != want {
-		t.Fatalf("BodyHeight() = %d without Micko, want %d", got, want)
+		t.Fatalf("BodyHeight() = %d without Mićko, want %d", got, want)
 	}
 }
 
@@ -46,7 +46,7 @@ func topRow(t *testing.T, ls []string) int {
 	return -1
 }
 
-// Micko sits above the border with his feet and beak on it, and the frame
+// Mićko sits above the border with his feet and beak on it, and the frame
 // is still exactly the terminal.
 func TestMickoPerchesOnTheBorder(t *testing.T) {
 	f := perchedFrame()
@@ -61,11 +61,11 @@ func TestMickoPerchesOnTheBorder(t *testing.T) {
 	}
 	top := topRow(t, ls)
 	if top != 1+len(shared.MickoPerch.Lines)-1 {
-		t.Fatalf("top border on row %d, want below the header and Micko's rows:\n%s", top, strings.Join(ls[:top+1], "\n"))
+		t.Fatalf("top border on row %d, want below the header and Mićko's rows:\n%s", top, strings.Join(ls[:top+1], "\n"))
 	}
 	for _, want := range []string{"_.-~~~~-._", "^v^v^v", "o )"} {
 		if !strings.Contains(strings.Join(ls[1:top], "\n"), want) {
-			t.Errorf("Micko's rows lack %q:\n%s", want, strings.Join(ls[:top+1], "\n"))
+			t.Errorf("Mićko's rows lack %q:\n%s", want, strings.Join(ls[:top+1], "\n"))
 		}
 	}
 	for _, want := range []string{"/_/", `\v/`, "Workflows", "5 collected"} {
@@ -86,12 +86,12 @@ func TestMickoStaysOffSmallTerminals(t *testing.T) {
 			t.Errorf("%dx%d: top border on row %d, want 1", tc.w, tc.h, top)
 		}
 		if strings.Contains(strings.Join(ls, "\n"), "^v^v^v") {
-			t.Errorf("%dx%d: Micko drawn on a small terminal", tc.w, tc.h)
+			t.Errorf("%dx%d: Mićko drawn on a small terminal", tc.w, tc.h)
 		}
 	}
 }
 
-// Micko never covers the title or the count. A long count moves him left;
+// Mićko never covers the title or the count. A long count moves him left;
 // one that leaves no room makes him step off, but his rows stay, so the
 // pane does not move.
 func TestMickoMakesWayForTheTitleAndCount(t *testing.T) {
@@ -119,13 +119,13 @@ func TestMickoMakesWayForTheTitleAndCount(t *testing.T) {
 			// Perched: he sits wholly between the title and the count.
 			at := strings.Index(ls[top], `\v/`)
 			if at > strings.Index(ls[top], right[:12]) {
-				t.Fatalf("Micko is past the count: %q", ls[top])
+				t.Fatalf("Mićko is past the count: %q", ls[top])
 			}
 		}
 	}
 }
 
-// Colour is decoration: in every skin Micko is the same characters in the
+// Colour is decoration: in every skin Mićko is the same characters in the
 // same cells as in the plain frame. (A skin's header margins and border
 // corners differ from plain, so only his rows and cells are compared.)
 func TestMickoThemeOnlyStyles(t *testing.T) {

@@ -1,6 +1,6 @@
 // Package shell composes the three bands every route shares: a context
 // header, a bordered content pane, and a key-hint footer. When asked, and on
-// a large enough terminal, Micko the mascot perches on the pane's top border
+// a large enough terminal, Mićko the mascot perches on the pane's top border
 // (perch.go).
 //
 // The point of the package is stable geometry. The alternate screen has no
@@ -52,7 +52,7 @@ type Frame struct {
 	// Mode words carry the meaning; the badge colour only repeats it.
 	ActionsEnabled bool
 
-	// Mascot asks for Micko, the mascot, to perch on the pane (perch.go).
+	// Mascot asks for Mićko, the mascot, to perch on the pane (perch.go).
 	// He only perches on a terminal with room for him.
 	Mascot bool
 
@@ -188,7 +188,7 @@ const minTitleRight = 16
 // without spending a content row on a heading. The corner and line
 // characters come from the theme, so a skin can round the corners.
 //
-// When the frame is perched, Micko's feet and beak are drawn into the line
+// When the frame is perched, Mićko's feet and beak are drawn into the line
 // between the title and the count. perchX is the column his drawing starts
 // at, or -1 when he has no room on this border.
 func (f Frame) topBorder(t shared.Theme) (line string, perchX int) {

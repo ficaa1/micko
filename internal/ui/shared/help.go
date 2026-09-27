@@ -66,7 +66,7 @@ func ClampLines(lines []string, height int) []string {
 // as tea.KeyPressMsg.String() reports them, so the text matches what a reader
 // must actually press. The whole body fits the pane of a 40-row terminal and
 // every line the pane of an 80-column one, so a common terminal shows the
-// overlay without clipping it. That pane is the one left under Micko's perch.
+// overlay without clipping it. That pane is the one left under Mićko's perch.
 func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
@@ -123,7 +123,7 @@ func (h *HelpOverlay) styleLine(i int, l string) string {
 }
 
 // helpFitWidth and helpFitHeight are the body of an 80x40 terminal inside
-// the shell's border, under the three rows Micko perches in: the smallest
+// the shell's border, under the three rows Mićko perches in: the smallest
 // common terminal the overlay is written to fit whole. Help that clips there
 // hides keys from the reader who most needs them.
 const (
@@ -156,7 +156,7 @@ func (h *HelpOverlay) View(width, height int) string {
 	return strings.Join(append(styled, h.wordmark(width, height-len(lines))...), "\n")
 }
 
-// wordmark signs the overlay with Micko and the project name, below the
+// wordmark signs the overlay with Mićko and the project name, below the
 // keys and a blank line, when he is turned on and the pane has room left
 // for all of it. It is
 // never clipped: a part of the drawing is worth less than none. An unsized

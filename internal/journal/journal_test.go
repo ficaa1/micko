@@ -126,31 +126,3 @@ func TestDefaultPathFollowsXDGStateHome(t *testing.T) {
 		t.Fatalf("relative XDG_STATE_HOME was used: %q", got)
 	}
 }
-
-// A journal kept under the tool's former name is appended to until a micko
-// journal exists, so the rename does not split the record of writes.
-func TestDefaultPathKeepsALegacyJournal(t *testing.T) {
-	state := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", state)
-	legacy := filepath.Join(state, "argo-tui", "actions.jsonl")
-	if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(legacy, []byte("{}\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := DefaultPath(); err != nil || got != legacy {
-		t.Fatalf("path = %q, err = %v; want the legacy journal %q", got, err, legacy)
-	}
-
-	current := filepath.Join(state, "micko", "actions.jsonl")
-	if err := os.MkdirAll(filepath.Dir(current), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(current, []byte("{}\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := DefaultPath(); err != nil || got != current {
-		t.Fatalf("path = %q, err = %v; want the micko journal %q once it exists", got, err, current)
-	}
-}

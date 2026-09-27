@@ -17,7 +17,7 @@ refreshInterval: 5s
 # A profile can set it too, overriding this line either way.
 # redactValues: true
 
-# Perch Micko, the mascot, on the pane on terminals of 80x40 and larger. He
+# Perch Mićko, the mascot, on the pane on terminals of 80x40 and larger. He
 # costs three rows. --mascot turns him on too, and :mascot toggles him.
 # mascot: true
 

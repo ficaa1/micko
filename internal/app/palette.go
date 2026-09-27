@@ -102,7 +102,7 @@ func builtinCommands() []command {
 			run:  (*Root).runProfile,
 		},
 		{
-			Command: palette.Command{Name: "mascot", Desc: "toggle Micko, the mascot"},
+			Command: palette.Command{Name: "mascot", Desc: "toggle Mićko, the mascot"},
 			run: func(m *Root, _ string) tea.Cmd {
 				m.toggleMascot()
 				return nil

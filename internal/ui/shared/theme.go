@@ -93,7 +93,7 @@ type Theme struct {
 	TabActive   lipgloss.Style
 	TabInactive lipgloss.Style
 
-	// Micko, the mascot (micko.go): his body, his wings and tail, the dark
+	// Mićko, the mascot (micko.go): his body, his wings and tail, the dark
 	// of his scallops, eye and feet, and his beak and cheek. He is
 	// decoration, so these tokens carry no meaning a mono terminal loses.
 	MickoBody lipgloss.Style

@@ -143,7 +143,7 @@ type Root struct {
 	// pipeCommand prefills the log pane's pipe editor.
 	pipeCommand string
 
-	// mascot perches Micko on the pane when the terminal has room.
+	// mascot perches Mićko on the pane when the terminal has room.
 	mascot bool
 
 	// redact is the profile's redactValues setting. The detail view is
@@ -216,11 +216,11 @@ func (m *Root) toggleMascot() {
 	m.SetMascot(!m.mascot)
 	switch {
 	case !m.mascot:
-		m.flash = "Micko flew off"
+		m.flash = "Mićko flew off"
 	case shell.PerchFits(m.width, m.height):
-		m.flash = "Micko is perched"
+		m.flash = "Mićko is perched"
 	default:
-		m.flash = "Micko is on; he perches on terminals of 80x40 and larger"
+		m.flash = "Mićko is on; he perches on terminals of 80x40 and larger"
 	}
 }
 

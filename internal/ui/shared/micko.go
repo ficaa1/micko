@@ -6,7 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Micko is the project's mascot, a crimson rosella: red body, blue wings and
+// Mićko is the project's mascot, an eastern rosella: red body, blue wings and
 // tail, a back scalloped in black, and a pale beak and cheek. He is drawn as
 // ASCII art with a colour mask of the same shape, so the drawing stays plain
 // text and only the theme decides whether it is coloured.
@@ -15,11 +15,11 @@ import (
 //
 //	r body   b wing and tail   k scallops, eye and feet   w beak and cheek
 //
-// A space in the mask is not part of Micko. What shows through there is the
+// A space in the mask is not part of Mićko. What shows through there is the
 // caller's: blank cells above the pane, the border line under his feet, the
 // project name beside him.
 
-// MickoPerch is Micko perched on the pane's top border with his head bowed
+// MickoPerch is Mićko perched on the pane's top border with his head bowed
 // over the edge, the way he rests his beak on a monitor. The last row is
 // drawn onto the border itself: only its masked cells replace border line.
 var MickoPerch = Art{
@@ -37,7 +37,7 @@ var MickoPerch = Art{
 	},
 }
 
-// MickoWordmark is Micko facing the reader beside the project name.
+// MickoWordmark is Mićko facing the reader beside the project name.
 var MickoWordmark = Art{
 	Lines: []string{
 		`    .---.                _        _`,
@@ -75,7 +75,7 @@ func (a Art) Width() int {
 }
 
 // Cell reports the character at row, col and the style the theme gives it.
-// ok is false for a cell outside the drawing or not masked as part of Micko.
+// ok is false for a cell outside the drawing or not masked as part of Mićko.
 func (a Art) Cell(t Theme, row, col int) (ch string, style lipgloss.Style, ok bool) {
 	if row < 0 || row >= len(a.Lines) || col < 0 {
 		return "", lipgloss.Style{}, false
@@ -88,7 +88,7 @@ func (a Art) Cell(t Theme, row, col int) (ch string, style lipgloss.Style, ok bo
 	return string(line[col]), style, ok
 }
 
-// RenderRow draws one row of the drawing. Micko's cells take his colours;
+// RenderRow draws one row of the drawing. Mićko's cells take his colours;
 // any other character (the wordmark's text) is drawn in text. Neighbouring
 // cells of one part are drawn as one run, so a row costs a few escapes
 // rather than one per character.
@@ -99,7 +99,7 @@ func (a Art) RenderRow(t Theme, row int, text lipgloss.Style) string {
 		mask = []rune(a.Mask[row])
 	}
 	// part is the mask cell a character is drawn as: its own mask cell, a
-	// space for a blank, or 't' for text beside Micko.
+	// space for a blank, or 't' for text beside Mićko.
 	part := func(col int) rune {
 		if col < len(mask) && mask[col] != ' ' {
 			return mask[col]

@@ -9,7 +9,7 @@ import (
 
 // Every mask names a part only under a character, and the perch masks every
 // character it has: a stray mask cell would colour a blank, and an unmasked
-// one would draw in the terminal's colours inside Micko.
+// one would draw in the terminal's colours inside Mićko.
 func TestMickoMasksMatchTheirDrawings(t *testing.T) {
 	for name, a := range map[string]Art{"perch": MickoPerch, "wordmark": MickoWordmark} {
 		if len(a.Lines) != len(a.Mask) {
@@ -67,7 +67,7 @@ func TestMickoRenderRowOnlyStyles(t *testing.T) {
 	}
 }
 
-// The wordmark signs the help overlay only with Micko turned on, and only
+// The wordmark signs the help overlay only with Mićko turned on, and only
 // when the whole of it fits below the keys: never on the 80x40 body the keys
 // are written for, never cut.
 func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
@@ -75,7 +75,7 @@ func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
 	h.Toggle()
 	room := len(helpLines()) + 1 + len(MickoWordmark.Lines)
 	if strings.Contains(h.View(100, room), "_ __ ___") {
-		t.Error("wordmark drawn with Micko off")
+		t.Error("wordmark drawn with Mićko off")
 	}
 	h.SetMascot(true)
 	if strings.Contains(h.View(helpFitWidth, helpFitHeight), "_ __ ___") {

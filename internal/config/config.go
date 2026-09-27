@@ -90,7 +90,7 @@ type File struct {
 	// workflow to see, and a cluster whose parameters carry secrets turns
 	// it on here or per profile.
 	RedactValues bool `yaml:"redactValues,omitempty"`
-	// Mascot perches Micko, the mascot, on the pane on terminals of 80x40 and
+	// Mascot perches Mićko, the mascot, on the pane on terminals of 80x40 and
 	// larger. It is off unless set: he costs three rows.
 	Mascot bool `yaml:"mascot,omitempty"`
 }
@@ -466,14 +466,6 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// appDir is the directory name the config file lives under.
-const appDir = "micko"
-
-// legacyAppDir is the directory name the tool used before it was named
-// micko. A file there is still found, so a config written for the old name
-// keeps working until it is moved.
-const legacyAppDir = "argo-tui"
-
 // DefaultConfigPath resolves the configuration file location. It returns the
 // first candidate that exists, so an existing file is always found:
 //
@@ -482,26 +474,19 @@ const legacyAppDir = "argo-tui"
 //     platform and the one this tool documents
 //  3. os.UserConfigDir()/micko/config.yaml, which on macOS is
 //     ~/Library/Application Support
-//  4. the same three places under argo-tui/, the tool's former name
 //
 // When none exists it returns the first candidate, which is where a new file
 // should be written.
 func DefaultConfigPath() (string, error) {
-	var bases []string
+	var candidates []string
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		bases = append(bases, xdg)
+		candidates = append(candidates, filepath.Join(xdg, "micko", "config.yaml"))
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		bases = append(bases, filepath.Join(home, ".config"))
+		candidates = append(candidates, filepath.Join(home, ".config", "micko", "config.yaml"))
 	}
 	if dir, err := os.UserConfigDir(); err == nil {
-		bases = append(bases, dir)
-	}
-	var candidates []string
-	for _, name := range []string{appDir, legacyAppDir} {
-		for _, b := range bases {
-			candidates = append(candidates, filepath.Join(b, name, "config.yaml"))
-		}
+		candidates = append(candidates, filepath.Join(dir, "micko", "config.yaml"))
 	}
 	if len(candidates) == 0 {
 		return "", fmt.Errorf("config: resolve user config dir: no home or config directory")

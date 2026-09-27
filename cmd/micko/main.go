@@ -50,7 +50,7 @@ func run(args []string) int {
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
 	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
-	mascot := fs.Bool("mascot", false, "perch Micko, the mascot, on the pane (terminals of 80x40 and larger)")
+	mascot := fs.Bool("mascot", false, "perch Mićko on the pane (terminals of 80x40 and larger)")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2

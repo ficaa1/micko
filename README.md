@@ -13,7 +13,7 @@ Browse workflows, inspect nodes and resources, stream logs, and resume, retry,
 resubmit or stop a run with explicit confirmation. It was called argo-tui
 until 0.5.0.
 
-It is named after Micko, a crimson rosella, who is also its mascot. Turn him
+It is named after Mićko, an eastern rosella, who is also its mascot. Turn him
 on with `mascot: true` in the config file, `--mascot`, or `:mascot` at any
 time, and on a terminal of 80×40 or larger he perches on top of the pane, the
 way he rests his beak on a monitor. He is off by default: he costs the pane
@@ -99,9 +99,7 @@ expects TLS. For an already reachable endpoint, omit `kubeContext`, `service`,
 
 Configuration lookup checks `$XDG_CONFIG_HOME/micko/config.yaml`, then
 `~/.config/micko/config.yaml`, then the OS user config directory, using
-the first existing file. A file under `argo-tui/`, the tool's former name, is
-still found when there is none under `micko/`. `--config PATH` selects a file
-explicitly.
+the first existing file. `--config PATH` selects a file explicitly.
 With no `--profile` and no `--server`, micko opens the profile picker and
 connects to nothing until you choose. `currentProfile` places the cursor on a
 row; it does not connect by itself. `P` reopens the picker at any time, and
@@ -189,9 +187,8 @@ the marks and refreshes the list.
 
 Every write attempt, refused ones included, appends one JSON line to
 `$XDG_STATE_HOME/micko/actions.jsonl` (by default
-`~/.local/state/micko/actions.jsonl`; a journal already kept under
-`argo-tui/` goes on there until a `micko/` one exists): time, profile,
-server, namespace, name, UID, verb, outcome and error text. The file is created readable by you
+`~/.local/state/micko/actions.jsonl`): time, profile, server, namespace,
+name, UID, verb, outcome and error text. The file is created readable by you
 only. A journal that cannot be written never blocks or changes an action; the
 footer reports the first failure of the session. Sessions without
 `--allow-actions` and the demo write nothing. To turn the journal off, set
@@ -292,7 +289,7 @@ runs a guess: a word that names no command is reported in the footer.
 | `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
 | `all` | Toggle the all-namespaces view |
 | `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
-| `mascot` | Toggle Micko, the mascot |
+| `mascot` | Toggle Mićko, the mascot |
 | `help` | Show every key |
 | `quit`, `q` | Quit |
 
@@ -540,7 +537,7 @@ spells out `READ ONLY` or `ACTIONS ENABLED`.
 | `--debug` | Emit sanitized lifecycle diagnostics |
 | `--skin NAME` | Colour skin, overriding the config file (see [Skins](#skins)) |
 | `--redact-values` | Open every workflow with parameter and output values hidden |
-| `--mascot` | Perch Micko, the mascot, on the pane (terminals of 80×40 and larger) |
+| `--mascot` | Perch Mićko on the pane (terminals of 80×40 and larger) |
 | `--demo` | Run the offline, read-only demo |
 | `--version` | Print version and exit |
 
