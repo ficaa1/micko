@@ -11,7 +11,8 @@ adds him as an opt-in mascot (`--mascot`) that perches on the pane at 80x40+.
 
 ## Where things stand
 
-- **The 0.6 draft is kept** as `micko-0.6-draft.mp4` (+ `micko-0.6-draft-poster.png`).
+- **Two 0.6 drafts are kept:** `micko-0.6-draft.mp4` (dark, tokyo-night) and
+  `micko-0.6-paper-draft.mp4` (current look: paper + monokai). The source builds the paper look.
   Renders write `micko-0.6.mp4` by default (or `--out NAME.mp4`), so they
   never overwrite the draft. The commit that rendered it is tagged in history
   as "video: render the micko 0.6 draft".
@@ -67,7 +68,7 @@ source and the shared engine, so a re-run only redoes what changed.
       window titles, outro commands
 - [x] 5. New scenes: `bird` (photos) and `mascot` (the ASCII Mićko perched, across skins)
 - [x] 6. Soundtrack re-timed; full render (94.5 s, ~22 MB, draft sent for review) -> kept as `micko-0.6-draft.mp4`
-- [~] 7. Restyle "Mićko on paper" (done except the full render) (owner's direction): see the section below
+- [x] 7. Restyle "Mićko on paper": rendered as `micko-0.6-paper-draft.mp4` (94.5 s, ~36 MB; grain costs bitrate) (owner's direction): see the section below
 - [ ] 8. Refinements (owner's list), owner's music, final render on the owner's PC
 
 ## Restyle: Mićko on paper
@@ -91,7 +92,7 @@ presentation; terminal skin gruvbox or similar. Decisions:
   punchy window on cream paper. Default skin lives in `capture/capture.sh`
   (`SKIN`) and `capture/ansi2json.mjs`; the mascot scene cycles other skins.
 - Steps: [x] tokens + CSS + engine  [x] remap scene colours
-  [x] recapture (now monokai)  [x] stills of every scene checked  [ ] render
+  [x] recapture (now monokai)  [x] stills of every scene checked  [x] render -> `micko-0.6-paper-draft.mp4`
   (review sheet: `restyle-review.png`; render here or on the owner's PC)
 
 ## Plan (1920x1080, 30 fps)
