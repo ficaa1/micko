@@ -27,26 +27,26 @@ source and the shared engine, so a re-run only redoes what changed.
 - [x] 4. Rename in scenes: intro retypes `argo-tui` as `micko`, release rolls to 0.6,
       window titles, outro commands
 - [x] 5. New scenes: `bird` (photos) and `mascot` (the ASCII Mićko perched, across skins)
-- [ ] 6. Soundtrack re-timed; full render -> `micko-0.6.mp4` + `poster.png`
+- [x] 6. Soundtrack re-timed; full render (94.5 s, ~22 MB, draft sent for review) -> `micko-0.6.mp4` + `poster.png`
 
 ## Plan (1920x1080, 30 fps)
 
 | # | id | seconds | content | status |
 |---|----|---------|---------|--------|
-| 1 | intro | 6.5 | types `argo-tui`, deletes it, types `micko`; wordmark, tagline | written |
-| 2 | release | 4.5 | big "0.6" reveal, new name + mascot pills | written |
-| 3 | bird | 8 | photos of Mićko, "named after an eastern rosella" | written |
-| 4 | mascot | 7 | the ASCII Mićko perched on the real pane, across skins | written |
-| 5 | list | 7 | real workflow list, phase glyphs, progress | written |
-| 6 | timeline | 8 | Gantt timeline, critical path ◆, now line | written |
-| 7 | explain | 7.5 | Explain cards: why a run failed, offline | written |
-| 8 | nodes | 6.5 | pipeline tree, folds, info panel | written |
-| 9 | logs | 6.5 | per-step labels, level colours, events | written |
-| 10 | palette | 6.5 | `:` command palette typing, cron list | written |
-| 11 | filter | 5.5 | query language `phase=Failed age<3h` | written |
-| 12 | skins | 7 | wall of 13 skins | written |
-| 13 | actions | 6.5 | marks + bulk actions, 4 outcomes | written |
-| 14 | outro | 7 | wordmark, install, feature ticker | written |
+| 1 | intro | 6.5 | types `argo-tui`, deletes it, types `micko`; wordmark, tagline | rendered |
+| 2 | release | 4.5 | big "0.6" reveal, new name + mascot pills | rendered |
+| 3 | bird | 8 | photos of Mićko, "named after an eastern rosella" | rendered |
+| 4 | mascot | 7 | the ASCII Mićko perched on the real pane, across skins | rendered |
+| 5 | list | 7 | real workflow list, phase glyphs, progress | rendered |
+| 6 | timeline | 8 | Gantt timeline, critical path ◆, now line | rendered |
+| 7 | explain | 7.5 | Explain cards: why a run failed, offline | rendered |
+| 8 | nodes | 6.5 | pipeline tree, folds, info panel | rendered |
+| 9 | logs | 6.5 | per-step labels, level colours, events | rendered |
+| 10 | palette | 6.5 | `:` command palette typing, cron list | rendered |
+| 11 | filter | 5.5 | query language `phase=Failed age<3h` | rendered |
+| 12 | skins | 7 | wall of 13 skins | rendered |
+| 13 | actions | 6.5 | marks + bulk actions, 4 outcomes | rendered |
+| 14 | outro | 7 | wordmark, install, feature ticker | rendered |
 
 ## Notes / decisions
 
