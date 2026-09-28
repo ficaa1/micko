@@ -78,7 +78,7 @@ Steps:
 - [x] 3. `anim` shots: record Mićko's loops at 10 fps, keep distinct poses + timing
 - [x] 4. Tour scenes written, stills checked (`renders/tour-review.png`); 92.5 s
 - [ ] 5. Full render -> `renders/micko-tour.mp4`
-- [ ] 6. Skill: `.claude/skills/motion-graphics/` so the next video is quicker
+- [x] 6. Skill: `.claude/skills/motion-graphics/` so the next video is quicker
 
 ## Style decisions (shared by release-0.6 and tour)
 
