@@ -5,9 +5,48 @@ this file first, then continue from the first unchecked item. Every step is
 committed on its own, so `git log -- video/` shows where things stopped.
 
 The project was argo-tui until 0.6. The 0.5 video (`argo-tui-0.5.mp4`) is
-kept as it was released; the source now builds the 0.6 video, `micko-0.6.mp4`.
+kept as it was released; the source now builds the 0.6 video.
 0.6 renames the tool to micko after Mićko, the owner's eastern rosella, and
 adds him as an opt-in mascot (`--mascot`) that perches on the pane at 80x40+.
+
+## Where things stand
+
+- **The 0.6 draft is kept** as `micko-0.6-draft.mp4` (+ `micko-0.6-draft-poster.png`).
+  Renders write `micko-0.6.mp4` by default (or `--out NAME.mp4`), so they
+  never overwrite the draft. The commit that rendered it is tagged in history
+  as "video: render the micko 0.6 draft".
+- **Next:** refinements before shipping, rendered on the owner's own PC, with
+  the owner's own music (see below). The synthesized soundtrack was only for
+  the draft.
+
+## Render on your own PC
+
+Needs Node 22+ and nothing else: the screens are committed, so Go, tmux and
+the capture step are only needed if the UI changes (capture is bash + tmux, so
+on Windows run it under WSL; rendering works natively).
+
+```sh
+git checkout claude/argo-tui-motion-graphic-lpmtsz
+cd video
+npm install
+npx playwright install chromium          # once: the browser that takes the frames
+node render.mjs --jobs 8                 # ~ one job per 2 CPU cores
+```
+
+- Speed comes from CPU cores: each frame is a Chromium layout + screenshot,
+  mostly CPU-bound. The draft took ~30 min on 4 cores; a 16-core desktop with
+  `--jobs 8` should be several times faster. The GPU helps little.
+- Only changed scenes re-render (per-scene mp4s in `out/scenes/`). A fresh
+  clone has no `out/`, so its first render does every scene.
+- **Your own music:** drop the track at `audio/music.mp3` (or `.m4a/.wav/.flac/.ogg`),
+  or pass `--music path/to/song.mp3`. It is trimmed to the video with a 2 s
+  fade-out and replaces the synthesized soundtrack. Changing music only
+  re-joins; no scene re-renders. Cuts in the draft, for syncing music
+  (from each scene's `dur:`): release 7.0 s, bird 11.5, mascot 19.5, list 26.5,
+  timeline 33.5, explain 41.5, nodes 49.0, logs 55.5, palette 62.0, filter 68.5,
+  skins 74.0, actions 81.0, outro 87.5, end 94.5.
+- Iterate on one scene: open `src/index.html` in a browser (scrubber), or
+  `node render.mjs --still bird:3.5`, then `node render.mjs bird` to re-render it.
 
 ## Resume in one command
 
@@ -27,7 +66,8 @@ source and the shared engine, so a re-run only redoes what changed.
 - [x] 4. Rename in scenes: intro retypes `argo-tui` as `micko`, release rolls to 0.6,
       window titles, outro commands
 - [x] 5. New scenes: `bird` (photos) and `mascot` (the ASCII Mićko perched, across skins)
-- [x] 6. Soundtrack re-timed; full render (94.5 s, ~22 MB, draft sent for review) -> `micko-0.6.mp4` + `poster.png`
+- [x] 6. Soundtrack re-timed; full render (94.5 s, ~22 MB, draft sent for review) -> kept as `micko-0.6-draft.mp4`
+- [ ] 7. Refinements (owner's list), owner's music, final render on the owner's PC
 
 ## Plan (1920x1080, 30 fps)
 

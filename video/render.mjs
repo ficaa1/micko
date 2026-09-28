@@ -5,6 +5,8 @@
 //   node render.mjs --jobs 3         scenes rendered in parallel (default 3)
 //   node render.mjs --still list:2.5 [more...]   write out/stills/list-2.5.png only
 //   node render.mjs --sheet list     contact sheet of a scene (every 0.5 s)
+//   node render.mjs --music song.mp3 use your own track (or drop audio/music.mp3)
+//   node render.mjs --out take2.mp4  name of the final video (default micko-0.6.mp4)
 // A scene is up to date when out/scenes/<id>.mp4 is newer than its source
 // file and the shared engine files, so an interrupted run resumes cheaply.
 import fs from 'node:fs';
@@ -27,7 +29,7 @@ const stills = []; const sheets = []; const only = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--still') { while (args[i + 1] && !args[i + 1].startsWith('--')) stills.push(args[++i]); }
   else if (args[i] === '--sheet') { while (args[i + 1] && !args[i + 1].startsWith('--')) sheets.push(args[++i]); }
-  else if (args[i] === '--jobs') i++;
+  else if (['--jobs', '--music', '--out'].includes(args[i])) i++;
   else if (!args[i].startsWith('--')) only.push(args[i]);
 }
 fs.mkdirSync(path.join(out, 'scenes'), { recursive: true });
@@ -111,13 +113,22 @@ const missing = scenes.filter((s) => !fs.existsSync(path.join(out, 'scenes', `${
 if (missing.length) { console.log(`not joined yet; missing: ${missing.map((s) => s.id).join(', ')}`); process.exit(0); }
 const list = path.join(out, 'concat.txt');
 fs.writeFileSync(list, scenes.map((s) => `file 'scenes/${s.id}.mp4'`).join('\n') + '\n');
-// Join losslessly into out/master.mp4 (with the soundtrack if it exists),
-// then encode the committed, smaller micko-0.6.mp4 from it.
+// Join losslessly into out/master.mp4 with a soundtrack, then encode the
+// smaller final video from it (--out NAME.mp4, default micko-0.6.mp4).
+// Music, first found wins: --music FILE, then audio/music.{mp3,m4a,wav,flac,ogg}
+// (your own track: trimmed to the video with a 2 s fade-out), then the
+// synthesized audio/soundtrack.m4a.
 const master = path.join(out, 'master.mp4');
-const final = path.join(dir, 'micko-0.6.mp4');
-const audio = path.join(dir, 'audio', 'soundtrack.m4a');
+const final = path.resolve(dir, opt('--out', 'micko-0.6.mp4'));
+const total = scenes.reduce((a, s) => a + s.dur, 0);
+const music = opt('--music') || ['mp3', 'm4a', 'wav', 'flac', 'ogg'].map((e) => path.join(dir, 'audio', 'music.' + e)).find((f) => fs.existsSync(f));
+const synth = path.join(dir, 'audio', 'soundtrack.m4a');
 const joinArgs = ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list];
-if (fs.existsSync(audio)) joinArgs.push('-i', audio, '-map', '0:v', '-map', '1:a', '-shortest', '-c:a', 'copy');
+if (music) {
+  joinArgs.push('-i', music, '-map', '0:v', '-map', '1:a', '-af', `afade=t=out:st=${Math.max(0, total - 2)}:d=2`,
+    '-t', String(total), '-c:a', 'aac', '-b:a', '256k');
+  console.log('music:', path.relative(dir, music));
+} else if (fs.existsSync(synth)) joinArgs.push('-i', synth, '-map', '0:v', '-map', '1:a', '-shortest', '-c:a', 'copy');
 joinArgs.push('-c:v', 'copy', '-movflags', '+faststart', master);
 await run(joinArgs);
 await run(['-y', '-loglevel', 'error', '-i', master, '-c:v', 'libx264', '-preset', 'slow', '-crf', '22', '-tune', 'animation',
