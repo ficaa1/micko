@@ -4,8 +4,8 @@ E.scene({
   id: 'logs', dur: 6.5,
   build(root) {
     const h = E.headline(root, { x: 110, y: 70, width: 1700, kicker: 'logs & events', title: 'Who said it, and what happened' });
-    const logs = E.term(root, 'nightly_logs', { rows: 24, title: 'argo-tui --demo  ·  logs' });
-    const ev = E.term(root, 'gate_events', { rows: 15, title: 'argo-tui --demo  ·  events' });
+    const logs = E.term(root, 'nightly_logs', { rows: 24, title: 'micko --demo  ·  logs' });
+    const ev = E.term(root, 'gate_events', { rows: 15, title: 'micko --demo  ·  events' });
     const cover = E.el('div', '', logs.body); E.css(cover, { left: 0, width: 124 * E.CW, height: 30 * E.LH, background: logs.skin.bg, zIndex: 3 });
     const hSrc = E.hl(logs, logs.cell(4, 1, 23, 16), '#bb9af7');
     const hErr = [7, 14, 21].map((r) => E.hl(logs, logs.cell(r, 40, r, 44), '#f7768e'));

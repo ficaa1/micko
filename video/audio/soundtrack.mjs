@@ -72,17 +72,25 @@ for (const s of scenes.slice(1)) {
     add(Math.floor((a + t) * SR), lp * env * 0.12 * (1 - x * 0.3), lp * env * 0.12 * (0.7 + x * 0.3));
   }
 }
-// Impact as 0.5 lands.
+// Impact as the version lands.
 { const c = at.release + 0.35;
   for (let k = 0; k < 1.6 * SR; k++) { const t = k / SR; add(Math.floor((c + t) * SR), Math.sin(2 * Math.PI * (48 + 30 * Math.exp(-t * 8)) * t) * Math.exp(-t * 2.6) * 0.3 + rnd() * Math.exp(-t * 25) * 0.05); } }
-// Key clicks under the typing.
+// A soft thump as each photo of Mićko lands.
+for (let i = 0; i < 5; i++) {
+  const c = at.bird + 1.05 + i * 0.45;
+  for (let k = 0; k < 0.35 * SR; k++) { const t = k / SR; add(Math.floor((c + t) * SR), Math.sin(2 * Math.PI * (90 + 60 * Math.exp(-t * 20)) * t) * Math.exp(-t * 12) * 0.12); }
+}
+// Key clicks under the typing: the intro types argo-tui, deletes it, types micko --demo.
 const clicks = [];
-for (let k = 0; k < 17; k++) clicks.push(at.intro + 0.35 + (k + 1) * 1.1 / 17);
+for (let k = 0; k < 8; k++) clicks.push(at.intro + 0.3 + (k + 1) * 0.7 / 8);
+for (let k = 0; k < 8; k++) clicks.push(at.intro + 1.35 + (k + 1) * 0.4 / 8);
+for (let k = 0; k < 12; k++) clicks.push(at.intro + 1.95 + (k + 1) * 0.65 / 12);
+for (let k = 0; k < 6; k++) clicks.push(at.mascot + 4.0 + k * 0.42);
 for (const x of [1.0, 1.4, 1.65, 1.9, 2.15, 2.85, 3.9]) clicks.push(at.palette + x);
 for (let k = 0; k < 19; k++) clicks.push(at.filter + 0.9 + k * 0.095);
 for (let k = 0; k < 3; k++) clicks.push(at.actions + 1.0 + k * 0.35);
-for (let k = 0; k < 50; k++) clicks.push(at.outro + 1.5 + k / 38);
-for (let k = 0; k < 15; k++) clicks.push(at.outro + 3.0 + k / 28);
+for (let k = 0; k < 47; k++) clicks.push(at.outro + 1.5 + k / 38);
+for (let k = 0; k < 21; k++) clicks.push(at.outro + 3.0 + k / 28);
 for (const c of clicks) {
   const f = 1800 + rnd() * 400;
   for (let k = 0; k < 0.025 * SR; k++) { const t = k / SR; const v = (Math.sin(2 * Math.PI * f * t) * 0.5 + rnd() * 0.5) * Math.exp(-t * 260) * 0.08; add(Math.floor((c + t) * SR), v, v * 0.8); }

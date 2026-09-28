@@ -131,7 +131,7 @@
   E.COLS = 124; E.ROWS = 32;
   // A terminal window showing screen `name`. Its origin is the window's top
   // left; cell(row, col) gives a cell's position inside it.
-  E.term = (parent, name, { title = 'argo-tui --demo', cols = E.COLS, rows = E.ROWS } = {}) => {
+  E.term = (parent, name, { title = 'micko --demo', cols = E.COLS, rows = E.ROWS } = {}) => {
     const sk = window.SKINS[window.SCREENS[name].skin];
     const w = cols * E.CW + E.PAD * 2, h = rows * E.LH + E.BAR + E.PAD * 2;
     const win = E.el('div', 'win', parent); E.css(win, { left: 0, top: 0, width: w, height: h, background: sk.bg });
@@ -143,10 +143,18 @@
     const api = {
       win, body, w, h, skin: sk, current: null,
       layer(n) { // one child per screen so switching is an opacity change
-        if (!layers[n]) { const d = E.el('div', '', body); E.css(d, { left: 0, top: 0, width: cols * E.CW, height: E.ROWS * E.LH, background: sk.bg }); d.innerHTML = E.screenHTML(n); layers[n] = d; }
+        if (!layers[n]) {
+          // Each layer paints its own screen's skin, so one window can cycle skins.
+          const sc = window.SCREENS[n], d = E.el('div', '', body);
+          E.css(d, { left: 0, top: 0, width: cols * E.CW, height: sc.rows.length * E.LH, background: window.SKINS[sc.skin].bg });
+          d.innerHTML = E.screenHTML(n); layers[n] = d;
+        }
         return layers[n];
       },
-      show(n, o = 1) { api.layer(n); for (const k in layers) E.set(layers[k], { o: k === n ? o : 0 }); api.current = n; },
+      show(n, o = 1) {
+        api.layer(n); for (const k in layers) E.set(layers[k], { o: k === n ? o : 0 }); api.current = n;
+        win.style.background = window.SKINS[window.SCREENS[n].skin].bg;
+      },
       // Crossfade from a to b by p.
       mix(a, b, p) { api.layer(a); api.layer(b); for (const k in layers) E.set(layers[k], { o: k === a ? 1 : k === b ? p : 0 }); layers[b].style.zIndex = 2; layers[a].style.zIndex = 1; },
       // Wipe from a to b by p, left to right (b is revealed behind a moving edge).

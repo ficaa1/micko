@@ -1,0 +1,56 @@
+// The mascot: the real 40-row capture with --mascot. The camera goes in on
+// the ASCII Mićko next to the photo he is drawn from, then the window cycles
+// skins to show he takes his colours from each one.
+E.scene({
+  id: 'mascot', dur: 7,
+  build(root) {
+    const h = E.headline(root, { x: 110, y: 90, width: 760, kicker: 'new · --mascot', title: 'Now he perches\non your pane' });
+    const skins = ['catppuccin-latte', 'gruvbox-dark', 'dracula', 'rose-pine-dawn', 'nord', 'monokai'];
+    const term = E.term(root, 'mascot_list', { rows: 40 });
+    skins.forEach((s) => term.layer('mascot_skin_' + s));
+
+    // Where Mićko sits: the non-blank cells above the pane's top border.
+    const rows = window.SCREENS.mascot_list.rows.map((r) => [...r.map((x) => x[0]).join('')]);
+    const border = rows.findIndex((r) => r.includes('╭'));
+    let c0 = 999, c1 = 0;
+    for (let r = 1; r < border; r++) rows[r].forEach((ch, c) => { if (ch.trim()) { c0 = Math.min(c0, c); c1 = Math.max(c1, c); } });
+    const bird = term.cell(1, c0, border, c1);
+    const hl = E.hl(term, bird, '#ff9e64');
+
+    const photo = E.el('div', '', root);
+    E.css(photo, { left: 110, top: 470, width: 560, height: 420, borderRadius: 18, overflow: 'hidden', border: '8px solid #f2efe9', boxShadow: '0 30px 70px rgba(0,0,0,.55)' });
+    const img = E.el('img', '', photo); img.src = 'photos/micko-monitor.jpg';
+    E.css(img, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '65% 55%' });
+
+    const S = 0.8;
+    const wide = { fx: term.w / 2, fy: term.h / 2, X: 1390, Y: 560, s: S };
+    const close = { fx: bird.x + bird.w / 2, fy: bird.y + bird.h / 2, X: 1390, Y: 520, s: 2.4 };
+    const keys = [[1.3, wide], [2.0, close], [3.3, close], [3.9, wide]];
+    const pPose = E.pill(root, 'the same pose, in ASCII', '#ff9e64'); pPose.style.fontSize = '28px';
+    const lab = E.el('div', 'chip', root); E.css(lab, { top: 980, fontSize: 26, color: '#e6e9ff', fontFamily: 'JBM, monospace' });
+    const how = E.el('div', '', root, '<span class=g style="color:#ff9e64">--mascot</span> · <span class=g style="color:#ff9e64">:mascot</span> · <span class=g style="color:#ff9e64">mascot: true</span><br><span style="color:#565f89">off by default · on terminals of 80×40 or larger</span>');
+    E.css(how, { left: 110, top: 930, font: '400 26px/1.5 Inter, sans-serif', color: '#a9b1d6', whiteSpace: 'nowrap' });
+
+    return (t) => {
+      h.update(t, 0.1, 6.45);
+      const pin = E.p(t, 0, 0.9, 'expo'), pout = E.p(t, 6.45, 7, 'in');
+      const cam = E.camPath(t, keys);
+      E.cam(term.win, { ...cam, X: cam.X + (1 - pin) * 800, o: E.clamp(pin * 2) * (1 - pout), ry: (1 - pin) * -30, persp: 2400 });
+      // Photo slides in from the left beside him.
+      const pp = E.p(t, 0.5, 1.3, 'expo');
+      E.set(photo, { x: (1 - pp) * -700, r: -3 * pp, o: E.clamp(pp * 2) * (1 - pout) });
+      E.set(hl, { o: E.inOut(t, 2.0, 3.3, 0.3) });
+      E.css(pPose, { left: 1390 - pPose.offsetWidth / 2, top: 700 });
+      E.pop(pPose, t, 2.1, 3.25);
+      // Skins: one every 0.42 s from 4.0 s.
+      const k = Math.floor((t - 4.0) / 0.42);
+      const cur = t < 4.0 ? 'mascot_list' : 'mascot_skin_' + skins[Math.min(k, skins.length - 1)];
+      term.show(cur);
+      lab.textContent = '--skin ' + (t < 4.0 ? 'tokyo-night' : skins[Math.min(k, skins.length - 1)]);
+      E.css(lab, { left: 1390 - lab.offsetWidth / 2 });
+      E.set(lab, { o: E.inOut(t, 3.95, 6.3, 0.2) });
+      const ph = E.p(t, 4.2, 4.8);
+      E.set(how, { o: ph * (1 - pout), y: (1 - ph) * 20 });
+    };
+  },
+});

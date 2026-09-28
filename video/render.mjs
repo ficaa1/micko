@@ -112,9 +112,9 @@ if (missing.length) { console.log(`not joined yet; missing: ${missing.map((s) =>
 const list = path.join(out, 'concat.txt');
 fs.writeFileSync(list, scenes.map((s) => `file 'scenes/${s.id}.mp4'`).join('\n') + '\n');
 // Join losslessly into out/master.mp4 (with the soundtrack if it exists),
-// then encode the committed, smaller argo-tui-0.5.mp4 from it.
+// then encode the committed, smaller micko-0.6.mp4 from it.
 const master = path.join(out, 'master.mp4');
-const final = path.join(dir, 'argo-tui-0.5.mp4');
+const final = path.join(dir, 'micko-0.6.mp4');
 const audio = path.join(dir, 'audio', 'soundtrack.m4a');
 const joinArgs = ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list];
 if (fs.existsSync(audio)) joinArgs.push('-i', audio, '-map', '0:v', '-map', '1:a', '-shortest', '-c:a', 'copy');

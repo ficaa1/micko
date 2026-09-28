@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Records real argo-tui screens for the video. Each shot starts the demo fresh
+# Records real micko screens for the video. Each shot starts the demo fresh
 # in a detached tmux session, sends keys, and saves the pane with its colours
 # (ANSI SGR) to screens/<name>.ans. Existing files are kept, so a re-run only
 # records what is missing; FORCE=1 records everything again.
@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(cd .. && pwd)
-BIN="$ROOT/dist/argo-tui"
+BIN="$ROOT/dist/micko"
 OUT=screens
 COLS=${COLS:-124}
 ROWS=${ROWS:-32}
@@ -22,7 +22,7 @@ S=argo-video
 start() {
   tmux kill-session -t $S 2>/dev/null || true
   tmux -f /dev/null new-session -d -s $S -x "$COLS" -y "$ROWS" \
-    "env COLORTERM=truecolor TERM=xterm-256color $BIN --demo --allow-actions --skin $1"
+    "env COLORTERM=truecolor TERM=xterm-256color $BIN --demo --allow-actions ${EXTRA:-} --skin $1"
   tmux set -t $S default-terminal tmux-256color >/dev/null
   tmux set -ga terminal-overrides ",*:RGB" >/dev/null
   sleep 2
@@ -89,6 +89,13 @@ shot marks_3 -- Down Space Down Space Down Space
 for skin in catppuccin-mocha catppuccin-latte gruvbox-dark gruvbox-light nord dracula \
   tokyo-night solarized-dark solarized-light one-dark rose-pine rose-pine-dawn monokai; do
   shot "skin_$skin" --skin "$skin" -- Down Down
+done
+# Mićko, the mascot, perches on the pane from 80x40 up: 40-row shots.
+ROWS=40 EXTRA=--mascot
+shot mascot_list --
+shot mascot_timeline -- Down Down T
+for skin in catppuccin-latte gruvbox-dark dracula rose-pine-dawn nord monokai; do
+  shot "mascot_skin_$skin" --skin "$skin" --
 done
 tmux kill-session -t $S 2>/dev/null || true
 echo done

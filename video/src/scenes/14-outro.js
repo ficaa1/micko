@@ -1,16 +1,23 @@
-// Outro: wordmark and version, the two commands to try it, a ticker of what
-// shipped, then fade to black.
+// Outro: Mićko, the wordmark and version, the two commands to try it, a
+// ticker of what shipped, then fade to black.
 E.scene({
   id: 'outro', dur: 7,
   build(root) {
     const mark = E.el('div', '', root);
     E.css(mark, { left: 0, width: 1920, top: 170, textAlign: 'center', font: '800 150px/1 JBM, monospace', letterSpacing: '-0.03em', whiteSpace: 'pre' });
-    const letters = [...'argo-tui'].map((ch) => E.el('span', 'w grad', mark, ch));
-    const ver = E.el('div', 'chip', root, 'v0.5.0');
-    E.css(ver, { top: 350, fontSize: 30, color: '#0a0b14', background: 'linear-gradient(90deg,#7aa2f7,#bb9af7)', border: 'none', padding: '10px 26px', fontWeight: 800 });
+    const letters = [...'micko'].map((ch) => E.el('span', 'w grad', mark, ch));
+    // Mićko himself, as a round avatar left of the wordmark.
+    const textW = letters.reduce((a, s) => a + s.offsetWidth, 0);
+    const av = E.el('div', '', root);
+    E.css(av, { left: 960 - textW / 2 - 60 - 150, top: 160, width: 150, height: 150, borderRadius: '50%', overflow: 'hidden', border: '5px solid #f2efe9', boxShadow: '0 16px 40px rgba(0,0,0,.5)' });
+    const avImg = E.el('img', '', av); avImg.src = 'photos/micko-cage.jpg';
+    E.css(avImg, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 18%' });
+    E.css(mark, { left: 75 });
+    const ver = E.el('div', 'chip', root, 'v0.6.0');
+    E.css(ver, { top: 350, fontSize: 30, color: '#0a0b14', background: 'linear-gradient(90deg,#f7768e,#ff9e64)', border: 'none', padding: '10px 26px', fontWeight: 800 });
 
     const card = E.el('div', 'card', root); E.css(card, { left: 360, top: 470, width: 1200, height: 250 });
-    const lines = ['gh release download v0.5.0 --repo ficaa1/argo-tui', 'argo-tui --demo'];
+    const lines = ['gh release download v0.6.0 --repo ficaa1/micko', 'micko --demo --mascot'];
     const ls = lines.map((l, i) => {
       const n = E.el('div', '', card); E.css(n, { left: 44, top: 52 + i * 84, font: '500 34px JBM, monospace', color: '#c0caf5', whiteSpace: 'pre' });
       return n;
@@ -18,7 +25,7 @@ E.scene({
     const cmt = E.el('div', '', card, '# no cluster needed: synthetic data, no writes');
     E.css(cmt, { left: 44, top: 196, font: '400 24px JBM, monospace', color: '#565f89', whiteSpace: 'pre' });
 
-    const feats = 'Timeline  ·  Explain  ·  Events  ·  Command palette  ·  Query filters  ·  13 skins  ·  Bulk actions  ·  Cron workflows  ·  Templates  ·  Archive  ·  All namespaces  ·  ';
+    const feats = 'Mićko the mascot  ·  Timeline  ·  Explain  ·  Events  ·  Command palette  ·  Query filters  ·  13 skins  ·  Bulk actions  ·  Cron workflows  ·  Templates  ·  Archive  ·  All namespaces  ·  ';
     const band = E.el('div', '', root); E.css(band, { left: 0, top: 840, width: 1920, height: 70, overflow: 'hidden',
       maskImage: 'linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)', webkitMaskImage: 'linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)' });
     const tick = E.el('div', '', band, E.esc(feats + feats + feats));
@@ -33,6 +40,7 @@ E.scene({
       });
       E.css(ver, { left: 960 - ver.offsetWidth / 2 });
       E.pop(ver, t, 0.75);
+      E.pop(av, t, 0.35);
       const pc = E.p(t, 1.0, 1.6);
       E.set(card, { o: pc, y: (1 - pc) * 50 });
       // Type the commands, one after the other.
