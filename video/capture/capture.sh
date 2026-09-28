@@ -33,7 +33,7 @@ save() { sleep 0.9; tmux capture-pane -t $S -e -p > "$OUT/$1.ans"; echo "  $1"; 
 want() { [ "${FORCE:-0}" = 1 ] || [ ! -f "$OUT/$1.ans" ]; }
 
 shot() {
-  local name=$1; shift; local skin=tokyo-night
+  local name=$1; shift; local skin=${SKIN:-gruvbox-light}
   if [ "$1" = --skin ]; then skin=$2; shift 2; fi
   [ "$1" = -- ] && shift
   want "$name" || return 0
@@ -41,7 +41,7 @@ shot() {
 }
 
 type_shot() {
-  local name=$1; shift; local skin=tokyo-night
+  local name=$1; shift; local skin=${SKIN:-gruvbox-light}
   if [ "$1" = --skin ]; then skin=$2; shift 2; fi
   [ "$1" = -- ] && shift
   want "${name}_00" || return 0

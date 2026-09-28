@@ -13,17 +13,24 @@ E.scene({
       ['micko-perch.jpg', 440, 330, 1010, 760, 4, '50% 35%'],
       ['micko-monitor.jpg', 440, 330, 1460, 745, -5, '65% 55%'],
     ];
+    let cards0 = 0;
     const cards = P.map(([f, w, hh, x, y, r, pos]) => {
       const c = E.el('div', '', root);
-      E.css(c, { left: x - w / 2, top: y - hh / 2, width: w, height: hh, borderRadius: 16, overflow: 'hidden', background: '#1a1b26',
-        border: '8px solid #f2efe9', boxShadow: '0 30px 70px rgba(0,0,0,.55)' });
+      E.css(c, { left: x - w / 2, top: y - hh / 2, width: w, height: hh, borderRadius: 6, background: '#fbf8f1',
+        border: '10px solid #fbf8f1', boxShadow: '0 0 0 2.5px #1f1a17, 9px 9px 0 2.5px #1f1a17' });
       const img = E.el('img', '', c); img.src = 'photos/' + f;
       E.css(img, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: pos });
+      // Two strips of washi tape hold each print down.
+      const i = cards0++;
+      [[-18, 26, -9, '#f2c14e'], [-16, w - 150, 7, '#6f7fd6']].forEach(([ty, tx, rot, col], j) => {
+        if ((i + j) % 3 === 2) return;
+        const tp = E.el('div', 'tape', c); E.css(tp, { top: ty, left: tx, background: col, transform: `rotate(${rot}deg)`, zIndex: 2 });
+      });
       return { c, x, y, r, w, hh };
     });
     const hero = cards[4];
-    const cap = E.el('div', 'pill', root, 'he rests his beak on the monitor…', '#ff9e64');
-    cap.style.background = '#ff9e64'; cap.style.fontSize = '28px';
+    const cap = E.el('div', 'pill', root, 'he rests his beak on the monitor…', '#e8553b');
+    cap.style.background = '#e8553b'; cap.style.fontSize = '28px';
 
     return (t) => {
       h.update(t, 0.2, 7.35);
@@ -40,7 +47,7 @@ E.scene({
           x = heroP * (1300 - hero.x); y += heroP * (520 - hero.y); rot = E.lerp(rot, 0, heroP); s *= 1 + heroP * 0.75;
         }
         E.set(c, { x, y: y - out * 60, r: rot, s, o: E.clamp(p * 2) * (1 - out) });
-        c.style.filter = dim < 1 ? `brightness(${dim}) blur(${(1 - dim) * 6}px)` : 'none';
+        c.style.filter = dim < 1 ? `grayscale(${1 - dim}) opacity(${0.35 + 0.65 * dim})` : 'none';
         c.style.zIndex = isHero ? 3 : 1;
       });
       E.css(cap, { left: 1300 - cap.offsetWidth / 2, top: 520 + (hero.hh * 1.75) / 2 + 30, zIndex: 4 });

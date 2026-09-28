@@ -10,16 +10,16 @@ E.scene({
     const cam = { fx: term.w / 2, fy: E.BAR + E.PAD + 7.5 * E.LH, X: 960, Y: 650, s: 1.55 };
     // Wipe that reveals the bars left to right, with a glowing edge.
     const wipe = E.el('div', '', term.body); E.css(wipe, { top: 5 * E.LH, height: 8 * E.LH, background: term.skin.bg, zIndex: 3 });
-    const edge = E.el('div', '', term.body); E.css(edge, { top: 5 * E.LH, height: 8 * E.LH, width: 3, background: '#7dcfff', boxShadow: '0 0 18px 4px rgba(125,207,255,.7)', zIndex: 4 });
-    const hCrit = E.hl(term, term.cell(6, 38, 10, 38), '#ff9e64');
-    const hWait = E.hl(term, term.cell(9, 73, 9, 76), '#e0af68');
-    const hRetry = E.hl(term, term.cell(7, 60, 7, 110), '#bb9af7');
-    const hNow = E.hl(term, term.cell(4, 121, 13, 121), '#7dcfff');
+    const edge = E.el('div', '', term.body); E.css(edge, { top: 5 * E.LH, height: 8 * E.LH, width: 3, background: '#3f5bb8', boxShadow: '0 0 18px 4px rgba(63,91,184,.7)', zIndex: 4 });
+    const hCrit = E.hl(term, term.cell(6, 38, 10, 38), '#e8553b');
+    const hWait = E.hl(term, term.cell(9, 73, 9, 76), '#e3a21a');
+    const hRetry = E.hl(term, term.cell(7, 60, 7, 110), '#6f7fd6');
+    const hNow = E.hl(term, term.cell(4, 121, 13, 121), '#3f5bb8');
     const spot = E.spot(term, term.cell(6, 38, 10, 38));
-    const pCrit = E.pill(root, '<span class=g>◆</span> critical path: the chain that set the end time', '#ff9e64');
-    const pWait = E.pill(root, '<span class=g>░</span> shading: time a step waited to start', '#e0af68');
-    const pRetry = E.pill(root, 'groups are brackets over the time they took', '#bb9af7');
-    const pNow = E.pill(root, 'a live “now” line while it runs', '#7dcfff');
+    const pCrit = E.pill(root, '<span class=g>◆</span> critical path: the chain that set the end time', '#e8553b');
+    const pWait = E.pill(root, '<span class=g>░</span> shading: time a step waited to start', '#e3a21a');
+    const pRetry = E.pill(root, 'groups are brackets over the time they took', '#6f7fd6');
+    const pNow = E.pill(root, 'a live “now” line while it runs', '#3f5bb8');
     const at = (pill, r, c, dx = 0, dy = 0) => { const q = E.toStage(cam, r.x + dx, r.y + dy); E.css(pill, { left: q.x, top: q.y }); };
 
     return (t) => {

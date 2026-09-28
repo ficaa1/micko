@@ -4,7 +4,7 @@ E.scene({
   id: 'skins', dur: 7,
   build(root) {
     const h = E.headline(root, { x: 0, y: 70, width: 1920, align: 'center', kicker: '', title: '13 truecolor skins' });
-    const sub = E.el('div', 'body', root, 'or <span class=g style="color:#7dcfff">--skin auto</span> picks dark or light from your terminal');
+    const sub = E.el('div', 'body', root, 'or <span class=g style="color:#3f5bb8">--skin auto</span> picks dark or light from your terminal');
     E.css(sub, { left: 0, width: 1920, top: 200, textAlign: 'center' });
     const wall = E.el('div', '', root); E.css(wall, { left: 0, top: 0, width: 1920, height: 1080 });
     const names = ['catppuccin-mocha', 'gruvbox-dark', 'nord', 'dracula', 'tokyo-night', 'solarized-dark', 'one-dark',
@@ -13,7 +13,7 @@ E.scene({
     const tiles = names.map((n, i) => {
       const term = E.term(wall, 'skin_' + n, { title: n });
       const lab = E.el('div', '', wall, n);
-      E.css(lab, { font: '600 22px JBM, monospace', color: '#c0caf5', whiteSpace: 'nowrap' });
+      E.css(lab, { font: '600 22px JBM, monospace', color: '#1f1a17', whiteSpace: 'nowrap' });
       const r = i < 7 ? 0 : 1, c = i < 7 ? i : i - 7 + 0.5;
       return { term, lab, x: 80 + c * GX, y: 300 + r * GY, i };
     });

@@ -67,7 +67,28 @@ source and the shared engine, so a re-run only redoes what changed.
       window titles, outro commands
 - [x] 5. New scenes: `bird` (photos) and `mascot` (the ASCII Mićko perched, across skins)
 - [x] 6. Soundtrack re-timed; full render (94.5 s, ~22 MB, draft sent for review) -> kept as `micko-0.6-draft.mp4`
-- [ ] 7. Refinements (owner's list), owner's music, final render on the owner's PC
+- [ ] 7. Restyle "Mićko on paper" (owner's direction): see the section below
+- [ ] 8. Refinements (owner's list), owner's music, final render on the owner's PC
+
+## Restyle: Mićko on paper
+
+Direction from the owner: lean into Mićko's colours, paper textures, TUI-type
+presentation; terminal skin gruvbox or similar. Decisions:
+- Palette from his plumage, printed like risograph ink on warm paper:
+  crimson `#d7263d` (head, chest), cobalt `#3f5bb8` and violet-blue `#6f7fd6`
+  (wing), yellow `#f2c14e` / `#e3a21a` (scallop edges), olive `#6f8a2a`,
+  cheek cream `#fbf8f1`; ink `#1f1a17` on paper `#efe4cf`.
+- Background: paper with grain that "boils" on twos, faint engineering-grid
+  lines, soft mottling; no glows, no dark gradients.
+- Type: JetBrains Mono throughout (TUI); kickers as box-drawing rules
+  (`╭─ KICKER ──`), titles with a blinking block cursor; misregistered
+  crimson/cobalt print offset on the wordmark and the big numbers.
+- Objects: cards, pills, keycaps and windows as paper cut-outs with ink
+  borders and hard offset shadows; photos taped on with washi tape.
+- Terminal skin: gruvbox-light (its `#fbf1c7` reads as a sheet of paper);
+  every screen recaptured with it.
+- Steps: [ ] tokens + CSS + engine  [ ] remap scene colours
+  [ ] recapture gruvbox-light  [ ] stills of every scene checked  [ ] render
 
 ## Plan (1920x1080, 30 fps)
 

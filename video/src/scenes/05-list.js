@@ -5,11 +5,11 @@ E.scene({
   build(root) {
     const h = E.headline(root, { x: 110, y: 250, width: 600, kicker: 'the workflow list', title: 'Every run,\nat a glance', body: 'Phase as a glyph, a word and a colour. Progress bars. The reason a run failed, right in the row.' });
     const term = E.term(root, 'list_0');
-    const phase = E.hl(term, term.cell(3, 49, 15, 67), '#7dcfff');
-    const prog = E.hl(term, term.cell(3, 84, 15, 97), '#bb9af7');
+    const phase = E.hl(term, term.cell(3, 49, 15, 67), '#3f5bb8');
+    const prog = E.hl(term, term.cell(3, 84, 15, 97), '#6f7fd6');
     const spot = E.spot(term, term.cell(3, 49, 15, 67));
-    const p1 = E.pill(root, '<span class=g>✓ ● ◐ ✗ ○</span>  glyph · word · colour', '#7dcfff');
-    const p2 = E.pill(root, 'progress on every row', '#bb9af7');
+    const p1 = E.pill(root, '<span class=g>✓ ● ◐ ✗ ○</span>  glyph · word · colour', '#3f5bb8');
+    const p2 = E.pill(root, 'progress on every row', '#6f7fd6');
     const wide = { fx: term.w / 2, fy: term.h / 2, X: 1300, Y: 560, s: 0.93 };
 
     return (t) => {

@@ -70,10 +70,14 @@
   // Headline block: kicker, title, body, positioned at (x, y).
   E.headline = (root, { x, y, kicker, title, body, width = 720, align = 'left' }) => {
     const box = E.el('div', '', root); E.css(box, { left: x, top: y, width });
-    const k = E.el('div', 'kicker', box); k.textContent = kicker || '';
+    // Kicker as a box-drawing rule, like a pane title: ╭─ KICKER ────────
+    const k = E.el('div', 'kicker', box); k.textContent = kicker ? '╭─ ' + kicker + ' ' + '─'.repeat(10) : '';
+    E.css(k, { width, textAlign: align });
     const ti = E.el('div', 'title', box); E.css(ti, { top: 40, textAlign: align, width });
     const titleSpans = E.words(ti, title);
-    const b = E.el('div', 'body', box); E.css(b, { top: 40 + 102 * (title.split('\n').length) + 14, width, whiteSpace: 'normal', textAlign: align });
+    // A block cursor after the last word, blinking once the title is in.
+    const cur = E.el('span', 'cursor', ti);
+    const b = E.el('div', 'body', box); E.css(b, { top: 40 + 91 * (title.split('\n').length) + 18, width, whiteSpace: 'normal', textAlign: align });
     const bodySpans = E.words(b, body || '');
     ti.style.whiteSpace = 'pre';
     return {
@@ -83,6 +87,8 @@
         const pk = E.p(t, a, a + 0.5);
         E.set(k, { x: (1 - pk) * -30, o: pk * po });
         E.revealWords(titleSpans, t, a + 0.1, 0.07, 0.6);
+        const tc = a + 0.1 + titleSpans.length * 0.07 + 0.3;
+        cur.style.opacity = t < tc ? 0 : ((t - tc) * 1.8) % 1 < 0.6 ? 1 : 0;
         E.revealWords(bodySpans, t, a + 0.45, 0.025, 0.5);
         E.set(box, { o: po, y: (1 - po) * -20 });
       },
@@ -136,7 +142,7 @@
     const w = cols * E.CW + E.PAD * 2, h = rows * E.LH + E.BAR + E.PAD * 2;
     const win = E.el('div', 'win', parent); E.css(win, { left: 0, top: 0, width: w, height: h, background: sk.bg });
     const bar = E.el('div', 'bar', win);
-    ['#ff5f57', '#febc2e', '#28c840'].forEach((c, i) => E.css(E.el('div', 'dot', bar), { left: 16 + i * 20, background: c }));
+    ['#d7263d', '#f2c14e', '#3f5bb8'].forEach((c, i) => E.css(E.el('div', 'dot', bar), { left: 16 + i * 20, background: c }));
     const ttl = E.el('div', 'ttl', bar); ttl.textContent = title;
     const body = E.el('div', 'term', win); E.css(body, { left: E.PAD, top: E.BAR + E.PAD, width: cols * E.CW, height: rows * E.LH, overflow: 'hidden' });
     const layers = {};
@@ -195,15 +201,14 @@
     return { ...keys[keys.length - 1][1] };
   };
   // Highlight box around a rect in a window's coordinates (added to the window).
-  E.hl = (term, rect, color = '#7dcfff') => {
+  E.hl = (term, rect, color = '#3f5bb8') => {
     const n = E.el('div', 'hl', term.win);
-    E.css(n, { left: rect.x - 5, top: rect.y - 3, width: rect.w + 10, height: rect.h + 6, borderColor: color, zIndex: 5,
-      boxShadow: `0 0 0 4px ${color}24, 0 0 30px ${color}66` });
+    E.css(n, { left: rect.x - 5, top: rect.y - 3, width: rect.w + 10, height: rect.h + 6, borderColor: color, zIndex: 5 });
     return n;
   };
   // Dim everything in a window except rect: four panes.
   E.spot = (term, rect) => {
-    const ns = [0, 1, 2, 3].map(() => { const d = E.el('div', 'dim-mask', term.win); d.style.zIndex = 4; return d; });
+    const ns = [0, 1, 2, 3].map(() => { const d = E.el('div', 'dim-mask', term.win); d.style.zIndex = 4; d.style.background = term.skin.bg + 'c4'; return d; });
     const { w, h } = term;
     const place = (r) => {
       E.css(ns[0], { left: 0, top: 0, width: w, height: Math.max(0, r.y - 4) });
@@ -214,7 +219,13 @@
     place(rect);
     return { place, set: (o) => ns.forEach((d) => E.set(d, { o })) };
   };
-  E.pill = (parent, text, color = '#7dcfff') => { const n = E.el('div', 'pill', parent); n.innerHTML = text; n.style.background = color; return n; };
+  // Relative luminance of #rrggbb, to pick ink or cream text on a colour.
+  E.lum = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  E.pill = (parent, text, color = '#f2c14e') => {
+    const n = E.el('div', 'pill', parent); n.innerHTML = text; n.style.background = color;
+    n.style.color = E.lum(color) < 0.3 ? '#fbf8f1' : '#1f1a17';
+    return n;
+  };
 
   // Pop-in helper for small elements: scale from .6 with a spring.
   E.pop = (n, t, a, out = 99, extra = {}) => {
@@ -230,10 +241,13 @@
 
   function background(T) {
     const o = document.querySelectorAll('#bg .orb');
-    E.set(o[0], { x: 200 + Math.sin(T * 0.21) * 260, y: -200 + Math.cos(T * 0.17) * 140 });
-    E.set(o[1], { x: 1150 + Math.cos(T * 0.19) * 240, y: 380 + Math.sin(T * 0.23) * 160 });
-    E.set(o[2], { x: 600 + Math.sin(T * 0.13 + 2) * 420, y: 620 + Math.cos(T * 0.29) * 120 });
-    document.querySelector('#bg .grid').style.backgroundPosition = `0 ${(T * 40) % 80}px`;
+    // Paper mottling drifts slowly; the grain jumps 12 times a second, like
+    // printed frames of stop-motion.
+    E.set(o[0], { x: 100 + Math.sin(T * 0.11) * 160, y: -150 + Math.cos(T * 0.09) * 90 });
+    E.set(o[1], { x: 1150 + Math.cos(T * 0.1) * 160, y: 420 + Math.sin(T * 0.12) * 100 });
+    E.set(o[2], { x: 500 + Math.sin(T * 0.07 + 2) * 260, y: 640 + Math.cos(T * 0.15) * 80 });
+    const k = Math.floor(T * 12), h = (n) => ((Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1 + 1) % 1;
+    document.querySelector('#bg .grain').style.transform = `translate(${Math.round(h(k) * 160 - 80)}px,${Math.round(h(k + 99) * 160 - 80)}px)`;
   }
 
   let live = null; // { id, update }

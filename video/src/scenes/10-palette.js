@@ -10,16 +10,16 @@ E.scene({
     const caps = keys.map(([k], i) => {
       const n = E.el('div', 'chip', root, k);
       E.css(n, { top: 945, left: 760 + i * 92 + (i === 6 ? 70 : 0), minWidth: 76, textAlign: 'center', fontSize: 30, padding: '12px 18px',
-        background: 'linear-gradient(180deg,#2a2f4a,#1b1e30)', border: '1px solid rgba(255,255,255,.14)', boxShadow: '0 6px 0 #0d0f1a, 0 12px 30px rgba(0,0,0,.4)', color: '#e6e9ff' });
+        background: 'linear-gradient(180deg,#fbf8f1,#efe4cf)', border: '1px solid rgba(31,26,23,.35)', boxShadow: '0 6px 0 #1f1a17, 0 0 0 transparent', color: '#1f1a17' });
       return n;
     });
-    const hPal = E.hl(term, term.cell(2, 1, 4, 80), '#bb9af7');
-    const hCron = E.hl(term, term.cell(3, 1, 6, 120), '#7dcfff');
-    const hInfo = E.hl(term, term.cell(20, 1, 27, 58), '#9ece6a');
+    const hPal = E.hl(term, term.cell(2, 1, 4, 80), '#6f7fd6');
+    const hCron = E.hl(term, term.cell(3, 1, 6, 120), '#3f5bb8');
+    const hInfo = E.hl(term, term.cell(20, 1, 27, 58), '#6f8a2a');
     const pills = [
-      [':cron, :tmpl, :cwftmpl, :aw, :ns, :all, :profile', '#bb9af7', 1.2, 2.8],
-      ['cron workflows: schedule, last run, next run, policy', '#7dcfff', 3.05, 3.85],
-      ['the next five runs, computed like the controller does', '#9ece6a', 4.1, 5.9],
+      [':cron, :tmpl, :cwftmpl, :aw, :ns, :all, :profile', '#6f7fd6', 1.2, 2.8],
+      ['cron workflows: schedule, last run, next run, policy', '#3f5bb8', 3.05, 3.85],
+      ['the next five runs, computed like the controller does', '#6f8a2a', 4.1, 5.9],
     ].map(([txt, c, a, b]) => { const p = E.pill(root, txt, c); p.style.fontSize = '26px'; return { p, a, b }; });
     const cam = { fx: term.w / 2, fy: term.h / 2, X: 1300, Y: 510, s: 0.93 };
 
@@ -34,7 +34,7 @@ E.scene({
         const press = E.inOut(t, at, at + 0.08, 0.08);
         const pop = E.p(t, at - 0.2, at + 0.15, 'back');
         E.set(caps[i], { y: (1 - pop) * 30 + press * 5, s: 0.8 + 0.2 * pop, o: E.clamp(pop * 2) * (1 - pout) });
-        caps[i].style.borderColor = press > 0.5 ? '#7dcfff' : 'rgba(255,255,255,.14)';
+        caps[i].style.borderColor = press > 0.5 ? '#3f5bb8' : 'rgba(31,26,23,.35)';
       });
       term.show(cur);
       E.set(hPal, { o: E.inOut(t, 1.2, 2.75, 0.25) });

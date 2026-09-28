@@ -8,10 +8,10 @@ E.scene({
     term.layer('train_info');
     const cam = { fx: term.w / 2, fy: term.h / 2, X: 640, Y: 540, s: 0.93 };
     const H = [
-      [E.hl(term, term.cell(3, 1, 3, 60), '#7dcfff'), 'a progress line: bar, counts by state, time against the estimate', '#7dcfff', 1.1, 2.2],
-      [E.hl(term, term.cell(8, 2, 11, 60), '#f7768e'), 'retry attempts nest under their Retry node, with exit codes', '#f7768e', 2.3, 3.3],
-      [E.hl(term, term.cell(12, 2, 13, 36), '#9ece6a'), 'what each task waits for, and the exit handler as its own tree', '#9ece6a', 3.4, 4.3],
-      [E.hl(term, term.cell(15, 1, 26, 120), '#bb9af7'), '<span class=g>i</span> opens everything the workflow says about a node', '#bb9af7', 4.75, 6.0],
+      [E.hl(term, term.cell(3, 1, 3, 60), '#3f5bb8'), 'a progress line: bar, counts by state, time against the estimate', '#3f5bb8', 1.1, 2.2],
+      [E.hl(term, term.cell(8, 2, 11, 60), '#d7263d'), 'retry attempts nest under their Retry node, with exit codes', '#d7263d', 2.3, 3.3],
+      [E.hl(term, term.cell(12, 2, 13, 36), '#6f8a2a'), 'what each task waits for, and the exit handler as its own tree', '#6f8a2a', 3.4, 4.3],
+      [E.hl(term, term.cell(15, 1, 26, 120), '#6f7fd6'), '<span class=g>i</span> opens everything the workflow says about a node', '#6f7fd6', 4.75, 6.0],
     ].map(([box, text, col, a, b]) => {
       const p = E.pill(root, text, col); p.style.fontSize = '26px';
       return { box, p, a, b };

@@ -8,21 +8,21 @@ E.scene({
     E.css(kick, { left: 0, width: 1920, top: 170, textAlign: 'center', fontSize: 24 });
 
     const big = E.el('div', 'flow', root);
-    E.css(big, { position: 'absolute', left: 0, width: 1920, top: 210, textAlign: 'center', font: '700 400px/1 Grotesk, sans-serif', letterSpacing: '-0.04em', color: '#fff', whiteSpace: 'nowrap' });
+    E.css(big, { position: 'absolute', left: 0, width: 1920, top: 210, textAlign: 'center', font: '700 400px/1 JBM, monospace', letterSpacing: '-0.04em', color: '#1f1a17', whiteSpace: 'nowrap' });
     big.innerHTML = '<span class="grad">0.</span><span id="rel-col" class="grad" style="display:inline-block;height:1em;overflow:hidden;vertical-align:top;position:relative"><span id="rel-strip" class="grad" style="display:block;position:relative;line-height:1">0<br>1<br>2<br>3<br>4<br>5<br>6</span></span>';
     const strip = big.querySelector('#rel-strip');
 
     // Row one is what is new in 0.6, in rosella colours; row two what it keeps.
-    const news = [['argo-tui → micko', '#f7768e'], ['Mićko, the mascot', '#ff9e64'], ['<span class=g>--mascot</span>', '#e0af68']];
+    const news = [['argo-tui → micko', '#d7263d'], ['Mićko, the mascot', '#e8553b'], ['<span class=g>--mascot</span>', '#e3a21a']];
     const keeps = ['Timeline', 'Explain', 'Events', 'Command palette', 'Query filters', '13 skins', 'Bulk actions'];
     const pill = (html, dot, big) => {
       const n = E.el('div', 'chip', root, `<span style="color:${dot}">●</span> ${html}`);
-      E.css(n, { fontFamily: 'Inter, sans-serif', fontSize: big ? 32 : 24, color: big ? '#fff' : '#a9b1d6' });
+      E.css(n, { fontFamily: 'JBM, monospace', fontSize: big ? 32 : 24, color: big ? '#1f1a17' : '#4a3f36' });
       if (big) { n.style.borderColor = dot + '88'; n.style.background = dot + '1f'; }
       return n;
     };
     const row1 = news.map(([h, c]) => pill(h, c, true));
-    const row2 = keeps.map((h) => pill(h, '#565f89', false));
+    const row2 = keeps.map((h) => pill(h, '#8a7b69', false));
     [[row1, 690], [row2, 800]].forEach(([r, top]) => {
       const widths = r.map((p) => p.offsetWidth), gap = 18;
       let x = 960 - (widths.reduce((a, b) => a + b, 0) + gap * (r.length - 1)) / 2;

@@ -5,24 +5,24 @@ E.scene({
   id: 'intro', dur: 7,
   build(root) {
     const prompt = E.el('div', '', root);
-    E.css(prompt, { left: 0, width: 1920, top: 500, textAlign: 'center', font: '500 46px JBM, monospace', color: '#c0caf5', whiteSpace: 'pre' });
+    E.css(prompt, { left: 0, width: 1920, top: 500, textAlign: 'center', font: '500 46px JBM, monospace', color: '#1f1a17', whiteSpace: 'pre' });
     const typed = E.el('span', '', prompt); typed.style.position = 'static';
-    const caret = E.el('span', '', prompt); E.css(caret, { position: 'relative', display: 'inline-block', width: 26, height: 52, top: 8, marginLeft: 4, background: '#7aa2f7' });
+    const caret = E.el('span', '', prompt); E.css(caret, { position: 'relative', display: 'inline-block', width: 26, height: 52, top: 8, marginLeft: 4, background: '#3f5bb8' });
 
     const mark = E.el('div', '', root);
     E.css(mark, { left: 0, width: 1920, top: 330, textAlign: 'center', font: '800 220px/1 JBM, monospace', letterSpacing: '-0.03em', whiteSpace: 'pre' });
     const letters = [...'micko'].map((ch) => E.el('span', 'w grad', mark, ch));
-    const cur = E.el('span', 'w', mark); E.css(cur, { display: 'inline-block', width: 110, height: 186, marginLeft: 18, background: 'linear-gradient(180deg,#f7768e,#ff9e64)', top: 24 });
+    const cur = E.el('span', 'w', mark); E.css(cur, { display: 'inline-block', width: 110, height: 186, marginLeft: 18, background: 'linear-gradient(180deg,#d7263d,#e8553b)', top: 24 });
 
     const tag = E.el('div', 'body', root);
-    E.css(tag, { left: 0, width: 1920, top: 590, textAlign: 'center', fontSize: 40, color: '#c0caf5' });
+    E.css(tag, { left: 0, width: 1920, top: 590, textAlign: 'center', fontSize: 40, color: '#1f1a17' });
     const tagWords = E.words(tag, 'A keyboard-first terminal UI for Argo Workflows');
 
-    const glyphs = [['✓', 'Succeeded', '#9ece6a'], ['●', 'Running', '#7dcfff'], ['◐', 'Suspended', '#e0af68'], ['✗', 'Failed', '#f7768e'], ['○', 'Pending', '#a9b1d6']];
+    const glyphs = [['✓', 'Succeeded', '#6f8a2a'], ['●', 'Running', '#3f5bb8'], ['◐', 'Suspended', '#e3a21a'], ['✗', 'Failed', '#d7263d'], ['○', 'Pending', '#4a3f36']];
     const row = E.el('div', '', root); E.css(row, { left: 0, top: 710, width: 1920, height: 80 });
     const chips = glyphs.map(([g, w, c], i) => {
       const n = E.el('div', 'chip', row, `<span class=g style="color:${c}">${g}</span> ${w}`);
-      E.css(n, { left: 960 - (5 * 250) / 2 + i * 250 + 10, top: 0, width: 230, textAlign: 'center', color: '#c0caf5', fontSize: 24 });
+      E.css(n, { left: 960 - (5 * 250) / 2 + i * 250 + 10, top: 0, width: 230, textAlign: 'center', color: '#1f1a17', fontSize: 24 });
       return n;
     });
 
@@ -37,7 +37,7 @@ E.scene({
     return (t) => {
       // 1. prompt: old name, deleted, new name; then it lifts away.
       typed.textContent = '❯ ' + line(t);
-      typed.style.color = t > 1.0 && t < 1.85 ? '#565f89' : '#c0caf5';
+      typed.style.color = t > 1.0 && t < 1.85 ? '#8a7b69' : '#1f1a17';
       caret.style.opacity = t < 2.7 ? ((t * 2.2) % 1 < 0.6 ? 1 : 0.15) : 1;
       const up = E.p(t, 2.75, 3.15, 'in');
       E.set(prompt, { y: -up * 60, o: E.p(t, 0, 0.3) * (1 - up), blur: up * 6 });

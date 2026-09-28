@@ -15,22 +15,23 @@ E.scene({
     let c0 = 999, c1 = 0;
     for (let r = 1; r < border; r++) rows[r].forEach((ch, c) => { if (ch.trim()) { c0 = Math.min(c0, c); c1 = Math.max(c1, c); } });
     const bird = term.cell(1, c0, border, c1);
-    const hl = E.hl(term, bird, '#ff9e64');
+    const hl = E.hl(term, bird, '#e8553b');
 
     const photo = E.el('div', '', root);
-    E.css(photo, { left: 110, top: 470, width: 560, height: 420, borderRadius: 18, overflow: 'hidden', border: '8px solid #f2efe9', boxShadow: '0 30px 70px rgba(0,0,0,.55)' });
+    E.css(photo, { left: 110, top: 470, width: 560, height: 420, borderRadius: 6, background: '#fbf8f1', border: '10px solid #fbf8f1', boxShadow: '0 0 0 2.5px #1f1a17, 9px 9px 0 2.5px #1f1a17' });
     const img = E.el('img', '', photo); img.src = 'photos/micko-monitor.jpg';
     E.css(img, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '65% 55%' });
+    E.css(E.el('div', 'tape', photo), { top: -18, left: 210, background: '#f2c14e', transform: 'rotate(-4deg)', zIndex: 2 });
 
     const S = 0.8;
     const wide = { fx: term.w / 2, fy: term.h / 2, X: 1390, Y: 560, s: S };
     const close = { fx: bird.x + bird.w / 2, fy: bird.y + bird.h / 2, X: 1350, Y: 640, s: 2.2 };
     // The close-up crops the window to a lens around him, so the zoom never covers the headline.
     const M = 56, lens = { t: bird.y - M * 0.7, l: bird.x - M, r: term.w - (bird.x + bird.w + M), b: term.h - (bird.y + bird.h + M * 0.7) };
-    const pPose = E.pill(root, 'the same pose, in ASCII', '#ff9e64'); pPose.style.fontSize = '28px';
-    const lab = E.el('div', 'chip', root); E.css(lab, { top: 980, fontSize: 26, color: '#e6e9ff', fontFamily: 'JBM, monospace' });
-    const how = E.el('div', '', root, '<span class=g style="color:#ff9e64">--mascot</span> · <span class=g style="color:#ff9e64">:mascot</span> · <span class=g style="color:#ff9e64">mascot: true</span><br><span style="color:#565f89">off by default · on terminals of 80×40 or larger</span>');
-    E.css(how, { left: 110, top: 930, font: '400 26px/1.5 Inter, sans-serif', color: '#a9b1d6', whiteSpace: 'nowrap' });
+    const pPose = E.pill(root, 'the same pose, in ASCII', '#e8553b'); pPose.style.fontSize = '28px';
+    const lab = E.el('div', 'chip', root); E.css(lab, { top: 980, fontSize: 26, color: '#1f1a17', fontFamily: 'JBM, monospace' });
+    const how = E.el('div', '', root, '<span class=g style="color:#e8553b">--mascot</span> · <span class=g style="color:#e8553b">:mascot</span> · <span class=g style="color:#e8553b">mascot: true</span><br><span style="color:#8a7b69">off by default · on terminals of 80×40 or larger</span>');
+    E.css(how, { left: 110, top: 930, font: '400 26px/1.5 JBM, monospace', color: '#4a3f36', whiteSpace: 'nowrap' });
 
     return (t) => {
       h.update(t, 0.1, 6.45);
@@ -49,7 +50,7 @@ E.scene({
       const k = Math.floor((t - 4.0) / 0.42);
       const cur = t < 4.0 ? 'mascot_list' : 'mascot_skin_' + skins[Math.min(k, skins.length - 1)];
       term.show(cur);
-      lab.textContent = '--skin ' + (t < 4.0 ? 'tokyo-night' : skins[Math.min(k, skins.length - 1)]);
+      lab.textContent = '--skin ' + (t < 4.0 ? 'gruvbox-light' : skins[Math.min(k, skins.length - 1)]);
       E.css(lab, { left: 1390 - lab.offsetWidth / 2 });
       E.set(lab, { o: E.inOut(t, 3.95, 6.3, 0.2) });
       const ph = E.p(t, 4.2, 4.8);

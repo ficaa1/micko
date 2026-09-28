@@ -6,16 +6,16 @@ E.scene({
     const k = E.el('div', 'kicker', root, 'list filter · a small query language'); E.css(k, { left: 110, top: 90 });
     const q = 'phase=Failed age<3h';
     const big = E.el('div', '', root);
-    E.css(big, { left: 110, top: 140, font: '700 96px/1.1 JBM, monospace', whiteSpace: 'pre', color: '#e6e9ff' });
-    const col = (i) => (i < 6 ? '#7aa2f7' : i < 12 ? '#f7768e' : i === 12 ? '#e6e9ff' : i < 17 ? '#7aa2f7' : '#e0af68');
+    E.css(big, { left: 110, top: 140, font: '700 96px/1.1 JBM, monospace', whiteSpace: 'pre', color: '#1f1a17' });
+    const col = (i) => (i < 6 ? '#3f5bb8' : i < 12 ? '#d7263d' : i === 12 ? '#1f1a17' : i < 17 ? '#3f5bb8' : '#e3a21a');
     const chars = [...q].map((ch, i) => { const s = E.el('span', 'w', big, E.esc(ch)); s.style.color = col(i); return s; });
-    const slash = E.el('span', 'w', big, '/ '); slash.style.color = '#565f89'; big.prepend(slash);
-    const caret = E.el('span', 'w', big); E.css(caret, { display: 'inline-block', width: 52, height: 96, background: '#7dcfff', top: 14 });
+    const slash = E.el('span', 'w', big, '/ '); slash.style.color = '#8a7b69'; big.prepend(slash);
+    const caret = E.el('span', 'w', big); E.css(caret, { display: 'inline-block', width: 52, height: 96, background: '#3f5bb8', top: 14 });
     const term = E.term(root, 'filter_00', { rows: 17 });
     for (let i = 1; i <= 19; i++) term.layer('filter_' + String(i).padStart(2, '0'));
-    const hRows = E.hl(term, term.cell(4, 1, 5, 120), '#f7768e');
+    const hRows = E.hl(term, term.cell(4, 1, 5, 120), '#d7263d');
     const grammar = ['a|b', '!word', '/regex/', '~fuzzy', 'dur>10m', 'label:k=v', 'tmpl=etl', 'cron=nightly'];
-    const chips = grammar.map((g) => { const n = E.el('div', 'chip', root, E.esc(g)); n.style.fontSize = '28px'; n.style.color = '#c0caf5'; return n; });
+    const chips = grammar.map((g) => { const n = E.el('div', 'chip', root, E.esc(g)); n.style.fontSize = '28px'; n.style.color = '#1f1a17'; return n; });
     let x = 110; chips.forEach((c) => { E.css(c, { left: x, top: 960 }); x += c.offsetWidth + 16; });
     const T0 = 0.9, DT = 0.095;
     // "N shown" from each captured footer: the real count as the query grows.
@@ -26,7 +26,7 @@ E.scene({
       shown.push(m ? +m[1] : 12);
     }
     const stat = E.el('div', '', root); E.css(stat, { left: 1330, top: 420, width: 480, textAlign: 'center' });
-    const num = E.el('div', '', stat); E.css(num, { left: 0, width: 480, top: 0, font: '700 220px/1 Grotesk, sans-serif', color: '#fff', textAlign: 'center' });
+    const num = E.el('div', '', stat); E.css(num, { left: 0, width: 480, top: 0, font: '700 220px/1 JBM, monospace', color: '#1f1a17', textAlign: 'center' });
     const lab = E.el('div', 'body', stat, 'workflows shown'); E.css(lab, { left: 0, width: 480, top: 230, textAlign: 'center' });
 
     return (t) => {
@@ -43,7 +43,7 @@ E.scene({
       E.cam(term.win, { fx: 0, fy: 0, X: 110, Y: 330 + (1 - pin) * 400 - pout * 60, s: 1.0, rx: (1 - pin) * 25, persp: 2400, o: E.clamp(pin * 2) * (1 - pout) });
       term.show('filter_' + String(n).padStart(2, '0'));
       num.textContent = shown[n];
-      num.style.color = shown[n] < 12 ? '#f7768e' : '#fff';
+      num.style.color = shown[n] < 12 ? '#d7263d' : '#1f1a17';
       const ps = E.p(t, 0.4, 1.2);
       E.set(stat, { o: ps * (1 - pout), y: (1 - ps) * 40 });
       // A little bump each time the count changes.

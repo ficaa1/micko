@@ -71,7 +71,7 @@ const dir = path.join(video, 'screens');
 const screens = {};
 for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.ans')).sort()) {
   const name = f.slice(0, -4);
-  const skin = (name.match(/(?:^|_)skin_(.+)$/) || [])[1] || 'tokyo-night';
+  const skin = (name.match(/(?:^|_)skin_(.+)$/) || [])[1] || process.env.SKIN || 'gruvbox-light';
   screens[name] = { skin, rows: parse(fs.readFileSync(path.join(dir, f), 'utf8')) };
 }
 const out = path.join(video, 'src/screens.js');

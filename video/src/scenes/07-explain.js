@@ -5,8 +5,8 @@ E.scene({
   build(root) {
     const h = E.headline(root, { x: 110, y: 230, width: 640, kicker: 'new · explain section', title: 'Why did\nit fail?', body: 'Findings built from what the workflow records, and nothing else.' });
     const chips = ['no network service', 'no model', 'same answer every time'].map((c, i) => {
-      const n = E.el('div', 'chip', root, `<span style="color:#9ece6a" class=g>✓</span> ${c}`);
-      E.css(n, { left: 110, top: 660 + i * 76, fontFamily: 'Inter, sans-serif', fontSize: 26, color: '#e6e9ff' });
+      const n = E.el('div', 'chip', root, `<span style="color:#6f8a2a" class=g>✓</span> ${c}`);
+      E.css(n, { left: 110, top: 660 + i * 76, fontFamily: 'JBM, monospace', fontSize: 26, color: '#1f1a17' });
       return n;
     });
     const term = E.term(root, 'nightly_explain');
@@ -16,12 +16,12 @@ E.scene({
     const k2 = { fx: fx(62), fy: fy(18), X: 960, Y: 560, s: 1.55 };
     const k3 = { fx: fx(62), fy: fy(22.5), X: 960, Y: 520, s: 1.55 };
     const keys = [[2.2, wide], [2.95, k1], [3.95, k1], [4.55, k2], [5.45, k2], [5.95, k3]];
-    const hA = E.hl(term, term.cell(4, 1, 4, 64), '#f7768e');
-    const hB = E.hl(term, term.cell(16, 12, 20, 107), '#e0af68');
-    const hC = E.hl(term, term.cell(21, 2, 22, 120), '#9ece6a');
-    const pA = E.pill(root, 'severity · headline · evidence · next step', '#f7768e');
-    const pB = E.pill(root, 'it reads the failed pod’s log and quotes the lines that matter', '#e0af68');
-    const pC = E.pill(root, 'and says what to do next', '#9ece6a');
+    const hA = E.hl(term, term.cell(4, 1, 4, 64), '#d7263d');
+    const hB = E.hl(term, term.cell(16, 12, 20, 107), '#e3a21a');
+    const hC = E.hl(term, term.cell(21, 2, 22, 120), '#6f8a2a');
+    const pA = E.pill(root, 'severity · headline · evidence · next step', '#d7263d');
+    const pB = E.pill(root, 'it reads the failed pod’s log and quotes the lines that matter', '#e3a21a');
+    const pC = E.pill(root, 'and says what to do next', '#6f8a2a');
     [pA, pB, pC].forEach((p) => (p.style.fontSize = '28px'));
 
     return (t) => {

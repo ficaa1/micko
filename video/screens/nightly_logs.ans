@@ -1,32 +1,32 @@
-[38;2;192;202;245m[48;2;41;46;66m [1m[38;2;122;162;247mmicko 0.6.0 @ 534e53f[0m[38;2;192;202;245m[48;2;41;46;66m   [38;2;86;95;137mserver: [38;2;192;202;245msynthetic demo   [38;2;86;95;137mns: [38;2;192;202;245mdemo[39m                                                      [1m[38;2;26;27;38m[48;2;158;206;106m READ ONLY [0m[48;2;41;46;66m
-[38;2;65;72;104m[49m╭─[39m [1m[38;2;122;162;247mLogs demo-nightly-report[0m [38;2;65;72;104m───────────────────────────────────────────────────────────────────[39m [38;2;86;95;137mstream ended (29 records)[39m [38;2;65;72;104m─╮
-│[39m Scope: workflow-wide · container: main · [ENDED]                                                                         [38;2;65;72;104m│
-│[39m [38;2;86;95;137mretained: 29/10000 lines (0 evicted)[39m                                                                                     [38;2;65;72;104m│
-│[39m [38;2;158;206;106mextract[39m          2026-09-28T12:11:13Z extract finished                                                                   [38;2;65;72;104m│
-│[39m [1m[38;2;122;162;247mtransform(0)[0m     2026-09-28T12:11:59Z reading raw-extract (184022 rows)                                                  [38;2;65;72;104m│
-│[39m [1m[38;2;122;162;247mtransform(0)[0m     2026-09-28T12:12:02Z applying 14 transforms                                                             [38;2;65;72;104m│
-│[39m [1m[38;2;122;162;247mtransform(0)[0m     2026-09-28T12:12:05Z [1m[38;2;247;118;142mERROR[0m column 'revenue_eur' has 312 nulls; schema requires non-null                 [38;2;65;72;104m│
-│[39m [1m[38;2;122;162;247mtransform(0)[0m     2026-09-28T12:12:08Z Traceback (most recent call last):                                                 [38;2;65;72;104m│
-│[39m [1m[38;2;122;162;247mtransform(0)[0m     2026-09-28T12:12:11Z   File "/app/transform.py", line 88, in <module>                                   [38;2;65;72;104m│
-│[39m [1m[38;2;122;162;247mtransform(0)[0m     2026-09-28T12:12:14Z SchemaViolation: revenue_eur: expected non-null                                    [38;2;65;72;104m│
-│[39m [1m[38;2;122;162;247mtransform(0)[0m     2026-09-28T12:12:17Z exit status 1                                                                      [38;2;65;72;104m│
-│[39m [38;2;187;154;247mtransform(1)[39m     2026-09-28T12:12:51Z reading raw-extract (184022 rows)                                                  [38;2;65;72;104m│
-│[39m [38;2;187;154;247mtransform(1)[39m     2026-09-28T12:12:54Z applying 14 transforms                                                             [38;2;65;72;104m│
-│[39m [38;2;187;154;247mtransform(1)[39m     2026-09-28T12:12:57Z [1m[38;2;247;118;142mERROR[0m column 'revenue_eur' has 312 nulls; schema requires non-null                 [38;2;65;72;104m│
-│[39m [38;2;187;154;247mtransform(1)[39m     2026-09-28T12:13:00Z Traceback (most recent call last):                                                 [38;2;65;72;104m│
-│[39m [38;2;187;154;247mtransform(1)[39m     2026-09-28T12:13:03Z   File "/app/transform.py", line 88, in <module>                                   [38;2;65;72;104m│
-│[39m [38;2;187;154;247mtransform(1)[39m     2026-09-28T12:13:06Z SchemaViolation: revenue_eur: expected non-null                                    [38;2;65;72;104m│
-│[39m [38;2;187;154;247mtransform(1)[39m     2026-09-28T12:13:09Z exit status 1                                                                      [38;2;65;72;104m│
-│[39m [38;2;125;207;255mtransform(2)[39m     2026-09-28T12:13:43Z reading raw-extract (184022 rows)                                                  [38;2;65;72;104m│
-│[39m [38;2;125;207;255mtransform(2)[39m     2026-09-28T12:13:46Z applying 14 transforms                                                             [38;2;65;72;104m│
-│[39m [38;2;125;207;255mtransform(2)[39m     2026-09-28T12:13:49Z [1m[38;2;247;118;142mERROR[0m column 'revenue_eur' has 312 nulls; schema requires non-null                 [38;2;65;72;104m│
-│[39m [38;2;125;207;255mtransform(2)[39m     2026-09-28T12:13:52Z Traceback (most recent call last):                                                 [38;2;65;72;104m│
-│[39m [38;2;125;207;255mtransform(2)[39m     2026-09-28T12:13:55Z   File "/app/transform.py", line 88, in <module>                                   [38;2;65;72;104m│
-│[39m [38;2;125;207;255mtransform(2)[39m     2026-09-28T12:13:58Z SchemaViolation: revenue_eur: expected non-null                                    [38;2;65;72;104m│
-│[39m [38;2;125;207;255mtransform(2)[39m     2026-09-28T12:14:01Z exit status 1                                                                      [38;2;65;72;104m│
-│[39m [38;2;187;154;247monExit[39m           2026-09-28T12:14:34Z starting notify                                                                    [38;2;65;72;104m│
-│[39m [38;2;187;154;247monExit[39m           2026-09-28T12:14:37Z config loaded                                                                      [38;2;65;72;104m│
-│[39m [38;2;187;154;247monExit[39m           2026-09-28T12:14:40Z working...                                                                         [38;2;65;72;104m│
-│[39m [38;2;187;154;247monExit[39m           2026-09-28T12:14:43Z notify finished                                                                    [38;2;65;72;104m│
+[38;2;60;56;54m[48;2;235;219;178m [1m[38;2;66;123;88mmicko 0.6.0 @ 534e53f[0m[38;2;60;56;54m[48;2;235;219;178m   [38;2;146;131;116mserver: [38;2;60;56;54msynthetic demo   [38;2;146;131;116mns: [38;2;60;56;54mdemo[39m                                                      [1m[38;2;251;241;199m[48;2;121;116;14m READ ONLY [0m[48;2;235;219;178m
+[38;2;189;174;147m[49m╭─[39m [1m[38;2;66;123;88mLogs demo-nightly-report[0m [38;2;189;174;147m───────────────────────────────────────────────────────────────────[39m [38;2;146;131;116mstream ended (29 records)[39m [38;2;189;174;147m─╮
+│[39m Scope: workflow-wide · container: main · [ENDED]                                                                         [38;2;189;174;147m│
+│[39m [38;2;146;131;116mretained: 29/10000 lines (0 evicted)[39m                                                                                     [38;2;189;174;147m│
+│[39m [38;2;121;116;14mextract[39m          2026-09-28T14:20:13Z extract finished                                                                   [38;2;189;174;147m│
+│[39m [1m[38;2;66;123;88mtransform(0)[0m     2026-09-28T14:20:59Z reading raw-extract (184022 rows)                                                  [38;2;189;174;147m│
+│[39m [1m[38;2;66;123;88mtransform(0)[0m     2026-09-28T14:21:02Z applying 14 transforms                                                             [38;2;189;174;147m│
+│[39m [1m[38;2;66;123;88mtransform(0)[0m     2026-09-28T14:21:05Z [1m[38;2;157;0;6mERROR[0m column 'revenue_eur' has 312 nulls; schema requires non-null                 [38;2;189;174;147m│
+│[39m [1m[38;2;66;123;88mtransform(0)[0m     2026-09-28T14:21:08Z Traceback (most recent call last):                                                 [38;2;189;174;147m│
+│[39m [1m[38;2;66;123;88mtransform(0)[0m     2026-09-28T14:21:11Z   File "/app/transform.py", line 88, in <module>                                   [38;2;189;174;147m│
+│[39m [1m[38;2;66;123;88mtransform(0)[0m     2026-09-28T14:21:14Z SchemaViolation: revenue_eur: expected non-null                                    [38;2;189;174;147m│
+│[39m [1m[38;2;66;123;88mtransform(0)[0m     2026-09-28T14:21:17Z exit status 1                                                                      [38;2;189;174;147m│
+│[39m [38;2;143;63;113mtransform(1)[39m     2026-09-28T14:21:51Z reading raw-extract (184022 rows)                                                  [38;2;189;174;147m│
+│[39m [38;2;143;63;113mtransform(1)[39m     2026-09-28T14:21:54Z applying 14 transforms                                                             [38;2;189;174;147m│
+│[39m [38;2;143;63;113mtransform(1)[39m     2026-09-28T14:21:57Z [1m[38;2;157;0;6mERROR[0m column 'revenue_eur' has 312 nulls; schema requires non-null                 [38;2;189;174;147m│
+│[39m [38;2;143;63;113mtransform(1)[39m     2026-09-28T14:22:00Z Traceback (most recent call last):                                                 [38;2;189;174;147m│
+│[39m [38;2;143;63;113mtransform(1)[39m     2026-09-28T14:22:03Z   File "/app/transform.py", line 88, in <module>                                   [38;2;189;174;147m│
+│[39m [38;2;143;63;113mtransform(1)[39m     2026-09-28T14:22:06Z SchemaViolation: revenue_eur: expected non-null                                    [38;2;189;174;147m│
+│[39m [38;2;143;63;113mtransform(1)[39m     2026-09-28T14:22:09Z exit status 1                                                                      [38;2;189;174;147m│
+│[39m [38;2;7;102;120mtransform(2)[39m     2026-09-28T14:22:43Z reading raw-extract (184022 rows)                                                  [38;2;189;174;147m│
+│[39m [38;2;7;102;120mtransform(2)[39m     2026-09-28T14:22:46Z applying 14 transforms                                                             [38;2;189;174;147m│
+│[39m [38;2;7;102;120mtransform(2)[39m     2026-09-28T14:22:49Z [1m[38;2;157;0;6mERROR[0m column 'revenue_eur' has 312 nulls; schema requires non-null                 [38;2;189;174;147m│
+│[39m [38;2;7;102;120mtransform(2)[39m     2026-09-28T14:22:52Z Traceback (most recent call last):                                                 [38;2;189;174;147m│
+│[39m [38;2;7;102;120mtransform(2)[39m     2026-09-28T14:22:55Z   File "/app/transform.py", line 88, in <module>                                   [38;2;189;174;147m│
+│[39m [38;2;7;102;120mtransform(2)[39m     2026-09-28T14:22:58Z SchemaViolation: revenue_eur: expected non-null                                    [38;2;189;174;147m│
+│[39m [38;2;7;102;120mtransform(2)[39m     2026-09-28T14:23:01Z exit status 1                                                                      [38;2;189;174;147m│
+│[39m [38;2;143;63;113monExit[39m           2026-09-28T14:23:34Z starting notify                                                                    [38;2;189;174;147m│
+│[39m [38;2;143;63;113monExit[39m           2026-09-28T14:23:37Z config loaded                                                                      [38;2;189;174;147m│
+│[39m [38;2;143;63;113monExit[39m           2026-09-28T14:23:40Z working...                                                                         [38;2;189;174;147m│
+│[39m [38;2;143;63;113monExit[39m           2026-09-28T14:23:43Z notify finished                                                                    [38;2;189;174;147m│
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-[38;2;122;162;247mlogs[38;2;86;95;137m   [1m[38;2;122;162;247mt[0m[38;2;86;95;137m follow[39m  [1m[38;2;122;162;247mspace[0m[38;2;86;95;137m pause[39m  [1m[38;2;122;162;247m/[0m[38;2;86;95;137m search[39m  [1m[38;2;122;162;247mn[0m[38;2;86;95;137m next[39m  [1m[38;2;122;162;247m&[0m[38;2;86;95;137m only matches[39m  [1m[38;2;122;162;247mw[0m[38;2;86;95;137m wrap[39m  [1m[38;2;122;162;247mL[0m[38;2;86;95;137m labels[39m  [1m[38;2;122;162;247mc[0m[38;2;86;95;137m cont…[39m [1m[38;2;122;162;247m:[0m[38;2;86;95;137m command[39m  [1m[38;2;122;162;247m?[0m[38;2;86;95;137m help   ENDED · follow
+[38;2;66;123;88mlogs[38;2;146;131;116m   [1m[38;2;66;123;88mt[0m[38;2;146;131;116m follow[39m  [1m[38;2;66;123;88mspace[0m[38;2;146;131;116m pause[39m  [1m[38;2;66;123;88m/[0m[38;2;146;131;116m search[39m  [1m[38;2;66;123;88mn[0m[38;2;146;131;116m next[39m  [1m[38;2;66;123;88m&[0m[38;2;146;131;116m only matches[39m  [1m[38;2;66;123;88mw[0m[38;2;146;131;116m wrap[39m  [1m[38;2;66;123;88mL[0m[38;2;146;131;116m labels[39m  [1m[38;2;66;123;88mc[0m[38;2;146;131;116m cont…[39m [1m[38;2;66;123;88m:[0m[38;2;146;131;116m command[39m  [1m[38;2;66;123;88m?[0m[38;2;146;131;116m help   ENDED · follow

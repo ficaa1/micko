@@ -7,13 +7,13 @@ E.scene({
     const logs = E.term(root, 'nightly_logs', { rows: 24, title: 'micko --demo  ·  logs' });
     const ev = E.term(root, 'gate_events', { rows: 15, title: 'micko --demo  ·  events' });
     const cover = E.el('div', '', logs.body); E.css(cover, { left: 0, width: 124 * E.CW, height: 30 * E.LH, background: logs.skin.bg, zIndex: 3 });
-    const hSrc = E.hl(logs, logs.cell(4, 1, 23, 16), '#bb9af7');
-    const hErr = [7, 14, 21].map((r) => E.hl(logs, logs.cell(r, 40, r, 44), '#f7768e'));
-    const hEv = E.hl(ev, ev.cell(4, 1, 13, 120), '#e0af68');
+    const hSrc = E.hl(logs, logs.cell(4, 1, 23, 16), '#6f7fd6');
+    const hErr = [7, 14, 21].map((r) => E.hl(logs, logs.cell(r, 40, r, 44), '#d7263d'));
+    const hEv = E.hl(ev, ev.cell(4, 1, 13, 120), '#e3a21a');
     const pills = [
-      ['every line labelled with the step that wrote it', '#bb9af7', 2.1, 3.2],
-      ['level words coloured: ERROR, WARN, DEBUG', '#f7768e', 3.25, 4.3],
-      ['Kubernetes events stream live while a workflow is open', '#e0af68', 4.75, 5.95],
+      ['every line labelled with the step that wrote it', '#6f7fd6', 2.1, 3.2],
+      ['level words coloured: ERROR, WARN, DEBUG', '#d7263d', 3.25, 4.3],
+      ['Kubernetes events stream live while a workflow is open', '#e3a21a', 4.75, 5.95],
     ].map(([txt, c, a, b]) => { const p = E.pill(root, txt, c); p.style.fontSize = '26px'; return { p, a, b }; });
 
     return (t) => {
