@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1
 
 - Mićko hops. On the floor he now watches you from a little way off, and
   when he wants a kiss he turns, crouches and hops over to his mirror in two
