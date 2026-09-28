@@ -66,7 +66,7 @@ func ClampLines(lines []string, height int) []string {
 // as tea.KeyPressMsg.String() reports them, so the text matches what a reader
 // must actually press. The whole body fits the pane of a 40-row terminal and
 // every line the pane of an 80-column one, so a common terminal shows the
-// overlay without clipping it. That pane is the one left under Mićko's perch.
+// overlay without clipping it. That pane is the one Mićko leaves on the floor.
 func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
@@ -96,12 +96,11 @@ func helpLines() []string {
 		"          / search  n / N next / previous match  & only matching lines",
 		"          w wrap long lines  L source labels  | pipe to a program",
 		"          ctrl+t server timestamps (reopens the stream, keeps the lines)",
-		"Actions   a opens the pane; only verbs that apply are offered",
+		"Actions   a opens the pane (with --allow-actions); lists verbs that apply",
 		"          u resume  z suspend  r retry  b resubmit  s stop",
 		"          t terminate (type the name)  d delete (then only D deletes)",
 		"          y confirms; enter and esc cancel; one result goes to the footer",
 		"          marked: one request per workflow, in order; results stay until esc",
-		"          actions need --allow-actions",
 	}
 }
 
@@ -123,12 +122,12 @@ func (h *HelpOverlay) styleLine(i int, l string) string {
 }
 
 // helpFitWidth and helpFitHeight are the body of an 80x40 terminal inside
-// the shell's border, under the three rows Mićko perches in: the smallest
+// the shell's border, less the four rows Mićko takes on the floor: the smallest
 // common terminal the overlay is written to fit whole. Help that clips there
 // hides keys from the reader who most needs them.
 const (
 	helpFitWidth  = 76
-	helpFitHeight = 33
+	helpFitHeight = 32
 )
 
 // View renders the overlay clipped to the given box. A closed overlay renders

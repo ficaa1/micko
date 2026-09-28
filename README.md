@@ -19,8 +19,9 @@ time, and on a terminal of 80×40 or larger he perches on top of the pane, the
 way he rests his beak on a monitor. Now and then he blinks, dozes off, or
 lifts his head to look left and right. With `mascot: floor` (or
 `--mascot=floor`, or a second `:mascot`) he sits on the floor of the pane
-instead, in its bottom corner, watching you and now and then turning to kiss
-himself in his mirror. He is off by default: he costs the pane three rows.
+instead, in its bottom corner, watching you and now and then hopping over to
+kiss himself in his mirror. He is off by default: he costs the pane three rows
+perched, four on the floor.
 
 ![micko browsing the demo dataset](docs/demo.gif)
 

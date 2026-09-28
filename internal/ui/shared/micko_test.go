@@ -3,6 +3,7 @@ package shared
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -167,5 +168,51 @@ func TestMirroredTurnsHimRound(t *testing.T) {
 	}
 	if got := mirrored("====`-^-^-' "); got != " `-^-^-'====" {
 		t.Errorf("mirrored = %q", got)
+	}
+}
+
+// On the floor he hops to his mirror and back: in the air he is a row off
+// the floor with his feet tucked, he kisses the mirror only once he is at
+// it, and each hop redraws him a handful of times, not for seconds.
+func TestMickoHopsToHisMirror(t *testing.T) {
+	var lifted, tucked, kissedAway bool
+	var quick time.Duration
+	for i, b := range MickoFloorBeats {
+		for row, l := range b.Pose.Lines {
+			for col, r := range []rune(l) {
+				if m := []rune(b.Pose.Mask[row]); r != ' ' && m[col] == ' ' || r == ' ' && m[col] != ' ' {
+					t.Fatalf("beat %d row %d col %d: %q masked %q", i, row, col, r, m[col])
+				}
+			}
+		}
+		air := strings.TrimSpace(b.Pose.Lines[0]) != ""
+		lifted = lifted || air
+		if air {
+			floor := strings.TrimSpace(b.Pose.Lines[len(b.Pose.Lines)-1])
+			if floor != "┴" {
+				t.Errorf("beat %d: off the floor, but the floor holds %q", i, floor)
+			}
+			tucked = tucked || strings.Contains(b.Pose.Lines[3], "`-----'") || strings.Contains(b.Pose.Lines[3], "'-----`")
+		}
+		if strings.Contains(b.Pose.Lines[2], "│<│") && !strings.Contains(b.Pose.Lines[2], ")>│<│") {
+			kissedAway = true
+		}
+		if b.Hold < 100*time.Millisecond {
+			quick += b.Hold
+		}
+	}
+	if !lifted || !tucked {
+		t.Errorf("no beat has him in the air (lifted %v) with his feet tucked (%v)", lifted, tucked)
+	}
+	if kissedAway {
+		t.Error("he kisses the mirror from across the floor")
+	}
+	// Four hops, each well under a second in the air.
+	if quick <= 0 || quick > 2*time.Second {
+		t.Errorf("hops spend %v in quick frames, want some and under 2s", quick)
+	}
+	first, last := MickoFloorBeats[0].Pose, MickoFloorBeats[len(MickoFloorBeats)-1].Pose
+	if !sameArt(first, MickoFloor) || !sameArt(last, MickoFloor) {
+		t.Error("the routine does not start and end where he watches you")
 	}
 }

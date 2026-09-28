@@ -9,7 +9,8 @@ import (
 )
 
 // On the floor, Mićko sits in the pane's bottom-right corner with his
-// mirror against its right edge. His rows are the pane's last three, kept
+// mirror against its right edge. His rows are the pane's last four, the top
+// one air for him to hop into, kept
 // clear of content the way the perch keeps the rows above the border, so
 // the list never runs under him and the border and the footer stay in the
 // same rows on every route. His feet, his tail and the mirror's stand are
