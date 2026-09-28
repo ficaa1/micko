@@ -38,7 +38,7 @@
     if (parent) parent.appendChild(n);
     return n;
   };
-  E.css = (n, o) => { for (const k in o) n.style[k] = typeof o[k] === 'number' && !/opacity|zIndex/.test(k) ? o[k] + 'px' : o[k]; return n; };
+  E.css = (n, o) => { for (const k in o) n.style[k] = typeof o[k] === 'number' && !/opacity|zIndex|lineHeight|fontWeight|flex/.test(k) ? o[k] + 'px' : o[k]; return n; };
   // Transform + opacity in one call: {x, y, s, sx, sy, r, rx, ry, o, blur}.
   E.set = (n, v) => {
     const tr = [];

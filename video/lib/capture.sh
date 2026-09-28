@@ -21,7 +21,9 @@
 #                                         can replay an animation the app draws.
 #
 # Shot lists may set: SKIN (default skin), COLS/ROWS (terminal size),
-# EXTRA (more flags for the binary, e.g. --mascot), BIN (the binary).
+# EXTRA (more flags, e.g. --mascot), ARGS (replaces the default
+# "--demo --allow-actions", e.g. to open the profile picker with a fixture
+# config), BIN (the binary). Every run gets an empty HOME.
 set -euo pipefail
 VIDEO=${1:?usage: bash lib/capture.sh VIDEO}
 cd "$(dirname "$0")/.."
@@ -34,6 +36,9 @@ COLS=${COLS:-124}
 ROWS=${ROWS:-32}
 SKIN=${SKIN:-monokai}
 EXTRA=${EXTRA:-}
+ARGS=${ARGS:---demo --allow-actions}
+# An empty home, so no real config file or journal is ever read or written.
+FAKEHOME=$(mktemp -d)
 mkdir -p "$OUT"
 [ -x "$BIN" ] || (cd "$ROOT" && make build)
 
@@ -41,7 +46,7 @@ S=micko-video
 start() {
   tmux kill-session -t $S 2>/dev/null || true
   tmux -f /dev/null new-session -d -s $S -x "$COLS" -y "$ROWS" \
-    "env COLORTERM=truecolor TERM=xterm-256color $BIN --demo --allow-actions $EXTRA --skin $1"
+    "env HOME=$FAKEHOME XDG_CONFIG_HOME=$FAKEHOME/.config COLORTERM=truecolor TERM=xterm-256color $BIN $ARGS $EXTRA --skin $1"
   tmux set -t $S default-terminal tmux-256color >/dev/null
   tmux set -ga terminal-overrides ",*:RGB" >/dev/null
   sleep 2

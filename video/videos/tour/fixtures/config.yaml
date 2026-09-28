@@ -1,0 +1,23 @@
+# Sample profiles for the tour's "connect" scene (profile picker). Not a real cluster.
+currentProfile: dev
+profiles:
+  dev:
+    kubeContext: kind-dev
+    service: argo-workflows-server
+    serviceNamespace: argo
+    remotePort: 2746
+    server: http://127.0.0.1:2746
+    namespace: workflows
+    tokenEnv: ARGO_TUI_TOKEN
+  staging:
+    kubeContext: gke-staging
+    service: argo-server
+    serviceNamespace: argo
+    remotePort: 2746
+    server: https://127.0.0.1:2746
+    namespace: pipelines
+    tokenEnv: STAGING_ARGO_TOKEN
+  prod:
+    server: https://argo.example.com
+    namespace: pipelines
+    tokenEnv: PROD_ARGO_TOKEN
