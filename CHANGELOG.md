@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 - Mićko moves. Perched, he spends most of his time resting his beak on the
   pane, blinks every few seconds, dozes off now and then, and about once a
