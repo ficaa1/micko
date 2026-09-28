@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.2
 
 - Workflow actions are on by default. Resume, suspend, retry, resubmit,
   stop, terminate and delete no longer need `--allow-actions`; each still
