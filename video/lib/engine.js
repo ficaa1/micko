@@ -7,6 +7,11 @@
   E.W = 1920; E.H = 1080; E.FPS = 30;
   E.scenes = [];
   E.scene = (s) => E.scenes.push(s);
+  // Shared assets (photos) live in video/assets, two levels above a video's page.
+  E.ASSETS = '../../assets/';
+  // Key clicks for n characters typed from time a, one every `per` seconds,
+  // for a scene's sfx list (read by lib/soundtrack.mjs).
+  E.typing = (a, n, per) => Array.from({ length: n }, (_, k) => [a + (k + 1) * per, 'click']);
 
   // ---- maths -------------------------------------------------------------
   E.clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));

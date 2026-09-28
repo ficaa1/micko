@@ -2,6 +2,7 @@
 // sketch of the menu and the four outcomes every write reports.
 E.scene({
   id: 'actions', dur: 6.5,
+  sfx: [0, 1, 2].map((k) => [1.0 + k * 0.35, 'click']),
   build(root) {
     const h = E.headline(root, { x: 110, y: 90, width: 700, kicker: 'marks & bulk actions', title: 'Act on many,\nsafely' });
     const term = E.term(root, 'list_0', { rows: 17 });

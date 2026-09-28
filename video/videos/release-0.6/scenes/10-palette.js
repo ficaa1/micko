@@ -2,6 +2,7 @@
 // opens its info panel. Keycaps under the window echo each key.
 E.scene({
   id: 'palette', dur: 6.5,
+  sfx: [1.0, 1.4, 1.65, 1.9, 2.15, 2.85, 3.9].map((t) => [t, 'click']),
   build(root) {
     const h = E.headline(root, { x: 110, y: 230, width: 560, kicker: 'command palette', title: 'One key,\nevery view', body: 'Commands rank as you type and tab completes. Cron workflows, templates, the archive, namespaces and profiles.' });
     const term = E.term(root, 'list_0');

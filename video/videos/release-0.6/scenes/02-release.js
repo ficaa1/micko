@@ -3,6 +3,7 @@
 // through the number.
 E.scene({
   id: 'release', dur: 4.5,
+  sfx: [[0.35, 'impact']],
   build(root) {
     const kick = E.el('div', 'kicker', root, 'new release · v0.6.0');
     E.css(kick, { left: 0, width: 1920, top: 170, textAlign: 'center', fontSize: 24 });

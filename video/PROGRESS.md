@@ -1,144 +1,109 @@
-# Motion graphic: micko 0.6 — progress log
+# micko motion graphics: progress log
 
-This file is the hand-off note. If a session is cut off, a new one should read
-this file first, then continue from the first unchecked item. Every step is
-committed on its own, so `git log -- video/` shows where things stopped.
+Hand-off note. If a session is cut off, read this first, then continue from the
+first unchecked item. Every step is committed on its own (`git log -- video/`).
+Commits are authored as ficaa1 with no attribution lines (see /CLAUDE.md).
 
-The project was argo-tui until 0.6. The 0.5 video (`argo-tui-0.5.mp4`) is
-kept as it was released; the source now builds the 0.6 video.
-0.6 renames the tool to micko after Mićko, the owner's eastern rosella, and
-adds him as an opt-in mascot (`--mascot`) that perches on the pane at 80x40+.
+## Layout
 
-## Where things stand
-
-- **Two 0.6 drafts are kept:** `micko-0.6-draft.mp4` (dark, tokyo-night) and
-  `micko-0.6-paper-draft.mp4` (current look: paper + monokai). The source builds the paper look.
-  Renders write `micko-0.6.mp4` by default (or `--out NAME.mp4`), so they
-  never overwrite the draft. The commit that rendered it is tagged in history
-  as "video: render the micko 0.6 draft".
-- **Next:** refinements before shipping, rendered on the owner's own PC, with
-  the owner's own music (see below). The synthesized soundtrack was only for
-  the draft.
-
-## Render on your own PC
-
-Needs Node 22+ and nothing else: the screens are committed, so Go, tmux and
-the capture step are only needed if the UI changes (capture is bash + tmux, so
-on Windows run it under WSL; rendering works natively).
-
-```sh
-git checkout claude/argo-tui-motion-graphic-lpmtsz
-cd video
-npm install
-npx playwright install chromium          # once: the browser that takes the frames
-node render.mjs --jobs 8                 # ~ one job per 2 CPU cores
+```
+video/
+  lib/                 shared toolkit (one copy for every video)
+    engine.js          deterministic scene engine: E.scene, E.term, E.cam, E.hl, E.pill, ...
+    style.css          "Mićko on paper" look: palette tokens, paper grain, TUI type
+    player.js          browser preview (scrubber) for a video's index.html
+    fonts/             JetBrains Mono (full), Inter, Space Grotesk
+    capture.sh         records real micko screens in tmux (shot lists live per video)
+    ansi2json.mjs      screens/*.ans -> screens.js for one video
+    find.mjs           row/col of text in a captured screen (for callouts)
+    render.mjs         Playwright frames -> ffmpeg, per scene, resumable; joins + final encode
+    soundtrack.mjs     synthesized placeholder soundtrack timed from the scenes
+  videos/<name>/       one folder per video
+    index.html         the scene list, in order (the video's "composition")
+    scenes/NN-id.js    one scene per file
+    shots.sh           which screens to record, and with which skin/binary
+    screens/*.ans      recorded screens (committed), screens.js generated from them
+  assets/photos/       photos of Mićko (resized, EXIF stripped)
+  renders/             finished videos and review sheets (committed)
+  out/                 scratch: per-scene mp4s, stills, soundtracks (gitignored)
 ```
 
-- Speed comes from CPU cores: each frame is a Chromium layout + screenshot,
-  mostly CPU-bound. The draft took ~30 min on 4 cores; a 16-core desktop with
-  `--jobs 8` should be several times faster. The GPU helps little.
-- Only changed scenes re-render (per-scene mp4s in `out/scenes/`). A fresh
-  clone has no `out/`, so its first render does every scene.
-- **Your own music:** drop the track at `audio/music.mp3` (or `.m4a/.wav/.flac/.ogg`),
-  or pass `--music path/to/song.mp3`. It is trimmed to the video with a 2 s
-  fade-out and replaces the synthesized soundtrack. Changing music only
-  re-joins; no scene re-renders. Cuts in the draft, for syncing music
-  (from each scene's `dur:`): release 7.0 s, bird 11.5, mascot 19.5, list 26.5,
-  timeline 33.5, explain 41.5, nodes 49.0, logs 55.5, palette 62.0, filter 68.5,
-  skins 74.0, actions 81.0, outro 87.5, end 94.5.
-- Iterate on one scene: open `src/index.html` in a browser (scrubber), or
-  `node render.mjs --still bird:3.5`, then `node render.mjs bird` to re-render it.
-
-## Resume in one command
+Commands (from `video/`):
 
 ```sh
-cd video && npm install && npm run all   # capture (if screens missing) + render + encode
+npm install                                   # once; plus `npx playwright install chromium` off this container
+bash lib/capture.sh tour                      # record screens missing from videos/tour/screens (FORCE=1 = all)
+node lib/render.mjs tour --still list:3       # stills -> out/tour/stills/
+node lib/render.mjs tour --sheet list         # contact sheet of one scene
+node lib/render.mjs tour --jobs 8             # render stale scenes, join, encode renders/tour.mp4
+node lib/render.mjs tour --music song.mp3     # your own track instead of the synthesized one
 ```
 
-`npm run render` skips any scene whose `out/scenes/<id>.mp4` is newer than its
-source and the shared engine, so a re-run only redoes what changed.
+Open `videos/<name>/index.html` in a browser for a scrubbing preview.
 
-## v0.6 draft: steps
+## Videos
 
-- [x] 1. Merge `main` (the rename) into this branch; `make build` gives `dist/micko`
-- [x] 2. Photos of Mićko into `src/photos/` (resized, EXIF stripped)
-- [x] 3. Recapture every screen with `dist/micko` (`FORCE=1 npm run capture`);
-      add 40-row `--mascot` shots; check callout coordinates still line up
-- [x] 4. Rename in scenes: intro retypes `argo-tui` as `micko`, release rolls to 0.6,
-      window titles, outro commands
-- [x] 5. New scenes: `bird` (photos) and `mascot` (the ASCII Mićko perched, across skins)
-- [x] 6. Soundtrack re-timed; full render (94.5 s, ~22 MB, draft sent for review) -> kept as `micko-0.6-draft.mp4`
-- [x] 7. Restyle "Mićko on paper": rendered as `micko-0.6-paper-draft.mp4` (94.5 s, ~36 MB; grain costs bitrate) (owner's direction): see the section below
-- [ ] 8. Refinements (owner's list), owner's music, final render on the owner's PC
+| video | what | status |
+|---|---|---|
+| `argo-tui-0.5.mp4` | the 0.5 release (dark, tokyo-night); its source is in git history | final |
+| `release-0.6` | the 0.6 release: rename to micko, Mićko the mascot | drafts: `renders/micko-0.6-draft.mp4` (dark), `renders/micko-0.6-paper-draft.mp4` (paper + monokai, current look). Owner still to refine, add music, render on own PC. Screens recorded with the 0.6.0 binary: to re-record, build tag v0.6.0 first. |
+| `tour` | general presentation of micko, not tied to a release | in progress, see below |
 
-## Restyle: Mićko on paper
+## Tour: plan
 
-Direction from the owner: lean into Mićko's colours, paper textures, TUI-type
-presentation; terminal skin gruvbox or similar. Decisions:
-- Palette from his plumage, printed like risograph ink on warm paper:
-  crimson `#d7263d` (head, chest), cobalt `#3f5bb8` and violet-blue `#6f7fd6`
-  (wing), yellow `#f2c14e` / `#e3a21a` (scallop edges), olive `#6f8a2a`,
-  cheek cream `#fbf8f1`; ink `#1f1a17` on paper `#efe4cf`.
-- Background: paper with grain that "boils" on twos, faint engineering-grid
-  lines, soft mottling; no glows, no dark gradients.
-- Type: JetBrains Mono throughout (TUI); kickers as box-drawing rules
-  (`╭─ KICKER ──`), titles with a blinking block cursor; misregistered
-  crimson/cobalt print offset on the wordmark and the big numbers.
-- Objects: cards, pills, keycaps and windows as paper cut-outs with ink
-  borders and hard offset shadows; photos taped on with washi tape.
-- Terminal skin: **monokai** (owner's pick). gruvbox-light was tried first but
-  blended into the paper and read weakly; a side-by-side of six skins on the
-  paper (`out/stills/skin-compare.png`, regenerable) led to monokai: a dark,
-  punchy window on cream paper. Default skin lives in `capture/capture.sh`
-  (`SKIN`) and `capture/ansi2json.mjs`; the mascot scene cycles other skins.
-- Steps: [x] tokens + CSS + engine  [x] remap scene colours
-  [x] recapture (now monokai)  [x] stills of every scene checked  [x] render -> `micko-0.6-paper-draft.mp4`
-  (review sheet: `restyle-review.png`; render here or on the owner's PC)
+Owner's brief: same look as the 0.6 paper draft; not a release video but a
+general presentation; first and foremost what the tool does; show Mićko's 0.7
+animations when showing him, briefly.
 
-## Plan (1920x1080, 30 fps)
+| # | id | s | content | status |
+|---|----|---|---------|--------|
+| 1 | intro | 6 | types `micko --demo`; wordmark, tagline, phase chips | todo |
+| 2 | what | 6 | four jobs as cards: browse, understand, follow, act | todo |
+| 3 | list | 6.5 | the workflow list: phases, progress, messages | todo |
+| 4 | timeline | 7.5 | Gantt timeline, critical path, now line | todo |
+| 5 | explain | 7 | why a run failed, offline | todo |
+| 6 | nodes | 6.5 | pipeline tree, retries, info panel | todo |
+| 7 | logs | 6.5 | labelled logs, level colours, live events | todo |
+| 8 | palette | 6.5 | `:` command palette, cron list | todo |
+| 9 | filter | 5.5 | query language | todo |
+| 10 | actions | 6.5 | marks, bulk actions, four outcomes, read-only default | todo |
+| 11 | connect | 5 | profiles, managed kubectl port-forward, tokens, TLS | todo |
+| 12 | skins | 5 | wall of skins | todo |
+| 13 | micko | 6.5 | photo, then the 0.7 animations: perched (blink, look) and floor (kiss) | todo |
+| 14 | outro | 6 | wordmark + Mićko, install, feature ticker | todo |
 
-| # | id | seconds | content | status |
-|---|----|---------|---------|--------|
-| 1 | intro | 6.5 | types `argo-tui`, deletes it, types `micko`; wordmark, tagline | rendered |
-| 2 | release | 4.5 | big "0.6" reveal, new name + mascot pills | rendered |
-| 3 | bird | 8 | photos of Mićko, "named after an eastern rosella" | rendered |
-| 4 | mascot | 7 | the ASCII Mićko perched on the real pane, across skins | rendered |
-| 5 | list | 7 | real workflow list, phase glyphs, progress | rendered |
-| 6 | timeline | 8 | Gantt timeline, critical path ◆, now line | rendered |
-| 7 | explain | 7.5 | Explain cards: why a run failed, offline | rendered |
-| 8 | nodes | 6.5 | pipeline tree, folds, info panel | rendered |
-| 9 | logs | 6.5 | per-step labels, level colours, events | rendered |
-| 10 | palette | 6.5 | `:` command palette typing, cron list | rendered |
-| 11 | filter | 5.5 | query language `phase=Failed age<3h` | rendered |
-| 12 | skins | 7 | wall of 13 skins | rendered |
-| 13 | actions | 6.5 | marks + bulk actions, 4 outcomes | rendered |
-| 14 | outro | 7 | wordmark, install, feature ticker | rendered |
+Steps:
+- [x] 1. Merge main (0.7.0: Mićko animates on the perch and sits on the floor)
+- [x] 2. Restructure into lib/ + videos/<name>/ (release-0.6 still renders the same)
+- [ ] 3. `anim` shots: record Mićko's loops at 10 fps, keep distinct poses + timing
+- [ ] 4. Tour scenes written, stills checked
+- [ ] 5. Full render -> `renders/micko-tour.mp4`
+- [ ] 6. Skill: `.claude/skills/motion-graphics/` so the next video is quicker
 
-## Notes / decisions
+## Style decisions (shared by release-0.6 and tour)
 
-- Terminal screens are real captures of `./dist/micko --demo --skin tokyo-night`
-  at 124x32 (the list shows its PROGRESS column from 120 pane columns), so the
-  video shows what the binary actually draws. The mascot needs 40 rows, so the
-  `mascot_*` shots are 124x40.
-- Frames and per-scene mp4s live in `out/` (gitignored); only the final video is committed.
-- The 0.5 build of this video is tagged by commit f93e21d-era history
-  (`git log -- video/argo-tui-0.5.mp4`).
+- Palette from Mićko's plumage, printed like riso ink on warm paper: crimson
+  `#d7263d`, cobalt `#3f5bb8`, violet-blue `#6f7fd6`, yellow `#f2c14e` /
+  `#e3a21a`, olive `#6f8a2a`, cream `#fbf8f1`; ink `#1f1a17` on paper `#efe4cf`.
+- Paper background with grain that shifts 12 times a second, faint grid, soft
+  mottling. No glows or dark gradients.
+- JetBrains Mono throughout; kickers as box-drawing rules (`╭─ KICKER ──`),
+  titles end in a blinking block cursor; the wordmark and big numbers are
+  printed off-register (crimson with a cobalt plate).
+- Cards, pills, keycaps and windows are paper cut-outs: ink border, hard
+  offset shadow. Photos are taped on with washi tape.
+- Terminal skin: monokai (owner's pick over gruvbox-light, which blended into
+  the paper). Dark punchy window on cream.
 
-## How to work on a scene
+## Lessons (also go into the skill)
 
-- Preview in a browser: open `src/index.html` (scrubber + scene picker), or
-  `src/index.html?scene=timeline&t=3` for one frame.
-- Headless stills: `node render.mjs --still timeline:3 timeline:5.5` -> `out/stills/`.
-- Contact sheet (every 0.5 s): `node render.mjs --sheet timeline`.
-- A scene file is `src/scenes/NN-id.js`: `E.scene({id, dur, build(root) { ...; return (t) => {...} }})`.
-  `update(t)` must derive everything from `t` (frames render out of order, in parallel).
-- Terminal helpers: `E.term(parent, screen)` -> `{win, cell(r,c,r2,c2), show, mix}`;
-  `E.cam(win, {fx, fy, X, Y, s})` puts window point (fx,fy) at stage (X,Y) with scale s;
-  `E.hl(term, rect)` highlight box; `E.spot(term, rect)` dims the rest.
-- Status values in the table: todo -> written (stills checked) -> rendered.
-- A full render takes ~17-20 min with `--jobs 4` (~1.5 s a frame); re-render one
-  scene with `node render.mjs <id>` (join + final encode run once all exist).
-- If the demo data or UI changes: `npm run capture` (FORCE=1 to re-record all);
-  `node capture/find.mjs <screen> "text"` prints where text sits.
-- Soundtrack is synthesized (`node audio/soundtrack.mjs`); rerun it whenever
-  scene durations change, since cuts and clicks are timed from them.
+- Render is CPU-bound (~1.5-3 s a frame on 4 cores); a 90 s video is ~30 min.
+  Only stale scenes re-render; parallel `--jobs` ~ cores/2.
+- Fonts: fontsource subsets split latin / latin-ext; "ć" needs latin-ext with
+  unicode-range, or it falls back to another face.
+- Block elements (█▌▐░) drawn as CSS cells, not glyphs, or bars show seams.
+- A freshly built scene must wait for `img.decode()`, or the first frames
+  show empty photos.
+- Crossfading two terminal screens looks like garbage; wipe between them.
+- Uploads to the user are capped at 30 MiB: send a lighter preview encode.
+- Keep drafts under their own names; renders write a new file.

@@ -3,6 +3,7 @@
 // skins to show he takes his colours from each one.
 E.scene({
   id: 'mascot', dur: 7,
+  sfx: [0, 1, 2, 3, 4, 5].map((k) => [4.0 + k * 0.42, 'click']),
   build(root) {
     const h = E.headline(root, { x: 110, y: 90, width: 760, kicker: 'new · --mascot', title: 'Now he perches\non your pane' });
     const skins = ['catppuccin-latte', 'gruvbox-dark', 'dracula', 'rose-pine-dawn', 'nord', 'gruvbox-light'];
@@ -19,7 +20,7 @@ E.scene({
 
     const photo = E.el('div', '', root);
     E.css(photo, { left: 110, top: 470, width: 560, height: 420, borderRadius: 6, background: '#fbf8f1', border: '10px solid #fbf8f1', boxShadow: '0 0 0 2.5px #1f1a17, 9px 9px 0 2.5px #1f1a17' });
-    const img = E.el('img', '', photo); img.src = 'photos/micko-monitor.jpg';
+    const img = E.el('img', '', photo); img.src = E.ASSETS + 'photos/micko-monitor.jpg';
     E.css(img, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '65% 55%' });
     E.css(E.el('div', 'tape', photo), { top: -18, left: 210, background: '#f2c14e', transform: 'rotate(-4deg)', zIndex: 2 });
 

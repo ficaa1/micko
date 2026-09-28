@@ -3,6 +3,7 @@
 // everything pushes toward the camera.
 E.scene({
   id: 'intro', dur: 7,
+  sfx: [...E.typing(0.3, 8, 0.7 / 8), ...E.typing(1.35, 8, 0.4 / 8), ...E.typing(1.95, 12, 0.65 / 12)],
   build(root) {
     const prompt = E.el('div', '', root);
     E.css(prompt, { left: 0, width: 1920, top: 500, textAlign: 'center', font: '500 46px JBM, monospace', color: '#1f1a17', whiteSpace: 'pre' });

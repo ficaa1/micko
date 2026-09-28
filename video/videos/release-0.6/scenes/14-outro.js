@@ -2,6 +2,7 @@
 // ticker of what shipped, then fade to black.
 E.scene({
   id: 'outro', dur: 7,
+  sfx: [...E.typing(1.5 - 1 / 38, 47, 1 / 38), ...E.typing(3.0 - 1 / 28, 21, 1 / 28)],
   build(root) {
     const mark = E.el('div', '', root);
     E.css(mark, { left: 0, width: 1920, top: 170, textAlign: 'center', font: '800 150px/1 JBM, monospace', letterSpacing: '-0.03em', whiteSpace: 'pre' });
@@ -10,7 +11,7 @@ E.scene({
     const textW = letters.reduce((a, s) => a + s.offsetWidth, 0);
     const av = E.el('div', '', root);
     E.css(av, { left: 960 - (textW + 186) / 2, top: 160, width: 150, height: 150, borderRadius: '50%', overflow: 'hidden', border: '5px solid #fbf8f1', boxShadow: '0 0 0 3px #1f1a17, 6px 6px 0 3px #1f1a17' });
-    const avImg = E.el('img', '', av); avImg.src = 'photos/micko-cage.jpg';
+    const avImg = E.el('img', '', av); avImg.src = E.ASSETS + 'photos/micko-cage.jpg';
     E.css(avImg, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 18%' });
     E.css(mark, { left: 93 });
     const ver = E.el('div', 'chip', root, 'v0.6.0');

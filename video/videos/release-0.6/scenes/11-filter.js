@@ -2,6 +2,7 @@
 // narrows under it, then the rest of the grammar lands as chips.
 E.scene({
   id: 'filter', dur: 5.5,
+  sfx: E.typing(0.9 - 0.095, 19, 0.095),
   build(root) {
     const k = E.el('div', 'kicker', root, 'list filter · a small query language'); E.css(k, { left: 110, top: 90 });
     const q = 'phase=Failed age<3h';

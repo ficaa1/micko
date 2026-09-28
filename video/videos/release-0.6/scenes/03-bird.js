@@ -3,6 +3,7 @@
 // ASCII mascot takes on the pane (next scene).
 E.scene({
   id: 'bird', dur: 8,
+  sfx: [0, 1, 2, 3, 4].map((i) => [1.05 + i * 0.45, 'thump']),
   build(root) {
     const h = E.headline(root, { x: 110, y: 290, width: 620, kicker: 'why the new name', title: 'Meet\nMićko', body: 'An eastern rosella, and the reason argo-tui is now micko.' });
     // [file, card w, card h, centre x, centre y, rotation, object-position]
@@ -18,7 +19,7 @@ E.scene({
       const c = E.el('div', '', root);
       E.css(c, { left: x - w / 2, top: y - hh / 2, width: w, height: hh, borderRadius: 6, background: '#fbf8f1',
         border: '10px solid #fbf8f1', boxShadow: '0 0 0 2.5px #1f1a17, 9px 9px 0 2.5px #1f1a17' });
-      const img = E.el('img', '', c); img.src = 'photos/' + f;
+      const img = E.el('img', '', c); img.src = E.ASSETS + 'photos/' + f;
       E.css(img, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: pos });
       // Two strips of washi tape hold each print down.
       const i = cards0++;
