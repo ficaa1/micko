@@ -50,7 +50,8 @@ func run(args []string) int {
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
 	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
-	mascot := fs.Bool("mascot", false, "perch Mićko on the pane (terminals of 80x40 and larger)")
+	var mascot mascotFlag
+	fs.Var(&mascot, "mascot", "perch Mićko on the pane, or --mascot=floor to sit him in its bottom corner (terminals of 80x40 and larger)")
 	if err := fs.Parse(args); err != nil {
 		// flag already printed usage/error to stderr
 		return 2
@@ -86,7 +87,7 @@ func run(args []string) int {
 		// The demo reads no config file, so the flag is its only skin.
 		_, _ = root.ApplySkin(demoSkin(*skin))
 		root.SetRedactValues(*redactValues)
-		root.SetMascot(*mascot)
+		root.SetMascot(mascot.spot)
 	} else {
 		connector, err := session.NewConnector(session.Options{
 			ConfigPath:            *configPath,
@@ -100,7 +101,7 @@ func run(args []string) int {
 			Skin:                  *skin,
 			Skins:                 shared.SkinNames(),
 			RedactValues:          *redactValues,
-			Mascot:                *mascot,
+			Mascot:                mascot.spot,
 			Diagnostics:           os.Stderr,
 		})
 		if err != nil {
@@ -182,3 +183,18 @@ func newClock(demo bool) (app.Clock, *testkit.FakeClock) {
 	}
 	return app.SystemClock{}, nil
 }
+
+// mascotFlag is --mascot. Bare, it perches Mićko; --mascot=floor sits him
+// on the floor of the pane, and --mascot=false leaves him to the config
+// file.
+type mascotFlag struct{ spot config.Mascot }
+
+func (f *mascotFlag) String() string { return string(f.spot) }
+
+func (f *mascotFlag) Set(s string) (err error) {
+	f.spot, err = config.ParseMascot(s)
+	return err
+}
+
+// IsBoolFlag lets --mascot stand alone, as a bool flag does.
+func (f *mascotFlag) IsBoolFlag() bool { return true }

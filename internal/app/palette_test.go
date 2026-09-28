@@ -21,20 +21,22 @@ func demoRoot(t *testing.T) (*Root, *testkit.FakeReader) {
 	t.Helper()
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m.mascotSleep = func(time.Duration) {}
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	deliver(m, m.startListGeneration())
 	return m, f
 }
 
 // deliver runs cmd and feeds its messages back into the root, the way the
-// program loop would, until nothing is left. Poll ticks are dropped: each one
-// starts another list, and the chain would never end.
+// program loop would, until nothing is left. Poll ticks and Mićko's beats
+// are dropped: each one schedules the next, and the chain would never end.
 func deliver(m *Root, cmd tea.Cmd) {
 	queue := runCmd(cmd)
 	for len(queue) > 0 {
 		msg := queue[0]
 		queue = queue[1:]
-		if _, ok := msg.(tickMsg); ok {
+		switch msg.(type) {
+		case tickMsg, mascotBeatMsg:
 			continue
 		}
 		_, next := m.Update(msg)

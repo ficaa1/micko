@@ -444,13 +444,16 @@ func TestMickoIsOffUnlessTurnedOn(t *testing.T) {
 	cases := []struct {
 		name string
 		data string
-		want bool
+		want Mascot
 	}{
-		{"no file", "", false},
-		{"key absent", "currentProfile: dev\n", false},
-		{"turned on", "mascot: true\n", true},
-		{"turned off", "mascot: false\n", false},
-		{"broken file", "mascot: [\n", false},
+		{"no file", "", MascotOff},
+		{"key absent", "currentProfile: dev\n", MascotOff},
+		{"turned on", "mascot: true\n", MascotPerch},
+		{"perched", "mascot: perch\n", MascotPerch},
+		{"on the floor", "mascot: floor\n", MascotFloor},
+		{"turned off", "mascot: false\n", MascotOff},
+		{"unknown spot", "mascot: ceiling\n", MascotOff},
+		{"broken file", "mascot: [\n", MascotOff},
 	}
 	for _, tc := range cases {
 		if got := FileMascot([]byte(tc.data)); got != tc.want {
@@ -460,6 +463,10 @@ func TestMickoIsOffUnlessTurnedOn(t *testing.T) {
 	data := []byte("mascot: true\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: MICKO_TOKEN_MASCOT\n")
 	if _, err := Load(data, Options{}); err != nil {
 		t.Fatalf("Load with mascot set: %v", err)
+	}
+	bad := []byte(strings.Replace(string(data), "mascot: true", "mascot: ceiling", 1))
+	if _, err := Load(bad, Options{}); err == nil || !strings.Contains(err.Error(), "floor") {
+		t.Fatalf("Load with mascot: ceiling = %v, want an error naming the choices", err)
 	}
 }
 

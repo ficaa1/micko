@@ -151,3 +151,33 @@ func TestMickoThemeOnlyStyles(t *testing.T) {
 		}
 	}
 }
+
+// When he lifts his head his beak leaves the border, which is border line
+// again there, and his feet stay where they were.
+func TestMickoLiftsHisHeadOffTheBorder(t *testing.T) {
+	f := perchedFrame()
+	rest := lines(f.Render(plain()))
+	top := topRow(t, rest)
+	for _, pose := range []shared.Art{shared.MickoPerchLeft, shared.MickoPerchRight} {
+		f.MascotPose = pose
+		ls := lines(f.Render(plain()))
+		if got := topRow(t, ls); got != top {
+			t.Fatalf("border moved to row %d, want %d", got, top)
+		}
+		if strings.Contains(ls[top], `\v/`) {
+			t.Errorf("beak still on the border: %q", ls[top])
+		}
+		if strings.Index(ls[top], "/_/") != strings.Index(rest[top], "/_/") {
+			t.Errorf("feet moved:\n%s\n%s", rest[top], ls[top])
+		}
+		beak := strings.Index(rest[top], `\v/`)
+		if got := []rune(ls[top])[len([]rune(rest[top][:beak]))]; got != '─' {
+			t.Errorf("border under his beak is %q, want line: %q", got, ls[top])
+		}
+		for _, l := range ls {
+			if w := ansi.StringWidth(l); w != f.Width {
+				t.Fatalf("line is %d cells: %q", w, l)
+			}
+		}
+	}
+}

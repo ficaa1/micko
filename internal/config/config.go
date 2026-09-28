@@ -90,19 +90,46 @@ type File struct {
 	// workflow to see, and a cluster whose parameters carry secrets turns
 	// it on here or per profile.
 	RedactValues bool `yaml:"redactValues,omitempty"`
-	// Mascot perches Mićko, the mascot, on the pane on terminals of 80x40 and
-	// larger. It is off unless set: he costs three rows.
-	Mascot bool `yaml:"mascot,omitempty"`
+	// Mascot puts Mićko, the mascot, on the pane on terminals of 80x40 and
+	// larger: true or perch perches him on its top border, floor sits him in
+	// its bottom corner. It is off unless set: he costs three rows.
+	Mascot string `yaml:"mascot,omitempty"`
 }
 
-// FileMascot reports whether the config file turns the mascot on. A file
-// that is absent, or that does not parse, leaves him off.
-func FileMascot(cfgData []byte) bool {
+// Mascot is where Mićko sits: nowhere, perched on the pane's top border, or
+// on the floor of the pane, in its bottom corner.
+type Mascot string
+
+const (
+	MascotOff   Mascot = ""
+	MascotPerch Mascot = "perch"
+	MascotFloor Mascot = "floor"
+)
+
+// ParseMascot reads the mascot key or the --mascot flag. true is perch, as
+// it was before he had a floor to sit on.
+func ParseMascot(s string) (Mascot, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "false", "off":
+		return MascotOff, nil
+	case "true", "on", "perch":
+		return MascotPerch, nil
+	case "floor":
+		return MascotFloor, nil
+	}
+	return MascotOff, fmt.Errorf("mascot %q: want true, false, perch or floor", s)
+}
+
+// FileMascot reports where the config file puts the mascot. A file that is
+// absent, that does not parse, or whose mascot key is not one ParseMascot
+// reads leaves him off; Load reports the bad key.
+func FileMascot(cfgData []byte) Mascot {
 	var f File
 	if len(cfgData) == 0 || yaml.Unmarshal(cfgData, &f) != nil {
-		return false
+		return MascotOff
 	}
-	return f.Mascot
+	m, _ := ParseMascot(f.Mascot)
+	return m
 }
 
 // JournalEnabled reports whether the config file leaves the action journal
@@ -237,6 +264,9 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	cfg.Skin = firstNonEmpty(strings.TrimSpace(opts.Skin), strings.TrimSpace(prof.Skin), strings.TrimSpace(f.Skin), DefaultSkin)
 	if err := CheckSkin("skin", cfg.Skin, opts.Skins); err != nil {
 		return Config{}, err
+	}
+	if _, err := ParseMascot(f.Mascot); err != nil {
+		return Config{}, fmt.Errorf("config: %w", err)
 	}
 	cfg.RedactValues = opts.RedactValues || f.RedactValues
 	if prof.RedactValues != nil {
