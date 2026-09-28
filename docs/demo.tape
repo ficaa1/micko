@@ -23,7 +23,7 @@ Type "PS1='$ '" Enter
 Type "clear" Enter
 Show
 
-Type "./dist/argo-tui --demo" Sleep 400ms Enter
+Type "./dist/micko --demo" Sleep 400ms Enter
 Sleep 2.5s
 
 # Move down the list; the phase column carries a symbol, a word and a colour.

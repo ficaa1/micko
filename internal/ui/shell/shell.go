@@ -1,5 +1,7 @@
 // Package shell composes the three bands every route shares: a context
-// header, a bordered content pane, and a key-hint footer.
+// header, a bordered content pane, and a key-hint footer. When asked, and on
+// a large enough terminal, Mićko the mascot perches on the pane's top border
+// (perch.go).
 //
 // The point of the package is stable geometry. The alternate screen has no
 // scrollback, so a frame that changes height between renders does not scroll
@@ -19,7 +21,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // minBorderWidth is the narrowest terminal that still gets a border. Below
@@ -49,6 +51,10 @@ type Frame struct {
 	// ActionsEnabled draws the mode badge in the theme's armed style. The
 	// Mode words carry the meaning; the badge colour only repeats it.
 	ActionsEnabled bool
+
+	// Mascot asks for Mićko, the mascot, to perch on the pane (perch.go).
+	// He only perches on a terminal with room for him.
+	Mascot bool
 
 	// Pane.
 	Title      string   // left of the top border, e.g. "Workflows"
@@ -108,7 +114,7 @@ func (f Frame) BodyHeight() int {
 	if f.Height <= 0 {
 		return 0
 	}
-	chrome := bandRows + f.titleRows()
+	chrome := bandRows + f.titleRows() + f.perchRows()
 	if n := f.Height - chrome; n > 0 {
 		return n
 	}
@@ -125,7 +131,9 @@ func (f Frame) Render(t shared.Theme) string {
 	body := f.bodyLines()
 	b := t.Borders()
 	if f.bordered() {
-		out = append(out, f.topBorder(t))
+		top, perchX := f.topBorder(t)
+		out = append(out, f.perchLines(t, perchX)...)
+		out = append(out, top)
 		inner := f.BodyWidth()
 		left, right := t.Border.Render(b.Left), t.Border.Render(b.Right)
 		for _, l := range body {
@@ -179,7 +187,11 @@ const minTitleRight = 16
 // The title and the count ride the border so the pane says what it holds
 // without spending a content row on a heading. The corner and line
 // characters come from the theme, so a skin can round the corners.
-func (f Frame) topBorder(t shared.Theme) string {
+//
+// When the frame is perched, Mićko's feet and beak are drawn into the line
+// between the title and the count. perchX is the column his drawing starts
+// at, or -1 when he has no room on this border.
+func (f Frame) topBorder(t shared.Theme) (line string, perchX int) {
 	b := t.Borders()
 	inner := f.Width - 2 // between the corners
 	title := oneLine(f.Title)
@@ -212,8 +224,10 @@ func (f Frame) topBorder(t shared.Theme) string {
 	if fill < 0 {
 		fill = 0
 	}
-	return t.Border.Render(b.TopLeft) + left + t.Border.Render(strings.Repeat(b.Top, fill)) +
-		tail + t.Border.Render(b.TopRight)
+	fillStart := 1 + ansi.StringWidth(left) // after the corner and the title
+	perchX = f.perchColumn(fillStart, fill)
+	return t.Border.Render(b.TopLeft) + left + perchFill(t, b.Top, fillStart, fill, perchX) +
+		tail + t.Border.Render(b.TopRight), perchX
 }
 
 func (f Frame) bottomBorder(b lipgloss.Border) string {

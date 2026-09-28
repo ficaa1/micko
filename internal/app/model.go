@@ -8,18 +8,18 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/actions"
-	"github.com/ficaa1/argo-tui/internal/ui/archivedlist"
-	"github.com/ficaa1/argo-tui/internal/ui/detail"
-	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
-	"github.com/ficaa1/argo-tui/internal/ui/logs"
-	"github.com/ficaa1/argo-tui/internal/ui/namespaces"
-	"github.com/ficaa1/argo-tui/internal/ui/palette"
-	"github.com/ficaa1/argo-tui/internal/ui/profiles"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
-	"github.com/ficaa1/argo-tui/internal/ui/shell"
-	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/actions"
+	"github.com/ficaa1/micko/internal/ui/archivedlist"
+	"github.com/ficaa1/micko/internal/ui/detail"
+	"github.com/ficaa1/micko/internal/ui/kindlist"
+	"github.com/ficaa1/micko/internal/ui/logs"
+	"github.com/ficaa1/micko/internal/ui/namespaces"
+	"github.com/ficaa1/micko/internal/ui/palette"
+	"github.com/ficaa1/micko/internal/ui/profiles"
+	"github.com/ficaa1/micko/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shell"
+	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
 // Root is the top-level Tea model: it owns routing, generations,
@@ -143,6 +143,9 @@ type Root struct {
 	// pipeCommand prefills the log pane's pipe editor.
 	pipeCommand string
 
+	// mascot perches Mićko on the pane when the terminal has room.
+	mascot bool
+
 	// redact is the profile's redactValues setting. The detail view is
 	// rebuilt on every namespace and profile switch, so the root holds it
 	// and hands it to each new one.
@@ -199,6 +202,27 @@ func (m *Root) SetWebURL(u string) { m.webURL = u }
 // SetPipeCommand records the command the log pipe editor prefills with. The
 // log pane is rebuilt on every open, so the root holds it.
 func (m *Root) SetPipeCommand(cmd string) { m.pipeCommand = cmd }
+
+// SetMascot turns the mascot on or off: his perch on the pane and his
+// wordmark in the help overlay.
+func (m *Root) SetMascot(on bool) {
+	m.mascot = on
+	m.help.SetMascot(on)
+}
+
+// toggleMascot flips the mascot and says what happened, including when the
+// terminal is too small for him to show.
+func (m *Root) toggleMascot() {
+	m.SetMascot(!m.mascot)
+	switch {
+	case !m.mascot:
+		m.flash = "Mićko flew off"
+	case shell.PerchFits(m.width, m.height):
+		m.flash = "Mićko is perched"
+	default:
+		m.flash = "Mićko is on; he perches on terminals of 80x40 and larger"
+	}
+}
 
 // SetRedactValues records whether workflows open with their parameter and
 // output values hidden, and applies it to the detail view now on screen.
@@ -847,12 +871,13 @@ func (m *Root) View() tea.View {
 		Help:      ": command  ? help",
 		Width:     m.width,
 		Height:    m.height,
-		App:       "argo-tui " + m.version,
+		App:       "micko " + m.version,
 		Server:    m.serverLabel(),
 		Namespace: m.namespaceLabel(),
 		Mode:      m.modeLabel(),
 		// The badge colour repeats what the mode words say.
 		ActionsEnabled: m.actionsEnabled(),
+		Mascot:         m.mascot,
 	}
 
 	// An action modal is a dialog: it takes the pane so the route behind it

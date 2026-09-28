@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // archiveListBody is an archive list page as Argo returns it: the archive's

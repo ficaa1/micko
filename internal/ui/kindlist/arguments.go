@@ -3,7 +3,7 @@ package kindlist
 import (
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // Redacted is what a parameter value shows until the reader reveals it. It is

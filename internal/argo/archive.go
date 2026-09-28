@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 var _ core.ArchiveReader = (*Client)(nil)

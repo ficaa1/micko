@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // demoArchive fills the demo's workflow archive: runs older than every live

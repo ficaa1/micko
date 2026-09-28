@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // minUsableWidth is the narrowest pane the table is drawn in, the same bound
@@ -29,7 +29,7 @@ const minRestWidth = 10
 func (m *Model[T]) BodyLines(now time.Time) []string {
 	if m.width > 0 && m.width < minUsableWidth {
 		return []string{
-			"argo-tui: terminal too small (" + itoa(m.width) + "x" + itoa(m.height) + ")",
+			"micko: terminal too small (" + itoa(m.width) + "x" + itoa(m.height) + ")",
 			"Resize to at least 60 columns to show the " + m.spec.Noun + " list.",
 			"q quit  ? help  ctrl+c quit",
 		}

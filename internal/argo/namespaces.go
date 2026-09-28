@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 var _ core.NamespaceLister = (*Client)(nil)
@@ -25,7 +25,7 @@ var _ core.NamespaceLister = (*Client)(nil)
 //  2. Otherwise the workflow list is requested with no namespace in the path.
 //     The server answers with the workflows this token may read across the
 //     cluster, and their own metadata.namespace is the list. It needs no
-//     permission beyond the one argo-tui already uses to show workflows.
+//     permission beyond the one micko already uses to show workflows.
 //
 // The second path is honest but partial: a namespace with no workflows in the
 // returned page cannot appear in it. The note says so, and the picker always

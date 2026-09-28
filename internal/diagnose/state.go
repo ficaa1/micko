@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // state.go holds the rules about a run that has not failed: waiting at a

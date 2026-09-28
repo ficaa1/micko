@@ -5,7 +5,7 @@ package workflowlist
 import (
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // PhaseFilter is the local phase bucket. "Other" collects every phase the

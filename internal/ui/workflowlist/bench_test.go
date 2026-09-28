@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // Benchmarks for PERF-01 (5,000 summaries keyboard-responsive): filter+sort

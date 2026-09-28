@@ -8,7 +8,7 @@ access for managed forwarding goes through `kubectl`.
 
 | Package | Responsibility |
 | --- | --- |
-| `cmd/argo-tui` | Flags, config, connection setup and process lifecycle |
+| `cmd/micko` | Flags, config, connection setup and process lifecycle |
 | `internal/config`, `internal/portforward` | Profile validation and owned port-forward recovery |
 | `internal/core` | Reader, Watcher and Actioner interfaces, the optional listers of the other kinds and the archive; workflow, cron workflow and template types and errors |
 | `internal/cronexpr` | The controller's cron dialect: parsing and next run times in a time zone |
@@ -100,8 +100,8 @@ go vet ./...
 gofmt -l cmd internal tests
 go test -race ./...
 go test -tags=integration ./tests/integration/... -count=1
-go build -o dist/argo-tui ./cmd/argo-tui
-./dist/argo-tui --version
+go build -o dist/micko ./cmd/micko
+./dist/micko --version
 ```
 
 `gofmt -l` should print nothing. The race detector needs a supported platform
@@ -144,7 +144,7 @@ lines, not YAML. Set `server`, `namespace` and `allowActions=true`. The optional
 out of Git.
 
 ```sh
-ARGO_TUI_E2E=1 ARGO_TUI_E2E_CONFIG=/absolute/path/to/e2e-config.yaml \
+MICKO_E2E=1 MICKO_E2E_CONFIG=/absolute/path/to/e2e-config.yaml \
   go test -tags=e2e ./tests/e2e/... -count=1 -v
 ```
 

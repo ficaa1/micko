@@ -13,10 +13,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/journal"
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/actions"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/journal"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/actions"
 )
 
 // fleet is a backend of several workflows that applies each action's

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/buildinfo"
+	"github.com/ficaa1/micko/internal/buildinfo"
 )
 
 // demoRows is the demo list in the order the default sort produces: phase
@@ -37,17 +37,17 @@ var demoRows = []string{
 // demoListed is the list pane's count once the whole demo snapshot is in.
 const demoListed = "list: 12 workflows"
 
-// buildBinary compiles the real cmd/argo-tui binary once per test binary.
+// buildBinary compiles the real cmd/micko binary once per test binary.
 func buildBinary(t *testing.T) string {
 	t.Helper()
 	if _, err := os.Stat("/dev/ptmx"); err != nil {
 		t.Skipf("ET-3 unavailable: /dev/ptmx missing on this host (%v)", err)
 	}
-	bin := "/tmp/argo-tui-e1-" + strings.ReplaceAll(t.Name(), "/", "_")
-	cmd := exec.Command("go", "build", "-o", bin, "github.com/ficaa1/argo-tui/cmd/argo-tui")
+	bin := "/tmp/micko-e1-" + strings.ReplaceAll(t.Name(), "/", "_")
+	cmd := exec.Command("go", "build", "-o", bin, "github.com/ficaa1/micko/cmd/micko")
 	cmd.Dir = projectRoot()
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build argo-tui: %v\n%s", err, out)
+		t.Fatalf("build micko: %v\n%s", err, out)
 	}
 	t.Cleanup(func() { _ = os.Remove(bin) })
 	return bin
@@ -158,12 +158,12 @@ func TestPTYVersionFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
-	if code != 0 || !strings.Contains(p.Screen(), "argo-tui "+buildinfo.Version) {
+	if code != 0 || !strings.Contains(p.Screen(), "micko "+buildinfo.Version) {
 		t.Fatalf("--version: code=%d screen=%q", code, p.Screen())
 	}
 }
 
-// Started with no destination, argo-tui asks which profile to use instead of
+// Started with no destination, micko asks which profile to use instead of
 // guessing one. With no config file the picker names the path to write and
 // esc leaves, because there is no session behind the dialog to return to.
 //
@@ -212,8 +212,8 @@ func TestPTYThePickerListsConfiguredProfiles(t *testing.T) {
 	bin := buildBinary(t)
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	body := "currentProfile: prod\nprofiles:\n" +
-		"  dev:\n    server: https://dev.invalid\n    namespace: workflows\n    tokenEnv: ARGO_TUI_TEST\n" +
-		"  prod:\n    server: https://prod.invalid\n    namespace: argo\n    tokenEnv: ARGO_TUI_TEST\n"
+		"  dev:\n    server: https://dev.invalid\n    namespace: workflows\n    tokenEnv: MICKO_TEST\n" +
+		"  prod:\n    server: https://prod.invalid\n    namespace: argo\n    tokenEnv: MICKO_TEST\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestPTYSmallTerminalStillQuits(t *testing.T) {
 		p.Close()
 	}()
 	waitScreen(p, 10*time.Second, func(s string) bool {
-		return strings.Contains(s, "argo-tui")
+		return strings.Contains(s, "micko")
 	})
 	_ = p.Send("q")
 	code, err := p.Wait()

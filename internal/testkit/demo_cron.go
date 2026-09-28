@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // demoCronWorkflows are the demo's CronWorkflows, in the v3.6+ shape (the
@@ -111,7 +111,7 @@ func ptrInt(n int64) *int64 { return &n }
 // return it, so the raw view has a real manifest to render and redact.
 func demoCron(cw core.CronWorkflow) core.CronWorkflow {
 	cw.UID = "synthetic-uid-cron-" + cw.Name
-	cw.Labels = map[string]string{"app.kubernetes.io/part-of": "argo-tui-demo"}
+	cw.Labels = map[string]string{"app.kubernetes.io/part-of": "micko-demo"}
 	spec := map[string]any{
 		"schedules":         cw.Schedules,
 		"concurrencyPolicy": cw.ConcurrencyPolicy,

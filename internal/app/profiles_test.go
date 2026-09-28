@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/profiles"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/profiles"
 )
 
 // fakeConnector stands in for the real one, which starts a kubectl
@@ -48,7 +48,7 @@ func profileRoot(t *testing.T, conn *fakeConnector) *Root {
 	m.SetConnector(conn)
 	m.SetProfiles(ProfileList{
 		Items:      []profiles.Item{{Name: "dev"}, {Name: "prod"}},
-		ConfigPath: "/home/x/.config/argo-tui/config.yaml",
+		ConfigPath: "/home/x/.config/micko/config.yaml",
 		Current:    "prod",
 	})
 	return m

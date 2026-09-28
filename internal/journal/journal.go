@@ -71,19 +71,19 @@ func (j *Journal) Path() string {
 	return j.path
 }
 
-// DefaultPath is $XDG_STATE_HOME/argo-tui/actions.jsonl, or
-// ~/.local/state/argo-tui/actions.jsonl when XDG_STATE_HOME is unset. The
+// DefaultPath is $XDG_STATE_HOME/micko/actions.jsonl, or
+// ~/.local/state/micko/actions.jsonl when XDG_STATE_HOME is unset. The
 // XDG spec defines the state directory as the place for exactly this kind
 // of history: kept across runs, not configuration, not cache.
 func DefaultPath() (string, error) {
 	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" && filepath.IsAbs(dir) {
-		return filepath.Join(dir, "argo-tui", "actions.jsonl"), nil
+		return filepath.Join(dir, "micko", "actions.jsonl"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return "", errors.New("no state directory: XDG_STATE_HOME and the home directory are both unset")
 	}
-	return filepath.Join(home, ".local", "state", "argo-tui", "actions.jsonl"), nil
+	return filepath.Join(home, ".local", "state", "micko", "actions.jsonl"), nil
 }
 
 // Record appends e as one line. It is safe for concurrent use; each line is

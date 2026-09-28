@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // events_tab.go is the Events section's state: the events the root has

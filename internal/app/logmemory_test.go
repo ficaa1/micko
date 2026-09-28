@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // The logs view owns the retained lines and bounds them by line count and

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // RenderSummary renders the one-screen workflow summary (DET-01): name,

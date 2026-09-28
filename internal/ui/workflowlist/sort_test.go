@@ -3,8 +3,8 @@ package workflowlist
 import (
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // testTheme is the shared plain theme for tests in this package.

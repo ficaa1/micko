@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/cronlist"
-	"github.com/ficaa1/argo-tui/internal/ui/kindlist"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/cronlist"
+	"github.com/ficaa1/micko/internal/ui/kindlist"
 )
 
 // cron.go registers the cron workflow kind: its view, and the call that

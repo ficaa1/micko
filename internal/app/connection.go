@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // connection.go is the boundary between the root model and the transport.

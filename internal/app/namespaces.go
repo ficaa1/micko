@@ -5,8 +5,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/namespaces"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/namespaces"
 )
 
 // namespaces.go owns the `n` key: the namespace the session is looking at.

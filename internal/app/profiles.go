@@ -5,9 +5,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/core"
-	"github.com/ficaa1/argo-tui/internal/ui/profiles"
-	"github.com/ficaa1/argo-tui/internal/ui/workflowlist"
+	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/profiles"
+	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
 // profiles.go owns the capital P key: which cluster this session talks to.

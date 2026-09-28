@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ficaa1/argo-tui/internal/testkit"
-	"github.com/ficaa1/argo-tui/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/testkit"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // paneModel builds a list with n fixture rows at a known size.

@@ -6,7 +6,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 
-	"github.com/ficaa1/argo-tui/internal/testkit"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // lineCount counts rendered terminal lines for a view string.

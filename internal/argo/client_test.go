@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/argo-tui/internal/core"
+	"github.com/ficaa1/micko/internal/core"
 )
 
 // newTestClient builds a Client pointed at the given test server. The

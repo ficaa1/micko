@@ -1,6 +1,6 @@
 package actions
 
-import "github.com/ficaa1/argo-tui/internal/core"
+import "github.com/ficaa1/micko/internal/core"
 
 // ConfirmAction validates the UI's opt-in confirmation without performing an
 // API call. It is useful to roots that keep confirmation orchestration outside

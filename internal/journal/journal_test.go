@@ -13,7 +13,7 @@ import (
 // Each record is one JSON line with every field of the format, appended in
 // order.
 func TestRecordAppendsOneJSONLinePerEntry(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state", "argo-tui", "actions.jsonl")
+	path := filepath.Join(t.TempDir(), "state", "micko", "actions.jsonl")
 	j := New(path)
 	at := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
 	first := Entry{Time: at, Profile: "dev", Server: "https://argo.test", Namespace: "ns", Name: "wf-a", UID: "uid-a", Verb: "retry", Outcome: "confirmed"}
@@ -107,7 +107,7 @@ func TestDefaultPathFollowsXDGStateHome(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
 	got, err := DefaultPath()
-	if err != nil || got != filepath.Join(state, "argo-tui", "actions.jsonl") {
+	if err != nil || got != filepath.Join(state, "micko", "actions.jsonl") {
 		t.Fatalf("path = %q, err = %v", got, err)
 	}
 
@@ -115,14 +115,14 @@ func TestDefaultPathFollowsXDGStateHome(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("HOME", home)
 	got, err = DefaultPath()
-	if err != nil || got != filepath.Join(home, ".local", "state", "argo-tui", "actions.jsonl") {
+	if err != nil || got != filepath.Join(home, ".local", "state", "micko", "actions.jsonl") {
 		t.Fatalf("fallback path = %q, err = %v", got, err)
 	}
 
 	// The XDG spec says a relative value is invalid and must be ignored.
 	t.Setenv("XDG_STATE_HOME", "relative/state")
 	got, _ = DefaultPath()
-	if got != filepath.Join(home, ".local", "state", "argo-tui", "actions.jsonl") {
+	if got != filepath.Join(home, ".local", "state", "micko", "actions.jsonl") {
 		t.Fatalf("relative XDG_STATE_HOME was used: %q", got)
 	}
 }
