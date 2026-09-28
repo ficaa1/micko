@@ -9,10 +9,10 @@ E.scene({
     // Mićko himself, as a round avatar left of the wordmark.
     const textW = letters.reduce((a, s) => a + s.offsetWidth, 0);
     const av = E.el('div', '', root);
-    E.css(av, { left: 960 - textW / 2 - 60 - 150, top: 160, width: 150, height: 150, borderRadius: '50%', overflow: 'hidden', border: '5px solid #f2efe9', boxShadow: '0 16px 40px rgba(0,0,0,.5)' });
+    E.css(av, { left: 960 - (textW + 186) / 2, top: 160, width: 150, height: 150, borderRadius: '50%', overflow: 'hidden', border: '5px solid #f2efe9', boxShadow: '0 16px 40px rgba(0,0,0,.5)' });
     const avImg = E.el('img', '', av); avImg.src = 'photos/micko-cage.jpg';
     E.css(avImg, { left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 18%' });
-    E.css(mark, { left: 75 });
+    E.css(mark, { left: 93 });
     const ver = E.el('div', 'chip', root, 'v0.6.0');
     E.css(ver, { top: 350, fontSize: 30, color: '#0a0b14', background: 'linear-gradient(90deg,#f7768e,#ff9e64)', border: 'none', padding: '10px 26px', fontWeight: 800 });
 

@@ -1,7 +1,6 @@
-[38;2;192;202;245m[48;2;41;46;66m [1m[38;2;122;162;247margo-tui 0.5.0 @ 12c81bc[0m[38;2;192;202;245m[48;2;41;46;66m   [38;2;86;95;137mserver: [38;2;192;202;245msynthetic demo   [38;2;86;95;137mns: [38;2;192;202;245mdemo[39m                                                   [1m[38;2;26;27;38m[48;2;158;206;106m READ ONLY [0m[48;2;41;46;66m
+[38;2;192;202;245m[48;2;41;46;66m [1m[38;2;122;162;247mmicko 0.6.0 @ 534e53f[0m[38;2;192;202;245m[48;2;41;46;66m   [38;2;86;95;137mserver: [38;2;192;202;245msynthetic demo   [38;2;86;95;137mns: [38;2;192;202;245mdemo[39m                                                      [1m[38;2;26;27;38m[48;2;158;206;106m READ ONLY [0m[48;2;41;46;66m
 [38;2;65;72;104m[49m╭─[39m [1m[38;2;122;162;247mHelp[0m [38;2;65;72;104m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │[39m [1m[38;2;122;162;247mKEYS[0m                                       [38;2;86;95;137m? or esc to close[39m                                                             [38;2;65;72;104m│
-│[39m                                                                                                                          [38;2;65;72;104m│
 │[39m [38;2;122;162;247mGlobal[39m    q quit  ctrl+c quit  ? help  esc back / close  : command                                                       [38;2;65;72;104m│
 │[39m           P profile  f raw full screen  y copy  o open in Argo UI                                                        [38;2;65;72;104m│
 │[39m [38;2;122;162;247mMove[39m      j / k  pgup / pgdn  gg / home top  G / end bottom                                                              [38;2;65;72;104m│
@@ -24,9 +23,10 @@
 │[39m [38;2;122;162;247mTimeline[39m  ◆ critical path  ░ waited  │ now  l logs  i info  space fold                                                   [38;2;65;72;104m│
 │[39m [38;2;122;162;247mExplain[39m   why it ended, as findings  y copy report  l failing log                                                        [38;2;65;72;104m│
 │[39m [38;2;122;162;247mEvents[39m    live Kubernetes events  s warnings first  / filter                                                             [38;2;65;72;104m│
-│[39m                                                                                                                          [38;2;65;72;104m│
 │[39m [38;2;122;162;247mLogs[39m      t follow  space pause  c container  G newest  esc back                                                         [38;2;65;72;104m│
 │[39m           / search  n / N next / previous match  & only matching lines                                                   [38;2;65;72;104m│
 │[39m           w wrap long lines  L source labels  | pipe to a program                                                        [38;2;65;72;104m│
+│[39m           ctrl+t server timestamps (reopens the stream, keeps the lines)                                                 [38;2;65;72;104m│
+│[39m [38;2;122;162;247mActions[39m   a opens the pane; only verbs that apply are offered                                                            [38;2;65;72;104m│
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 [38;2;122;162;247mhelp[39m                                                                                                               [1m[38;2;122;162;247mesc[0m[38;2;86;95;137m close

@@ -24,8 +24,9 @@ E.scene({
 
     const S = 0.8;
     const wide = { fx: term.w / 2, fy: term.h / 2, X: 1390, Y: 560, s: S };
-    const close = { fx: bird.x + bird.w / 2, fy: bird.y + bird.h / 2, X: 1390, Y: 520, s: 2.4 };
-    const keys = [[1.3, wide], [2.0, close], [3.3, close], [3.9, wide]];
+    const close = { fx: bird.x + bird.w / 2, fy: bird.y + bird.h / 2, X: 1350, Y: 640, s: 2.2 };
+    // The close-up crops the window to a lens around him, so the zoom never covers the headline.
+    const M = 56, lens = { t: bird.y - M * 0.7, l: bird.x - M, r: term.w - (bird.x + bird.w + M), b: term.h - (bird.y + bird.h + M * 0.7) };
     const pPose = E.pill(root, 'the same pose, in ASCII', '#ff9e64'); pPose.style.fontSize = '28px';
     const lab = E.el('div', 'chip', root); E.css(lab, { top: 980, fontSize: 26, color: '#e6e9ff', fontFamily: 'JBM, monospace' });
     const how = E.el('div', '', root, '<span class=g style="color:#ff9e64">--mascot</span> · <span class=g style="color:#ff9e64">:mascot</span> · <span class=g style="color:#ff9e64">mascot: true</span><br><span style="color:#565f89">off by default · on terminals of 80×40 or larger</span>');
@@ -34,13 +35,15 @@ E.scene({
     return (t) => {
       h.update(t, 0.1, 6.45);
       const pin = E.p(t, 0, 0.9, 'expo'), pout = E.p(t, 6.45, 7, 'in');
-      const cam = E.camPath(t, keys);
+      const z = t < 2.3 ? E.p(t, 1.3, 2.1, 'inOut') : 1 - E.p(t, 3.3, 3.95, 'inOut');
+      const cam = E.mixCam(wide, close, z);
       E.cam(term.win, { ...cam, X: cam.X + (1 - pin) * 800, o: E.clamp(pin * 2) * (1 - pout), ry: (1 - pin) * -30, persp: 2400 });
+      term.win.style.clipPath = z > 0.001 ? `inset(${lens.t * z}px ${lens.r * z}px ${lens.b * z}px ${lens.l * z}px round ${14 + 6 * z}px)` : '';
       // Photo slides in from the left beside him.
       const pp = E.p(t, 0.5, 1.3, 'expo');
       E.set(photo, { x: (1 - pp) * -700, r: -3 * pp, o: E.clamp(pp * 2) * (1 - pout) });
       E.set(hl, { o: E.inOut(t, 2.0, 3.3, 0.3) });
-      E.css(pPose, { left: 1390 - pPose.offsetWidth / 2, top: 700 });
+      E.css(pPose, { left: 1350 - pPose.offsetWidth / 2, top: 640 + (bird.h / 2 + M * 0.7) * 2.2 + 26 });
       E.pop(pPose, t, 2.1, 3.25);
       // Skins: one every 0.42 s from 4.0 s.
       const k = Math.floor((t - 4.0) / 0.42);
