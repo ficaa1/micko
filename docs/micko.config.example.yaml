@@ -17,8 +17,10 @@ refreshInterval: 5s
 # A profile can set it too, overriding this line either way.
 # redactValues: true
 
-# Perch Mićko, the mascot, on the pane on terminals of 80x40 and larger. He
-# costs three rows. --mascot turns him on too, and :mascot toggles him.
+# Put Mićko, the mascot, on the pane on terminals of 80x40 and larger: true
+# (or perch) perches him on its top border, floor sits him in its bottom
+# corner. He costs three rows. --mascot and --mascot=floor do the same, and
+# :mascot moves him from perch to floor to off.
 # mascot: true
 
 profiles:

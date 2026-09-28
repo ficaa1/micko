@@ -55,8 +55,11 @@ type Frame struct {
 	// Mascot asks for Mićko, the mascot, to perch on the pane (perch.go).
 	// He only perches on a terminal with room for him.
 	Mascot bool
-	// MascotPose is the pose he is in, one of shared.MickoPerchBeats. The
-	// zero Art is his resting pose, shared.MickoPerch.
+	// MascotFloor sits him on the floor of the pane instead, in its bottom
+	// corner (floor.go).
+	MascotFloor bool
+	// MascotPose is the pose he is in, one of shared.MickoPerchBeats or
+	// shared.MickoFloorBeats. The zero Art is his resting pose there.
 	MascotPose shared.Art
 
 	// Pane.
@@ -117,7 +120,7 @@ func (f Frame) BodyHeight() int {
 	if f.Height <= 0 {
 		return 0
 	}
-	chrome := bandRows + f.titleRows() + f.perchRows()
+	chrome := bandRows + f.titleRows() + f.perchRows() + f.floorRows()
 	if n := f.Height - chrome; n > 0 {
 		return n
 	}
@@ -139,10 +142,10 @@ func (f Frame) Render(t shared.Theme) string {
 		out = append(out, top)
 		inner := f.BodyWidth()
 		left, right := t.Border.Render(b.Left), t.Border.Render(b.Right)
-		for _, l := range body {
+		for _, l := range append(body, f.floorLines(t)...) {
 			out = append(out, left+" "+fit(l, inner)+" "+right)
 		}
-		out = append(out, t.Border.Render(f.bottomBorder(b)))
+		out = append(out, f.bottomLine(t, b))
 	} else {
 		if f.titleRows() > 0 {
 			out = append(out, band(

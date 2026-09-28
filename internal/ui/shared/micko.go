@@ -16,6 +16,8 @@ import (
 //
 //	r body   b wing and tail   k scallops, eye and feet   w beak and cheek
 //
+// and, on the floor (micko_floor.go), g his mirror and h a heart.
+//
 // A space in the mask is not part of Mićko. What shows through there is the
 // caller's: blank cells above the pane, the border line under his feet, the
 // project name beside him.
@@ -53,7 +55,7 @@ var (
 		},
 		Mask: []string{
 			`      rrrrrrrrrr rrr  `,
-			`bbbbrrrkrkrkrkrwrrkrr `,
+			`bbbbrrrkrkrkrkrwr k r `,
 			`      rrrbbbbbrrrww   `,
 			`       kkk            `,
 		},
@@ -67,7 +69,7 @@ var (
 		},
 		Mask: []string{
 			`      rrrrrrrrrr rrr  `,
-			`bbbbrrrkrkrkrkrkrrkrrw`,
+			`bbbbrrrkrkrkrkrkr k rw`,
 			`      rrrbbbbbrrrww   `,
 			`       kkk            `,
 		},
@@ -213,6 +215,10 @@ func (t Theme) mickoPart(m rune) (lipgloss.Style, bool) {
 		return t.MickoDark, true
 	case 'w':
 		return t.MickoBeak, true
+	case 'g': // his mirror (micko_floor.go)
+		return t.MickoDark, true
+	case 'h': // the heart he sends it
+		return t.MickoBody, true
 	}
 	return lipgloss.Style{}, false
 }

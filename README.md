@@ -17,8 +17,10 @@ It is named after Mićko, my eastern rosella, who is also its mascot. Turn him
 on with `mascot: true` in the config file, `--mascot`, or `:mascot` at any
 time, and on a terminal of 80×40 or larger he perches on top of the pane, the
 way he rests his beak on a monitor. Now and then he blinks, dozes off, or
-lifts his head to look left and right. He is off by default: he costs the
-pane three rows.
+lifts his head to look left and right. With `mascot: floor` (or
+`--mascot=floor`, or a second `:mascot`) he sits on the floor of the pane
+instead, in its bottom corner, watching you and now and then turning to kiss
+himself in his mirror. He is off by default: he costs the pane three rows.
 
 ![micko browsing the demo dataset](docs/demo.gif)
 
@@ -290,7 +292,7 @@ runs a guess: a word that names no command is reported in the footer.
 | `ns [namespace]` | Switch namespace; with no name, open the namespace picker |
 | `all` | Toggle the all-namespaces view |
 | `profile [name]`, `ctx [name]` | Switch profile; with no name, open the profile picker |
-| `mascot` | Toggle Mićko, the mascot |
+| `mascot` | Move Mićko, the mascot: perch, floor, off |
 | `help` | Show every key |
 | `quit`, `q` | Quit |
 
@@ -538,7 +540,7 @@ spells out `READ ONLY` or `ACTIONS ENABLED`.
 | `--debug` | Emit sanitized lifecycle diagnostics |
 | `--skin NAME` | Colour skin, overriding the config file (see [Skins](#skins)) |
 | `--redact-values` | Open every workflow with parameter and output values hidden |
-| `--mascot` | Perch Mićko on the pane (terminals of 80×40 and larger) |
+| `--mascot` | Perch Mićko on the pane; `--mascot=floor` sits him in its bottom corner (terminals of 80×40 and larger) |
 | `--demo` | Run the offline, read-only demo |
 | `--version` | Print version and exit |
 

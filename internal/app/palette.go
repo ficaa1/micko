@@ -102,8 +102,8 @@ func builtinCommands() []command {
 			run:  (*Root).runProfile,
 		},
 		{
-			Command: palette.Command{Name: "mascot", Desc: "toggle Mićko, the mascot"},
-			run:     func(m *Root, _ string) tea.Cmd { return m.toggleMascot() },
+			Command: palette.Command{Name: "mascot", Desc: "move Mićko: perch, floor, off"},
+			run:     func(m *Root, _ string) tea.Cmd { return m.cycleMascot() },
 		},
 		{
 			Command: palette.Command{Name: "help", Desc: "show every key"},

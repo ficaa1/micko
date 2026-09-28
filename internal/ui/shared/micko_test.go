@@ -7,11 +7,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Every mask names a part only under a character, and the perch masks every
-// character it has: a stray mask cell would colour a blank, and an unmasked
+// Every mask names a part only under a character, and Mićko's own drawings
+// mask every character they have: a stray mask cell would colour a blank, and an unmasked
 // one would draw in the terminal's colours inside Mićko.
 func TestMickoMasksMatchTheirDrawings(t *testing.T) {
-	for name, a := range map[string]Art{"perch": MickoPerch, "wordmark": MickoWordmark} {
+	for name, a := range map[string]Art{"perch": MickoPerch, "perch-left": MickoPerchLeft, "perch-right": MickoPerchRight, "floor": MickoFloor, "wordmark": MickoWordmark} {
 		if len(a.Lines) != len(a.Mask) {
 			t.Fatalf("%s: %d lines, %d mask rows", name, len(a.Lines), len(a.Mask))
 		}
@@ -25,10 +25,10 @@ func TestMickoMasksMatchTheirDrawings(t *testing.T) {
 				if masked && r == ' ' {
 					t.Errorf("%s row %d col %d: mask on a blank", name, row, col)
 				}
-				if name == "perch" && !masked && r != ' ' {
+				if name != "wordmark" && !masked && r != ' ' {
 					t.Errorf("%s row %d col %d: %q is not masked", name, row, col, r)
 				}
-				if masked && !strings.ContainsRune("rbkw", mask[col]) {
+				if masked && !strings.ContainsRune("rbkwgh", mask[col]) {
 					t.Errorf("%s row %d col %d: unknown part %q", name, row, col, mask[col])
 				}
 			}
@@ -94,7 +94,7 @@ func TestMickoRenderRowOnlyStyles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, a := range []Art{MickoPerch, MickoWordmark} {
+	for _, a := range []Art{MickoPerch, MickoPerchLeft, MickoPerchRight, MickoFloor, MickoWordmark} {
 		for row, l := range a.Lines {
 			got := a.RenderRow(th, row, th.Title)
 			if ansi.Strip(got) != l {
@@ -135,5 +135,37 @@ func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
 	}
 	if strings.Contains(h.View(100, room-1), "_ __ ___") || strings.Contains(h.View(MickoWordmark.Width()-1, room), "_ __ ___") {
 		t.Error("wordmark drawn without room for all of it")
+	}
+}
+
+// Every floor pose is drawn at one column, so its rows share a width, and
+// the mirror stays in the same cells.
+func TestMickoFloorPosesShareAShape(t *testing.T) {
+	w := MickoFloor.Width()
+	for i, b := range MickoFloorBeats {
+		if len(b.Pose.Lines) != len(MickoFloor.Lines) || len(b.Pose.Mask) != len(MickoFloor.Lines) {
+			t.Fatalf("beat %d has %d lines and %d mask rows", i, len(b.Pose.Lines), len(b.Pose.Mask))
+		}
+		for row, l := range b.Pose.Lines {
+			if n, m := len([]rune(l)), len([]rune(b.Pose.Mask[row])); n != w || m != w {
+				t.Errorf("beat %d row %d is %d cells with a %d-cell mask, want %d: %q", i, row, n, m, w, l)
+			}
+			if got, want := []rune(l)[w-3], []rune(MickoFloor.Lines[row])[w-3]; got != want {
+				t.Errorf("beat %d row %d: mirror edge %q, want %q", i, row, got, want)
+			}
+		}
+		if b.Hold <= 0 {
+			t.Errorf("beat %d holds for %v", i, b.Hold)
+		}
+	}
+}
+
+// Left-facing poses are the right-facing ones seen in a mirror.
+func TestMirroredTurnsHimRound(t *testing.T) {
+	if got := mirrored("    (  o )> "); got != " <( o  )    " {
+		t.Errorf("mirrored = %q", got)
+	}
+	if got := mirrored("====`-^-^-' "); got != " `-^-^-'====" {
+		t.Errorf("mirrored = %q", got)
 	}
 }

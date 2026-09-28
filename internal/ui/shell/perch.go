@@ -31,13 +31,14 @@ const (
 // put while the count changes.
 const perchRight = 30
 
-// perched reports whether Mićko is asked for and this frame has room for him.
+// perched reports whether Mićko is asked for on the perch and this frame
+// has room for him.
 func (f Frame) perched() bool {
-	return f.Mascot && f.bordered() && PerchFits(f.Width, f.Height)
+	return f.Mascot && !f.MascotFloor && f.bordered() && PerchFits(f.Width, f.Height)
 }
 
 // PerchFits reports whether a terminal of width by height has room for
-// Mićko's perch.
+// Mićko, on his perch or on the floor.
 func PerchFits(width, height int) bool {
 	return width >= perchMinWidth && height >= perchMinHeight
 }
@@ -103,7 +104,13 @@ func (f Frame) perchFill(t shared.Theme, line string, fillStart, fill, x int) st
 	if x < 0 {
 		return t.Border.Render(strings.Repeat(line, fill))
 	}
-	art := f.pose()
+	return artOnLine(t, f.pose(), line, fillStart, fill, x)
+}
+
+// artOnLine draws fill cells of border line from column fillStart, with the
+// last row of art laid over it from column x: only the cells that belong to
+// Mićko replace line.
+func artOnLine(t shared.Theme, art shared.Art, line string, fillStart, fill, x int) string {
 	row := len(art.Lines) - 1
 	var b strings.Builder
 	run := 0 // border cells waiting to be drawn as one run
