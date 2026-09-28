@@ -92,7 +92,8 @@ type File struct {
 	RedactValues bool `yaml:"redactValues,omitempty"`
 	// Mascot puts Mićko, the mascot, on the pane on terminals of 80x40 and
 	// larger: true or perch perches him on its top border, floor sits him in
-	// its bottom corner. It is off unless set: he costs three rows.
+	// its bottom corner. It is off unless set: he costs three rows perched,
+	// four on the floor.
 	Mascot string `yaml:"mascot,omitempty"`
 }
 

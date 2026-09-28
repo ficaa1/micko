@@ -19,7 +19,7 @@ refreshInterval: 5s
 
 # Put Mićko, the mascot, on the pane on terminals of 80x40 and larger: true
 # (or perch) perches him on its top border, floor sits him in its bottom
-# corner. He costs three rows. --mascot and --mascot=floor do the same, and
+# corner. He costs three rows perched, four on the floor. --mascot and --mascot=floor do the same, and
 # :mascot moves him from perch to floor to off.
 # mascot: true
 

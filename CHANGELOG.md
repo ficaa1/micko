@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Mićko hops. On the floor he now watches you from a little way off, and
+  when he wants a kiss he turns, crouches and hops over to his mirror in two
+  hops, feet tucked, then hops back. His hops follow a damped spring
+  (harmonica) and redraw the screen only while he is in the air, a few
+  frames a hop. He needs a row of air to hop into, so on the floor he costs
+  the pane four rows; to keep the help overlay whole on an 80x40 terminal,
+  its last line, about `--allow-actions`, joined the Actions line.
+
 ## 0.7.0
 
 - Mićko moves. Perched, he spends most of his time resting his beak on the
