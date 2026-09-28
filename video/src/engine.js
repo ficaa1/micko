@@ -257,6 +257,10 @@
       const root = document.getElementById('scene');
       root.innerHTML = ''; root.removeAttribute('style');
       live = { id, update: s.build(root) };
+      // A freshly built scene waits for its photos to decode, so no frame
+      // is captured with an empty print (render.mjs awaits this promise).
+      const imgs = [...root.querySelectorAll('img')].map((i) => i.decode().catch(() => {}));
+      if (imgs.length) return Promise.all(imgs).then(() => { background(E.offset(id) + t); live.update(t); });
     }
     background(E.offset(id) + t);
     live.update(t);

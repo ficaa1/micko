@@ -5,7 +5,7 @@ E.scene({
   id: 'mascot', dur: 7,
   build(root) {
     const h = E.headline(root, { x: 110, y: 90, width: 760, kicker: 'new · --mascot', title: 'Now he perches\non your pane' });
-    const skins = ['catppuccin-latte', 'gruvbox-dark', 'dracula', 'rose-pine-dawn', 'nord', 'monokai'];
+    const skins = ['catppuccin-latte', 'gruvbox-dark', 'dracula', 'rose-pine-dawn', 'nord', 'gruvbox-light'];
     const term = E.term(root, 'mascot_list', { rows: 40 });
     skins.forEach((s) => term.layer('mascot_skin_' + s));
 
@@ -50,7 +50,7 @@ E.scene({
       const k = Math.floor((t - 4.0) / 0.42);
       const cur = t < 4.0 ? 'mascot_list' : 'mascot_skin_' + skins[Math.min(k, skins.length - 1)];
       term.show(cur);
-      lab.textContent = '--skin ' + (t < 4.0 ? 'gruvbox-light' : skins[Math.min(k, skins.length - 1)]);
+      lab.textContent = '--skin ' + (t < 4.0 ? 'monokai' : skins[Math.min(k, skins.length - 1)]);
       E.css(lab, { left: 1390 - lab.offsetWidth / 2 });
       E.set(lab, { o: E.inOut(t, 3.95, 6.3, 0.2) });
       const ph = E.p(t, 4.2, 4.8);

@@ -85,10 +85,13 @@ presentation; terminal skin gruvbox or similar. Decisions:
   crimson/cobalt print offset on the wordmark and the big numbers.
 - Objects: cards, pills, keycaps and windows as paper cut-outs with ink
   borders and hard offset shadows; photos taped on with washi tape.
-- Terminal skin: gruvbox-light (its `#fbf1c7` reads as a sheet of paper);
-  every screen recaptured with it.
+- Terminal skin: **monokai** (owner's pick). gruvbox-light was tried first but
+  blended into the paper and read weakly; a side-by-side of six skins on the
+  paper (`out/stills/skin-compare.png`, regenerable) led to monokai: a dark,
+  punchy window on cream paper. Default skin lives in `capture/capture.sh`
+  (`SKIN`) and `capture/ansi2json.mjs`; the mascot scene cycles other skins.
 - Steps: [x] tokens + CSS + engine  [x] remap scene colours
-  [x] recapture gruvbox-light  [x] stills of every scene checked  [ ] render
+  [x] recapture (now monokai)  [x] stills of every scene checked  [ ] render
   (review sheet: `restyle-review.png`; render here or on the owner's PC)
 
 ## Plan (1920x1080, 30 fps)
