@@ -55,6 +55,9 @@ type Frame struct {
 	// Mascot asks for Mićko, the mascot, to perch on the pane (perch.go).
 	// He only perches on a terminal with room for him.
 	Mascot bool
+	// MascotPose is the pose he is in, one of shared.MickoPerchBeats. The
+	// zero Art is his resting pose, shared.MickoPerch.
+	MascotPose shared.Art
 
 	// Pane.
 	Title      string   // left of the top border, e.g. "Workflows"
@@ -226,7 +229,7 @@ func (f Frame) topBorder(t shared.Theme) (line string, perchX int) {
 	}
 	fillStart := 1 + ansi.StringWidth(left) // after the corner and the title
 	perchX = f.perchColumn(fillStart, fill)
-	return t.Border.Render(b.TopLeft) + left + perchFill(t, b.Top, fillStart, fill, perchX) +
+	return t.Border.Render(b.TopLeft) + left + f.perchFill(t, b.Top, fillStart, fill, perchX) +
 		tail + t.Border.Render(b.TopRight), perchX
 }
 

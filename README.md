@@ -16,8 +16,9 @@ until 0.5.0.
 It is named after Mićko, my eastern rosella, who is also its mascot. Turn him
 on with `mascot: true` in the config file, `--mascot`, or `:mascot` at any
 time, and on a terminal of 80×40 or larger he perches on top of the pane, the
-way he rests his beak on a monitor. He is off by default: he costs the pane
-three rows.
+way he rests his beak on a monitor. Now and then he blinks, dozes off, or
+lifts his head to look left and right. He is off by default: he costs the
+pane three rows.
 
 ![micko browsing the demo dataset](docs/demo.gif)
 

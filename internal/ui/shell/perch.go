@@ -87,13 +87,23 @@ func footSpan(a shared.Art) (lo, hi int) {
 	return lo, hi
 }
 
+// pose is the drawing of Mićko in his current pose. Every pose shares the
+// resting pose's width and feet, so where he sits is worked out from the
+// resting pose alone and does not change as he moves.
+func (f Frame) pose() shared.Art {
+	if len(f.MascotPose.Lines) == 0 {
+		return shared.MickoPerch
+	}
+	return f.MascotPose
+}
+
 // perchFill draws fill cells of border line from column fillStart, with
 // Mićko's border row laid over it when he sits at column x.
-func perchFill(t shared.Theme, line string, fillStart, fill, x int) string {
+func (f Frame) perchFill(t shared.Theme, line string, fillStart, fill, x int) string {
 	if x < 0 {
 		return t.Border.Render(strings.Repeat(line, fill))
 	}
-	art := shared.MickoPerch
+	art := f.pose()
 	row := len(art.Lines) - 1
 	var b strings.Builder
 	run := 0 // border cells waiting to be drawn as one run
@@ -124,7 +134,7 @@ func (f Frame) perchLines(t shared.Theme, x int) []string {
 	for row := 0; row < n; row++ {
 		l := ""
 		if x >= 0 {
-			l = strings.Repeat(" ", x) + shared.MickoPerch.RenderRow(t, row, t.Text)
+			l = strings.Repeat(" ", x) + f.pose().RenderRow(t, row, t.Text)
 		}
 		out = append(out, fit(l, f.Width))
 	}

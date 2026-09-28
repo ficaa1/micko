@@ -103,10 +103,7 @@ func builtinCommands() []command {
 		},
 		{
 			Command: palette.Command{Name: "mascot", Desc: "toggle Mićko, the mascot"},
-			run: func(m *Root, _ string) tea.Cmd {
-				m.toggleMascot()
-				return nil
-			},
+			run:     func(m *Root, _ string) tea.Cmd { return m.toggleMascot() },
 		},
 		{
 			Command: palette.Command{Name: "help", Desc: "show every key"},

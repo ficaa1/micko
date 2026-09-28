@@ -6,6 +6,8 @@ import (
 
 	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // The alternate screen is repainted, not scrolled. A frame that is not
@@ -175,5 +177,46 @@ func TestMickoCommandTogglesThePerch(t *testing.T) {
 	runLine(m, "mascot")
 	if perched() || !strings.Contains(screen(m), "80x40") {
 		t.Fatalf("small terminal: want no perch and a notice naming the size:\n%s", screen(m))
+	}
+}
+
+// Once on, Mićko moves through his routine one beat at a time, and the
+// pose on screen follows. A beat from before he was turned off and on again
+// is dropped, so only one routine ever runs.
+func TestMickoMovesThroughHisRoutine(t *testing.T) {
+	m, _ := demoRoot(t)
+	m = resize(t, m, 100, 40)
+	on := m.toggleMascot()
+	if on == nil {
+		t.Fatal("turning him on started no routine")
+	}
+	beat := on()
+	if _, ok := beat.(mascotBeatMsg); !ok {
+		t.Fatalf("routine sent %T, want a beat", beat)
+	}
+	_, next := m.Update(beat)
+	if m.mascotBeat != 1 || next == nil {
+		t.Fatalf("after one beat: at beat %d, next scheduled %v", m.mascotBeat, next != nil)
+	}
+
+	// Walk on until he looks away from the pane.
+	for i := 0; i < len(shared.MickoPerchBeats) && !strings.Contains(screen(m), ")>") && !strings.Contains(screen(m), "<("); i++ {
+		_, next = m.Update(next())
+	}
+	if !strings.Contains(screen(m), ")>") && !strings.Contains(screen(m), "<(") {
+		t.Fatalf("a whole routine went by without him looking around:\n%s", screen(m))
+	}
+
+	stale := next()
+	m.toggleMascot()
+	if cmd := m.toggleMascot(); cmd == nil {
+		t.Fatal("turning him back on started no routine")
+	}
+	if _, cmd := m.Update(stale); cmd != nil || m.mascotBeat != 0 {
+		t.Fatalf("a beat from the old routine moved him to beat %d", m.mascotBeat)
+	}
+	m.toggleMascot()
+	if cmd := m.nextMascotBeat(); cmd != nil {
+		t.Fatal("a routine was scheduled while he is off")
 	}
 }

@@ -36,14 +36,54 @@ func TestMickoMasksMatchTheirDrawings(t *testing.T) {
 	}
 }
 
-// The perch is drawn at one column for all its rows, so they must be the
-// same width or his head would drift from his body.
-func TestMickoPerchRowsShareAWidth(t *testing.T) {
+// Every perched pose is drawn at the resting pose's column, so each of its
+// rows must be the resting pose's width or his head would drift from his
+// body, and his feet must stay put or he would shuffle along the border.
+func TestMickoPerchPosesShareAShape(t *testing.T) {
 	w := MickoPerch.Width()
-	for row, l := range MickoPerch.Lines {
-		if n := len([]rune(l)); n != w {
-			t.Errorf("row %d is %d cells, want %d: %q", row, n, w, l)
+	last := len(MickoPerch.Lines) - 1
+	feet := strings.Index(MickoPerch.Lines[last], "/_/")
+	for i, b := range MickoPerchBeats {
+		if len(b.Pose.Lines) != len(MickoPerch.Lines) || len(b.Pose.Mask) != len(MickoPerch.Lines) {
+			t.Fatalf("beat %d has %d lines and %d mask rows", i, len(b.Pose.Lines), len(b.Pose.Mask))
 		}
+		for row, l := range b.Pose.Lines {
+			if n, m := len([]rune(l)), len([]rune(b.Pose.Mask[row])); n != w || m != w {
+				t.Errorf("beat %d row %d is %d cells with a %d-cell mask, want %d: %q", i, row, n, m, w, l)
+			}
+		}
+		if got := strings.Index(b.Pose.Lines[last], "/_/"); got != feet {
+			t.Errorf("beat %d: feet at column %d, want %d", i, got, feet)
+		}
+		if b.Hold <= 0 {
+			t.Errorf("beat %d holds for %v", i, b.Hold)
+		}
+	}
+}
+
+// His routine rests his beak on the pane, blinks, and looks both ways.
+func TestMickoPerchRoutine(t *testing.T) {
+	seen := map[string]bool{}
+	for _, b := range MickoPerchBeats {
+		head := b.Pose.Lines[1] + b.Pose.Lines[2] + b.Pose.Lines[3]
+		switch {
+		case strings.Contains(head, `\v/`) && strings.Contains(head, " o "):
+			seen["resting"] = true
+		case strings.Contains(head, " - "):
+			seen["blinking"] = true
+		case strings.Contains(head, "<("):
+			seen["looking left"] = true
+		case strings.Contains(head, ")>"):
+			seen["looking right"] = true
+		}
+	}
+	for _, want := range []string{"resting", "blinking", "looking left", "looking right"} {
+		if !seen[want] {
+			t.Errorf("no beat has him %s", want)
+		}
+	}
+	if MickoPerchBeats[0].Pose.Lines[3] != MickoPerch.Lines[3] {
+		t.Error("the routine does not start at rest")
 	}
 }
 

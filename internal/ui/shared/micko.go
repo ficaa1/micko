@@ -2,6 +2,7 @@ package shared
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 )
@@ -22,19 +23,90 @@ import (
 // MickoPerch is Mićko perched on the pane's top border with his head bowed
 // over the edge, the way he rests his beak on a monitor. The last row is
 // drawn onto the border itself: only its masked cells replace border line.
+// It is his resting pose; the other poses (MickoPerchBeats) share its width
+// and its feet, so he never shifts on the border as he moves.
 var MickoPerch = Art{
 	Lines: []string{
-		`      _.-~~~~-._    `,
-		"====-'^v^v^v^v^v `. ",
-		"      `-.\\\\\\\\\\__ o )",
-		`       /_/    \v/   `,
+		`      _.-~~~~-._      `,
+		"====-'^v^v^v^v^v `.   ",
+		"      `-.\\\\\\\\\\__ o )  ",
+		`       /_/    \v/     `,
 	},
 	Mask: []string{
-		`      rrrrrrrrrr    `,
-		`bbbbrrrkrkrkrkrk rr `,
-		`      rrrbbbbbrr k r`,
-		`       kkk    www   `,
+		`      rrrrrrrrrr      `,
+		`bbbbrrrkrkrkrkrk rr   `,
+		`      rrrbbbbbrr k r  `,
+		`       kkk    www     `,
 	},
+}
+
+// MickoPerchLeft and MickoPerchRight are Mićko with his head lifted off the
+// pane, looking left toward the pane's title and right past its count. His
+// beak leaves the border, so the border line shows again where it was.
+var (
+	MickoPerchLeft = Art{
+		Lines: []string{
+			`      _.-~~~~-._ .-.  `,
+			`====-'^v^v^v^v^<( o ) `,
+			"      `-.\\\\\\\\\\__.-'   ",
+			`       /_/            `,
+		},
+		Mask: []string{
+			`      rrrrrrrrrr rrr  `,
+			`bbbbrrrkrkrkrkrwrrkrr `,
+			`      rrrbbbbbrrrww   `,
+			`       kkk            `,
+		},
+	}
+	MickoPerchRight = Art{
+		Lines: []string{
+			`      _.-~~~~-._ .-.  `,
+			`====-'^v^v^v^v^v( o )>`,
+			"      `-.\\\\\\\\\\__.-'   ",
+			`       /_/            `,
+		},
+		Mask: []string{
+			`      rrrrrrrrrr rrr  `,
+			`bbbbrrrkrkrkrkrkrrkrrw`,
+			`      rrrbbbbbrrrww   `,
+			`       kkk            `,
+		},
+	}
+)
+
+// Beat is one step of Mićko's animation: a pose and how long he holds it.
+type Beat struct {
+	Pose Art
+	Hold time.Duration
+}
+
+// MickoPerchBeats is Mićko's perched routine, played on a loop. He spends
+// most of it resting his beak on the pane, blinking now and then and once
+// dozing off, then lifts his head to look left and right before settling
+// back down. A pass takes about 45 seconds.
+var MickoPerchBeats = func() []Beat {
+	rest, shut := MickoPerch, closedEye(MickoPerch)
+	left, right := MickoPerchLeft, MickoPerchRight
+	ms := func(n int) time.Duration { return time.Duration(n) * time.Millisecond }
+	return []Beat{
+		{rest, ms(5000)}, {shut, ms(150)},
+		{rest, ms(6000)}, {shut, ms(150)},
+		{rest, ms(4000)}, {shut, ms(2000)}, // dozing
+		{rest, ms(7000)}, {shut, ms(150)},
+		{rest, ms(8000)},
+		{right, ms(1400)}, {closedEye(right), ms(150)}, {right, ms(900)},
+		{left, ms(1400)}, {right, ms(1000)}, {left, ms(900)},
+		{closedEye(left), ms(150)}, {left, ms(700)},
+	}
+}()
+
+// closedEye is a with its eye shut.
+func closedEye(a Art) Art {
+	lines := make([]string, len(a.Lines))
+	for i, l := range a.Lines {
+		lines[i] = strings.Replace(l, " o ", " - ", 1)
+	}
+	return Art{Lines: lines, Mask: a.Mask}
 }
 
 // MickoWordmark is Mićko facing the reader beside the project name.
