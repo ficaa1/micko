@@ -6,6 +6,9 @@ import (
 
 	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/ficaa1/micko/internal/config"
+	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 // The alternate screen is repainted, not scrolled. A frame that is not
@@ -28,18 +31,21 @@ func TestFrameFillsTheWholeWindow(t *testing.T) {
 
 // Pane geometry must not move between routes. A reader who presses enter
 // should find the footer and the border in the same rows. With Mićko on, on
-// a terminal large enough for his perch, he perches on every route.
+// a terminal large enough for him, he is on every route, perched or on the
+// floor.
 func TestPaneGeometryIsStableAcrossRoutes(t *testing.T) {
-	for _, h := range []int{24, 40} {
-		m := loadDemoList(t)
-		m.SetMascot(true)
-		m = resize(t, m, 100, h)
-		listRows := borderRows(viewLines(m))
+	for _, spot := range []config.Mascot{config.MascotOff, config.MascotPerch, config.MascotFloor} {
+		for _, h := range []int{24, 40} {
+			m := loadDemoList(t)
+			m.SetMascot(spot)
+			m = resize(t, m, 100, h)
+			listRows := borderRows(viewLines(m))
 
-		for _, route := range []Route{RouteDetail, RouteLogs, RouteCron, RouteArchived} {
-			m.route = route
-			if got := borderRows(viewLines(m)); got != listRows {
-				t.Fatalf("100x%d: border moved on route %v: list %q, got %q", h, route, listRows, got)
+			for _, route := range []Route{RouteDetail, RouteLogs, RouteCron, RouteArchived} {
+				m.route = route
+				if got := borderRows(viewLines(m)); got != listRows {
+					t.Fatalf("%q 100x%d: border moved on route %v: list %q, got %q", spot, h, route, listRows, got)
+				}
 			}
 		}
 	}
@@ -141,8 +147,8 @@ func TestResizePropagatesToTheActivePane(t *testing.T) {
 }
 
 // Mićko is off until asked for. `:mascot` perches him and says so, a second
-// `:mascot` sends him off, and on a terminal too small for him the notice
-// says why he does not show.
+// `:mascot` moves him to the floor, a third sends him off, and on a terminal
+// too small for him the notice says why he does not show.
 func TestMickoCommandTogglesThePerch(t *testing.T) {
 	m, _ := demoRoot(t)
 	m = resize(t, m, 100, 40)
@@ -164,8 +170,19 @@ func TestMickoCommandTogglesThePerch(t *testing.T) {
 	}
 
 	runLine(m, "mascot")
-	if perched() || !strings.Contains(screen(m), "Mićko flew off") {
-		t.Fatalf("second :mascot did not send him off:\n%s", screen(m))
+	floored := func() bool { return strings.Contains(screen(m), "╭─╮") }
+	if perched() || !floored() || !strings.Contains(screen(m), "Mićko is on the floor") {
+		t.Fatalf("second :mascot did not move him to the floor:\n%s", screen(m))
+	}
+	// On the floor he takes the pane's own last rows, so the pane is where
+	// it was with him off.
+	if got := borderRows(viewLines(m)); got != top {
+		t.Fatalf("border rows %q with him on the floor, want %q", got, top)
+	}
+
+	runLine(m, "mascot")
+	if perched() || floored() || !strings.Contains(screen(m), "Mićko flew off") {
+		t.Fatalf("third :mascot did not send him off:\n%s", screen(m))
 	}
 	if got := borderRows(viewLines(m)); got != top {
 		t.Fatalf("border rows %q after he left, want %q", got, top)
@@ -175,5 +192,58 @@ func TestMickoCommandTogglesThePerch(t *testing.T) {
 	runLine(m, "mascot")
 	if perched() || !strings.Contains(screen(m), "80x40") {
 		t.Fatalf("small terminal: want no perch and a notice naming the size:\n%s", screen(m))
+	}
+}
+
+// Once on, Mićko moves through his routine one beat at a time, and the
+// pose on screen follows. A beat from before he was turned off and on again
+// is dropped, so only one routine ever runs.
+func TestMickoMovesThroughHisRoutine(t *testing.T) {
+	m, _ := demoRoot(t)
+	m = resize(t, m, 100, 40)
+	on := m.cycleMascot()
+	if on == nil {
+		t.Fatal("turning him on started no routine")
+	}
+	beat := on()
+	if _, ok := beat.(mascotBeatMsg); !ok {
+		t.Fatalf("routine sent %T, want a beat", beat)
+	}
+	_, next := m.Update(beat)
+	if m.mascotBeat != 1 || next == nil {
+		t.Fatalf("after one beat: at beat %d, next scheduled %v", m.mascotBeat, next != nil)
+	}
+
+	// Walk on until he looks away from the pane.
+	for i := 0; i < len(shared.MickoPerchBeats) && !strings.Contains(screen(m), ")>") && !strings.Contains(screen(m), "<("); i++ {
+		_, next = m.Update(next())
+	}
+	if !strings.Contains(screen(m), ")>") && !strings.Contains(screen(m), "<(") {
+		t.Fatalf("a whole routine went by without him looking around:\n%s", screen(m))
+	}
+
+	stale := next()
+	if cmd := m.cycleMascot(); cmd == nil || m.mascot != config.MascotFloor {
+		t.Fatal("moving him to the floor started no routine")
+	}
+	if _, cmd := m.Update(stale); cmd != nil || m.mascotBeat != 0 {
+		t.Fatalf("a beat from the perch routine moved him to beat %d", m.mascotBeat)
+	}
+
+	// On the floor he plays the floor routine, and gets to his mirror.
+	next = m.nextMascotBeat()
+	for i := 0; i < len(shared.MickoFloorBeats) && !strings.Contains(screen(m), "│<│"); i++ {
+		_, next = m.Update(next())
+	}
+	if !strings.Contains(screen(m), "│<│") {
+		t.Fatalf("a whole routine on the floor went by without a kiss:\n%s", screen(m))
+	}
+
+	m.cycleMascot()
+	if m.mascot != config.MascotOff {
+		t.Fatalf("third cycle left him at %q", m.mascot)
+	}
+	if cmd := m.nextMascotBeat(); cmd != nil {
+		t.Fatal("a routine was scheduled while he is off")
 	}
 }

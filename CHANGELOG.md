@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Mićko moves. Perched, he spends most of his time resting his beak on the
+  pane, blinks every few seconds, dozes off now and then, and about once a
+  minute lifts his head to look left toward the pane's title and right past
+  its count before settling back down. His feet stay put, so he never
+  shifts along the border, and the pane does not move. He only redraws the
+  screen when he changes pose, and not at all while he is off.
+- Mićko can sit on the floor. `mascot: floor` in the config file, or
+  `--mascot=floor`, sits him in the pane's bottom-right corner beside his
+  mirror, with his feet on the bottom border. He watches you, blinks, bobs
+  his head and flicks his tail, and about once a minute turns to kiss
+  himself in the mirror. His rows are the pane's last three, so the list
+  never runs under him and the pane stays where it is with him off.
+  `mascot: true` still perches him, and `perch` says so outright; any other
+  value is a config error. `:mascot` now moves him from his perch to the
+  floor to off.
+
 ## 0.6.0
 
 - argo-tui is now micko, after Mićko, my eastern rosella, so it is no longer

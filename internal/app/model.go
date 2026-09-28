@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 
+	"github.com/ficaa1/micko/internal/config"
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/actions"
 	"github.com/ficaa1/micko/internal/ui/archivedlist"
@@ -143,8 +144,16 @@ type Root struct {
 	// pipeCommand prefills the log pane's pipe editor.
 	pipeCommand string
 
-	// mascot perches Mićko on the pane when the terminal has room.
-	mascot bool
+	// mascot is where Mićko sits on the pane when the terminal has room.
+	mascot config.Mascot
+	// mascotBeat is his place in his routine there (mascotBeats). mascotGen names the
+	// running beat chain; turning him off or on again starts a new one, and
+	// beats of an older chain are dropped, so there is never more than one.
+	mascotBeat int
+	mascotGen  int
+	// mascotSleep holds a pose for its beat. Nil means time.Sleep; tests
+	// replace it so a beat arrives at once.
+	mascotSleep func(time.Duration)
 
 	// redact is the profile's redactValues setting. The detail view is
 	// rebuilt on every namespace and profile switch, so the root holds it
@@ -203,24 +212,65 @@ func (m *Root) SetWebURL(u string) { m.webURL = u }
 // log pane is rebuilt on every open, so the root holds it.
 func (m *Root) SetPipeCommand(cmd string) { m.pipeCommand = cmd }
 
-// SetMascot turns the mascot on or off: his perch on the pane and his
-// wordmark in the help overlay.
-func (m *Root) SetMascot(on bool) {
-	m.mascot = on
-	m.help.SetMascot(on)
+// SetMascot puts the mascot on his perch, on the floor of the pane, or
+// nowhere, and signs the help overlay with his wordmark while he is about.
+// He starts in his resting pose; Init, or the command that moved him,
+// starts his routine.
+func (m *Root) SetMascot(spot config.Mascot) {
+	m.mascot = spot
+	m.help.SetMascot(spot != config.MascotOff)
+	m.mascotBeat = 0
+	m.mascotGen++
 }
 
-// toggleMascot flips the mascot and says what happened, including when the
-// terminal is too small for him to show.
-func (m *Root) toggleMascot() {
-	m.SetMascot(!m.mascot)
+// cycleMascot moves the mascot on, from off to his perch to the floor and
+// off again, and says what happened, including when the terminal is too
+// small for him to show.
+func (m *Root) cycleMascot() tea.Cmd {
+	next := map[config.Mascot]config.Mascot{
+		config.MascotOff:   config.MascotPerch,
+		config.MascotPerch: config.MascotFloor,
+		config.MascotFloor: config.MascotOff,
+	}[m.mascot]
+	m.SetMascot(next)
 	switch {
-	case !m.mascot:
+	case next == config.MascotOff:
 		m.flash = "Mićko flew off"
-	case shell.PerchFits(m.width, m.height):
-		m.flash = "Mićko is perched"
+	case !shell.PerchFits(m.width, m.height):
+		m.flash = "Mićko is on; he shows on terminals of 80x40 and larger"
+	case next == config.MascotFloor:
+		m.flash = "Mićko is on the floor"
 	default:
-		m.flash = "Mićko is on; he perches on terminals of 80x40 and larger"
+		m.flash = "Mićko is perched"
+	}
+	return m.nextMascotBeat()
+}
+
+// mascotBeats is his routine where he sits.
+func (m *Root) mascotBeats() []shared.Beat {
+	if m.mascot == config.MascotFloor {
+		return shared.MickoFloorBeats
+	}
+	return shared.MickoPerchBeats
+}
+
+// mascotBeatMsg moves Mićko on to his next pose. gen is the chain it
+// belongs to.
+type mascotBeatMsg struct{ gen int }
+
+// nextMascotBeat holds his current pose for its beat, then moves him on. It
+// schedules nothing while he is off.
+func (m *Root) nextMascotBeat() tea.Cmd {
+	if m.mascot == config.MascotOff {
+		return nil
+	}
+	gen, hold, sleep := m.mascotGen, m.mascotBeats()[m.mascotBeat].Hold, m.mascotSleep
+	if sleep == nil {
+		sleep = time.Sleep
+	}
+	return func() tea.Msg {
+		sleep(hold)
+		return mascotBeatMsg{gen: gen}
 	}
 }
 
@@ -414,9 +464,9 @@ var _ tea.Model = (*Root)(nil)
 // with a config file of several clusters has to answer is which one.
 func (m *Root) Init() tea.Cmd {
 	if !m.connected() {
-		return tea.Batch(m.openProfilePicker(), m.backgroundQuery())
+		return tea.Batch(m.openProfilePicker(), m.backgroundQuery(), m.nextMascotBeat())
 	}
-	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery())
+	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery(), m.nextMascotBeat())
 }
 
 // armTick schedules the next poll unless one is already scheduled. Every
@@ -468,6 +518,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.resizeChildren(msg)
 		return m, nil
+
+	case mascotBeatMsg:
+		if msg.gen != m.mascotGen {
+			return m, nil
+		}
+		m.mascotBeat = (m.mascotBeat + 1) % len(m.mascotBeats())
+		return m, m.nextMascotBeat()
 
 	case tea.KeyPressMsg:
 		key := msg.String()
@@ -877,7 +934,9 @@ func (m *Root) View() tea.View {
 		Mode:      m.modeLabel(),
 		// The badge colour repeats what the mode words say.
 		ActionsEnabled: m.actionsEnabled(),
-		Mascot:         m.mascot,
+		Mascot:         m.mascot != config.MascotOff,
+		MascotFloor:    m.mascot == config.MascotFloor,
+		MascotPose:     m.mascotBeats()[m.mascotBeat].Pose,
 	}
 
 	// An action modal is a dialog: it takes the pane so the route behind it

@@ -31,13 +31,14 @@ const (
 // put while the count changes.
 const perchRight = 30
 
-// perched reports whether Mićko is asked for and this frame has room for him.
+// perched reports whether Mićko is asked for on the perch and this frame
+// has room for him.
 func (f Frame) perched() bool {
-	return f.Mascot && f.bordered() && PerchFits(f.Width, f.Height)
+	return f.Mascot && !f.MascotFloor && f.bordered() && PerchFits(f.Width, f.Height)
 }
 
 // PerchFits reports whether a terminal of width by height has room for
-// Mićko's perch.
+// Mićko, on his perch or on the floor.
 func PerchFits(width, height int) bool {
 	return width >= perchMinWidth && height >= perchMinHeight
 }
@@ -87,13 +88,29 @@ func footSpan(a shared.Art) (lo, hi int) {
 	return lo, hi
 }
 
+// pose is the drawing of Mićko in his current pose. Every pose shares the
+// resting pose's width and feet, so where he sits is worked out from the
+// resting pose alone and does not change as he moves.
+func (f Frame) pose() shared.Art {
+	if len(f.MascotPose.Lines) == 0 {
+		return shared.MickoPerch
+	}
+	return f.MascotPose
+}
+
 // perchFill draws fill cells of border line from column fillStart, with
 // Mićko's border row laid over it when he sits at column x.
-func perchFill(t shared.Theme, line string, fillStart, fill, x int) string {
+func (f Frame) perchFill(t shared.Theme, line string, fillStart, fill, x int) string {
 	if x < 0 {
 		return t.Border.Render(strings.Repeat(line, fill))
 	}
-	art := shared.MickoPerch
+	return artOnLine(t, f.pose(), line, fillStart, fill, x)
+}
+
+// artOnLine draws fill cells of border line from column fillStart, with the
+// last row of art laid over it from column x: only the cells that belong to
+// Mićko replace line.
+func artOnLine(t shared.Theme, art shared.Art, line string, fillStart, fill, x int) string {
 	row := len(art.Lines) - 1
 	var b strings.Builder
 	run := 0 // border cells waiting to be drawn as one run
@@ -124,7 +141,7 @@ func (f Frame) perchLines(t shared.Theme, x int) []string {
 	for row := 0; row < n; row++ {
 		l := ""
 		if x >= 0 {
-			l = strings.Repeat(" ", x) + shared.MickoPerch.RenderRow(t, row, t.Text)
+			l = strings.Repeat(" ", x) + f.pose().RenderRow(t, row, t.Text)
 		}
 		out = append(out, fit(l, f.Width))
 	}

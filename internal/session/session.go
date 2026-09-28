@@ -47,9 +47,9 @@ type Options struct {
 	Debug                 bool
 	// Skin is the --skin flag, which outranks every skin in the file.
 	Skin string
-	// Mascot is the --mascot flag. It can only turn the mascot on; the
-	// file's mascot key turns him on too.
-	Mascot bool
+	// Mascot is the --mascot flag. It can only put the mascot somewhere;
+	// left off, the file's mascot key decides.
+	Mascot config.Mascot
 	// Skins is the set of valid skin names. Every skin the file names is
 	// checked against it when the file is read.
 	Skins []string
@@ -140,9 +140,14 @@ func (c *Connector) Skin() string {
 	return config.DefaultSkin
 }
 
-// Mascot reports whether the mascot is turned on: the --mascot flag, else the
-// config file's top-level mascot key.
-func (c *Connector) Mascot() bool { return c.opts.Mascot || config.FileMascot(c.data) }
+// Mascot reports where the mascot sits: the --mascot flag, else the config
+// file's top-level mascot key.
+func (c *Connector) Mascot() config.Mascot {
+	if c.opts.Mascot != config.MascotOff {
+		return c.opts.Mascot
+	}
+	return config.FileMascot(c.data)
+}
 
 // JournalEnabled reports whether the config file leaves the action journal
 // on (the top-level `journal` key).
