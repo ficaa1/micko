@@ -16,9 +16,9 @@ E.scene({
     const vrows = verbs.map(([k, v, d], i) => {
       const r = E.el('div', '', menu); E.css(r, { left: 20, top: 74 + i * 76, width: 660, height: 64, borderRadius: 12 });
       E.css(E.el('div', 'chip', r, k), { left: 12, top: 8, padding: '6px 16px', fontSize: 26, color: '#1f1a17' });
-      E.css(E.el('div', '', r, v), { left: 86, top: 12, font: '600 30px JBM, monospace', color: '#1f1a17' });
-      E.css(E.el('div', '', r, d), { left: 250, top: 17, font: '400 22px JBM, monospace', color: '#4a3f36' });
-      E.css(E.el('div', '', r, '3 of 3'), { left: 560, top: 16, font: '600 22px JBM, monospace', color: '#6f8a2a' });
+      E.css(E.el('div', '', r, v), { left: 86, top: 14, font: '700 26px JBM, monospace', color: '#1f1a17' });
+      E.css(E.el('div', '', r, d), { left: 232, top: 19, font: '400 19px JBM, monospace', color: '#4a3f36' });
+      E.css(E.el('div', '', r, '3 of 3'), { left: 575, top: 17, font: '600 22px JBM, monospace', color: '#6f8a2a' });
       return r;
     });
 

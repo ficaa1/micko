@@ -67,7 +67,7 @@ source and the shared engine, so a re-run only redoes what changed.
       window titles, outro commands
 - [x] 5. New scenes: `bird` (photos) and `mascot` (the ASCII Mićko perched, across skins)
 - [x] 6. Soundtrack re-timed; full render (94.5 s, ~22 MB, draft sent for review) -> kept as `micko-0.6-draft.mp4`
-- [ ] 7. Restyle "Mićko on paper" (owner's direction): see the section below
+- [~] 7. Restyle "Mićko on paper" (done except the full render) (owner's direction): see the section below
 - [ ] 8. Refinements (owner's list), owner's music, final render on the owner's PC
 
 ## Restyle: Mićko on paper
@@ -87,8 +87,9 @@ presentation; terminal skin gruvbox or similar. Decisions:
   borders and hard offset shadows; photos taped on with washi tape.
 - Terminal skin: gruvbox-light (its `#fbf1c7` reads as a sheet of paper);
   every screen recaptured with it.
-- Steps: [ ] tokens + CSS + engine  [ ] remap scene colours
-  [ ] recapture gruvbox-light  [ ] stills of every scene checked  [ ] render
+- Steps: [x] tokens + CSS + engine  [x] remap scene colours
+  [x] recapture gruvbox-light  [x] stills of every scene checked  [ ] render
+  (review sheet: `restyle-review.png`; render here or on the owner's PC)
 
 ## Plan (1920x1080, 30 fps)
 

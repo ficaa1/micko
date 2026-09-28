@@ -9,7 +9,7 @@ E.scene({
 
     const big = E.el('div', 'flow', root);
     E.css(big, { position: 'absolute', left: 0, width: 1920, top: 210, textAlign: 'center', font: '700 400px/1 JBM, monospace', letterSpacing: '-0.04em', color: '#1f1a17', whiteSpace: 'nowrap' });
-    big.innerHTML = '<span class="grad">0.</span><span id="rel-col" class="grad" style="display:inline-block;height:1em;overflow:hidden;vertical-align:top;position:relative"><span id="rel-strip" class="grad" style="display:block;position:relative;line-height:1">0<br>1<br>2<br>3<br>4<br>5<br>6</span></span>';
+    big.innerHTML = '<span class="grad">0.</span><span id="rel-col" class="grad" style="display:inline-block;height:1em;overflow:hidden;vertical-align:top;position:relative;padding-right:.07em"><span id="rel-strip" class="grad" style="display:block;position:relative;line-height:1">0<br>1<br>2<br>3<br>4<br>5<br>6</span></span>';
     const strip = big.querySelector('#rel-strip');
 
     // Row one is what is new in 0.6, in rosella colours; row two what it keeps.
