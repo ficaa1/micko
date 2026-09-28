@@ -1,7 +1,7 @@
 // Command micko is a keyboard-first TUI for Argo Workflows.
 //
-// Mutations stay explicitly opt-in and confirmation-gated behind
-// --allow-actions; --demo remains offline and never performs writes.
+// Workflow actions are on unless --read-only turns them off, and each one
+// is confirmation-gated; --demo remains offline and never performs writes.
 package main
 
 import (
@@ -46,7 +46,10 @@ func run(args []string) int {
 	caFile := fs.String("ca-file", "", "custom CA bundle")
 	refresh := fs.Duration("refresh-interval", 0, "poll interval")
 	insecure := fs.Bool("insecure-skip-tls-verify", false, "disable TLS verification (unsafe)")
-	allowActions := fs.Bool("allow-actions", false, "enable explicitly confirmed workflow actions")
+	readOnly := fs.Bool("read-only", false, "turn off workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete)")
+	// Actions used to be opt-in with --allow-actions. They are on by default
+	// now, and the flag is still accepted so scripts that pass it keep working.
+	_ = fs.Bool("allow-actions", false, "no effect: actions are on unless --read-only")
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
 	redactValues := fs.Bool("redact-values", false, "hide parameter and output values until v reveals them")
@@ -74,11 +77,7 @@ func run(args []string) int {
 	}
 
 	clock, demoClock := newClock(*demo)
-	opts := actions.Options{
-		AllowActions: *allowActions && !*demo,
-		ReadOnly:     !*allowActions || *demo,
-		Demo:         *demo,
-	}
+	opts := actionOptions(*readOnly, *demo)
 
 	var root *app.Root
 	if *demo {
@@ -116,7 +115,7 @@ func run(args []string) int {
 		root = app.NewRootWithOptions(nil, clock, "", config.DefaultRefreshInterval, opts)
 		// The journal records write attempts, so only a session that can
 		// write gets one. The demo, which never writes, has none at all.
-		if *allowActions && connector.JournalEnabled() {
+		if !*readOnly && connector.JournalEnabled() {
 			root.SetJournal(journal.Open())
 		}
 		root.SetConnector(connector)
@@ -198,3 +197,13 @@ func (f *mascotFlag) Set(s string) (err error) {
 
 // IsBoolFlag lets --mascot stand alone, as a bool flag does.
 func (f *mascotFlag) IsBoolFlag() bool { return true }
+
+// actionOptions is what a session may do: act, unless --read-only turns
+// actions off or it is the demo, which never writes.
+func actionOptions(readOnly, demo bool) actions.Options {
+	return actions.Options{
+		AllowActions: !readOnly && !demo,
+		ReadOnly:     readOnly || demo,
+		Demo:         demo,
+	}
+}

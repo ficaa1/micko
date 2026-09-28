@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Workflow actions are on by default. Resume, suspend, retry, resubmit,
+  stop, terminate and delete no longer need `--allow-actions`; each still
+  asks for confirmation, with the typed-name gate for terminate and the
+  final screen for delete. `--read-only` turns them off for a session and
+  shows `READ ONLY` in the header, as a session without `--allow-actions`
+  did before. `--allow-actions` is still accepted and does nothing. The
+  demo still writes nothing.
+
 ## 0.7.1
 
 - Mićko hops. On the floor he now watches you from a little way off, and

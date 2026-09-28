@@ -132,3 +132,30 @@ func TestOnlyTheDemoGetsAFrozenClock(t *testing.T) {
 		t.Fatal("the demo clock moved on its own")
 	}
 }
+
+// Actions are on unless --read-only turns them off; the demo never writes.
+func TestActionsAreOnUnlessReadOnly(t *testing.T) {
+	for _, tc := range []struct {
+		readOnly, demo, act bool
+	}{
+		{false, false, true},
+		{true, false, false},
+		{false, true, false},
+		{true, true, false},
+	} {
+		o := actionOptions(tc.readOnly, tc.demo)
+		if got := o.AllowActions && !o.ReadOnly && !o.Demo; got != tc.act {
+			t.Errorf("read-only %v, demo %v: actions %v, want %v", tc.readOnly, tc.demo, got, tc.act)
+		}
+	}
+}
+
+// --allow-actions turned actions on before they were on by default, so
+// scripts still pass it: it parses, alongside --read-only.
+func TestRunStillAcceptsAllowActions(t *testing.T) {
+	for _, args := range [][]string{{"--allow-actions", "--version"}, {"--read-only", "--version"}} {
+		if code := run(args); code != 0 {
+			t.Errorf("run(%q) = %d, want 0", args, code)
+		}
+	}
+}
