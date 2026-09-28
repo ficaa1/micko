@@ -7,6 +7,9 @@
   E.W = 1920; E.H = 1080; E.FPS = 30;
   E.scenes = [];
   E.scene = (s) => E.scenes.push(s);
+  // A theme token from style.css (:root { --red: ... }), resolved to its value.
+  E.tok = (name) => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+  const col = (c) => (c && c.startsWith('var(--') ? E.tok(c.slice(6, -1)) : c);
   // Shared assets (photos) live in video/assets, two levels above a video's page.
   E.ASSETS = '../../assets/';
   // Key clicks for n characters typed from time a, one every `per` seconds,
@@ -62,7 +65,7 @@
     const out = [];
     text.split('\n').forEach((line, i) => {
       if (i) E.el('br', '', parent).style.position = 'static';
-      line.split(/( +)/).filter(Boolean).forEach((w) => out.push(E.el('span', 'w ' + cls, parent, E.esc(w))));
+      line.split(/(?<= )/).filter(Boolean).forEach((w) => out.push(E.el('span', 'w ' + cls, parent, E.esc(w))));
     });
     return out;
   };
@@ -142,12 +145,12 @@
   E.COLS = 124; E.ROWS = 32;
   // A terminal window showing screen `name`. Its origin is the window's top
   // left; cell(row, col) gives a cell's position inside it.
-  E.term = (parent, name, { title = 'micko --demo', cols = E.COLS, rows = E.ROWS } = {}) => {
+  E.term = (parent, name, { title = '', cols = E.COLS, rows = E.ROWS } = {}) => {
     const sk = window.SKINS[window.SCREENS[name].skin];
     const w = cols * E.CW + E.PAD * 2, h = rows * E.LH + E.BAR + E.PAD * 2;
     const win = E.el('div', 'win', parent); E.css(win, { left: 0, top: 0, width: w, height: h, background: sk.bg });
     const bar = E.el('div', 'bar', win);
-    ['#d7263d', '#f2c14e', '#3f5bb8'].forEach((c, i) => E.css(E.el('div', 'dot', bar), { left: 16 + i * 20, background: c }));
+    ['var(--red)', 'var(--yellow)', 'var(--blue)'].forEach((c, i) => E.css(E.el('div', 'dot', bar), { left: 16 + i * 20, background: c }));
     const ttl = E.el('div', 'ttl', bar); ttl.textContent = title;
     const body = E.el('div', 'term', win); E.css(body, { left: E.PAD, top: E.BAR + E.PAD, width: cols * E.CW, height: rows * E.LH, overflow: 'hidden' });
     const layers = {};
@@ -206,7 +209,7 @@
     return { ...keys[keys.length - 1][1] };
   };
   // Highlight box around a rect in a window's coordinates (added to the window).
-  E.hl = (term, rect, color = '#3f5bb8') => {
+  E.hl = (term, rect, color = 'var(--blue)') => {
     const n = E.el('div', 'hl', term.win);
     E.css(n, { left: rect.x - 5, top: rect.y - 3, width: rect.w + 10, height: rect.h + 6, borderColor: color, zIndex: 5 });
     return n;
@@ -226,9 +229,9 @@
   };
   // Relative luminance of #rrggbb, to pick ink or cream text on a colour.
   E.lum = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
-  E.pill = (parent, text, color = '#f2c14e') => {
+  E.pill = (parent, text, color = 'var(--yellow)') => {
     const n = E.el('div', 'pill', parent); n.innerHTML = text; n.style.background = color;
-    n.style.color = E.lum(color) < 0.3 ? '#fbf8f1' : '#1f1a17';
+    n.style.color = E.lum(col(color)) < 0.3 ? 'var(--cream)' : 'var(--ink)';
     return n;
   };
 

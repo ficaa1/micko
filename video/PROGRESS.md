@@ -57,27 +57,27 @@ animations when showing him, briefly.
 
 | # | id | s | content | status |
 |---|----|---|---------|--------|
-| 1 | intro | 6 | types `micko --demo`; wordmark, tagline, phase chips | written |
-| 2 | what | 6 | four jobs as cards: browse, understand, follow, act | written |
-| 3 | list | 7 | the workflow list: phases, progress, messages | written |
-| 4 | timeline | 8 | Gantt timeline, critical path, now line | written |
-| 5 | explain | 7.5 | why a run failed, offline | written |
-| 6 | nodes | 6.5 | pipeline tree, retries, info panel | written |
-| 7 | logs | 6.5 | labelled logs, level colours, live events | written |
-| 8 | palette | 6.5 | `:` command palette, cron list | written |
-| 9 | filter | 5.5 | query language | written |
-| 10 | actions | 6.5 | marks, bulk actions, four outcomes, read-only default | written |
-| 11 | connect | 5.5 | profiles, managed kubectl port-forward, tokens, TLS | written |
-| 12 | skins | 7 | wall of skins | written |
-| 13 | micko | 6.5 | photo, then the 0.7 animations: perched (blink, look) and floor (kiss) | written |
-| 14 | outro | 7 | wordmark + Mićko, install, feature ticker | written |
+| 1 | intro | 6 | types `micko --demo`; wordmark, tagline, phase chips | rendered |
+| 2 | what | 6 | four jobs as cards: browse, understand, follow, act | rendered |
+| 3 | list | 7 | the workflow list: phases, progress, messages | rendered |
+| 4 | timeline | 8 | Gantt timeline, critical path, now line | rendered |
+| 5 | explain | 7.5 | why a run failed, offline | rendered |
+| 6 | nodes | 6.5 | pipeline tree, retries, info panel | rendered |
+| 7 | logs | 6.5 | labelled logs, level colours, live events | rendered |
+| 8 | palette | 6.5 | `:` command palette, cron list | rendered |
+| 9 | filter | 5.5 | query language | rendered |
+| 10 | actions | 6.5 | marks, bulk actions, four outcomes, read-only default | rendered |
+| 11 | connect | 5.5 | profiles, managed kubectl port-forward, tokens, TLS | rendered |
+| 12 | skins | 7 | wall of skins | rendered |
+| 13 | micko | 6.5 | photo, then the 0.7 animations: perched (blink, look) and floor (kiss) | rendered |
+| 14 | outro | 7 | wordmark + Mićko, install, feature ticker | rendered |
 
 Steps:
 - [x] 1. Merge main (0.7.0: Mićko animates on the perch and sits on the floor)
 - [x] 2. Restructure into lib/ + videos/<name>/ (release-0.6 still renders the same)
 - [x] 3. `anim` shots: record Mićko's loops at 10 fps, keep distinct poses + timing
 - [x] 4. Tour scenes written, stills checked (`renders/tour-review.png`); 92.5 s
-- [ ] 5. Full render -> `renders/micko-tour.mp4`
+- [x] 5. Full render -> `renders/micko-tour.mp4`
 - [x] 6. Skill: `.claude/skills/motion-graphics/` so the next video is quicker
 
 ## Style decisions (shared by release-0.6 and tour)
@@ -107,3 +107,11 @@ Steps:
 - Crossfading two terminal screens looks like garbage; wipe between them.
 - Uploads to the user are capped at 30 MiB: send a lighter preview encode.
 - Keep drafts under their own names; renders write a new file.
+
+## Toolkit vs the skill
+
+`.claude/skills/motion-graphics/toolkit/` is the generic copy of `lib/` (for
+other projects). `lib/engine.js` and `lib/style.css` are synced with it; the
+skill's `capture.sh` and `ansi2json.mjs` are generalized (BIN from shots.sh,
+colours from skins.json), while `lib/` keeps the micko-specific ones (reads
+skins.go, defaults to dist/micko).

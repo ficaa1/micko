@@ -1,7 +1,7 @@
 @font-face { font-family: 'JBM'; src: url(fonts/JetBrainsMono-Regular.ttf); font-weight: 400; }
 @font-face { font-family: 'JBM'; src: url(fonts/JetBrainsMono-Bold.ttf); font-weight: 700; }
 @font-face { font-family: 'JBM'; src: url(fonts/JetBrainsMono-ExtraBold.ttf); font-weight: 800; }
-/* Latin and Latin-extended subsets, split by unicode-range so "Mićko" keeps one face. */
+/* Latin and Latin-extended subsets, split by unicode-range, so names like "Mićko" keep one face. */
 @font-face { font-family: 'Grotesk'; src: url(fonts/space-grotesk-latin-500-normal.woff2); font-weight: 500; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC, U+2122, U+2212; }
 @font-face { font-family: 'Grotesk'; src: url(fonts/space-grotesk-latin-700-normal.woff2); font-weight: 700; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC, U+2122, U+2212; }
 @font-face { font-family: 'Grotesk'; src: url(fonts/space-grotesk-latin-ext-500-normal.woff2); font-weight: 500; unicode-range: U+0100-02BA, U+1E00-1E9F; }
@@ -14,7 +14,11 @@
 @font-face { font-family: 'Inter'; src: url(fonts/inter-latin-ext-600-normal.woff2); font-weight: 600; unicode-range: U+0100-02BA, U+1E00-1E9F; }
 
 :root {
-  /* Mićko's plumage, printed like riso ink on warm paper. */
+  /* THEME. This is the "paper" look from the micko videos: a palette taken from
+     the subject (a crimson rosella's plumage), printed like riso ink on warm
+     paper. Retheme per project: change these tokens, #bg below, and the
+     cut-out rules (.win, .card, .pill, .chip). Scenes should use var(--name)
+     rather than hex values, so a retheme is one file. */
   --paper: #efe4cf; --paper2: #e4d5b9; --cream: #fbf8f1; --ink: #1f1a17; --soft: #4a3f36; --dim: #8a7b69;
   --red: #d7263d; --verm: #e8553b; --yellow: #f2c14e; --ochre: #e3a21a; --olive: #6f8a2a;
   --blue: #3f5bb8; --violet: #6f7fd6; --teal: #2e5e6e;
