@@ -1,7 +1,7 @@
 package logs
 
 // marker.go — stream-context annotations mixed into the retained buffer
-// (stream open, end, cancel, dropped lines, timestamp reopen).
+// (stream open, dropped lines, timestamp reopen).
 // Markers are UI authoring, not data: they never count toward the byte
 // cap, and their wording is pinned by tests.
 
@@ -11,12 +11,8 @@ type markerKind int
 const (
 	// markOpen starts one stream: pod/container context header.
 	markOpen markerKind = iota
-	// markEnd marks a normal end-of-stream.
-	markEnd
 	// markDropped marks oversize records dropped by the record cap.
 	markDropped
-	// markCanceled marks a user-canceled / disconnected stream.
-	markCanceled
 	// markTimestampsOn and markTimestampsOff mark where the stream was
 	// reopened with server timestamps switched on or off.
 	markTimestampsOn
@@ -56,12 +52,8 @@ func markerText(kind markerKind, podName, container string) string {
 	switch kind {
 	case markOpen:
 		return markerLine(podName, container)
-	case markEnd:
-		return "── stream ended ──"
 	case markDropped:
 		return "── oversized lines dropped (per-record cap) ──"
-	case markCanceled:
-		return "── stream canceled ──"
 	case markTimestampsOn:
 		return "── server timestamps on: stream reopened from the start ──"
 	case markTimestampsOff:

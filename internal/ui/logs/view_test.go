@@ -12,7 +12,7 @@ import (
 // ---------------------------------------------------------------------------
 // view tests — golden rendering and sanitization. These verify what the
 // terminal receives for the standard terminal cases (control-sequence
-// stripping, truncation markers), plus the pinned ended surface.
+// stripping, truncation markers).
 // ---------------------------------------------------------------------------
 
 // TestViewReachesTerminalWithoutControlSequences pins: hostile
@@ -90,28 +90,6 @@ func TestViewGoldenPaused(t *testing.T) {
 	}, "\n")
 	if got != want {
 		t.Errorf("golden paused mismatch:\n got: %q\nwant: %q", got, want)
-	}
-}
-
-// TestViewGoldenEnded pins the ended lifecycle: badge ENDED plus the
-// end-of-stream row.
-func TestViewGoldenEnded(t *testing.T) {
-	m := testModel(t)
-	m.ApplyRecords([]core.LogRecord{rec("only")})
-	m.ApplyMarker(markEnd, "pod-1", "main")
-	m.SetPhase(PhaseEnded)
-	got := m.View()
-	want := strings.Join([]string{
-		"logs: wf-1",
-		"Scope: workflow-wide · container: main · [ENDED]",
-		"retained: 1/10000 lines (0 evicted)",
-		"── (all pods):main ── 1 line recorded",
-		"pod-1            only",
-		"── stream ended ──",
-		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
-	}, "\n")
-	if got != want {
-		t.Errorf("golden ended mismatch:\n got: %q\nwant: %q", got, want)
 	}
 }
 

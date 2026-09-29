@@ -309,18 +309,6 @@ func (m *Model) ApplyRecords(recs []core.LogRecord) {
 	m.invalidateLocked()
 }
 
-// ApplyMarker appends one stream-context annotation row.
-func (m *Model) ApplyMarker(kind markerKind, podName, container string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if kind == markOpen {
-		// An explicit open marker replaces the lazy one for this context.
-		m.headerDone = true
-	}
-	m.buf.PushMarker(kind, podName, container)
-	m.invalidateLocked()
-}
-
 // Clear drops all retained entries (route change to a different
 // workflow/context starts empty; stale streams never bleed across).
 func (m *Model) Clear() {

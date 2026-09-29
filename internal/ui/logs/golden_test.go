@@ -50,7 +50,6 @@ func goldenTestcases() map[string]func(*Model) {
 				{PodName: "pod-1", Container: "main", Content: "step: starting", ReceivedAt: testkit.FixtureEpoch},
 				{PodName: "pod-1", Container: "main", Content: "step: done", ReceivedAt: testkit.FixtureEpoch},
 			})
-			m.ApplyMarker(markEnd, "pod-1", "main")
 			m.SetPhase(PhaseEnded)
 		},
 		// Paused viewport (Space).
@@ -66,7 +65,6 @@ func goldenTestcases() map[string]func(*Model) {
 		// Canceled stream (navigating away or context switch).
 		"canceled": func(m *Model) {
 			m.ApplyRecords([]core.LogRecord{rec("so far, so good")})
-			m.ApplyMarker(markCanceled, "pod-1", "main")
 			m.SetPhase(PhaseCanceled)
 		},
 		// Truncation marker visible on an oversized line.

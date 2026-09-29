@@ -21,7 +21,7 @@ import (
 // Duplicates are legitimate log output: no deduplication ever happens
 //
 // buffer is unexported: the model talks to it through
-// Push/PushMarker/ApplyMarker/Counts/Lines/Search.
+// Push/PushMarker/Counts/Entries/Lines/Search.
 
 // Frozen caps (docs/development.md).
 const (
