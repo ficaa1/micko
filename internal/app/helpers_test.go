@@ -46,8 +46,7 @@ func fixtureReader(wfs ...core.Workflow) *testkit.FakeReader {
 	return f
 }
 
-// workflowsIn counts the fake's workflows in namespace ns: what a list of
-// that namespace collects.
+// workflowsIn counts the fake's workflows in namespace ns.
 func workflowsIn(f *testkit.FakeReader, ns string) int {
 	n := 0
 	for ref := range f.Workflows {
@@ -58,8 +57,7 @@ func workflowsIn(f *testkit.FakeReader, ns string) int {
 	return n
 }
 
-// runCmd executes cmd, and every command of a batch, and collects the
-// messages.
+// runCmd runs cmd, and every command of a batch, and collects the messages.
 func runCmd(cmd tea.Cmd) []tea.Msg {
 	if cmd == nil {
 		return nil
@@ -79,9 +77,7 @@ func runCmd(cmd tea.Cmd) []tea.Msg {
 	}
 }
 
-// deliver runs cmd and feeds its messages back into the root, the way the
-// program loop would, until nothing is left. Poll ticks and Mićko's beats
-// are dropped: each one schedules the next, and the chain would never end.
+// deliver runs cmd and feeds its messages back until none are left, dropping ticks and mascot beats.
 func deliver(m *Root, cmd tea.Cmd) {
 	queue := runCmd(cmd)
 	for len(queue) > 0 {
@@ -96,9 +92,7 @@ func deliver(m *Root, cmd tea.Cmd) {
 	}
 }
 
-// settle runs cmd and every command its messages start, applying only the
-// detail fetch, the explain log read and the open they come from, so no
-// poll tick or watch runs.
+// settle delivers only detail fetches and explain reads, so no tick or watch runs.
 func settle(m *Root, cmd tea.Cmd) {
 	for i := 0; i < 6 && cmd != nil; i++ {
 		var cmds []tea.Cmd
@@ -113,8 +107,7 @@ func settle(m *Root, cmd tea.Cmd) {
 	}
 }
 
-// key is the key press a name stands for: space, esc, enter, tab, ctrl+c,
-// or a single printable character.
+// key is the key press for a name: space, esc, enter, tab, ctrl+c or one character.
 func key(k string) tea.KeyPressMsg {
 	switch k {
 	case "space", " ":
@@ -156,16 +149,14 @@ func pressKey(m *Root, code rune) tea.Cmd {
 	return cmd
 }
 
-// runLine opens the palette, types line and presses enter, delivering every
-// message that follows.
+// runLine runs line in the palette.
 func runLine(m *Root, line string) {
 	deliver(m, typeKeys(m, ":"))
 	typeKeys(m, line)
 	deliver(m, pressKey(m, tea.KeyEnter))
 }
 
-// screen is the rendered frame as a reader sees it: the text with the
-// styling removed.
+// screen is the rendered frame without styling.
 func screen(m *Root) string { return ansi.Strip(m.View().Content) }
 
 // viewLines is the rendered frame as terminal lines, without styling.
@@ -180,8 +171,7 @@ func resize(t *testing.T, m *Root, w, h int) *Root {
 	return m
 }
 
-// loadDemoList is a root on the demo dataset's "demo" namespace with its
-// list collected and applied.
+// loadDemoList is a demo root with the "demo" list loaded.
 func loadDemoList(t *testing.T) *Root {
 	t.Helper()
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
@@ -195,10 +185,7 @@ func loadDemoList(t *testing.T) *Root {
 	return m
 }
 
-// demoRoot is a root on the demo dataset with the "demo" namespace's list
-// loaded on a 140×40 terminal. The poll interval is a millisecond so a
-// delivered command that arms the tick returns at once; deliver drops the
-// tick itself.
+// demoRoot is a 140×40 demo root with the "demo" list loaded and a millisecond poll.
 func demoRoot(t *testing.T) (*Root, *testkit.FakeReader) {
 	t.Helper()
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
@@ -209,8 +196,7 @@ func demoRoot(t *testing.T) (*Root, *testkit.FakeReader) {
 	return m, f
 }
 
-// openFromList presses k on the list with the cursor on the workflow named
-// name and settles the open it starts.
+// openFromList presses k on the named workflow and settles the open.
 func openFromList(t *testing.T, m *Root, name string, k tea.KeyPressMsg) *Root {
 	t.Helper()
 	for i := 0; i < 20 && m.listView.SelectedRef().Name != name; i++ {

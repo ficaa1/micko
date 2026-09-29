@@ -13,11 +13,7 @@ func summary(name string) core.Summary {
 	return core.Summary{Ref: core.Ref{Namespace: "ns", Name: name, UID: "uid-" + name}, Phase: "Running"}
 }
 
-// A watch event changes the snapshot in place, by UID, and moves the
-// resume cursor. A bookmark only moves the cursor. An event from a watch
-// that was replaced changes nothing. The snapshot cap holds against
-// additions, and says the snapshot is capped, but never blocks an update
-// to a workflow already in it.
+// A watch event updates the snapshot by UID within the cap.
 func TestWatchEvents(t *testing.T) {
 	succeeded := summary("a")
 	succeeded.Phase = "Succeeded"
@@ -57,8 +53,7 @@ func TestWatchEvents(t *testing.T) {
 	}
 }
 
-// A watch that ends on a permission error stops and says so; one that is
-// rate limited waits before it relists.
+// A permission error stops the watch; a rate limit delays the relist.
 func TestWatchEndings(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -79,9 +74,7 @@ func TestWatchEndings(t *testing.T) {
 	}
 }
 
-// Once the watch has stopped on a permission error, nothing already queued
-// restarts polling: not a tick, not a list reply. Only r does. A retry
-// scheduled by a watch that has since been replaced starts nothing either.
+// Nothing queued restarts a stopped watch.
 func TestNothingQueuedRestartsAStoppedWatch(t *testing.T) {
 	const denied = "authentication/permission required"
 	for _, c := range []struct {
@@ -122,8 +115,7 @@ func TestRefreshClearsTerminalWatchState(t *testing.T) {
 	}
 }
 
-// Retries back off exponentially, capped, and never sooner than the
-// server's Retry-After.
+// Retry delays back off, are capped, and honour Retry-After.
 func TestWatchRetryDelayIsExponentialAndCapped(t *testing.T) {
 	if got := watchRetryDelay(1, nil); got < time.Second || got > 2*time.Second {
 		t.Fatalf("first retry delay = %v", got)

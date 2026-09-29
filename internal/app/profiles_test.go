@@ -13,10 +13,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/profiles"
 )
 
-// fakeConnector stands in for the real one, which starts a kubectl
-// port-forward. It records what it was asked for and how many connections it
-// handed out were closed again, which is the leak the switch path must not
-// have.
+// fakeConnector records the profiles asked for and the connections closed.
 type fakeConnector struct {
 	asked  []string
 	err    error
@@ -54,8 +51,7 @@ func profileRoot(t *testing.T, conn *fakeConnector) *Root {
 	return m
 }
 
-// With no profile chosen on the command line the session starts in the picker
-// rather than guessing a cluster.
+// Without a profile the session starts in the picker.
 func TestStartWithNoProfileOpensThePicker(t *testing.T) {
 	m := profileRoot(t, &fakeConnector{})
 	m.Init()
@@ -67,8 +63,7 @@ func TestStartWithNoProfileOpensThePicker(t *testing.T) {
 	}
 }
 
-// currentProfile places the cursor and selects nothing by itself. Connecting
-// to it would be the guess the picker exists to avoid.
+// currentProfile only places the cursor.
 func TestCurrentProfileOnlyPlacesTheCursor(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -81,8 +76,6 @@ func TestCurrentProfileOnlyPlacesTheCursor(t *testing.T) {
 	}
 }
 
-// P opens the picker on every route. A reader who has drilled into a workflow
-// can still change cluster.
 func TestCapitalPOpensThePickerOnEveryRoute(t *testing.T) {
 	for _, route := range []Route{RouteList, RouteDetail, RouteLogs} {
 		m := profileRoot(t, &fakeConnector{})
@@ -95,8 +88,7 @@ func TestCapitalPOpensThePickerOnEveryRoute(t *testing.T) {
 	}
 }
 
-// Lowercase p stays the phase filter. The two keys are one shift apart, so a
-// collision here would switch cluster when the reader meant to filter.
+// p is the phase filter, not the profile picker.
 func TestLowercasePDoesNotOpenTheProfilePicker(t *testing.T) {
 	m := profileRoot(t, &fakeConnector{})
 	m.Adopt(mustConnect(t, &fakeConnector{}, "dev"))
@@ -106,9 +98,7 @@ func TestLowercasePDoesNotOpenTheProfilePicker(t *testing.T) {
 	}
 }
 
-// A switch is the widest generation change there is: the server, the
-// credentials and the transport all change, so nothing from the old
-// connection may survive it.
+// A profile switch drops everything from the old connection.
 func TestSwitchProfileStartsAConnectionGeneration(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -160,9 +150,7 @@ func TestSwitchProfileStartsAConnectionGeneration(t *testing.T) {
 	}
 }
 
-// A reply from a switch the reader has already replaced carries a live
-// connection that nothing points at. Dropping it would leave a port-forward
-// running for the rest of the session.
+// An overtaken switch closes the connection it carries.
 func TestAnOvertakenSwitchClosesTheConnectionItCarries(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -176,8 +164,6 @@ func TestAnOvertakenSwitchClosesTheConnectionItCarries(t *testing.T) {
 	}
 }
 
-// A failed switch leaves no connection, so the dialog has to stay up: there is
-// nothing to fall back to and the reader has to choose again.
 func TestAFailedSwitchKeepsThePickerOpen(t *testing.T) {
 	conn := &fakeConnector{err: errors.New("port-forward readiness: timed out")}
 	m := profileRoot(t, conn)
@@ -193,8 +179,6 @@ func TestAFailedSwitchKeepsThePickerOpen(t *testing.T) {
 	}
 }
 
-// Esc before the first connection quits. There is no session behind the
-// dialog, so closing it would leave a program that can do nothing.
 func TestEscQuitsBeforeTheFirstConnection(t *testing.T) {
 	m := profileRoot(t, &fakeConnector{})
 	m.Init()
@@ -219,8 +203,6 @@ func TestEscReturnsToTheSessionAfterAConnection(t *testing.T) {
 	}
 }
 
-// A transport event stamped with an older generation belongs to a forward the
-// switch has already closed. Applying it would report the new connection lost.
 func TestAStaleTransportEventCannotMarkTheNewConnectionLost(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -232,8 +214,7 @@ func TestAStaleTransportEventCannotMarkTheNewConnectionLost(t *testing.T) {
 	}
 }
 
-// Quitting has to release the transport: a kubectl port-forward is a child
-// process, and it would outlive the terminal that started it.
+// Quitting closes the connection's port-forward.
 func TestQuitClosesTheConnection(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -253,9 +234,7 @@ func mustConnect(t *testing.T, c *fakeConnector, name string) *Connection {
 	return conn
 }
 
-// A session with no connector — the demo — has nothing to switch to. Opening
-// the dialog there would invite the reader to write a config file this session
-// would never read.
+// P says why it does nothing when there is no connector.
 func TestPIsRefusedWithNothingToConnectTo(t *testing.T) {
 	m := newRoot(&testkit.FakeReader{}, "demo", time.Second)
 	m.Update(tea.KeyPressMsg{Code: 'P', Text: "P"})

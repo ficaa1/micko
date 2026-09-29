@@ -33,8 +33,7 @@ func (r *requestLog) all() []core.LogRequest {
 	return append([]core.LogRequest(nil), r.reqs...)
 }
 
-// demoLogsRoot is a root over the demo dataset with the logs of the
-// nightly report open, workflow-wide, and every request recorded.
+// demoLogsRoot opens the nightly report's logs, recording every request.
 func demoLogsRoot(t *testing.T) (*Root, *requestLog, core.Ref) {
 	t.Helper()
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
@@ -54,8 +53,7 @@ func demoLogsRoot(t *testing.T) (*Root, *requestLog, core.Ref) {
 	return m, rl, ref
 }
 
-// Workflow-wide logs are labelled by step: the root reads the workflow's
-// node map once and hands the pane the pod-to-step names.
+// Workflow-wide log lines are labelled by step, not pod.
 func TestWorkflowLogsAreLabelledBySteps(t *testing.T) {
 	m, _, _ := demoLogsRoot(t)
 	body := strings.Join(m.logsView.BodyLines(), "\n")
@@ -90,10 +88,7 @@ func TestAStaleSourcesAnswerIsIgnored(t *testing.T) {
 	}
 }
 
-// The stream follows the log: without Follow the server closes at the
-// current end and a running workflow stops updating. ctrl+t reopens it with
-// timestamps: the new request carries the flag, the retained lines stay,
-// and the switch point is marked.
+// The stream follows; ctrl+t reopens it with timestamps and marks the switch.
 func TestTimestampsReopenTheStream(t *testing.T) {
 	m, rl, ref := demoLogsRoot(t)
 	before := len(rl.all())
@@ -129,9 +124,7 @@ func TestTimestampsReopenTheStream(t *testing.T) {
 	}
 }
 
-// Late replies from the stream a reopen replaced are ignored: its batches
-// would duplicate lines, and its cancellation would mark the live stream
-// canceled.
+// A replaced stream's late batches and cancellation are ignored.
 func TestAReplacedStreamsRepliesAreIgnored(t *testing.T) {
 	m, _, _ := demoLogsRoot(t)
 	old := m.logState.streamID
@@ -158,8 +151,7 @@ func TestAReplacedStreamsRepliesAreIgnored(t *testing.T) {
 	}
 }
 
-// A pane opened without a container reads "main", the container every Argo
-// step runs its work in. It is never guessed from the node.
+// Logs opened without a container read "main".
 func TestLogsDefaultToTheMainContainer(t *testing.T) {
 	rl := &requestLog{}
 	f := fixtureReader()
@@ -172,8 +164,7 @@ func TestLogsDefaultToTheMainContainer(t *testing.T) {
 	}
 }
 
-// Every record of a stream reaches the pane, however many batches it takes,
-// and the pane's title counts them.
+// Every record reaches the pane and the title counts them.
 func TestAStreamIsDeliveredWhole(t *testing.T) {
 	f := &testkit.FakeReader{StreamSequence: make([]core.LogRecord, 1000)}
 	for i := range f.StreamSequence {

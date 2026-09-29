@@ -4,6 +4,28 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) first: every comment describes the
 code as it stands, with no review rounds, issue IDs, plan sections or
 release labels.
 
+## Comments
+
+Keep them to a minimum.
+
+- **Say it in the code first.** A good name needs no comment. Comment only
+  what the code cannot say: a reason that is not obvious, a constraint, a
+  trap.
+- **One line where one line will do.** A test's comment names the
+  behaviour it protects in one sentence; the test and its table rows show
+  the rest. A helper's comment says what it returns, not how it works.
+- **Never tell history.** No comment says what the code used to do, which
+  bug it fixed or what it replaced. That belongs in the commit message.
+
+  ```go
+  // Wrong: history.
+  // Leaving the flag set froze the detail view for the rest of the session:
+  // the phase stopped moving and r was the only way to see anything new.
+
+  // Right: the behaviour.
+  // A stale or canceled detail reply still ends its fetch.
+  ```
+
 ## Tests
 
 A test earns its place by catching a regression a reader would care about.

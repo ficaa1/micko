@@ -24,8 +24,7 @@ func rawRoot(t *testing.T) (*Root, core.Workflow) {
 	return m, wf
 }
 
-// The bordered pane wraps every content line, so a mouse selection picks up
-// border columns. The raw view exists to remove them.
+// The raw view drops the border and the bands.
 func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 	m, wf := rawRoot(t)
 	framed := screen(m)
@@ -54,8 +53,7 @@ func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 	}
 }
 
-// f is the full-screen key on every route, logs included: one key, one
-// meaning. Follow moved to t (tail). ctrl+f stays as a second way in.
+// f and ctrl+f enter the raw view from the logs too.
 func TestFEntersTheRawViewFromLogs(t *testing.T) {
 	m, wf := rawRoot(t)
 	m.Update(OpenLogsMsg{Ref: wf.Summary.Ref, Container: "main"})
@@ -74,8 +72,7 @@ func TestFEntersTheRawViewFromLogs(t *testing.T) {
 	}
 }
 
-// A copy that silently produced nothing is the failure mode here, so the key
-// always reports what it did.
+// y copies the selection and says so.
 func TestCopyReportsWhatItPutOnTheClipboard(t *testing.T) {
 	m, wf := rawRoot(t)
 	cmd := keys(m, "y")
@@ -90,8 +87,6 @@ func TestCopyReportsWhatItPutOnTheClipboard(t *testing.T) {
 	}
 }
 
-// The report is cleared by the next key, or a stale "copied" line would sit
-// beside a screen it does not describe.
 func TestTheReportClearsOnTheNextKey(t *testing.T) {
 	m, _ := rawRoot(t)
 	keys(m, "y")
@@ -104,8 +99,7 @@ func TestTheReportClearsOnTheNextKey(t *testing.T) {
 	}
 }
 
-// Without a webURL there is no honest link to build, so the key says so
-// instead of opening something wrong.
+// o needs a webURL and says so without one.
 func TestOpenInBrowserNeedsAConfiguredWebAddress(t *testing.T) {
 	m, _ := rawRoot(t)
 	var opened []string
@@ -142,8 +136,7 @@ func TestAFailedBrowserOpenStillCopiesTheLink(t *testing.T) {
 	}
 }
 
-// Actions must never be reachable by accident from the raw view; it is a
-// read-only surface over content the reader already sees.
+// The raw view only scrolls and leaves; no key there starts an action.
 func TestTheRawViewOnlyScrollsAndLeaves(t *testing.T) {
 	m, _ := rawRoot(t)
 	keys(m, "f")

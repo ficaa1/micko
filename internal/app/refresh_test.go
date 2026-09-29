@@ -7,10 +7,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// The tick carries the only poll chain, so dropping it off the list route
-// would stop every refresh for the rest of the session: the reader returns
-// to the list and sees a phase from minutes ago, or an age frozen at the
-// moment they left.
+// The tick re-arms off the list route.
 func TestTheTickSurvivesLeavingTheListRoute(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
@@ -38,8 +35,7 @@ func TestTheTickSurvivesLeavingTheListRoute(t *testing.T) {
 	}
 }
 
-// Two tick chains double the poll rate, and double again on every route
-// change. Only one may ever be alive.
+// Only one tick chain is ever armed.
 func TestTheTickChainNeverForks(t *testing.T) {
 	m := testRoot(t, &testkit.FakeReader{})
 	m.route = RouteDetail
@@ -57,8 +53,6 @@ func TestTheTickChainNeverForks(t *testing.T) {
 	}
 }
 
-// An action changes the row the reader is about to look at. Returning to the
-// list with the pre-action snapshot reads as "the action did nothing".
 func TestLeavingDetailRefreshesTheList(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
@@ -79,8 +73,7 @@ func TestLeavingDetailRefreshesTheList(t *testing.T) {
 	}
 }
 
-// r is the manual refresh everywhere else; the detail route had no way to
-// ask for current data at all.
+// r refetches the open workflow.
 func TestRRefreshesTheOpenWorkflow(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
@@ -104,11 +97,7 @@ func TestRRefreshesTheOpenWorkflow(t *testing.T) {
 	}
 }
 
-// Only an accepted list snapshot clears the stale block on mutations, and
-// the poll collects one on the list route alone. Off the list, a tick
-// recollects the snapshot while the block is up, so a reader whose data
-// went stale while reading a workflow is not blocked for as long as they
-// stay; a fresh session does not pay for a full snapshot on every tick.
+// Off the list, a tick recollects the snapshot only while it is stale.
 func TestATickRecollectsOnlyAStaleSnapshotOffTheList(t *testing.T) {
 	for _, fresh := range []bool{false, true} {
 		wf := workflowFixture("wf-1")

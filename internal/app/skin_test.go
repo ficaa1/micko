@@ -15,15 +15,13 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// sgr is the escape sequence a style opens with. Two skins never share one
-// for the same token, so finding it in a render says which skin drew it.
+// sgr is the escape sequence a style opens with; it identifies the skin that drew it.
 func sgr(s lipgloss.Style) string {
 	out := s.Render("x")
 	return out[:strings.Index(out, "x")]
 }
 
-// loadThemedDemo is the demo list with colour forced on, whatever the
-// environment running the tests says.
+// loadThemedDemo is the demo list with colour forced on.
 func loadThemedDemo(t *testing.T) *Root {
 	t.Helper()
 	t.Setenv("NO_COLOR", "")
@@ -39,9 +37,7 @@ func applySkin(t *testing.T, m *Root, name string) shared.Theme {
 	return m.Theme()
 }
 
-// A skin change reaches every pane at once, including the ones already on
-// screen. A pane left on the old theme would draw its rows in one palette
-// inside a frame drawn in another.
+// A skin change rethemes every open pane.
 func TestApplySkinRethemesEveryOpenView(t *testing.T) {
 	m := loadThemedDemo(t)
 	// Build every child under the default skin first.
@@ -108,9 +104,7 @@ func TestApplySkinRejectsAnUnknownName(t *testing.T) {
 	}
 }
 
-// auto asks the terminal for its background, draws as the default skin
-// until the answer, then switches to the variant drawn for it. Once the
-// background is known it is not asked for again.
+// auto asks for the terminal background once and follows it.
 func TestAutoFollowsTheTerminalBackground(t *testing.T) {
 	m := loadThemedDemo(t)
 	cmd, err := m.ApplySkin(shared.SkinAuto)
@@ -154,8 +148,7 @@ func TestANamedSkinIgnoresTheBackground(t *testing.T) {
 	}
 }
 
-// The background query is an escape sequence some terminals print rather
-// than answer, so Init sends it only when auto needs it.
+// Init asks for the terminal background only under auto.
 func TestInitAsksForTheBackgroundOnlyUnderAuto(t *testing.T) {
 	asks := func(m *Root) bool {
 		for _, msg := range runCmd(m.Init()) {
@@ -178,8 +171,7 @@ func TestInitAsksForTheBackgroundOnlyUnderAuto(t *testing.T) {
 	}
 }
 
-// A profile's skin arrives with its connection. A connection naming none
-// leaves the current skin alone.
+// A profile's skin applies on connect; a profile with none keeps the current one.
 func TestAProfileSkinArrivesWithItsConnection(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	conn := &fakeConnector{}
@@ -196,8 +188,7 @@ func TestAProfileSkinArrivesWithItsConnection(t *testing.T) {
 	}
 }
 
-// The mode badge is drawn in the armed style only when actions are enabled;
-// the words say the same thing in every theme.
+// The mode badge uses the armed style only when actions are enabled.
 func TestHeaderBadgeFollowsTheSafetyMode(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	reader := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))

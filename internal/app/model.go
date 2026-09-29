@@ -332,9 +332,7 @@ type logState struct {
 	streamID uint64
 }
 
-// NewRoot constructs the root model. The reader's optional interfaces
-// (watch, actions, namespaces, events, the other kinds and the archive)
-// enable the features that need them; opts sets what actions may do.
+// NewRoot builds the root model; the reader's optional interfaces enable their features.
 func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duration, opts actions.Options) *Root {
 	var watcher core.Watcher
 	if w, ok := r.(core.Watcher); ok {

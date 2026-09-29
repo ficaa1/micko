@@ -15,8 +15,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/actions"
 )
 
-// archiveRecorder is the demo reader with its archive and live reads
-// counted, so a test can see which route a detail came from.
+// archiveRecorder counts archive and live reads.
 type archiveRecorder struct {
 	*testkit.FakeReader
 	mu                 sync.Mutex
@@ -67,8 +66,7 @@ func archCursor(m *Root) string {
 	return w.Summary.Ref.Name
 }
 
-// :archived and :aw list the namespace's archive with the workflow list's
-// columns, newest first, asked for with the namespace field selector.
+// :archived and :aw list the namespace's archive, newest first.
 func TestArchivedList(t *testing.T) {
 	m, rec := archiveRoot(t, nil)
 	v := screen(m)
@@ -93,9 +91,7 @@ func TestArchivedList(t *testing.T) {
 	}
 }
 
-// enter reads the run from the archive by UID and shows it as archived; esc
-// returns to the archive list with the cursor in place; the detail is not
-// polled, and actions are refused.
+// An archived run is read by UID, not polled, refuses actions, and esc returns to the archive.
 func TestArchivedDetail(t *testing.T) {
 	m, rec := archiveRoot(t, nil)
 	typeKeys(m, "j")
@@ -136,8 +132,6 @@ func TestArchivedDetail(t *testing.T) {
 	if m.route != RouteArchived || archCursor(m) != want {
 		t.Fatalf("esc: route %v cursor %q", m.route, archCursor(m))
 	}
-	// A live workflow opened afterwards is read from the live route and is
-	// not marked archived.
 	runLine(m, "wf")
 	deliver(m, pressKey(m, tea.KeyEnter))
 	if m.detailState.archived || m.detailView.Archived() || rec.liveGets != 1 {
@@ -149,8 +143,7 @@ func TestArchivedDetail(t *testing.T) {
 	}
 }
 
-// Logs of an archived run that arrive empty say why; a failed stream says
-// the likely reason beside its own; logs that were archived show as usual.
+// Empty or failed logs of an archived run say why; archived logs show as usual.
 func TestArchivedLogs(t *testing.T) {
 	m, _ := archiveRoot(t, nil)
 	deliver(m, pressKey(m, tea.KeyEnter))
@@ -191,8 +184,7 @@ func TestArchivedLogs(t *testing.T) {
 	}
 }
 
-// A server without an archive: the list says the archive is not enabled
-// rather than dumping the error, and so does the detail.
+// A server without an archive says so on the list and the detail.
 func TestArchiveNotEnabled(t *testing.T) {
 	disabled := &core.APIError{Kind: core.ErrUnsupported, Status: 500,
 		Message: core.ArchiveDisabledMessage + " (the server said: getting archived workflows not supported)"}
@@ -210,8 +202,7 @@ func TestArchiveNotEnabled(t *testing.T) {
 	}
 }
 
-// A large archive is read to the cap, newest first, and the pane says it
-// holds only the newest runs.
+// A large archive is read to the cap and the pane says so.
 func TestArchiveCap(t *testing.T) {
 	m, rec := archiveRoot(t, func(f *testkit.FakeReader) {
 		var runs []core.Workflow
@@ -232,8 +223,7 @@ func TestArchiveCap(t *testing.T) {
 	}
 }
 
-// 0 lists the whole archive; o links to the run's archived page by UID,
-// from the list and from the detail.
+// 0 lists the whole archive; o links to the archived page by UID.
 func TestArchiveAllNamespacesAndLink(t *testing.T) {
 	m, rec := archiveRoot(t, nil)
 	m.SetWebURL("https://argo.example")

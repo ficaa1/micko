@@ -13,12 +13,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// The alternate screen is repainted, not scrolled: a frame that is not
-// exactly the terminal size leaves stale rows from the previous frame, or
-// loses its bottom rows, which is where the key hints live. On every route
-// and size, many workflows included, the frame fills the window exactly,
-// the header names the namespace and the safety mode, and the footer
-// advertises help. Below the border width the frame drops the border.
+// The frame fills the window exactly on every route and size, with the header and help hint.
 func TestFrameFillsTheWholeWindow(t *testing.T) {
 	m := loadDemoList(t)
 	var items []core.Summary
@@ -71,10 +66,7 @@ func TestListTooSmallNotice(t *testing.T) {
 	}
 }
 
-// Pane geometry must not move between routes. A reader who presses enter
-// should find the footer and the border in the same rows. With Mićko on, on
-// a terminal large enough for him, he is on every route, perched or on the
-// floor.
+// The pane border stays in the same rows on every route, with or without Mićko.
 func TestPaneGeometryIsStableAcrossRoutes(t *testing.T) {
 	for _, spot := range []config.Mascot{config.MascotOff, config.MascotPerch, config.MascotFloor} {
 		for _, h := range []int{24, 40} {
@@ -104,9 +96,7 @@ func borderRows(lines []string) string {
 	return strings.Join(out, ",")
 }
 
-// Mićko is off until asked for. `:mascot` perches him and says so, a second
-// `:mascot` moves him to the floor, a third sends him off, and on a terminal
-// too small for him the notice says why he does not show.
+// :mascot cycles Mićko between perched, floor and off.
 func TestMickoCommandTogglesThePerch(t *testing.T) {
 	m, _ := demoRoot(t)
 	m = resize(t, m, 100, 40)
@@ -132,8 +122,6 @@ func TestMickoCommandTogglesThePerch(t *testing.T) {
 	if perched() || !floored() || !strings.Contains(screen(m), "Mićko is on the floor") {
 		t.Fatalf("second :mascot did not move him to the floor:\n%s", screen(m))
 	}
-	// On the floor he takes the pane's own last rows, so the pane is where
-	// it was with him off.
 	if got := borderRows(viewLines(m)); got != top {
 		t.Fatalf("border rows %q with him on the floor, want %q", got, top)
 	}
@@ -153,9 +141,7 @@ func TestMickoCommandTogglesThePerch(t *testing.T) {
 	}
 }
 
-// Once on, Mićko moves through his routine one beat at a time, and the
-// pose on screen follows. A beat from before he was turned off and on again
-// is dropped, so only one routine ever runs.
+// Mićko steps through one routine at a time; a beat from an earlier routine is dropped.
 func TestMickoMovesThroughHisRoutine(t *testing.T) {
 	m, _ := demoRoot(t)
 	m = resize(t, m, 100, 40)

@@ -7,9 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// T on the list opens the selected workflow straight on its Timeline
-// section, while enter keeps opening it on the section the pane last
-// showed.
+// T opens the Timeline section; enter reopens the last section shown.
 func TestListTOpensTheTimeline(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m = openFromList(t, m, "demo-release-gate", tea.KeyPressMsg{Code: 'T', Text: "T"})
@@ -35,9 +33,7 @@ func TestListTOpensTheTimeline(t *testing.T) {
 	}
 }
 
-// In the detail pane the digits jump to a section by position and T jumps
-// to the timeline, except while the nodes tab's find input is open, where
-// both are letters of the name being typed.
+// Digits and T switch sections, except while typing a find.
 func TestDetailSectionKeys(t *testing.T) {
 	m := openDetailNodes(t)
 	steps := []struct {
@@ -67,8 +63,7 @@ func TestDetailSectionKeys(t *testing.T) {
 	}
 }
 
-// enter on a pod row of the timeline opens that pod's log, as on the nodes
-// tab, and y copies the pod name.
+// enter on a timeline pod row opens its log; y copies the pod name.
 func TestTimelineRowOpensItsLogs(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m = openFromList(t, m, "demo-release-gate", tea.KeyPressMsg{Code: 'T', Text: "T"})

@@ -44,8 +44,7 @@ func TestNamespaceKeyOpensThePickerAndLoadsNames(t *testing.T) {
 	}
 }
 
-// A switch is a connection-generation change: every stale reply is discarded
-// and the session starts again on the list.
+// A namespace switch discards stale replies and starts again on the list.
 func TestSwitchNamespaceStartsAConnectionGeneration(t *testing.T) {
 	m, _ := nsRoot(t, "other-ns")
 	wf := workflowFixture("wf")

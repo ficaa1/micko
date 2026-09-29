@@ -23,8 +23,7 @@ func TestEscClosesThePalette(t *testing.T) {
 	}
 }
 
-// While open, the palette sits on top of the pane: the input, the suggestions
-// and the list below, with the palette's own hints in the footer.
+// The open palette sits at the top of the pane with its hints in the footer.
 func TestPaletteRendersAboveThePane(t *testing.T) {
 	m, _ := demoRoot(t)
 	typeKeys(m, ":w")
@@ -46,8 +45,7 @@ func TestPaletteRendersAboveThePane(t *testing.T) {
 	}
 }
 
-// `wf` returns to the workflow list from any route and stops the detail
-// fetch it leaves.
+// `wf` returns to the list and cancels the detail fetch.
 func TestCommandWorkflowsLeavesDetail(t *testing.T) {
 	m, _ := demoRoot(t)
 	ref := m.listView.SelectedRef()
@@ -64,8 +62,7 @@ func TestCommandWorkflowsLeavesDetail(t *testing.T) {
 	}
 }
 
-// `ns` with no argument opens the picker; with one it switches, which is a
-// connection generation like the picker's.
+// `ns` opens the picker, or switches with an argument.
 func TestCommandNamespace(t *testing.T) {
 	m, _ := demoRoot(t)
 	runLine(m, "ns")
@@ -93,8 +90,7 @@ func TestCommandNamespace(t *testing.T) {
 	}
 }
 
-// `ns` completes from the configured names and the ones the server reports.
-// Opening the palette asks for the latter.
+// `ns` completes from configured and discovered namespaces.
 func TestNamespaceCompletionUsesSeedAndDiscovered(t *testing.T) {
 	m, f := demoRoot(t)
 	f.Namespaces = []string{"argo"}
@@ -106,8 +102,7 @@ func TestNamespaceCompletionUsesSeedAndDiscovered(t *testing.T) {
 	}
 }
 
-// `all` and `0` both toggle the all-namespaces view: a new generation, a list
-// with no namespace, the header saying "all", and back again.
+// `all` and `0` toggle the all-namespaces view.
 func TestAllNamespacesToggle(t *testing.T) {
 	m, f := demoRoot(t)
 	before := m.connGen
@@ -139,8 +134,7 @@ func TestAllNamespacesToggle(t *testing.T) {
 	}
 }
 
-// Entering the view is a reconnection: a reply that was in flight for the
-// single namespace is discarded.
+// A single-namespace reply is dropped once the all-namespaces view is on.
 func TestAllNamespacesDiscardsTheOldScope(t *testing.T) {
 	m, _ := demoRoot(t)
 	stale := runCmd(m.startListGeneration())
@@ -178,8 +172,7 @@ func (w *recordingWatcher) Watch(ctx context.Context, req core.WatchRequest, _ f
 	return ctx.Err()
 }
 
-// Detail opened from the all-namespaces list asks for the row's own
-// namespace, not the session's.
+// A workflow opened from the all-namespaces list is read from its own namespace.
 func TestDetailFromAllNamespacesUsesTheRowNamespace(t *testing.T) {
 	m, _ := demoRoot(t)
 	deliver(m, typeKeys(m, "0"))
@@ -201,8 +194,7 @@ func TestDetailFromAllNamespacesUsesTheRowNamespace(t *testing.T) {
 	}
 }
 
-// A cluster-wide list the server refuses or cannot serve shows the failure
-// on the pane, with the way back, never an empty list.
+// A failed cluster-wide list shows the error and the way back, not an empty list.
 func TestAllNamespacesFailureIsShown(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -231,8 +223,7 @@ func TestAllNamespacesFailureIsShown(t *testing.T) {
 	}
 }
 
-// `profile`/`ctx` opens the picker with no argument and switches to a
-// configured profile with one. An unknown name is refused, never guessed.
+// `profile`/`ctx` opens the picker, or switches to a configured profile.
 func TestCommandProfile(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -259,8 +250,6 @@ func TestCommandProfile(t *testing.T) {
 	}
 }
 
-// A profile switch starts in the new profile's namespace, whatever view the
-// old one was in.
 func TestProfileSwitchLeavesAllNamespaces(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -275,8 +264,6 @@ func TestProfileSwitchLeavesAllNamespaces(t *testing.T) {
 	}
 }
 
-// The demo has no profiles; the command says so rather than opening an empty
-// picker.
 func TestCommandProfileWithoutProfiles(t *testing.T) {
 	m, _ := demoRoot(t)
 	runLine(m, "ctx dev")
@@ -318,8 +305,7 @@ func TestUnknownCommandIsReported(t *testing.T) {
 	}
 }
 
-// Every command in the registry is reachable from the palette by its name and
-// every alias, and the registry holds no two commands with the same word.
+// Every command word resolves to its command and no word is shared.
 func TestRegistryWordsAreUnique(t *testing.T) {
 	seen := map[string]string{}
 	for _, c := range newRegistry() {

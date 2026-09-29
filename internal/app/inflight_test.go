@@ -8,11 +8,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// The poll tick refetches the open workflow only while no fetch is running.
-// A reply that arrives after its own request was superseded, or canceled,
-// still ends that request, so it has to release the flag. Leaving it set
-// froze the detail view for the rest of the session: the phase stopped
-// moving and `r` was the only way to see anything new.
+// A stale or canceled detail reply still ends its fetch.
 func TestAnEndedDetailReplyDoesNotStallTheRefresh(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -20,8 +16,7 @@ func TestAnEndedDetailReplyDoesNotStallTheRefresh(t *testing.T) {
 	}{
 		{"stale", func(m *Root, wf core.Workflow) detailLoadedMsg {
 			msg := detailLoadedMsg{genStamp: genStamp{Conn: m.connGen, Sel: m.selGen}, RequestID: m.ids.next, Ref: wf.Summary.Ref, Workflow: wf}
-			// Opening the logs for a node bumps the selection generation
-			// while the fetch is still running.
+			// Opening a node's logs bumps the selection mid-fetch.
 			m.selGen++
 			return msg
 		}},
@@ -53,11 +48,7 @@ func TestAnEndedDetailReplyDoesNotStallTheRefresh(t *testing.T) {
 	}
 }
 
-// Two fetches of the same kind overlap whenever a key starts one while the
-// poll tick still has one running. The older reply must not retire the
-// newer request's cancel function: quitting, leaving the view and starting
-// the next fetch all cancel through that entry, so losing it leaks a
-// request nothing can stop.
+// A late reply does not retire the newer request's cancel function.
 func TestALateReplyKeepsTheNewerRequestCancelable(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}

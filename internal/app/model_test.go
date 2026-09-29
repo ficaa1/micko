@@ -12,8 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// A fetched workflow is applied to the detail route, and one whose UID no
-// longer matches (deleted and re-created under the same name) is refused.
+// A fetched workflow is applied; one with a different UID is refused.
 func TestDetailLoadAppliesAndValidatesUID(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	m := testRoot(t, fixtureReader(wf))
@@ -40,8 +39,7 @@ func TestDetailLoadAppliesAndValidatesUID(t *testing.T) {
 	}
 }
 
-// The reply to a workflow the reader has left never reaches the workflow
-// they opened next.
+// A reply for a workflow the reader left is dropped.
 func TestALeftWorkflowsReplyIsDropped(t *testing.T) {
 	a, b := workflowFixture("wf-a"), workflowFixture("wf-b")
 	m := testRoot(t, fixtureReader(a, b))
@@ -63,8 +61,6 @@ func TestALeftWorkflowsReplyIsDropped(t *testing.T) {
 	}
 }
 
-// A list reply stamped for another connection or selection, or one that
-// was canceled, is never applied.
 func TestListRepliesThatAreDropped(t *testing.T) {
 	ghost := []core.Summary{testkit.SyntheticWorkflow("ns", "ghost", "Running", testkit.FixtureEpoch).Summary}
 	for _, c := range []struct {
@@ -91,8 +87,6 @@ func TestListRepliesThatAreDropped(t *testing.T) {
 	}
 }
 
-// A snapshot spread over several pages is collected whole before it is
-// applied.
 func TestListSnapshotCollectsEveryPage(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	m := newRoot(f, "demo", time.Second)
@@ -115,8 +109,7 @@ func TestListSnapshotCollectsEveryPage(t *testing.T) {
 	}
 }
 
-// A failed poll keeps the last good snapshot, records the error and starts
-// the stale age.
+// A failed poll keeps the last good snapshot and marks it stale.
 func TestListErrorKeepsLastGoodData(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	m := newRoot(f, "demo", time.Second)
@@ -165,8 +158,7 @@ func TestListKeysMoveSelectionAndEnterOpensDetail(t *testing.T) {
 	}
 }
 
-// AGE is measured from the injected clock, not the zero time (which makes
-// every AGE a "-").
+// AGE is measured from the injected clock.
 func TestListAgeRendersUsingInjectedClock(t *testing.T) {
 	m := resize(t, loadDemoList(t), 100, 30)
 	// demo-data-pull started FixtureEpoch-40m.
@@ -195,8 +187,7 @@ func TestListErrorTextWrapsAtWidth(t *testing.T) {
 	}
 }
 
-// esc unwinds the way the reader came: logs opened from the list return to
-// the list, logs opened from a workflow return to it and then to the list.
+// esc returns to where the logs were opened from.
 func TestBackReturnsWhereItCameFrom(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	for _, c := range []struct {

@@ -94,9 +94,7 @@ func TestRootKeysPassThrough(t *testing.T) {
 	}
 }
 
-// | opens the pipe editor prefilled with the configured command, and enter
-// hands what it holds to the root. An emptied command runs nothing: the
-// whole terminal is not handed to a guess.
+// | prefills the configured command and enter emits it; an empty command emits nothing.
 func TestPipeEditorEmitsTheTypedCommand(t *testing.T) {
 	m := testModel(t)
 	m.SetPipeCommand("less")

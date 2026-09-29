@@ -11,10 +11,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// running is a command started on its own goroutine. An event stream's
-// drain blocks until the next event, so a test runs commands this way and
-// leaves the ones still waiting to be picked up later, instead of blocking
-// on them.
+// running is a command on its own goroutine, so a blocked drain can be resumed later.
 type running struct{ out chan tea.Msg }
 
 func start(cmd tea.Cmd) running {
@@ -23,9 +20,7 @@ func start(cmd tea.Cmd) running {
 	return r
 }
 
-// pump runs cmds, applying the messages of the detail pane's fetch and its
-// background sections, and the commands they start, until only commands
-// still waiting after wait are left. It returns those.
+// pump applies detail and section messages until only commands still blocked after wait remain.
 func pump(m *Root, wait time.Duration, cmds ...tea.Cmd) (*Root, []running) {
 	var queue []running
 	for _, c := range cmds {
@@ -71,8 +66,7 @@ func resume(m *Root, wait time.Duration, left []running) (*Root, []running) {
 	return pump(m, wait, cmds...)
 }
 
-// openOnEvents presses E on the list with the cursor on name and settles
-// the fetch and the first delivery of both streams.
+// openOnEvents presses E on the named workflow and settles both streams' first delivery.
 func openOnEvents(t *testing.T, m *Root, name string) (*Root, []running) {
 	t.Helper()
 	for i := 0; i < 20 && m.listView.SelectedRef().Name != name; i++ {
@@ -86,8 +80,7 @@ func openOnEvents(t *testing.T, m *Root, name string) (*Root, []running) {
 	return m, left
 }
 
-// settledStarts is how many event streams the fake has opened, once the
-// streams started on their own goroutines have all reached it.
+// settledStarts is the fake's event stream count once it stops changing.
 func settledStarts(f *testkit.FakeReader) int {
 	n := f.EventStartCount()
 	for {
@@ -100,9 +93,7 @@ func settledStarts(f *testkit.FakeReader) int {
 	}
 }
 
-// E on the list opens the workflow on its Events section, which streams
-// the workflow's own events and the namespace's pod events, and shows those
-// of the workflow and its pods by node name.
+// E opens the Events section, streaming the workflow's and its pods' events.
 func TestListEOpensTheEvents(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	f := m.deps.reader.(*testkit.FakeReader)
@@ -132,8 +123,6 @@ func TestListEOpensTheEvents(t *testing.T) {
 	}
 }
 
-// An event sent after the stream opened reaches the screen: the section is
-// live, not a snapshot.
 func TestEventsStreamLive(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	f := m.deps.reader.(*testkit.FakeReader)
@@ -154,8 +143,7 @@ func TestEventsStreamLive(t *testing.T) {
 	}
 }
 
-// Leaving the section, opening a log from the pane, or leaving the workflow
-// cancels both streams; coming back opens them again.
+// Leaving the section or the workflow cancels both streams; coming back reopens them.
 func TestEventsStreamsAreCanceledWhenLeft(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	f := m.deps.reader.(*testkit.FakeReader)
@@ -186,8 +174,6 @@ func TestEventsStreamsAreCanceledWhenLeft(t *testing.T) {
 	waitFor(t, "the streams to end after esc", func() bool { return f.EventCancelCount() == 4 })
 }
 
-// Replies from a stream that was replaced, or stamped with another
-// workflow's generation, change nothing.
 func TestEventsDropStaleReplies(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m, _ = openOnEvents(t, m, "demo-oom-backfill")
@@ -218,11 +204,7 @@ func TestEventsDropStaleReplies(t *testing.T) {
 	}
 }
 
-// A stream that ends reconnects from its last resource version after a
-// back-off, and the status line says so; an expired cursor starts over at
-// once; a permission error or a server without the stream stops it with
-// the reason; after too many failed reconnects it stops, and r starts it
-// again.
+// An ended stream reconnects from its cursor after a back-off, and stops on permission errors, a missing stream or too many failures.
 func TestEventsReconnectRules(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	f := m.deps.reader.(*testkit.FakeReader)
@@ -270,9 +252,7 @@ func TestEventsReconnectRules(t *testing.T) {
 		t.Errorf("the status does not say why it stopped:\n%s", s)
 	}
 
-	// Reconnects that deliver no event before failing again count toward
-	// the limit; the reopened streams' drains are not run, so nothing is
-	// delivered between the failures.
+	// Reconnects that deliver nothing count toward the limit.
 	for i := 0; i <= maxWatchRetries; i++ {
 		if cmd := done(eventStreamPods, core.NewWatchError(core.WatchEnded, "eof", "", nil)); cmd == nil {
 			break

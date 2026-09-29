@@ -7,8 +7,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// The profile's redactValues setting reaches the detail view on screen and
-// every detail view rebuilt by a later switch.
+// A profile's redactValues reaches every detail view, across switches.
 func TestRedactValuesFollowsTheConnection(t *testing.T) {
 	m := newRoot(testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch)), "demo", time.Second)
 	if !m.detailView.Reveal() {

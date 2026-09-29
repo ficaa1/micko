@@ -28,9 +28,7 @@ func detailRoot(t *testing.T) *Root {
 	return openFromList(t, m, m.listView.SelectedRef().Name, key("enter"))
 }
 
-// q quits from anywhere a reader browses; ctrl+c quits from everywhere,
-// modals and text entry included. q in text entry is a letter and in the
-// help overlay it closes the overlay (both below).
+// q quits while browsing; ctrl+c quits everywhere.
 func TestQuitKeys(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -62,9 +60,7 @@ func TestQuitKeys(t *testing.T) {
 	}
 }
 
-// Every text input owns the printable keys while it has focus: the root's
-// letters (q quit, ? help, r refresh, 0 all namespaces, f raw, y copy, P
-// profiles, a actions, : palette) type into it and act as nothing else.
+// A focused text input takes every printable key.
 func TestTextEntryOwnsPrintableKeys(t *testing.T) {
 	const typed = "q?r0fyPa:"
 	cases := []struct {
@@ -122,10 +118,7 @@ func TestTextEntryOwnsPrintableKeys(t *testing.T) {
 	}
 }
 
-// ? opens the key reference on every route. It replaces the pane body and
-// leaves the frame where it was, owns the keyboard (j does not move the
-// list behind it, q closes it rather than quitting), and closing it
-// returns to the route it was opened from.
+// ? opens help on every route without moving the frame; it owns the keys until closed.
 func TestHelpOverlay(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -167,8 +160,7 @@ func TestHelpOverlay(t *testing.T) {
 	}
 }
 
-// The help overlay fits a 40-row, 80-column terminal whole: its last line is
-// on screen and no line is cut.
+// Help fits 80×40 without cutting a line.
 func TestHelpFitsAnEightyByFortyTerminal(t *testing.T) {
 	m := resize(t, loadDemoList(t), 80, 40)
 	keys(m, "?")
@@ -188,10 +180,7 @@ func TestHelpFitsAnEightyByFortyTerminal(t *testing.T) {
 	}
 }
 
-// Whatever narrows a pane keeps esc for itself: the first esc clears it and
-// stays, the second leaves the way the reader came. A find being typed, a
-// committed find, a log filter (which is not text entry: the root's keys
-// still work beside it) and a filter on a drilled-down list all do.
+// The first esc clears a find or filter; the second leaves.
 func TestEscClearsBeforeLeaving(t *testing.T) {
 	for _, c := range []struct {
 		name   string

@@ -165,8 +165,7 @@ func TestRenderedActionTextSanitizesTargetAndStatesConsequences(t *testing.T) {
 	}
 }
 
-// The confirmation names the server, the profile and the phase the action
-// would act on, so a reader with two clusters open can tell them apart.
+// The confirmation names the server, profile and phase.
 func TestConfirmationNamesServerProfileAndPhase(t *testing.T) {
 	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
 	m := NewWithOptions(ref, Options{AllowActions: true, Server: "https://argo.test", Profile: "dev", Phase: "Running"})

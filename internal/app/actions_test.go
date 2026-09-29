@@ -12,8 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/actions"
 )
 
-// betaReader applies each action the way a server does, counting the sends.
-// execErr makes every send fail after it may have reached the server.
+// betaReader applies actions like a server; execErr fails every send.
 type betaReader struct {
 	*testkit.FakeReader
 	execCalls int
@@ -25,8 +24,7 @@ func (b *betaReader) Execute(_ context.Context, req core.ActionRequest) (core.Ac
 	if b.execErr != nil {
 		return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}, b.execErr
 	}
-	// A resume takes effect at once, as it does on a server: the read-back
-	// that follows sees the gate closed.
+	// The resume takes effect at once, so the read-back sees it.
 	if wf, ok := b.Workflows[req.Ref]; ok && req.Action == core.ActionResume {
 		wf.Summary.Suspended = false
 		b.Workflows[req.Ref] = wf
@@ -37,9 +35,7 @@ func (b *betaReader) Execute(_ context.Context, req core.ActionRequest) (core.Ac
 
 func (b *betaReader) execs() int { return b.execCalls }
 
-// stopReader accepts every action and then reports the phases given, one
-// per read, the last one repeating: a workflow that runs its exit handler
-// after the request was accepted.
+// stopReader accepts every action, then reports phases in turn, the last repeating.
 type stopReader struct {
 	*testkit.FakeReader
 	phases    []string
@@ -78,8 +74,7 @@ func (refusingReader) Execute(context.Context, core.ActionRequest) (core.ActionR
 
 func (refusingReader) execs() int { return 0 }
 
-// shortObservation makes an accepted Stop, Terminate or Delete give up
-// watching for its end state after a few milliseconds.
+// shortObservation cuts the wait for an accepted action's end state to milliseconds.
 func shortObservation(t *testing.T) {
 	t.Helper()
 	old, oldN := stopObservationInterval, stopObservationAttempts
@@ -87,11 +82,7 @@ func shortObservation(t *testing.T) {
 	t.Cleanup(func() { stopObservationInterval, stopObservationAttempts = old, oldN })
 }
 
-// An action is sent exactly once and its outcome is what was observed
-// afterwards: CONFIRMED once the expected end state is read back, ACCEPTED
-// when the server took it but the end state has not arrived yet, UNKNOWN
-// when the send failed and nobody knows whether it applied, and REFUSED
-// when a check failed before anything was sent. None of them is retried.
+// An action is sent once and its outcome is what was read back afterwards.
 func TestActionOutcome(t *testing.T) {
 	wf := workflowFixture("wf")
 	failed := wf
@@ -176,11 +167,7 @@ func TestReadBackSettlesOnTheEndState(t *testing.T) {
 	}
 }
 
-// Only an UNKNOWN outcome keeps the action pane on screen: nobody knows
-// whether the server applied it, and the reader must see that. Any other
-// outcome hands the screen back and reports on the footer. An error from
-// watching an accepted or refused action does not make it UNKNOWN; an
-// error beside a confirmation does.
+// Only an UNKNOWN outcome keeps the action pane open.
 func TestOnlyAnUnknownOutcomeKeepsThePaneOpen(t *testing.T) {
 	for _, c := range []struct {
 		outcome core.ActionOutcome
@@ -217,8 +204,6 @@ func TestOnlyAnUnknownOutcomeKeepsThePaneOpen(t *testing.T) {
 	}
 }
 
-// a, a verb and y on the detail route send the action and report its
-// outcome on the footer of the detail, which is back on screen.
 func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 	wf := workflowFixture("wf")
 	wf.Summary.Suspended = true
@@ -253,9 +238,7 @@ func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 	}
 }
 
-// Stale data blocks every action, whatever made it stale: a lost
-// connection, or a list that failed on the server. The blocked key says
-// why, and only a fresh snapshot opens the gate again.
+// Stale data blocks actions and says why until a fresh snapshot arrives.
 func TestStaleDataBlocksActions(t *testing.T) {
 	for _, c := range []struct {
 		name   string
