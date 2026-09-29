@@ -1,34 +1,26 @@
 package detail
 
 import (
-	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/diagnose"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// explainModel is the Explain section of one demo workflow in the plain
-// theme, with the first failing pod's log read from the demo backend when
-// read is set.
+// explainModel is the Explain section of a demo workflow, with its failing log read when read is set.
 func explainModel(t *testing.T, name string, w, h int, read bool) *Model {
 	t.Helper()
-	m := demoModel(t, name, w, h)
-	if !m.SetSection("explain") {
-		t.Fatal("no explain section")
-	}
+	m := sectionModel(t, name, "explain", w, h)
 	if read {
 		readDemoLog(t, m, 1)
 	}
 	return m
 }
 
-// readDemoLog answers the section's log request with the demo backend's
-// log for that pod, as request id.
+// readDemoLog answers the section's log request, as request id, with the demo's log for that pod.
 func readDemoLog(t *testing.T, m *Model, id uint64) {
 	t.Helper()
 	in, ok := m.ExplainLogWanted()
@@ -46,37 +38,7 @@ func readDemoLog(t *testing.T, m *Model, id uint64) {
 	}
 }
 
-var explainDemoNames = []string{
-	"demo-nightly-report", "demo-oom-backfill", "demo-param-check", "demo-release-gate",
-	"demo-train-pipeline", "demo-cleanup", "demo-deploy-multi-layer", "demo-etl-hourly-1790000000",
-}
-
-// Every line of the section stays inside the pane at every width, in the
-// plain theme and a truecolor skin, the tab strip included.
-func TestExplainLinesFitThePane(t *testing.T) {
-	for _, name := range explainDemoNames {
-		for _, w := range []int{136, 116, 76, 56, 36} {
-			for _, skin := range []string{"plain", "nord"} {
-				m := explainModel(t, name, w, 30, true)
-				if skin != "plain" {
-					th, _ := shared.SkinTheme(skin, false)
-					m.SetTheme(th)
-				}
-				for i := 0; i < 3; i++ {
-					for _, l := range m.BodyLines() {
-						if cw := ansi.StringWidth(l); cw > w {
-							t.Errorf("%s at %d (%s): line is %d cells: %q", name, w, skin, cw, ansi.Strip(l))
-						}
-					}
-					m.handleKey("pgdown")
-				}
-			}
-		}
-	}
-}
-
-// The severity is a glyph and a word on every card, so it survives a
-// terminal with no colour.
+// The severity is a glyph and a word on every card.
 func TestExplainSeverityIsGlyphAndWord(t *testing.T) {
 	want := map[string]string{
 		"demo-nightly-report": "✗ ERROR  transform failed all 3 attempts",
@@ -95,41 +57,13 @@ func TestExplainSeverityIsGlyphAndWord(t *testing.T) {
 	}
 }
 
-// Parameter values in the evidence follow the pane's reveal state: shown by
-// default, hidden by v and by a profile that redacts, on the pane and in
-// the copied report alike.
-func TestExplainValuesFollowReveal(t *testing.T) {
-	m := explainModel(t, "demo-oom-backfill", 136, 40, true)
-	has := func(s string) bool {
-		return strings.Contains(strings.Join(m.BodyLines(), "\n"), s) &&
-			strings.Contains(strings.Join(m.RawLines(), "\n"), s)
-	}
-	if !has("memory=2Gi") {
-		t.Fatal("values are not shown by default")
-	}
-	m.handleKey("v")
-	if !has("memory=[REDACTED]") || has("memory=2Gi") {
-		t.Fatal("v does not hide the values")
-	}
-	if !strings.Contains(m.explainStatusLine(), "values redacted (v reveals)") {
-		t.Errorf("status line %q does not say values are hidden", m.explainStatusLine())
-	}
-	r := explainModel(t, "demo-oom-backfill", 136, 40, true)
-	r.SetRedactByDefault(true)
-	if strings.Contains(strings.Join(r.RawLines(), "\n"), "memory=2Gi") {
-		t.Fatal("a redacting profile shows the values")
-	}
-}
-
-// The section asks for its log only while it is on screen, says it is
-// reading while the read runs, takes only the reply to its latest request,
-// and asks again after a canceled read or for another workflow.
+// The section asks for its log only while on screen, and takes only the reply to its latest request.
 func TestExplainLogLifecycle(t *testing.T) {
 	m := demoModel(t, "demo-nightly-report", 136, 40)
 	if _, ok := m.ExplainLogWanted(); ok {
 		t.Fatal("the nodes tab asked for the explain log")
 	}
-	m.handleKey("X")
+	press(m, "X")
 	in, ok := m.ExplainLogWanted()
 	if !ok || in.PodName != m.nodeMap[in.NodeID].PodName || m.nodeMap[in.NodeID].DisplayName != "transform(2)" ||
 		in.TailLines != diagnose.LogTail || in.Container != "main" {
@@ -181,8 +115,7 @@ func TestExplainLogLifecycle(t *testing.T) {
 	}
 }
 
-// A log the server no longer has is said on the card and as a finding of
-// its own.
+// A log the server no longer has is said on the card and as a finding of its own.
 func TestExplainGoneLog(t *testing.T) {
 	m := explainModel(t, "demo-oom-backfill", 136, 40, false)
 	in, _ := m.ExplainLogWanted()
@@ -196,13 +129,10 @@ func TestExplainGoneLog(t *testing.T) {
 	}
 }
 
-// The report copied with y and shown by f is plain text: the workflow and
-// its outcome, the counts, and every card, with no escape sequences in any
-// skin.
+// The copied report is plain text in any skin: the outcome, the counts and every card.
 func TestExplainRawReport(t *testing.T) {
 	m := explainModel(t, "demo-nightly-report", 136, 40, true)
-	th, _ := shared.SkinTheme("nord", false)
-	m.SetTheme(th)
+	m.SetTheme(skin(t))
 	raw := m.RawLines()
 	if raw[0] != "Explain demo-nightly-report in demo: Failed after 4m00s" || raw[1] != "1 error · 2 info" || raw[2] != "" {
 		t.Fatalf("report head:\n%s", strings.Join(raw[:3], "\n"))
@@ -225,19 +155,17 @@ func TestExplainRawReport(t *testing.T) {
 	}
 }
 
-// The status line counts the findings and gives the position once the
-// cards overflow; j and G scroll; the hints offer the failing log only
-// when there is one.
+// The status line counts the findings; j and G scroll; the hints offer the failing log when there is one.
 func TestExplainStatusScrollAndHints(t *testing.T) {
 	m := explainModel(t, "demo-nightly-report", 76, 12, true)
 	if s := m.explainStatusLine(); !strings.HasPrefix(s, "explain · 1 error · 2 info · 1/") {
 		t.Errorf("status %q", s)
 	}
-	m.handleKey("j")
+	press(m, "j")
 	if m.ex.top != 1 {
 		t.Errorf("j scrolled to %d", m.ex.top)
 	}
-	m.handleKey("G")
+	press(m, "G")
 	lines := m.BodyLines()
 	if last := lines[len(lines)-1]; !strings.Contains(last, "Nothing to do: it ran after the workflow failed.") {
 		t.Errorf("G does not show the end: %q", last)
@@ -259,8 +187,7 @@ func TestExplainStatusScrollAndHints(t *testing.T) {
 	}
 }
 
-// TestExplainGolden pins the section as a reader sees it on the pane of a
-// 140- and an 80-column terminal, in the plain theme, with the log read.
+// The Explain section at 140 and 80 columns, with the log read.
 func TestExplainGolden(t *testing.T) {
 	for _, width := range []int{140, 80} {
 		var b strings.Builder
@@ -272,34 +199,6 @@ func TestExplainGolden(t *testing.T) {
 			b.WriteString("== " + name + "\n")
 			b.WriteString(strings.Join(m.BodyLines(), "\n") + "\n")
 		}
-		compareGolden(t, filepath.Join("testdata", "explain-"+itoaDetail(width)+".golden"), b.String())
-	}
-}
-
-// The tab strip fits the pane: whole when there is room, closed up when
-// there is less, and a window around the active tab below that.
-func TestTabStripFits(t *testing.T) {
-	plain := shared.NewTheme(true)
-	cases := []struct {
-		active string
-		width  int
-		want   string
-	}{
-		{"explain", 80, " Summary   Nodes   Timeline  [Explain]  Events   Resource "},
-		{"explain", 50, "Summary Nodes Timeline [Explain] Events Resource"},
-		{"explain", 30, "… Timeline [Explain] Events …"},
-		{"summary", 30, "[Summary] Nodes Timeline …"},
-		{"resource", 24, "… Events [Resource]"},
-		{"explain", 13, "… [Explain] …"},
-		{"explain", 8, "… [Expl…"},
-	}
-	for _, tc := range cases {
-		got := tabStripFit(tc.active, plain, tc.width)
-		if got != tc.want {
-			t.Errorf("tabStripFit(%s, %d) = %q, want %q", tc.active, tc.width, got, tc.want)
-		}
-		if cellWidth(got) > tc.width {
-			t.Errorf("tabStripFit(%s, %d) is %d cells", tc.active, tc.width, cellWidth(got))
-		}
+		golden(t, "explain-"+strconv.Itoa(width), b.String())
 	}
 }

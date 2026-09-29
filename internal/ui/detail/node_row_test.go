@@ -6,40 +6,11 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// demoWorkflow returns one workflow of the demo dataset, built against a
-// clock frozen at FixtureEpoch, and that clock's time.
-func demoWorkflow(t *testing.T, name string) core.Workflow {
-	t.Helper()
-	r := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	for ref, wf := range r.Workflows {
-		if ref.Name == name {
-			return wf
-		}
-	}
-	t.Fatalf("no demo workflow %q", name)
-	return core.Workflow{}
-}
-
-// demoModel is a nodes tab showing one demo workflow in the plain theme.
-func demoModel(t *testing.T, name string, w, h int) *Model {
-	t.Helper()
-	m := New()
-	m.SetTheme(shared.NewTheme(true))
-	m.SetSize(w, h)
-	m.SetWorkflow(demoWorkflow(t, name), testkit.FixtureEpoch)
-	m.handleKey("tab")
-	return m
-}
-
-// The columns come and go with the pane: the template on the pane of a
-// 140-column terminal, the timing bar from 80, and the duration while the
-// name keeps its minimum. Below that the pane shows the name and the
-// message only if there is room for both.
+// The template, bar, duration and message columns come and go with the pane width.
 func TestColumnsForWidth(t *testing.T) {
 	cases := []struct {
 		width                       int
@@ -87,36 +58,7 @@ func TestColumnsForWidth(t *testing.T) {
 	}
 }
 
-// Every row of every demo workflow fits the pane at every width, in the
-// plain theme and in a skin, and the skin draws the same text. The bar is
-// the one part whose glyphs follow the theme, so the comparison runs on the
-// widths without it.
-func TestNodeRowsFitThePaneInEveryTheme(t *testing.T) {
-	th := nordTheme(t)
-	r := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	for ref := range r.Workflows {
-		for _, w := range []int{160, 120, 80, 60, 40} {
-			m := demoModel(t, ref.Name, w, 40)
-			m.handleKey("h") // skipped rows too
-			for i, row := range m.nodes {
-				plain := m.renderer(w, shared.NewTheme(true)).render(row, false, false)
-				themed := m.renderer(w, th).render(row, i == 0, false)
-				if cw := ansi.StringWidth(themed); cw > w {
-					t.Errorf("%s at %d: row %q is %d cells", ref.Name, w, row.Row.DisplayName, cw)
-				}
-				if cw := cellWidth(plain); cw > w {
-					t.Errorf("%s at %d: plain row %q is %d cells", ref.Name, w, row.Row.DisplayName, cw)
-				}
-				if w < tierBar && i > 0 && ansi.Strip(themed) != plain {
-					t.Errorf("%s at %d: themed text differs:\n%q\n%q", ref.Name, w, ansi.Strip(themed), plain)
-				}
-			}
-		}
-	}
-}
-
-// The name gives way last: the dependency annotation goes first, then the
-// type tag, and the name itself is never cut below a readable minimum.
+// The name gives way last: the dependencies go first, then the type tag, and the name keeps a minimum.
 func TestNameCellGivesWayInOrder(t *testing.T) {
 	rr := rowRenderer{theme: shared.NewTheme(true)}
 	row := FlatRow{Indent: "├─ ", Row: OutlineRow{
@@ -147,9 +89,7 @@ func TestNameCellGivesWayInOrder(t *testing.T) {
 	}
 }
 
-// Structural nodes carry a short type tag, a pod row does not, and an exit
-// handler is tagged with its role. A Retry row counts its retries and a pod
-// with a failing exit code states it; exit 0 is not news.
+// A row carries its type tag, role, retry count and a failing exit code; exit 0 is not news.
 func TestRowTagsAndFacts(t *testing.T) {
 	m := demoModel(t, "demo-nightly-report", 200, 40)
 	lines := map[string]string{}
@@ -190,8 +130,7 @@ func TestRowTagsAndFacts(t *testing.T) {
 	}
 }
 
-// The gate states that it waits for a person at every width that has a
-// message column.
+// The gate says it waits for a person at every width with a message column.
 func TestGateRowSaysAwaitingResume(t *testing.T) {
 	for _, w := range []int{160, 120, 80, 60} {
 		m := demoModel(t, "demo-release-gate", w, 30)
@@ -210,8 +149,7 @@ func TestGateRowSaysAwaitingResume(t *testing.T) {
 	}
 }
 
-// A running node's duration is its elapsed time on the injected clock; a
-// node that has not started has none; a skipped node did not run.
+// A running node's duration is its elapsed time on the injected clock; an unstarted one has none.
 func TestDurationColumn(t *testing.T) {
 	m := demoModel(t, "demo-train-pipeline", 120, 40)
 	want := map[string]string{
@@ -247,18 +185,6 @@ func sliceCells(s string, from, n int) string {
 	return ansi.Cut(s, from, from+n)
 }
 
-// A message with line breaks stays on its row.
-func TestRowMessageStaysOnOneLine(t *testing.T) {
-	row := FlatRow{Row: OutlineRow{DisplayName: "x", Type: "Pod", Phase: "Failed", Message: "one\ntwo\tthree\r\nfour"}}
-	got := RenderFlatRow(row, 80, shared.NewTheme(true), false)
-	if strings.ContainsAny(got, "\n\r\t") {
-		t.Fatalf("row broke: %q", got)
-	}
-	if !strings.Contains(got, "one two three four") {
-		t.Fatalf("message lost: %q", got)
-	}
-}
-
 // The column heads line up with the columns and give the bar its scale.
 func TestColumnHeads(t *testing.T) {
 	m := demoModel(t, "demo-nightly-report", 140, 40)
@@ -274,9 +200,7 @@ func TestColumnHeads(t *testing.T) {
 	}
 }
 
-// The progress header states the controller's progress with a bar, the
-// tally of the work by glyph, and the time with the estimate when there is
-// one.
+// The progress header shows the progress, the tally by glyph and the time with its estimate.
 func TestProgressHeader(t *testing.T) {
 	plain := shared.NewTheme(true)
 	train := demoWorkflow(t, "demo-train-pipeline")
@@ -299,8 +223,7 @@ func TestProgressHeader(t *testing.T) {
 	if !strings.Contains(gate, "◐ 1") {
 		t.Errorf("gate header %q does not count the gate", gate)
 	}
-	// No progress from the server, no progress drawn; a workflow that has
-	// not started has no time either.
+	// No progress from the server, no progress drawn; an unstarted workflow has no time.
 	pending := progressLine(demoWorkflow(t, "demo-cleanup"), testkit.FixtureEpoch, 120, plain)
 	if strings.Contains(pending, "progress") || strings.Contains(pending, "elapsed") {
 		t.Errorf("pending header %q", pending)

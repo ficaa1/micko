@@ -1,6 +1,7 @@
 package detail
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/ficaa1/micko/internal/ui/shared"
@@ -212,16 +213,16 @@ func (m *Model) timelineStatusLine() string {
 	}
 	parts := []string{plural(len(m.tl.rows), "row")}
 	if m.tl.leftOut > 0 {
-		parts = append(parts, itoaDetail(m.tl.leftOut)+" skipped not drawn")
+		parts = append(parts, strconv.Itoa(m.tl.leftOut)+" skipped not drawn")
 	}
 	if m.tl.folds > 0 {
-		parts = append(parts, itoaDetail(m.tl.foldedNodes)+" in "+plural(m.tl.folds, "fold"))
+		parts = append(parts, strconv.Itoa(m.tl.foldedNodes)+" in "+plural(m.tl.folds, "fold"))
 	}
 	if m.showInfo && infoPlacementFor(m.width) == infoHidden {
 		parts = append(parts, "no room for info")
 	}
 	if len(m.tl.rows) > 0 {
-		parts = append(parts, itoaDetail(m.tlCursor+1)+"/"+itoaDetail(len(m.tl.rows)))
+		parts = append(parts, strconv.Itoa(m.tlCursor+1)+"/"+strconv.Itoa(len(m.tl.rows)))
 	}
 	if r, ok := m.tlCursorRow(); ok && r.Row.HasPod && r.Row.PodName != "" {
 		parts = append(parts, "l logs")

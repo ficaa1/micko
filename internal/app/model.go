@@ -1628,8 +1628,7 @@ func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
 	case RouteList:
 		return m.listView.Update(msg)
 	case RouteDetail:
-		_, cmd := m.detailView.Update(msg)
-		return cmd
+		return m.detailView.Update(msg)
 	case RouteLogs:
 		if m.logsView == nil {
 			return nil
@@ -1650,7 +1649,7 @@ func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
 func (m *Root) resizeChildren(msg tea.WindowSizeMsg) {
 	m.listView.Update(msg)
 	if m.detailView != nil {
-		_, _ = m.detailView.Update(msg)
+		m.detailView.Update(msg)
 	}
 	if m.logsView != nil {
 		m.logsView.Update(msg)

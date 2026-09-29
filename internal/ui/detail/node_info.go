@@ -2,6 +2,7 @@ package detail
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -358,7 +359,7 @@ func renderInfo(groups [][]infoItem, r FlatRow, reveal bool, width, height int, 
 	}
 	if len(lines) > height {
 		cut := len(lines) - height + 1
-		lines = append(lines[:height-1], t.Muted.Render(truncCell("… "+itoaDetail(cut)+" more lines", width)))
+		lines = append(lines[:height-1], t.Muted.Render(truncCell("… "+strconv.Itoa(cut)+" more lines", width)))
 	}
 	return lines
 }

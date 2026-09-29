@@ -1,10 +1,11 @@
 package detail
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/diagnose"
@@ -149,7 +150,7 @@ func (m *Model) explainStatusLine() string {
 		parts = append(parts, "values redacted (v reveals)")
 	}
 	if n := m.scrollLines(); n > m.viewRows() {
-		parts = append(parts, itoaDetail(m.ex.top+1)+"/"+itoaDetail(n))
+		parts = append(parts, strconv.Itoa(m.ex.top+1)+"/"+strconv.Itoa(n))
 	}
 	s := strings.Join(parts, " · ")
 	if m.width > 0 {
@@ -197,15 +198,4 @@ func (m *Model) explainHints() string {
 	}
 	h = append(h, "v reveal", "a actions", "r refresh", "f raw", "esc back")
 	return strings.Join(h, "  ")
-}
-
-// renderExplainText is the explanation as plain text with no clock and no
-// log: the static renderer's view, measured at the latest time the workflow
-// records.
-func renderExplainText(state DetailViewState) []string {
-	wf := core.Workflow{Summary: state.Summary, Nodes: state.Nodes, NodesAvailable: state.Outline.Available,
-		NodesUnavailableReason: state.Outline.UnavailableReason}
-	now := workflowSpan(wf, time.Time{}).end
-	r := diagnose.Explain(explainInput(state.Outline, wf, now))
-	return explainReportLines(wf, r, false, now)
 }

@@ -1,22 +1,21 @@
 package detail
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// Model is the detail route's child Tea model (bubbletea v2 Model surface
-// frozen in docs/development.md). It renders the composed detail view and
-// emits intents only — the root alone converts them to network effects. It
-// never starts goroutines and holds no Reader.
+// Model is the detail pane. It emits intents only; the root turns them into
+// requests.
 type Model struct {
 	// state is the loaded workflow detail (or zero value while loading).
-	state DetailViewState
+	state workflowState
 	// rawResource keeps the workflow's raw payload for session-only
 	// reveal re-renders (nil until a workflow is applied).
 	rawResource []byte
@@ -124,6 +123,16 @@ type Model struct {
 	width, height int
 }
 
+// workflowState is what the pane draws from, derived from a core.Workflow.
+type workflowState struct {
+	Summary  core.Summary
+	Outline  Outline
+	Resource string // pre-rendered, redacted + sanitized YAML
+	Message  string
+	// Nodes is the node map as it arrived, for the timeline's span.
+	Nodes map[string]core.Node
+}
+
 // New builds the detail child model.
 func New() *Model {
 	return &Model{
@@ -139,16 +148,13 @@ func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 // time of running nodes and their timing bars are measured to.
 func (m *Model) SetNow(t time.Time) { m.now = t }
 
-// Compile-time interface check against the frozen v2 surface.
-var _ tea.Model = (*Model)(nil)
-
 // SetWorkflow applies a freshly loaded detail.
 func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 	var sameWorkflow bool
 	if m.loaded {
 		sameWorkflow = m.state.Summary.Ref.UID == wf.Summary.Ref.UID
 	}
-	m.state = DetailViewState{
+	m.state = workflowState{
 		Summary:  wf.Summary,
 		Outline:  BuildNodeOutline(wf, OutlineOptions{}),
 		Resource: RenderResource(wf, false),
@@ -191,9 +197,6 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 // SetArchived says whether the workflow shown comes from the archive.
 func (m *Model) SetArchived(on bool) { m.archived = on }
 
-// Archived reports whether the workflow shown comes from the archive.
-func (m *Model) Archived() bool { return m.archived }
-
 // SetLoading marks the loading state (root-driven, before data arrives).
 func (m *Model) SetLoading() {
 	m.loading = true
@@ -226,33 +229,24 @@ func (m *Model) SetRedactByDefault(redact bool) {
 	m.revealResource = !redact
 }
 
-// Reveal is the session-only reveal state accessor (for tests/root).
-func (m *Model) Reveal() bool { return m.revealResource }
-
-// Update implements tea.Model. Tab switching (Tab), Esc back intent,
-// session-only resource reveal (`v`) live here; intents bubble to the
-// root as messages — the model never talks to a Reader.
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update handles a key or a resize and returns the intent it emits, if any.
+func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.SetSize(msg.Width, msg.Height)
-		return m, nil
-
 	case tea.KeyPressMsg:
 		// The find input owns every key while it is open, so a name can
 		// hold any letter the tab otherwise binds.
 		if m.find.editing {
-			return m, m.handleFindKey(msg.String())
+			return m.handleFindKey(msg.String())
 		}
 		if m.tab == "events" && m.ev.editing {
 			m.handleEventsFilterKey(msg.String())
-			return m, nil
+			return nil
 		}
-		return m, m.handleKey(msg.String())
-
-	default:
-		return m, nil
+		return m.handleKey(msg.String())
 	}
+	return nil
 }
 
 // handleKey implements the detail key matrix. Every tab scrolls; only the
@@ -520,43 +514,10 @@ func (m *Model) jumpTo(pos int) {
 	}
 }
 
-// backCmd emits the back intent (the root converts it to routing).
-// BackMsg matches the root app's frozen back intent (app.BackMsg shape;
-// detail defines its own message struct so the child package stays
-// independent of internal/app — the root routes by type-agnostic handling
-// or app maps it; the intent names are part of the contract).
+// BackMsg asks the root to leave the workflow.
 type BackMsg struct{}
 
 func backCmd() tea.Cmd { return func() tea.Msg { return BackMsg{} } }
-
-// Init implements tea.Model — detail children have no autonomous effects.
-func (m *Model) Init() tea.Cmd { return nil }
-
-// View implements tea.Model.
-func (m *Model) View() tea.View {
-	if m.loading {
-		return tea.NewView("detail: loading...")
-	}
-	switch {
-	case m.notFound:
-		return tea.NewView("workflow no longer available")
-	case m.lastErr != "":
-		return tea.NewView("detail error: " + m.lastErr)
-	case !m.loaded:
-		return tea.NewView("detail: (no workflow loaded)")
-	}
-	state := m.state
-	// The resource pane reflects the session reveal state: re-render the
-	// resource with values revealed when toggled this session.
-	if m.revealResource {
-		wf := core.Workflow{
-			Summary:  state.Summary,
-			Resource: m.rawResource,
-		}
-		state.Resource = RenderResource(wf, true)
-	}
-	return tea.NewView(RenderDetail(state, m.tab))
-}
 
 // PaneTitle is the shell border title: the sanitized workflow name.
 // Before a workflow loads there is no name to show, so the title states the
@@ -700,7 +661,7 @@ func (m *Model) tabStatusLine() string {
 			reveal = "values shown (v redacts)"
 		}
 		return m.theme.Dim.Render("resource · " + reveal + " · " +
-			itoaDetail(m.resourceTop+1) + "/" + itoaDetail(m.scrollLines()))
+			strconv.Itoa(m.resourceTop+1) + "/" + strconv.Itoa(m.scrollLines()))
 	default:
 		return m.theme.Dim.Render("summary · tab changes section")
 	}
@@ -768,31 +729,9 @@ func (m *Model) summaryText() string {
 	return b.String()
 }
 
-func itoaDetail(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
-}
-
 // resolvedState applies the session-only resource reveal. Every resource
 // view reads through it, so the scroll bounds and the lines shown agree.
-func (m *Model) resolvedState() DetailViewState {
+func (m *Model) resolvedState() workflowState {
 	state := m.state
 	if m.revealResource {
 		state.Resource = RenderResource(core.Workflow{

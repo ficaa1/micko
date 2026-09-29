@@ -1,6 +1,7 @@
 package detail
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -283,9 +284,9 @@ func depsForms(deps []string) []string {
 	}
 	two := "← " + first + ", " + oneLine(deps[1])
 	if n > 2 {
-		two += " +" + itoaDetail(n-2)
+		two += " +" + strconv.Itoa(n-2)
 	}
-	return []string{two, "← " + first + " +" + itoaDetail(n-1), "← " + itoaDetail(n) + " tasks"}
+	return []string{two, "← " + first + " +" + strconv.Itoa(n-1), "← " + strconv.Itoa(n) + " tasks"}
 }
 
 // nameExtras are the optional parts after a row's name, in drawing order.
@@ -309,13 +310,13 @@ func (rr rowRenderer) extras(r FlatRow) []nameExtra {
 		out = append(out, nameExtra{text: oneLine(tag), style: t.Muted, drop: 2})
 	}
 	if r.Row.Retries > 0 {
-		out = append(out, nameExtra{text: "↻ " + itoaDetail(r.Row.Retries), style: t.Warning})
+		out = append(out, nameExtra{text: "↻ " + strconv.Itoa(r.Row.Retries), style: t.Warning})
 	}
 	if code := oneLine(r.Row.ExitCode); code != "" && code != "0" {
 		out = append(out, nameExtra{text: "exit " + code, style: t.PhaseFailed})
 	}
 	if r.Folded {
-		out = append(out, nameExtra{text: "+" + itoaDetail(r.FoldedCount), style: t.Accent})
+		out = append(out, nameExtra{text: "+" + strconv.Itoa(r.FoldedCount), style: t.Accent})
 	}
 	if forms := depsForms(r.Row.Deps); len(forms) > 0 {
 		out = append(out, nameExtra{text: forms[0], style: t.Muted, drop: 1, shorter: forms[1:]})
@@ -522,15 +523,6 @@ func (rr rowRenderer) header() string {
 		p = p.truncate(c.width)
 	}
 	return p.trimRight().render()
-}
-
-// RenderFlatRow draws one node line on its own, sizing the name column to
-// that row. The nodes tab lays out every row against the widest name
-// instead; this form serves callers that have a single row.
-func RenderFlatRow(r FlatRow, width int, theme shared.Theme, selected bool) string {
-	rr := rowRenderer{theme: theme}
-	rr.cols = columnsFor(width, rr.nameCellWidth(r), cellWidth(r.Row.Template))
-	return rr.render(r, selected, false)
 }
 
 // oneLine sanitizes server text for a single row: control sequences go, and

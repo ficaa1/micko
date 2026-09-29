@@ -2,6 +2,7 @@ package detail
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -278,7 +279,7 @@ func (er eventRenderer) render(r eventRow) string {
 	}
 	er.cell(&p, object, er.cols.object, t.Accent, false)
 	if er.cols.count > 0 {
-		er.cell(&p, itoaDetail(max(e.Count, 1)), er.cols.count, t.Muted, true)
+		er.cell(&p, strconv.Itoa(max(e.Count, 1)), er.cols.count, t.Muted, true)
 	}
 	p.add(oneLine(e.Message), msgStyle)
 	if er.cols.width > 0 {

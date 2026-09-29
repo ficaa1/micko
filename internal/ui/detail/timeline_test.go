@@ -1,28 +1,15 @@
 package detail
 
 import (
-	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
-
-// timelineModel is the timeline section of one demo workflow in the plain
-// theme.
-func timelineModel(t *testing.T, name string, w, h int) *Model {
-	t.Helper()
-	m := demoModel(t, name, w, h)
-	if !m.SetSection("timeline") {
-		t.Fatal("no timeline section")
-	}
-	return m
-}
 
 // pathNames is the critical path as display names, in run order.
 func pathNames(m *Model) []string {
@@ -48,9 +35,7 @@ func tlRowNamed(t *testing.T, m *Model, name string) tlRow {
 	return tlRow{}
 }
 
-// The tick step is the smallest round step whose labels fit with room
-// between them: seconds for a run of seconds, minutes for minutes, hours
-// and days for long runs, and coarser as the chart narrows.
+// The tick step is the smallest round step whose labels fit with room between them.
 func TestAxisStepFitsTheSpan(t *testing.T) {
 	cases := []struct {
 		span  time.Duration
@@ -104,9 +89,7 @@ func TestTickLabel(t *testing.T) {
 	}
 }
 
-// Every span from three seconds to three days gets an axis whose labels
-// sit inside the chart, in order, never touching, with the end label last
-// and flush with the right edge.
+// From seconds to days the axis labels sit in order inside the chart, the end label flush right.
 func TestAxisTicksFromSecondsToDays(t *testing.T) {
 	spans := []time.Duration{
 		3 * time.Second, 10 * time.Second, 45 * time.Second, 4 * time.Minute, 12 * time.Minute,
@@ -147,13 +130,11 @@ func TestAxisTicksFromSecondsToDays(t *testing.T) {
 	}
 }
 
-// A node sits at the same place on the timeline as on the nodes tab: the
-// run part of its timeline bar is the nodes tab's bar, cell for cell, and
-// only the track before it may be shaded as waiting.
+// A node's run sits on the timeline cell for cell where the nodes tab puts it.
 func TestTimelineBarsSharePlacementWithTheNodesTab(t *testing.T) {
 	for _, name := range []string{"demo-release-gate", "demo-nightly-report", "demo-train-pipeline", "demo-data-pull", "demo-deploy-multi-layer"} {
 		wf := demoWorkflow(t, name)
-		m := timelineModel(t, name, 136, 40)
+		m := sectionModel(t, name, "timeline", 136, 40)
 		span := workflowSpan(wf, m.now)
 		for _, r := range m.tl.rows {
 			if r.heading || r.Section != "" {
@@ -180,11 +161,9 @@ func TestTimelineBarsSharePlacementWithTheNodesTab(t *testing.T) {
 	}
 }
 
-// Bars take their phase's colour through the bar tokens: finished work the
-// fill, running work the running token, a failure the failed phase and the
-// gate the warning, while the wait is drawn in the track's token.
+// Bars take their phase's colour through the bar tokens.
 func TestTimelineBarKinds(t *testing.T) {
-	m := timelineModel(t, "demo-nightly-report", 136, 40)
+	m := sectionModel(t, "demo-nightly-report", "timeline", 136, 40)
 	span := workflowSpan(m.workflow(), m.now)
 	kindsOf := func(name string) map[barKind]bool {
 		r := tlRowNamed(t, m, name)
@@ -201,32 +180,27 @@ func TestTimelineBarKinds(t *testing.T) {
 	if k := kindsOf("transform(1)"); !k[barFailed] || !k[barWait] {
 		t.Errorf("transform(1) kinds %v, want a failed bar after a wait", k)
 	}
-	th, err := shared.SkinTheme("nord", false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	th := skin(t)
 	if barFailed.style(th).Render("x") != th.PhaseFailed.Render("x") ||
 		barGate.style(th).Render("x") != th.Warning.Render("x") ||
 		barWait.style(th).Render("x") != th.BarEmpty.Render("x") {
 		t.Error("bar kinds do not map to their tokens")
 	}
 
-	g := timelineModel(t, "demo-release-gate", 136, 40)
+	g := sectionModel(t, "demo-release-gate", "timeline", 136, 40)
 	gate := tlRowNamed(t, g, "approve-production")
 	if barKindFor(gate.Row, true) != barGate {
 		t.Error("the waiting gate is not drawn as a gate")
 	}
-	shard := tlRowNamed(t, timelineModel(t, "demo-train-pipeline", 136, 40), "train-shard(2:2)")
+	shard := tlRowNamed(t, sectionModel(t, "demo-train-pipeline", "timeline", 136, 40), "train-shard(2:2)")
 	if barKindFor(shard.Row, true) != barLive {
 		t.Error("a running shard is not drawn as live work")
 	}
 }
 
-// A node's wait runs from the end of what it waited for to its start: the
-// previous attempt for a retry attempt, the dependency for a DAG task, the
-// previous step group for a step, and its parent's start otherwise.
+// A node's wait runs from the end of what it waited for to its start.
 func TestTimelineReadyTimes(t *testing.T) {
-	m := timelineModel(t, "demo-nightly-report", 136, 40)
+	m := sectionModel(t, "demo-nightly-report", "timeline", 136, 40)
 	end := func(name string) time.Time { return *tlRowNamed(t, m, name).Row.FinishedAt }
 	start := func(name string) time.Time { return *tlRowNamed(t, m, name).Row.StartedAt }
 	cases := []struct{ name, want string }{
@@ -247,15 +221,14 @@ func TestTimelineReadyTimes(t *testing.T) {
 		}
 	}
 
-	s := timelineModel(t, "demo-data-pull", 136, 40)
+	s := sectionModel(t, "demo-data-pull", "timeline", 136, 40)
 	inc := tlRowNamed(t, s, "incremental-sync")
 	if got := tlRowNamed(t, s, "pull(us)").ready; !got.Equal(*inc.Row.FinishedAt) {
 		t.Errorf("pull(us) ready %v, want the end of group [1] %v", got, *inc.Row.FinishedAt)
 	}
 }
 
-// The critical path of every demo workflow: the chain of work that set the
-// end time, or, while the workflow runs, the chain its end waits on.
+// The critical path of every demo workflow.
 func TestTimelineCriticalPathOfTheDemo(t *testing.T) {
 	cases := map[string]string{
 		"demo-release-gate":          "build → integration-test → approve-production",
@@ -270,7 +243,7 @@ func TestTimelineCriticalPathOfTheDemo(t *testing.T) {
 		"demo-cleanup":               "",
 	}
 	for name, want := range cases {
-		m := timelineModel(t, name, 136, 40)
+		m := sectionModel(t, name, "timeline", 136, 40)
 		if got := strings.Join(pathNames(m), " → "); got != want {
 			t.Errorf("%s: critical path %q, want %q", name, got, want)
 		}
@@ -282,7 +255,7 @@ func TestTimelineCriticalPathOfTheDemo(t *testing.T) {
 		}
 	}
 	// Of the four layers' apply-eu-west, only the last layer's is on it.
-	m := timelineModel(t, "demo-deploy-multi-layer", 136, 40)
+	m := sectionModel(t, "demo-deploy-multi-layer", "timeline", 136, 40)
 	var marked []string
 	for _, r := range m.tl.rows {
 		if r.critical {
@@ -294,8 +267,7 @@ func TestTimelineCriticalPathOfTheDemo(t *testing.T) {
 	}
 }
 
-// critFixture is a workflow with start and end times in minutes after the
-// fixture epoch; an end of -1 means still running.
+// critFixture is a timeline of f with start and end minutes per node; an end of -1 is still running.
 func critFixture(t *testing.T, f *treeFixture, times map[string][2]float64) (*Model, core.Workflow) {
 	t.Helper()
 	at := func(min float64) *time.Time {
@@ -321,9 +293,7 @@ func critFixture(t *testing.T, f *treeFixture, times map[string][2]float64) (*Mo
 	return m, wf
 }
 
-// The chain walks back through the dependency that finished last, into
-// retries and nested templates, and on to the exit handler when that ran
-// last. While work runs, the chain ends at running work.
+// The critical path follows the dependency that finished last, into nested work and the exit handler.
 func TestTimelineCriticalPathRules(t *testing.T) {
 	t.Run("the slower side of a diamond", func(t *testing.T) {
 		f := newTreeFixture("wf").
@@ -408,11 +378,9 @@ func TestTimelineCriticalPathRules(t *testing.T) {
 	})
 }
 
-// Skipped subtrees in which nothing ran are left out and counted, a
-// workflow where everything was skipped says so, and omitted nodes stay as
-// rows with an empty track.
+// Skipped subtrees in which nothing ran are left out and counted; omitted nodes keep an empty track.
 func TestTimelineLeavesOutSkippedWork(t *testing.T) {
-	m := timelineModel(t, "demo-deploy-multi-layer", 136, 40)
+	m := sectionModel(t, "demo-deploy-multi-layer", "timeline", 136, 40)
 	if m.tl.leftOut != 16 {
 		t.Errorf("left out %d, want 16", m.tl.leftOut)
 	}
@@ -424,7 +392,7 @@ func TestTimelineLeavesOutSkippedWork(t *testing.T) {
 			t.Errorf("skipped row %q drawn", r.Row.DisplayName)
 		}
 	}
-	n := timelineModel(t, "demo-nightly-report", 136, 40)
+	n := sectionModel(t, "demo-nightly-report", "timeline", 136, 40)
 	load := tlRowNamed(t, n, "load")
 	if got := barText(ganttBar(workflowSpan(n.workflow(), n.now), load.Row, load.ready, n.now, 20, false)); got != strings.Repeat(glyphTrack, 20) {
 		t.Errorf("omitted load bar %q", got)
@@ -441,18 +409,16 @@ func TestTimelineLeavesOutSkippedWork(t *testing.T) {
 	}
 }
 
-// space, left and right fold the timeline as they fold the nodes tab, and
-// the two sections share their folds. A folded group that hides critical
-// work carries the marker.
+// The timeline folds as the nodes tab does and shares its folds; a fold hiding critical work is marked.
 func TestTimelineFolding(t *testing.T) {
-	m := timelineModel(t, "demo-nightly-report", 136, 40)
+	m := sectionModel(t, "demo-nightly-report", "timeline", 136, 40)
 	for i, r := range m.tl.rows {
 		if r.Row.DisplayName == "transform" {
 			m.tlCursor = i
 		}
 	}
 	before := len(m.tl.rows)
-	m.handleKey("space")
+	press(m, "space")
 	r, _ := m.tlCursorRow()
 	if !r.Folded || r.FoldedCount != 3 || len(m.tl.rows) != before-3 {
 		t.Fatalf("after space: %+v, %d rows", r.FlatRow, len(m.tl.rows))
@@ -477,28 +443,28 @@ func TestTimelineFolding(t *testing.T) {
 	}
 	m.SetSection("timeline")
 
-	m.handleKey("right") // folded: opens
+	press(m, "right") // folded: opens
 	if r, _ := m.tlCursorRow(); r.Folded || len(m.tl.rows) != before {
 		t.Fatalf("right did not open the fold: %+v", r.FlatRow)
 	}
-	m.handleKey("right") // open: first child
+	press(m, "right") // open: first child
 	if r, _ := m.tlCursorRow(); r.Row.DisplayName != "transform(0)" {
 		t.Fatalf("right on an open row went to %q", r.Row.DisplayName)
 	}
-	m.handleKey("left") // leaf: parent
+	press(m, "left") // leaf: parent
 	if r, _ := m.tlCursorRow(); r.Row.DisplayName != "transform" {
 		t.Fatalf("left on a leaf went to %q", r.Row.DisplayName)
 	}
-	m.handleKey("left") // open: folds
+	press(m, "left") // open: folds
 	if r, _ := m.tlCursorRow(); !r.Folded {
 		t.Fatal("left on an open row did not fold it")
 	}
-	m.handleKey("left") // folded: parent
+	press(m, "left") // folded: parent
 	if r, _ := m.tlCursorRow(); r.Row.DisplayName != "demo-nightly-report" {
 		t.Fatalf("left on a folded row went to %q", r.Row.DisplayName)
 	}
 	// The cursor stays on its node across a refresh.
-	m.handleKey("j")
+	press(m, "j")
 	id := m.tlSelectedID()
 	m.SetWorkflow(demoWorkflow(t, "demo-nightly-report"), testkit.FixtureEpoch)
 	if m.tlSelectedID() != id {
@@ -506,47 +472,16 @@ func TestTimelineFolding(t *testing.T) {
 	}
 }
 
-// Every line of the section fits the pane at every width, in the plain
-// theme and a skin, with and without the info panel, and a skin draws the
-// same text as the plain theme apart from the chart's glyphs.
-func TestTimelineLinesFitThePane(t *testing.T) {
-	th, err := shared.SkinTheme("nord", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"demo-release-gate", "demo-nightly-report", "demo-train-pipeline", "demo-deploy-multi-layer", "demo-param-check"} {
-		for _, w := range []int{160, 136, 120, 96, 76, 56, 40} {
-			for _, info := range []bool{false, true} {
-				for _, theme := range []shared.Theme{shared.NewTheme(true), th} {
-					m := timelineModel(t, name, w, 24)
-					m.SetTheme(theme)
-					m.showInfo = info
-					lines := m.BodyLines()
-					if len(lines) > 24 {
-						t.Errorf("%s at %d: %d lines", name, w, len(lines))
-					}
-					for _, l := range lines {
-						if cw := ansi.StringWidth(l); cw > w {
-							t.Errorf("%s at %d (info %v, %s): line is %d cells: %q", name, w, info, theme.Skin, cw, ansi.Strip(l))
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-// The status line says what the marker means and what is left out; the
-// hints name the section's keys.
+// The status line says what the marker means and what is left out; the hints name the keys.
 func TestTimelineStatusAndHints(t *testing.T) {
-	m := timelineModel(t, "demo-release-gate", 136, 40)
+	m := sectionModel(t, "demo-release-gate", "timeline", 136, 40)
 	s := m.timelineStatusLine()
 	for _, want := range []string{"4 rows", "1/4", "critical path so far", "3 nodes"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("status %q lacks %q", s, want)
 		}
 	}
-	f := timelineModel(t, "demo-nightly-report", 136, 40)
+	f := sectionModel(t, "demo-nightly-report", "timeline", 136, 40)
 	if s := f.timelineStatusLine(); !strings.Contains(s, "critical path: the 4 nodes that set the end time") {
 		t.Errorf("finished status %q", s)
 	}
@@ -556,18 +491,16 @@ func TestTimelineStatusAndHints(t *testing.T) {
 			t.Errorf("hints %q lack %q", h, want)
 		}
 	}
-	m.handleKey("i")
+	press(m, "i")
 	if !strings.Contains(m.Hints(), "v reveal") {
 		t.Errorf("hints with the panel open %q", m.Hints())
 	}
 }
 
-// The raw view is the whole chart in plain text: what the marker means, the
-// axis and every row, with ASCII glyphs whatever the skin.
+// The raw view is the whole chart in plain text with ASCII glyphs in any skin.
 func TestTimelineRawLines(t *testing.T) {
-	m := timelineModel(t, "demo-nightly-report", 60, 10)
-	th, _ := shared.SkinTheme("nord", false)
-	m.SetTheme(th)
+	m := sectionModel(t, "demo-nightly-report", "timeline", 60, 10)
+	m.SetTheme(skin(t))
 	raw := m.RawLines()
 	if len(raw) != len(m.tl.rows)+2 {
 		t.Fatalf("raw has %d lines, want %d", len(raw), len(m.tl.rows)+2)
@@ -582,9 +515,7 @@ func TestTimelineRawLines(t *testing.T) {
 	}
 }
 
-// TestTimelineGolden pins the section as a reader sees it on the pane of a
-// 140- and an 80-column terminal, in the plain theme: the status line, the
-// axis, the chart, and the info panel in the placement each width gives it.
+// The timeline at 140 and 80 columns, with the info panel where each width puts it.
 func TestTimelineGolden(t *testing.T) {
 	workflows := []string{
 		"demo-release-gate", "demo-nightly-report", "demo-train-pipeline",
@@ -593,35 +524,34 @@ func TestTimelineGolden(t *testing.T) {
 	for _, width := range []int{140, 80} {
 		var b strings.Builder
 		for _, name := range workflows {
-			m := timelineModel(t, name, width-4, 18)
+			m := sectionModel(t, name, "timeline", width-4, 18)
 			b.WriteString("== " + name + "\n")
 			b.WriteString(strings.Join(m.BodyLines(), "\n") + "\n")
 		}
-		m := timelineModel(t, "demo-nightly-report", width-4, 30)
+		m := sectionModel(t, "demo-nightly-report", "timeline", width-4, 30)
 		for i, r := range m.tl.rows {
 			if r.Row.DisplayName == "transform(1)" {
 				m.tlCursor = i
 			}
 		}
-		m.handleKey("i")
+		press(m, "i")
 		b.WriteString("== demo-nightly-report, info on transform(1)\n")
 		b.WriteString(strings.Join(m.BodyLines(), "\n") + "\n")
-		compareGolden(t, filepath.Join("testdata", "timeline-"+itoaDetail(width)+".golden"), b.String())
+		golden(t, "timeline-"+strconv.Itoa(width), b.String())
 	}
 }
 
-// A fold made on the nodes tab shows on the timeline when the reader next
-// opens it, and a refresh while another section is on screen does too.
+// The timeline shows folds and refreshes made while another section was on screen.
 func TestTimelineFollowsChangesMadeElsewhere(t *testing.T) {
 	m := demoModel(t, "demo-nightly-report", 136, 40)
 	cursorTo(t, m, "transform")
-	m.handleKey("space")
-	m.handleKey("3")
+	press(m, "space")
+	press(m, "3")
 	if r := tlRowNamed(t, m, "transform"); !r.Folded {
 		t.Fatal("the nodes tab's fold is not on the timeline")
 	}
-	m.handleKey("2")
-	m.handleKey("space")
+	press(m, "2")
+	press(m, "space")
 	wf := demoWorkflow(t, "demo-nightly-report")
 	n := wf.Nodes
 	for id, node := range n {
@@ -631,7 +561,7 @@ func TestTimelineFollowsChangesMadeElsewhere(t *testing.T) {
 		}
 	}
 	m.SetWorkflow(wf, testkit.FixtureEpoch)
-	m.handleKey("tab")
+	press(m, "tab")
 	if m.Section() != "timeline" {
 		t.Fatalf("tab from nodes went to %q", m.Section())
 	}

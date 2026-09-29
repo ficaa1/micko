@@ -1,0 +1,88 @@
+== nothing loaded
+Detail
+(no workflow loaded)
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+
+== loading
+Detail demo-nightly-report
+loading detail…
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+✗ Failed
+== error
+Detail demo-nightly-report
+detail error: forbidden: RBAC
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+✗ Failed
+== not found
+Detail demo-nightly-report
+workflow no longer available
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+✗ Failed
+== summary
+Detail demo-nightly-report
+[Summary]  Nodes   Timeline   Explain   Events   Resource 
+summary · tab changes section
+name:      demo-nightly-report
+namespace: demo
+uid:       synthetic-uid-demo-nightly-report
+phase:     ✗ Failed
+message:   child 'transform' failed
+labels:    schedule=nightly, team=data
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+✗ Failed
+== summary, suspended
+Detail demo-release-gate
+[Summary]  Nodes   Timeline   Explain   Events   Resource 
+summary · tab changes section
+name:      demo-release-gate
+namespace: demo
+uid:       synthetic-uid-demo-release-gate
+phase:     ● Running  (suspended: waiting for a resume)
+labels:    env=prod, team=platform, workflows.argoproj.io/phase=Running, workflows.argoproj.io/workflow-template=release
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+● Running
+== summary, archived
+Detail demo-nightly-report (archived)
+[Summary]  Nodes   Timeline   Explain   Events   Resource 
+summary · tab changes section
+source:    the workflow archive — a record kept after the run; actions do not apply
+name:      demo-nightly-report
+namespace: demo
+uid:       synthetic-uid-demo-nightly-report
+phase:     ✗ Failed
+message:   child 'transform' failed
+labels:    schedule=nightly, team=data
+tab section  1-9 jump  v reveal  y copy  f raw  r refresh  esc back
+✗ Failed
+== resource
+Detail redact-wf
+ Summary   Nodes   Timeline   Explain   Events  [Resource]
+resource · values shown (v redacts) · 1/24
+metadata:
+  annotations:
+    workflows.argoproj.io/pod-name-format: v2
+  name: redact-wf
+  namespace: ns
+spec:
+  arguments:
+    parameters:
+      - name: api-key
+        value: sk-1234567890abcdef123456
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+✓ Succeeded
+== nodes, offloaded
+Detail fixture-offloaded
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
+
+node status unavailable
+node status offloaded and not hydrated by the server
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
+● Running
+== nodes, not started
+Detail pending
+ Summary  [Nodes]  Timeline   Explain   Events   Resource 
+
+0 nodes · sort pipeline
+(no nodes yet — workflow not started)
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
+○ Pending

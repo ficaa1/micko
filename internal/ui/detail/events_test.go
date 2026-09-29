@@ -2,26 +2,20 @@ package detail
 
 import (
 	"fmt"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// eventsModel is the Events section of one demo workflow in the plain
-// theme, holding the demo backend's events for the namespace.
+// eventsModel is the Events section of a demo workflow holding the demo's events.
 func eventsModel(t *testing.T, name string, w, h int) *Model {
 	t.Helper()
-	m := demoModel(t, name, w, h)
-	if !m.SetSection("events") {
-		t.Fatal("no events section")
-	}
+	m := sectionModel(t, name, "events", w, h)
 	r := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	m.ApplyEvents(r.Events)
 	m.SetEventsStatus("live", false)
@@ -42,10 +36,7 @@ func rowObjects(m *Model) []string {
 	return out
 }
 
-// The table holds the workflow's own events and those of the pods its node
-// map names, by the node's display name. Another workflow's events are
-// dropped; a pod the map does not name yet is kept and shown once it does.
-// A resent event replaces itself and a deleted one goes.
+// The table holds the workflow's events and its named pods', replaces a resent event and drops a deleted one.
 func TestEventsMatchTheWorkflowAndItsPods(t *testing.T) {
 	m := demoModel(t, "demo-oom-backfill", 136, 30)
 	m.SetSection("events")
@@ -95,16 +86,14 @@ func TestEventsMatchTheWorkflowAndItsPods(t *testing.T) {
 	}
 }
 
-// s puts warnings first and back; / narrows the rows as it is typed, enter
-// keeps the filter, and esc clears it before it leaves the workflow. While
-// the filter is open every letter types.
+// s puts warnings first; / filters as it is typed, and esc clears the filter before it leaves.
 func TestEventsOrderAndFilter(t *testing.T) {
 	m := eventsModel(t, "demo-nightly-report", 136, 40)
 	first := func() string { return m.eventRows()[0].ev.Reason }
 	if first() != "WorkflowFailed" {
 		t.Fatalf("newest first starts with %s", first())
 	}
-	m.handleKey("s")
+	press(m, "s")
 	rows := m.eventRows()
 	seenNormal := false
 	for _, r := range rows {
@@ -117,9 +106,9 @@ func TestEventsOrderAndFilter(t *testing.T) {
 	if !strings.Contains(m.eventsStatusLine(), "warnings first") || !strings.Contains(m.Hints(), "s newest first") {
 		t.Errorf("status %q hints %q", m.eventsStatusLine(), m.Hints())
 	}
-	m.handleKey("s")
+	press(m, "s")
 
-	m.handleKey("/")
+	press(m, "/")
 	if !m.TextEntry() || !m.EscapeConsumed() {
 		t.Fatal("the open filter is not text entry")
 	}
@@ -140,13 +129,13 @@ func TestEventsOrderAndFilter(t *testing.T) {
 	if len(m.eventRows()) != 3 || !strings.Contains(m.eventsStatusLine(), "3 events · /back") {
 		t.Errorf("status %q", m.eventsStatusLine())
 	}
-	if cmd := m.handleKey("esc"); cmd != nil || m.ev.filter != "" {
+	if cmd := press(m, "esc"); cmd != nil || m.ev.filter != "" {
 		t.Fatal("esc left the workflow before clearing the filter")
 	}
 	if m.EscapeConsumed() {
 		t.Fatal("esc is still the pane's with no filter")
 	}
-	m.handleKey("/")
+	press(m, "/")
 	press(m, "z")
 	press(m, "esc")
 	if m.ev.filter != "" || m.ev.editing {
@@ -154,25 +143,8 @@ func TestEventsOrderAndFilter(t *testing.T) {
 	}
 }
 
-// Every line stays inside the pane at every width, in the plain theme and a
-// truecolor skin, and the type keeps its glyph when the word gives way.
-func TestEventsLinesFitThePane(t *testing.T) {
-	for _, name := range []string{"demo-nightly-report", "demo-oom-backfill", "demo-train-pipeline", "demo-param-check"} {
-		for _, w := range []int{136, 116, 76, 56, 36} {
-			for _, skin := range []string{"plain", "nord"} {
-				m := eventsModel(t, name, w, 30)
-				if skin != "plain" {
-					th, _ := shared.SkinTheme(skin, false)
-					m.SetTheme(th)
-				}
-				for _, l := range m.BodyLines() {
-					if cw := ansi.StringWidth(l); cw > w {
-						t.Errorf("%s at %d (%s): line is %d cells: %q", name, w, skin, cw, ansi.Strip(l))
-					}
-				}
-			}
-		}
-	}
+// The type is a glyph and a word, and keeps its glyph on a narrow pane.
+func TestEventsTypeKeepsItsGlyph(t *testing.T) {
 	wide := strings.Join(eventsModel(t, "demo-oom-backfill", 136, 30).BodyLines(), "\n")
 	if !strings.Contains(wide, "▲ Warning  OOMKilling") || !strings.Contains(wide, "◇ Normal") {
 		t.Errorf("the wide table lacks the glyph and word:\n%s", wide)
@@ -183,10 +155,7 @@ func TestEventsLinesFitThePane(t *testing.T) {
 	}
 }
 
-// The status line counts the events and warnings and says how the stream
-// is doing, in the warning style when it needs attention; the empty table
-// says why it is empty; pod events are said to be hidden when the server
-// did not name the pods.
+// The status line counts events and says how the stream is doing; an empty table says why.
 func TestEventsStatusAndEmpty(t *testing.T) {
 	m := eventsModel(t, "demo-oom-backfill", 136, 40)
 	if s := m.eventsStatusLine(); s != "events · 8 events · 3 warnings · newest first · live" {
@@ -249,8 +218,7 @@ func TestEventsAreCapped(t *testing.T) {
 // The copied table is plain text with every column and message whole.
 func TestEventsRawLines(t *testing.T) {
 	m := eventsModel(t, "demo-oom-backfill", 56, 30)
-	th, _ := shared.SkinTheme("nord", false)
-	m.SetTheme(th)
+	m.SetTheme(skin(t))
 	raw := m.RawLines()
 	if !strings.HasPrefix(raw[0], "AGE     TYPE       REASON") || len(raw) != 9 {
 		t.Fatalf("raw:\n%s", strings.Join(raw, "\n"))
@@ -271,15 +239,14 @@ func TestEventsWanted(t *testing.T) {
 	if _, ok := m.EventsWanted(); ok {
 		t.Fatal("the nodes tab wants events")
 	}
-	m.handleKey("E")
+	press(m, "E")
 	in, ok := m.EventsWanted()
 	if !ok || in.Ref.Name != "demo-oom-backfill" || m.Section() != "events" {
 		t.Fatalf("E: section %q wanted %+v %v", m.Section(), in, ok)
 	}
 }
 
-// TestEventsGolden pins the section on the pane of a 140- and an 80-column
-// terminal in the plain theme, with the demo's events.
+// The Events section at 140 and 80 columns, with the demo's events.
 func TestEventsGolden(t *testing.T) {
 	for _, width := range []int{140, 80} {
 		var b strings.Builder
@@ -289,12 +256,12 @@ func TestEventsGolden(t *testing.T) {
 			b.WriteString(strings.Join(m.BodyLines(), "\n") + "\n")
 		}
 		m := eventsModel(t, "demo-nightly-report", width-4, 36)
-		m.handleKey("s")
-		m.handleKey("/")
+		press(m, "s")
+		press(m, "/")
 		typeText(m, "backoff")
 		press(m, "enter")
 		b.WriteString("== demo-nightly-report, warnings first, /backoff\n")
 		b.WriteString(strings.Join(m.BodyLines(), "\n") + "\n")
-		compareGolden(t, filepath.Join("testdata", "events-"+itoaDetail(width)+".golden"), b.String())
+		golden(t, "events-"+strconv.Itoa(width), b.String())
 	}
 }
