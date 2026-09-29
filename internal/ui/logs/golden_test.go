@@ -58,12 +58,6 @@ func goldenTestcases() map[string]func(*Model) {
 			m.ApplyRecords([]core.LogRecord{rec("line one"), rec("line two")})
 			press(m, ' ')
 		},
-		// Reconnect gap annotation between the two halves.
-		"reconnect": func(m *Model) {
-			m.ApplyRecords([]core.LogRecord{rec("before disconnect")})
-			m.NewStream()
-			m.ApplyRecords([]core.LogRecord{rec("after reconnect"), rec("after reconnect")})
-		},
 		// Honest unavailability.
 		"unavailable": func(m *Model) {
 			m.ApplyRecords([]core.LogRecord{rec("partial output before failure")})

@@ -167,25 +167,6 @@ func TestBufferMarkersDoNotCountAsBytes(t *testing.T) {
 	}
 }
 
-// TestBufferReconnectMarkerPrecedesNextLine pins the ordering: the gap
-// annotation appears before the first line of the new stream.
-func TestBufferReconnectMarkerPrecedesNextLine(t *testing.T) {
-	b := NewBuffer(8, 0)
-	b.Push(rec("before"))
-	b.SetReconnect()
-	b.Push(rec("after"))
-	entries := b.Entries()
-	if len(entries) != 3 {
-		t.Fatalf("entries = %d, want 3", len(entries))
-	}
-	if entries[1].kind != markReconnect {
-		t.Fatalf("entry 1 kind = %v, want reconnect marker", entries[1].kind)
-	}
-	if entries[2].line.Content != "after" {
-		t.Fatalf("entry 2 = %q, want after", entries[2].line.Content)
-	}
-}
-
 // TestBufferLinesMutationSafe pins snapshot isolation: mutating a Lines()
 // result must not affect the buffer.
 func TestBufferLinesMutationSafe(t *testing.T) {
@@ -316,9 +297,8 @@ func TestBufferSanitizePreservesTabsAndNewlines(t *testing.T) {
 }
 
 // TestBufferMarkerContextSanitized pins that a hostile pod/container name
-// cannot smuggle control sequences into any rendered marker row: the
-// open-context header carries the (sanitized) name, the reconnect marker
-// never echoes it.
+// cannot smuggle control sequences into the open-context header, which
+// carries the (sanitized) name.
 func TestBufferMarkerContextSanitized(t *testing.T) {
 	b := NewBuffer(4, 0)
 	b.PushMarker(markOpen, "\x1b]0;pwned\x07pod", "main")
@@ -329,10 +309,6 @@ func TestBufferMarkerContextSanitized(t *testing.T) {
 	}
 	if !strings.Contains(got, "pod") {
 		t.Fatalf("sanitized context lost: %q", got)
-	}
-	// The reconnect marker is a fixed annotation: no untrusted context.
-	if r := markerText(markReconnect, "\x1b[2Jx", "y"); strings.ContainsRune(r, 0x1b) || strings.Contains(r, "x") {
-		t.Fatalf("reconnect marker must be a fixed, context-free annotation: %q", r)
 	}
 }
 

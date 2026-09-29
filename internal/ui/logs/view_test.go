@@ -12,8 +12,7 @@ import (
 // ---------------------------------------------------------------------------
 // view tests — golden rendering and sanitization. These verify what the
 // terminal receives for the standard terminal cases (control-sequence
-// stripping, truncation markers), plus the pinned disconnect/
-// reconnect/ended surfaces.
+// stripping, truncation markers), plus the pinned ended surface.
 // ---------------------------------------------------------------------------
 
 // TestViewReachesTerminalWithoutControlSequences pins: hostile
@@ -91,29 +90,6 @@ func TestViewGoldenPaused(t *testing.T) {
 	}, "\n")
 	if got != want {
 		t.Errorf("golden paused mismatch:\n got: %q\nwant: %q", got, want)
-	}
-}
-
-// TestViewGoldenReconnect pins the reconnect gap marker in the render: the marker with
-// pinned wording between the pre/post lines.
-func TestViewGoldenReconnect(t *testing.T) {
-	m := testModel(t)
-	m.ApplyRecords([]core.LogRecord{rec("before")})
-	m.NewStream()
-	m.ApplyRecords([]core.LogRecord{rec("after")})
-	got := m.View()
-	want := strings.Join([]string{
-		"logs: wf-1",
-		"Scope: workflow-wide · container: main · [FOLLOWING]",
-		"retained: 2/10000 lines (0 evicted)",
-		"── (all pods):main ── 2 lines recorded",
-		"pod-1            before",
-		"── reconnect: new stream; overlap/gap possible ──",
-		"pod-1            after",
-		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
-	}, "\n")
-	if got != want {
-		t.Errorf("golden reconnect mismatch:\n got: %q\nwant: %q", got, want)
 	}
 }
 

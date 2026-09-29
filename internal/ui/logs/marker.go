@@ -1,8 +1,7 @@
 package logs
 
 // marker.go — stream-context annotations mixed into the retained buffer
-// (disconnect/reconnect/gap marker: an explicit "new stream; overlap/gap
-// possible" marker, legitimate duplicates kept).
+// (stream open, end, cancel, dropped lines, timestamp reopen).
 // Markers are UI authoring, not data: they never count toward the byte
 // cap, and their wording is pinned by tests.
 
@@ -12,8 +11,6 @@ type markerKind int
 const (
 	// markOpen starts one stream: pod/container context header.
 	markOpen markerKind = iota
-	// markReconnect marks a new stream after a disconnect.
-	markReconnect
 	// markEnd marks a normal end-of-stream.
 	markEnd
 	// markDropped marks oversize records dropped by the record cap.
@@ -59,8 +56,6 @@ func markerText(kind markerKind, podName, container string) string {
 	switch kind {
 	case markOpen:
 		return markerLine(podName, container)
-	case markReconnect:
-		return "── reconnect: new stream; overlap/gap possible ──"
 	case markEnd:
 		return "── stream ended ──"
 	case markDropped:

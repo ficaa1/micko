@@ -45,8 +45,7 @@ const (
 	PhaseEnded
 	// PhaseError: stream failed; error text is shown (honest state).
 	PhaseError
-	// PhaseCanceled: the user navigated away / canceled; reconnects are
-	// labeled, never silent.
+	// PhaseCanceled: the user navigated away or canceled the stream.
 	PhaseCanceled
 )
 
@@ -180,9 +179,9 @@ func NewModel(ref core.Ref, podName, container string) *Model {
 }
 
 // ensureContextHeaderLocked emits the stream-open marker for the current
-// context once. ApplyRecords and NewStream call it, so no stream shows
-// records without saying which pod and container they came from. The caller
-// holds m.mu.
+// context once. ApplyRecords calls it before the first records land, so no
+// stream shows records without saying which pod and container they came
+// from. The caller holds m.mu.
 func (m *Model) ensureContextHeaderLocked() {
 	if m.headerDone {
 		return
@@ -310,8 +309,7 @@ func (m *Model) ApplyRecords(recs []core.LogRecord) {
 	m.invalidateLocked()
 }
 
-// ApplyMarker appends one stream-context annotation (the root converts
-// stream events to these — disconnect/reconnect/gap).
+// ApplyMarker appends one stream-context annotation row.
 func (m *Model) ApplyMarker(kind markerKind, podName, container string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -320,17 +318,6 @@ func (m *Model) ApplyMarker(kind markerKind, podName, container string) {
 		m.headerDone = true
 	}
 	m.buf.PushMarker(kind, podName, container)
-	m.invalidateLocked()
-}
-
-// NewStream annotates a fresh stream attempt on the same buffer: the next
-// pushed line is preceded by the reconnect gap marker ("new
-// stream; overlap/gap possible").
-func (m *Model) NewStream() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.ensureContextHeaderLocked()
-	m.buf.SetReconnect()
 	m.invalidateLocked()
 }
 

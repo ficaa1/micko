@@ -46,11 +46,10 @@ const markerTruncated = " …[truncated]"
 type buffer struct {
 	buf []entry // retained entries in arrival order
 
-	bytes     int // text bytes across retained log lines only
-	pushed    int64
-	evicted   int64
-	dropped   int64
-	reconnect bool // a reconnect marker is pending (gap annotation)
+	bytes   int // text bytes across retained log lines only
+	pushed  int64
+	evicted int64
+	dropped int64
 
 	maxLines, maxBytes int
 
@@ -102,26 +101,11 @@ func (b *buffer) PushMarker(kind markerKind, podName, container string) {
 	b.mu.Unlock()
 }
 
-// SetReconnect sets (or clears) the pending-gap flag: the next push
-// annotates a reconnect marker first. The root calls this on a
-// fresh stream attempt for the same buffer.
-func (b *buffer) SetReconnect() {
-	b.mu.Lock()
-	b.reconnect = true
-	b.mu.Unlock()
-}
-
 // pushEntry appends e and evicts oldest-first while a cap is exceeded.
 // Markers do not count toward the byte cap (they are UI authoring) but do
 // count toward the line cap so the retained window stays bounded.
 // Caller holds b.mu.
 func (b *buffer) pushEntry(e entry) {
-	// A pending reconnect annotation is emitted before the entry that
-	// triggered it (the gap precedes the new stream's lines).
-	if b.reconnect && e.kind == logEntryKind {
-		b.reconnect = false
-		b.pushEntryLocked(entry{kind: markReconnect})
-	}
 	b.buf = append(b.buf, e)
 	if e.kind == logEntryKind {
 		b.bytes += len(e.line.Content)
@@ -142,10 +126,6 @@ func (b *buffer) pushEntry(e entry) {
 		}
 	}
 }
-
-// pushEntryLocked is pushEntry without the reconnect preamble (used by the
-// preamble itself to avoid recursion on the marker). Caller holds b.mu.
-func (b *buffer) pushEntryLocked(e entry) { b.pushEntry(e) }
 
 // Counts snapshots the buffer counters under one lock.
 func (b *buffer) Counts() (lines, bytes int, pushed, evicted, dropped int64) {
