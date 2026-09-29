@@ -33,16 +33,16 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// MaxLogRecordBytes bounds one decoded record (LogEntry.content) delivered
+// maxLogRecordBytes bounds one decoded record (LogEntry.content) delivered
 // to the consumer. The server pipeline force-flushes single lines at
 // 1 MiB (maxTokenLength, docs/development.md); a misbehaving proxy could
 // deliver more — anything past this cap is dropped with a visible marker
 // instead of growing memory unboundedly.
-const MaxLogRecordBytes = 2 * 1024 * 1024
+const maxLogRecordBytes = 2 * 1024 * 1024
 
-// OversizeRecordMarker is the Content delivered instead of an oversized
+// oversizeRecordMarker is the Content delivered instead of an oversized
 // record — a visible truncation marker.
-const OversizeRecordMarker = "[log record dropped: exceeds client size cap]"
+const oversizeRecordMarker = "[log record dropped: exceeds client size cap]"
 
 // logStreamEnvelope is one stream chunk: either {"result": <LogEntry>} or a
 // final {"error": {...}} (docs/development.md).
@@ -180,7 +180,7 @@ func consumeLogStream(
 		if parser.byteOverflow {
 			// Oversized single line: drop with a visible marker, keep the
 			// stream usable (bounded memory).
-			if err := emitRecord(ctx, req, OversizeRecordMarker, podNameOr(req.PodName, ""), now(), cb); err != nil {
+			if err := emitRecord(ctx, req, oversizeRecordMarker, req.PodName, now(), cb); err != nil {
 				return err
 			}
 			parser.resetAfterOversize()
@@ -238,13 +238,6 @@ func stripSSE(line []byte) ([]byte, bool) {
 	return line, false
 }
 
-func podNameOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
-}
-
 // logChunkParser accumulates bytes until a complete line is assembled
 // (handles records split across reads and several records per read — the
 // bufio reader already split at newlines; this also enforces the per-record
@@ -262,9 +255,9 @@ func newLogChunkParser() *logChunkParser { return &logChunkParser{} }
 func (p *logChunkParser) consume(line []byte, req core.LogRequest, contentType string, now func() time.Time, cb func(core.LogRecord) error) error {
 	// Cap on RAW line bytes, before decoding: one raw JSON byte yields at
 	// most one decoded content byte (JSON never expands), so the decoded
-	// content cannot exceed MaxLogRecordBytes either. Checking here keeps
+	// content cannot exceed maxLogRecordBytes either. Checking here keeps
 	// memory bounded regardless of how the line is split across reads.
-	if len(p.buf)+len(line) > MaxLogRecordBytes {
+	if len(p.buf)+len(line) > maxLogRecordBytes {
 		p.byteOverflow = true
 		return nil
 	}
@@ -384,7 +377,7 @@ func emitRecord(ctx context.Context, req core.LogRequest, content, podName strin
 }
 
 // readStreamLine reads one \\n-terminated line, bounding its length. When a
-// line exceeds MaxLogRecordBytes it consumes through the end of the line
+// line exceeds maxLogRecordBytes it consumes through the end of the line
 // and reports overflow via the parser flag set by the caller's loop (the
 // reader cap is enforced here by returning the oversized remainder info as
 // an error-free long line).

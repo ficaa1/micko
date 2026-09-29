@@ -15,7 +15,6 @@
 package argo
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -59,9 +58,6 @@ type Client struct {
 	http *http.Client
 	// clock enables deterministic Retry-After parsing in tests.
 	now func() time.Time
-	// maxRetries stays 0 forever: this package performs no automatic
-	// retries; the app layer owns bounded backoff policy.
-	maxRetries int
 	// userAgent is the resolved User-Agent header value.
 	userAgent string
 	// unaryTimeout bounds one non-streaming request end to end.
@@ -466,9 +462,6 @@ func mapHTTPError(resp *http.Response, method, path string, body []byte, rawErr 
 	return ae
 }
 
-// currentNow was removed: the clock is injected through mapHTTPError's
-// signature (Client.now), avoiding a mutable package-level var.
-
 func headerGet(resp *http.Response, key string) string {
 	if resp == nil {
 		return "" // byte-only probes (stream parser) pass nil resp
@@ -734,9 +727,7 @@ func readAllBody(r io.Reader) ([]byte, error) {
 }
 
 // unaryTimeout bounds a whole non-streaming request: connection, headers and
-// body. Only the header timeout was bounded, so a server that flushed
-// headers and then stalled the body held the refresh for the rest of the
-// session. Streaming calls (logs, watch) never use it.
+// body. Streaming calls (logs, watch) never use it.
 const unaryTimeout = 30 * time.Second
 
 // withUnaryDeadline bounds ctx for one non-streaming request. A caller that
@@ -818,8 +809,3 @@ func sanitizeLine(s string) string {
 	}
 	return b.String()
 }
-
-// bufioPeek-based helpers live in logs.go; keep this file focused on the
-// transport and request plumbing.
-
-var _ = bufio.NewReader // referenced by logs.go in the same package

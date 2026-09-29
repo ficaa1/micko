@@ -28,7 +28,3 @@ func retryAfterOf(resp *http.Response, now func() time.Time) *time.Duration {
 func redactMessage(s string) string {
 	return shared.RedactTokens(sanitizeLine(s))
 }
-
-// compile-time guard: KindOf remains the single status→kind table; the client adds
-// no parallel mapping of its own for HTTP statuses.
-var _ = core.KindOf

@@ -324,9 +324,7 @@ func generatePodName(workflowName, nodeName, templateName, nodeID, version strin
 		prefix = workflowName + "-" + templateName
 	}
 	prefix = ensurePodNamePrefixLength(prefix)
-	// FNV-1a, matching Argo exactly. FNV-1 differs by one step order and
-	// produces a completely different name, so this is verified against a
-	// real cluster in podname_test.go rather than assumed.
+	// FNV-1a, as Argo uses; FNV-1 gives a different name.
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(nodeName))
 	return prefix + "-" + strconv.FormatUint(uint64(h.Sum32()), 10)

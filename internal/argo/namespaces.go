@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 
 	"github.com/ficaa1/micko/internal/core"
 )
@@ -59,7 +60,7 @@ func (c *Client) ListNamespaces(ctx context.Context) ([]string, string, error) {
 		return []string{ns}, "the server manages this namespace only", nil
 	}
 	req, err := c.newRequest(ctx, "/api/v1/workflows/", url.Values{
-		"listOptions.limit": []string{itoaNS(namespaceScanLimit)},
+		"listOptions.limit": []string{strconv.Itoa(namespaceScanLimit)},
 		// A projection keeps the scan cheap: the node map of every workflow
 		// on the cluster is a large payload to download for one field.
 		"fields": []string{"items.metadata.namespace"},
@@ -167,18 +168,4 @@ func (c *Client) managedNamespace(ctx context.Context) (string, error) {
 		return "", core.WrapAPIError(core.ErrProtocol, 0, "info: unparseable response", err)
 	}
 	return sanitizeLine(info.ManagedNamespace), nil
-}
-
-func itoaNS(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
 }

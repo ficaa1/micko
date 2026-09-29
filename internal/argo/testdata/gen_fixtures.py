@@ -164,26 +164,4 @@ w("logs_sse.txt",
   b'\n'
   b'data: {"result":{"content":"final-no-newline","podName":"pod-c"}}')
 
-# Dedicated unknown-phase fixture: a phase string outside the pinned
-# v4.1.1 enum must decode verbatim and stay displayable, never error.
-w("list_unknown_phase.json", b"""{
-  "metadata": {"continue": "", "resourceVersion": "rv-unknown"},
-  "items": [
-    {
-      "metadata": {
-        "name": "weird-one",
-        "namespace": "ns-x",
-        "uid": "uid-9",
-        "resourceVersion": "5",
-        "creationTimestamp": "2026-09-08T11:00:00Z"
-      },
-      "status": {
-        "phase": "ZombifiedByUpgrade",
-        "message": "phase introduced by a newer controller"
-      }
-    }
-  ]
-}
-""")
-
 print("fixtures written to", TD)
