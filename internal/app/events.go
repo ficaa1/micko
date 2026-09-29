@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"charm.land/bubbletea/v2"
@@ -300,7 +301,7 @@ func (m *Root) handleEventsDone(msg eventsDoneMsg) tea.Cmd {
 	}
 	if st.retries >= maxWatchRetries {
 		st.state = eventStopped
-		st.reason = "stream stopped after " + itoa(st.retries) + " failed reconnects (r retries)"
+		st.reason = "stream stopped after " + strconv.Itoa(st.retries) + " failed reconnects (r retries)"
 		return nil
 	}
 	st.retries++

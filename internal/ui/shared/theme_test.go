@@ -4,35 +4,6 @@ import (
 	"testing"
 )
 
-func TestQuitKeySemantics(t *testing.T) {
-	cases := []struct {
-		name  string
-		ctrlC bool
-		key   string
-		ctx   KeyContext
-		want  bool
-	}{
-		{"q in browsing quits", false, "q", KeyCtxBrowsing, true},
-		{"q in text entry does not quit", false, "q", KeyCtxTextEntry, false},
-		{"q in dialog does not quit", false, "q", KeyCtxDialog, false},
-		{"ctrl-c quits in text entry", true, "q", KeyCtxTextEntry, true},
-		{"ctrl-c quits in dialog", true, "ctrl+c", KeyCtxDialog, true},
-		{"ctrl-c quits in browsing", true, "ctrl+c", KeyCtxBrowsing, true},
-		{"other key does not quit", false, "j", KeyCtxBrowsing, false},
-	}
-	for _, c := range cases {
-		if got := QuitKeySet(c.ctrlC, c.key, c.ctx); got != c.want {
-			t.Errorf("%s: QuitKeySet = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-func TestKeyContextString(t *testing.T) {
-	if KeyCtxTextEntry.String() != "text-entry" {
-		t.Errorf("text entry label = %q", KeyCtxTextEntry.String())
-	}
-}
-
 func TestNewThemePlainWithNoColorEnv(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	th := NewTheme(false) // noColor=false, but env forces plain

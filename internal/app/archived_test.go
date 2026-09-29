@@ -52,7 +52,7 @@ func archiveRoot(t *testing.T, tune func(*testkit.FakeReader)) (*Root, *archiveR
 		tune(f)
 	}
 	rec := &archiveRecorder{FakeReader: f}
-	m := NewRoot(rec, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(rec, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	deliver(m, m.startListGeneration())
 	runLine(m, "aw")

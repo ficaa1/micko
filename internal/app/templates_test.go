@@ -16,7 +16,7 @@ import (
 func templateRoot(t *testing.T) (*Root, *queryRecorder) {
 	t.Helper()
 	rec := &queryRecorder{FakeReader: testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))}
-	m := NewRoot(rec, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(rec, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	deliver(m, m.startListGeneration())
 	return m, rec
@@ -160,7 +160,7 @@ func TestTemplateManifestAndLinks(t *testing.T) {
 func TestTemplateErrors(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	f.ClusterTemplateErr = core.ErrForbiddenf(`clusterworkflowtemplates.argoproj.io is forbidden: cannot list resource "clusterworkflowtemplates" at the cluster scope`)
-	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cwftmpl")
 	if v := screen(m); !strings.Contains(v, "no cluster workflow templates visible: list forbidden") || !strings.Contains(v, "at the cluster scope") {
@@ -170,7 +170,7 @@ func TestTemplateErrors(t *testing.T) {
 	if v := screen(m); !strings.Contains(v, "4 workflow templates") {
 		t.Fatalf("the namespaced list was affected:\n%s", v)
 	}
-	m = NewRoot(onlyReader{f}, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m = newRoot(onlyReader{f}, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "tmpl")
 	if v := screen(m); !strings.Contains(v, "cannot list workflow templates") {

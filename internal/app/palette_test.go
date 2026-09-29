@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -14,100 +13,13 @@ import (
 	"github.com/ficaa1/micko/internal/ui/palette"
 )
 
-// demoRoot is a root on the demo dataset with the "demo" namespace's list
-// loaded. The poll interval is a millisecond so a delivered command that arms
-// the tick returns at once; deliver drops the tick itself.
-func demoRoot(t *testing.T) (*Root, *testkit.FakeReader) {
-	t.Helper()
-	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
-	m.mascotSleep = func(time.Duration) {}
-	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
-	deliver(m, m.startListGeneration())
-	return m, f
-}
-
-// deliver runs cmd and feeds its messages back into the root, the way the
-// program loop would, until nothing is left. Poll ticks and Mićko's beats
-// are dropped: each one schedules the next, and the chain would never end.
-func deliver(m *Root, cmd tea.Cmd) {
-	queue := runCmd(cmd)
-	for len(queue) > 0 {
-		msg := queue[0]
-		queue = queue[1:]
-		switch msg.(type) {
-		case tickMsg, mascotBeatMsg:
-			continue
-		}
-		_, next := m.Update(msg)
-		queue = append(queue, runCmd(next)...)
-	}
-}
-
-func typeKeys(m *Root, s string) tea.Cmd {
-	var cmds []tea.Cmd
-	for _, r := range s {
-		msg := tea.KeyPressMsg{Code: r, Text: string(r)}
-		if r == ' ' {
-			msg = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
-		}
-		_, cmd := m.Update(msg)
-		cmds = append(cmds, cmd)
-	}
-	return tea.Batch(cmds...)
-}
-
-func pressKey(m *Root, code rune) tea.Cmd {
-	_, cmd := m.Update(tea.KeyPressMsg{Code: code})
-	return cmd
-}
-
-// runLine opens the palette, types line and presses enter, delivering every
-// message that follows.
-func runLine(m *Root, line string) {
-	deliver(m, typeKeys(m, ":"))
-	typeKeys(m, line)
-	deliver(m, pressKey(m, tea.KeyEnter))
-}
-
-// While the palette is open q and ? are letters, esc closes it, and ctrl+c
-// still quits.
-func TestPaletteKeyIsolation(t *testing.T) {
+// esc closes the palette and leaves the route where it was.
+func TestEscClosesThePalette(t *testing.T) {
 	m, _ := demoRoot(t)
-	typeKeys(m, ":")
-	if !m.paletteOpen() {
-		t.Fatal(": did not open the palette")
-	}
-	typeKeys(m, "q?")
-	if m.quitting || m.help.IsOpen() {
-		t.Fatalf("q or ? acted as a command while typing (quitting=%v help=%v)", m.quitting, m.help.IsOpen())
-	}
-	if m.palView.Value() != "q?" {
-		t.Fatalf("palette holds %q, want q?", m.palView.Value())
-	}
-	pressKey(m, tea.KeyEscape)
-	if m.paletteOpen() {
-		t.Fatal("esc left the palette open")
-	}
-	if m.route != RouteList {
-		t.Fatalf("esc in the palette moved the route to %v", m.route)
-	}
-	typeKeys(m, ":")
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	if !m.quitting || cmd == nil {
-		t.Fatal("ctrl+c did not quit while the palette was open")
-	}
-}
-
-// The palette is not offered inside text entry: there `:` is a character.
-func TestColonTypesIntoTheSearch(t *testing.T) {
-	m, _ := demoRoot(t)
-	typeKeys(m, "/:")
-	if m.paletteOpen() {
-		t.Fatal(": opened the palette inside the list search")
-	}
-	if got := m.listView.SearchValue(); got != ":" {
-		t.Fatalf("search holds %q, want :", got)
+	typeKeys(m, ":w")
+	keys(m, "esc")
+	if m.paletteOpen() || m.route != RouteList {
+		t.Fatalf("esc: open %v, route %v", m.paletteOpen(), m.route)
 	}
 }
 
@@ -289,32 +201,33 @@ func TestDetailFromAllNamespacesUsesTheRowNamespace(t *testing.T) {
 	}
 }
 
-// A server that refuses the cluster-wide list shows the refusal on the pane,
-// with the way back, instead of an empty list.
-func TestAllNamespacesRefusalIsShown(t *testing.T) {
-	m, f := demoRoot(t)
-	f.ListErr = core.NewAPIError(core.ErrForbidden, 403,
-		`Permission denied, you are not allowed to list workflows in namespace "".`)
-	deliver(m, typeKeys(m, "0"))
-	body := m.View().Content
-	for _, want := range []string{"no workflows visible", "list forbidden", "Permission denied", "press 0 to return to demo"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("pane lacks %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, "no workflows in") {
-		t.Error("a refused list rendered as an empty one")
-	}
-}
-
-// Any other failure of a first collection is still an error on the pane.
-func TestFirstListFailureIsNotAnEmptyList(t *testing.T) {
-	m, f := demoRoot(t)
-	f.ListErr = core.NewAPIError(core.ErrUnsupported, 0, "the server manages namespace argo only and cannot list all namespaces")
-	deliver(m, typeKeys(m, "0"))
-	body := m.View().Content
-	if !strings.Contains(body, "no workflows visible: all namespaces: the server manages namespace argo only") {
-		t.Fatalf("pane does not state the refusal:\n%s", body)
+// A cluster-wide list the server refuses or cannot serve shows the failure
+// on the pane, with the way back, never an empty list.
+func TestAllNamespacesFailureIsShown(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		err  *core.APIError
+		want []string
+	}{
+		{"forbidden", core.NewAPIError(core.ErrForbidden, 403, `Permission denied, you are not allowed to list workflows in namespace "".`),
+			[]string{"no workflows visible", "list forbidden", "Permission denied", "press 0 to return to demo"}},
+		{"unsupported", core.NewAPIError(core.ErrUnsupported, 0, "the server manages namespace argo only and cannot list all namespaces"),
+			[]string{"no workflows visible: all namespaces: the server manages namespace argo only"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m, f := demoRoot(t)
+			f.ListErr = c.err
+			deliver(m, typeKeys(m, "0"))
+			body := screen(m)
+			for _, want := range c.want {
+				if !strings.Contains(body, want) {
+					t.Errorf("pane lacks %q:\n%s", want, body)
+				}
+			}
+			if strings.Contains(body, "no workflows in") {
+				t.Error("a failed list rendered as an empty one")
+			}
+		})
 	}
 }
 

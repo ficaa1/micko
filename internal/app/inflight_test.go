@@ -2,69 +2,54 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
 // The poll tick refetches the open workflow only while no fetch is running.
-// A reply that arrives after its own request was superseded still ends that
-// request, so it has to release the flag. Leaving it set froze the detail
-// view for the rest of the session: the phase stopped moving and `r` was
-// the only way to see anything new.
-func TestAStaleDetailReplyDoesNotStallTheRefresh(t *testing.T) {
-	wf := workflowFixture("wf-1")
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
-	m := testRoot(t, f)
-	m.listState.items = []core.Summary{wf.Summary}
-	m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
-	if !m.detailState.loading {
-		t.Fatal("opening a workflow must start a fetch")
-	}
-
-	// Opening the logs for a node bumps the selection generation while the
-	// detail fetch is still running, which is what makes the reply stale.
-	stale := detailLoadedMsg{
-		genStamp:  genStamp{Conn: m.connGen, Sel: m.selGen},
-		RequestID: m.ids.last(),
-		Ref:       wf.Summary.Ref,
-		Workflow:  wf,
-	}
-	m.selGen++
-	m.Update(stale)
-
-	if m.detailState.loading {
-		t.Fatal("a stale reply left the detail view marked as loading")
-	}
-	_, cmd := m.Update(tickMsg{})
-	var refetched bool
-	for _, msg := range runCmd(cmd) {
-		if _, ok := msg.(detailLoadedMsg); ok {
-			refetched = true
-		}
-	}
-	if !refetched {
-		t.Fatal("the tick did not refetch the open workflow")
-	}
-}
-
-// A canceled reply ends its request too. Without this the same stall
-// happens whenever a fetch is replaced while it is still running.
-func TestACanceledDetailReplyDoesNotStallTheRefresh(t *testing.T) {
-	wf := workflowFixture("wf-1")
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
-	m := testRoot(t, f)
-	m.listState.items = []core.Summary{wf.Summary}
-	m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
-
-	m.Update(detailLoadedMsg{
-		genStamp:  genStamp{Conn: m.connGen, Sel: m.selGen},
-		RequestID: m.ids.last(),
-		Ref:       wf.Summary.Ref,
-		Canceled:  true,
-	})
-	if m.detailState.loading {
-		t.Fatal("a canceled reply left the detail view marked as loading")
+// A reply that arrives after its own request was superseded, or canceled,
+// still ends that request, so it has to release the flag. Leaving it set
+// froze the detail view for the rest of the session: the phase stopped
+// moving and `r` was the only way to see anything new.
+func TestAnEndedDetailReplyDoesNotStallTheRefresh(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		reply func(m *Root, wf core.Workflow) detailLoadedMsg
+	}{
+		{"stale", func(m *Root, wf core.Workflow) detailLoadedMsg {
+			msg := detailLoadedMsg{genStamp: genStamp{Conn: m.connGen, Sel: m.selGen}, RequestID: m.ids.next, Ref: wf.Summary.Ref, Workflow: wf}
+			// Opening the logs for a node bumps the selection generation
+			// while the fetch is still running.
+			m.selGen++
+			return msg
+		}},
+		{"canceled", func(m *Root, wf core.Workflow) detailLoadedMsg {
+			return detailLoadedMsg{genStamp: genStamp{Conn: m.connGen, Sel: m.selGen}, RequestID: m.ids.next, Ref: wf.Summary.Ref, Canceled: true}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			wf := workflowFixture("wf-1")
+			// A millisecond poll: running the tick's command waits it out.
+			m := newRoot(fixtureReader(wf), "ns", time.Millisecond)
+			m.listState.items = []core.Summary{wf.Summary}
+			m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
+			if !m.detailState.loading {
+				t.Fatal("opening a workflow must start a fetch")
+			}
+			m.Update(c.reply(m, wf))
+			if m.detailState.loading {
+				t.Fatal("the reply left the detail view marked as loading")
+			}
+			_, cmd := m.Update(tickMsg{})
+			for _, msg := range runCmd(cmd) {
+				if _, ok := msg.(detailLoadedMsg); ok {
+					return
+				}
+			}
+			t.Fatal("the tick did not refetch the open workflow")
+		})
 	}
 }
 
@@ -80,9 +65,9 @@ func TestALateReplyKeepsTheNewerRequestCancelable(t *testing.T) {
 	m.selection = wf.Summary.Ref
 
 	m.startDetailFetch()
-	first := m.ids.last()
+	first := m.ids.next
 	m.startDetailFetch()
-	second := m.ids.last()
+	second := m.ids.next
 	if first == second {
 		t.Fatal("two fetches shared one request id")
 	}

@@ -89,7 +89,7 @@ func TestRRefreshesTheOpenWorkflow(t *testing.T) {
 	m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
 	m.detailState.loading = false
 
-	cmd := rawKey(m, "r")
+	cmd := keys(m, "r")
 	if cmd == nil {
 		t.Fatal("r on the detail route produced no refetch")
 	}
@@ -104,40 +104,23 @@ func TestRRefreshesTheOpenWorkflow(t *testing.T) {
 	}
 }
 
-// Only an accepted list snapshot clears the stale block on mutations. The
-// poll collects one on the list route alone, so a reader whose snapshot went
-// stale while they read a workflow would stay blocked for as long as they
-// stayed on it.
-func TestAStaleSnapshotIsRecollectedOffTheListRoute(t *testing.T) {
-	wf := workflowFixture("wf-1")
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
-	m := testRoot(t, f)
-	m.listState.items = []core.Summary{wf.Summary}
-	m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
-	m.detailState.loading = false
-	m.connectionReady = true
-	m.connectionFresh = false
+// Only an accepted list snapshot clears the stale block on mutations, and
+// the poll collects one on the list route alone. Off the list, a tick
+// recollects the snapshot while the block is up, so a reader whose data
+// went stale while reading a workflow is not blocked for as long as they
+// stay; a fresh session does not pay for a full snapshot on every tick.
+func TestATickRecollectsOnlyAStaleSnapshotOffTheList(t *testing.T) {
+	for _, fresh := range []bool{false, true} {
+		wf := workflowFixture("wf-1")
+		m := testRoot(t, fixtureReader(wf))
+		m.listState.items = []core.Summary{wf.Summary}
+		m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
+		m.detailState.loading = false
+		m.connectionFresh = fresh
 
-	m.Update(tickMsg{})
-	if !m.listState.loading {
-		t.Fatal("a stale snapshot was not recollected on the detail route: actions stay blocked")
-	}
-}
-
-// The recollection above runs only while the block is up. A fresh session
-// reading one workflow must not pay for a full snapshot on every tick.
-func TestAFreshSnapshotIsNotRecollectedOffTheListRoute(t *testing.T) {
-	wf := workflowFixture("wf-1")
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
-	m := testRoot(t, f)
-	m.listState.items = []core.Summary{wf.Summary}
-	m.Update(OpenWorkflowMsg{Ref: wf.Summary.Ref})
-	m.detailState.loading = false
-	m.connectionReady = true
-	m.connectionFresh = true
-
-	m.Update(tickMsg{})
-	if m.listState.loading {
-		t.Fatal("a fresh snapshot was recollected off the list route")
+		m.Update(tickMsg{})
+		if m.listState.loading == fresh {
+			t.Fatalf("fresh %v: recollected %v", fresh, m.listState.loading)
+		}
 	}
 }

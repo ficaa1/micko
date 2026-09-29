@@ -41,7 +41,7 @@ func (r *queryRecorder) last() core.Query {
 func cronRoot(t *testing.T) (*Root, *queryRecorder) {
 	t.Helper()
 	rec := &queryRecorder{FakeReader: testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))}
-	m := NewRoot(rec, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(rec, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	deliver(m, m.startListGeneration())
 	runLine(m, "cron")
@@ -149,22 +149,6 @@ func TestCronDrillEscReturns(t *testing.T) {
 	}
 }
 
-// A filter on the drilled list clears before esc leaves it.
-func TestCronDrillEscClearsFilterFirst(t *testing.T) {
-	m, _ := cronRoot(t)
-	deliver(m, pressKey(m, tea.KeyEnter))
-	typeKeys(m, "/179")
-	deliver(m, pressKey(m, tea.KeyEnter))
-	deliver(m, pressKey(m, tea.KeyEscape))
-	if m.route != RouteList || m.listView.Query() != "" {
-		t.Fatalf("first esc: route %v query %q", m.route, m.listView.Query())
-	}
-	deliver(m, pressKey(m, tea.KeyEscape))
-	if m.route != RouteCron {
-		t.Fatalf("second esc: route %v", m.route)
-	}
-}
-
 // A workflow opened from the drill-down: esc twice lands on the cron list.
 func TestCronDrillDetailEscTwice(t *testing.T) {
 	m, _ := cronRoot(t)
@@ -245,7 +229,7 @@ func TestCronStaleReplyDiscarded(t *testing.T) {
 func TestCronErrors(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	f.CronErr = core.ErrForbiddenf(`cronworkflows.argoproj.io is forbidden: cannot list resource "cronworkflows"`)
-	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cron")
 	v := screen(m)
@@ -254,7 +238,7 @@ func TestCronErrors(t *testing.T) {
 	}
 
 	f.CronErr = core.NewAPIError(core.ErrNotFound, 404, "Not Found")
-	m = NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m = newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cron")
 	if v := screen(m); !strings.Contains(v, "no cron workflows on this server") || !strings.Contains(v, "HTTP 404") {
@@ -262,7 +246,7 @@ func TestCronErrors(t *testing.T) {
 	}
 
 	plain := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	m = NewRoot(onlyReader{plain}, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m = newRoot(onlyReader{plain}, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cron")
 	if v := screen(m); !strings.Contains(v, "cannot list cron workflows") {

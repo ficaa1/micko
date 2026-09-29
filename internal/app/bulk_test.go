@@ -87,34 +87,11 @@ func newFleet(t *testing.T, names ...string) (*Root, *fleet) {
 		f.Order = append(f.Order, wf.Summary.Ref)
 		items = append(items, wf.Summary)
 	}
-	m := NewRootWithOptions(f, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true, Server: "https://argo.test", Profile: "dev"})
+	m := armedRoot(f, actions.Options{Server: "https://argo.test", Profile: "dev"})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.handleListLoaded(listLoadedMsg{Page: core.Page{Items: items}})
-	old, oldN := stopObservationInterval, stopObservationAttempts
-	stopObservationInterval, stopObservationAttempts = time.Millisecond, 2
-	t.Cleanup(func() { stopObservationInterval, stopObservationAttempts = old, oldN })
+	shortObservation(t)
 	return m, f
-}
-
-func key(k string) tea.KeyPressMsg {
-	switch k {
-	case "space":
-		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
-	case "esc":
-		return tea.KeyPressMsg{Code: tea.KeyEscape}
-	case "enter":
-		return tea.KeyPressMsg{Code: tea.KeyEnter}
-	}
-	return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
-}
-
-// keys presses each key and returns the command of the last one.
-func keys(m *Root, ks ...string) tea.Cmd {
-	var cmd tea.Cmd
-	for _, k := range ks {
-		_, cmd = m.Update(key(k))
-	}
-	return cmd
 }
 
 // drive feeds the action commands back into the root until the chain
@@ -331,8 +308,8 @@ func TestANamespaceSwitchClearsTheMarks(t *testing.T) {
 func TestTheDemoRefusesBulkWritesAndJournalsNothing(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
 	m.actionOpts = actions.Options{AllowActions: true, Demo: true}
-	path := filepath.Join(t.TempDir(), "actions.jsonl")
-	m.SetJournal(journal.New(path))
+	path := stateJournal(t)
+	m.SetJournal(journal.Open())
 	keys(m, "space", "j", "space", "a")
 	if m.actionView.State() != actions.StateUnavailable || !strings.Contains(m.actionView.View().Content, "demo mode") {
 		t.Fatalf("demo bulk menu: state=%v", m.actionView.State())
@@ -352,6 +329,16 @@ func TestTheDemoRefusesBulkWritesAndJournalsNothing(t *testing.T) {
 	}
 }
 
+// stateJournal points the journal's default path into a temporary state
+// directory and returns that path.
+func stateJournal(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+	return filepath.Join(dir, "micko", "actions.jsonl")
+}
+
+// readJournal is every entry the journal at path holds.
 func readJournal(t *testing.T, path string) []journal.Entry {
 	t.Helper()
 	fh, err := os.Open(path)
@@ -376,8 +363,8 @@ func readJournal(t *testing.T, path string) []journal.Entry {
 func TestEveryAttemptIsJournaled(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
 	f.replaced["wf-b"] = true
-	path := filepath.Join(t.TempDir(), "actions.jsonl")
-	m.SetJournal(journal.New(path))
+	path := stateJournal(t)
+	m.SetJournal(journal.Open())
 	keys(m, "space", "j", "space", "a")
 	drive(m, keys(m, "s", "y"), nil)
 	entries := readJournal(t, path)
@@ -400,11 +387,10 @@ func TestEveryAttemptIsJournaled(t *testing.T) {
 // reported once, on the footer.
 func TestAJournalFailureIsIsolatedAndReportedOnce(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
-	dir := filepath.Join(t.TempDir(), "actions.jsonl")
-	if err := os.Mkdir(dir, 0o700); err != nil {
+	if err := os.MkdirAll(stateJournal(t), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	m.SetJournal(journal.New(dir))
+	m.SetJournal(journal.Open())
 
 	keys(m, "space", "a")
 	drive(m, keys(m, "s", "y"), nil)
@@ -424,52 +410,8 @@ func TestAJournalFailureIsIsolatedAndReportedOnce(t *testing.T) {
 	}
 }
 
-// Suspend settles when the workflow reports itself suspended.
-func TestSuspendSettlesWhenTheWorkflowReportsSuspended(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid-1"}
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{ref: {Summary: core.Summary{Ref: ref, Phase: "Running", Suspended: true}}}}
-	if _, settled, err := readBack(context.Background(), f, ref, core.ActionSuspend); err != nil || !settled {
-		t.Fatalf("suspended workflow: settled=%v err=%v", settled, err)
-	}
-	f.Workflows[ref] = core.Workflow{Summary: core.Summary{Ref: ref, Phase: "Running"}}
-	if _, settled, _ := readBack(context.Background(), f, ref, core.ActionSuspend); settled {
-		t.Fatal("a workflow that does not report suspended was read back as suspended")
-	}
-}
-
-// Terminate settles when the workflow reaches a terminal phase.
-func TestTerminateSettlesOnATerminalPhase(t *testing.T) {
-	m, r := newStopRoot(t, "Running", "Running", "Failed")
-	req := core.ActionRequest{Ref: workflowFixture("wf").Summary.Ref, Action: core.ActionTerminate, Confirmation: core.Confirmation{Confirmed: true, TypedName: "wf"}}
-	got := runCmd(m.startAction(req))[0].(actionResultMsg).Result
-	if got.Outcome != core.ActionConfirmed || r.execCalls != 1 {
-		t.Fatalf("outcome=%s execs=%d", got.Outcome, r.execCalls)
-	}
-	m2, _ := newStopRoot(t, "Running")
-	got = runCmd(m2.startAction(req))[0].(actionResultMsg).Result
-	if got.Outcome != core.ActionAccepted {
-		t.Fatalf("still running: outcome=%s, want accepted", got.Outcome)
-	}
-}
-
-// Delete settles when a read answers not found. A workflow that is still
-// readable (an archived copy, or a finalizer holding it) leaves the delete
-// ACCEPTED, never UNKNOWN: the server did apply it.
-func TestDeleteSettlesWhenTheWorkflowIsNotFound(t *testing.T) {
-	old, oldN := stopObservationInterval, stopObservationAttempts
-	stopObservationInterval, stopObservationAttempts = time.Millisecond, 2
-	t.Cleanup(func() { stopObservationInterval, stopObservationAttempts = old, oldN })
-
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid-1"}
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	if _, settled, err := readBack(context.Background(), f, ref, core.ActionDelete); err != nil || !settled {
-		t.Fatalf("gone workflow: settled=%v err=%v", settled, err)
-	}
-	f.Workflows[ref] = core.Workflow{Summary: core.Summary{Ref: ref, Phase: "Succeeded"}}
-	if _, settled, err := readBack(context.Background(), f, ref, core.ActionDelete); err != nil || settled {
-		t.Fatalf("readable workflow: settled=%v err=%v", settled, err)
-	}
-
+// Delete takes a second, distinct confirmation and is sent as final.
+func TestDeleteIsSentFinal(t *testing.T) {
 	m, fl := newFleet(t, "wf-a")
 	keys(m, "a", "d", "y")
 	drive(m, keys(m, "D"), nil)

@@ -31,38 +31,17 @@ func recordStreams(m *Root) (*testkit.FakeReader, func() []core.LogRequest) {
 	}
 }
 
-// settle runs cmd and every command its messages start, applying only the
-// detail fetch and the explain log read, so no poll tick or watch runs.
-func settle(m *Root, cmd tea.Cmd) *Root {
-	for i := 0; i < 6 && cmd != nil; i++ {
-		var cmds []tea.Cmd
-		for _, msg := range runCmd(cmd) {
-			switch msg.(type) {
-			case detailLoadedMsg, explainLogMsg, OpenWorkflowMsg:
-			default:
-				continue
-			}
-			next, c := m.Update(msg)
-			m = next.(*Root)
-			cmds = append(cmds, c)
-		}
-		cmd = tea.Batch(cmds...)
-	}
-	return m
-}
-
 // openOnExplain presses X on the list with the cursor on name and settles
 // the fetch and the log read it starts.
 func openOnExplain(t *testing.T, m *Root, name string) *Root {
 	t.Helper()
 	for i := 0; i < 20 && m.listView.SelectedRef().Name != name; i++ {
-		m = typeKey(m, 'j')
+		typeKeys(m, "j")
 	}
 	if got := m.listView.SelectedRef().Name; got != name {
 		t.Fatalf("precondition: cursor on %q, want %q", got, name)
 	}
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'X', Text: "X"})
-	m = settle(next.(*Root), cmd)
+	settle(m, keys(m, "X"))
 	if m.route != RouteDetail || m.detailView.Section() != "explain" {
 		t.Fatalf("X opened route %v section %q", m.route, m.detailView.Section())
 	}
@@ -102,8 +81,7 @@ func TestListXOpensTheExplanation(t *testing.T) {
 	}
 
 	// A refresh of the same workflow reads nothing again.
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
-	m = settle(next.(*Root), cmd)
+	settle(m, keys(m, "r"))
 	if n := len(reqs()); n != 1 {
 		t.Errorf("a refresh read the log again: %d requests", n)
 	}
@@ -124,7 +102,7 @@ func TestExplainReadIsCanceledWhenLeft(t *testing.T) {
 		t.Errorf("the section does not say it is reading:\n%s", screen(m))
 	}
 
-	m = typeKey(m, '1')
+	typeKeys(m, "1")
 	if m.hasInflight("explain") {
 		t.Fatal("leaving the section left the read running")
 	}
@@ -183,7 +161,7 @@ func TestExplainDropsStaleReplies(t *testing.T) {
 	m = openFromList(t, m, "demo-oom-backfill", tea.KeyPressMsg{Code: tea.KeyEnter})
 	next, _ := m.Update(tea.KeyPressMsg{Code: 'X', Text: "X"})
 	m = next.(*Root)
-	id := m.ids.last()
+	id := m.ids.next
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 
 	apply := func(msg explainLogMsg) {

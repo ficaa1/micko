@@ -3,6 +3,7 @@ package app
 import (
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbletea/v2"
@@ -195,7 +196,7 @@ func (m *Root) copyLabel() string {
 	n := strings.Count(text, "\n") + 1
 	label := "copied " + plural(n, "line")
 	if len(text) >= maxCopyBytes {
-		label += " (cut at " + itoa(maxCopyBytes/1024) + " KB)"
+		label += " (cut at " + strconv.Itoa(maxCopyBytes/1024) + " KB)"
 	}
 	return label + " — if nothing pasted, your terminal blocks clipboard writes"
 }

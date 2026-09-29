@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,7 +75,7 @@ func (m *Root) newArchivedKind() *kindDef {
 			m.archView.SetItems(res.items, now)
 			note := ""
 			if res.capped {
-				note = "newest " + itoa(len(res.items)) + " only; the archive holds more"
+				note = "newest " + strconv.Itoa(len(res.items)) + " only; the archive holds more"
 			}
 			m.archView.SetNote(note)
 		},

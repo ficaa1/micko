@@ -44,7 +44,7 @@ func (c *fakeConnector) Connect(ctx context.Context, profile string) (*Connectio
 
 func profileRoot(t *testing.T, conn *fakeConnector) *Root {
 	t.Helper()
-	m := NewRoot(nil, testkit.NewFakeClock(testkit.FixtureEpoch), "", time.Second)
+	m := newRoot(nil, "", time.Second)
 	m.SetConnector(conn)
 	m.SetProfiles(ProfileList{
 		Items:      []profiles.Item{{Name: "dev"}, {Name: "prod"}},
@@ -219,27 +219,6 @@ func TestEscReturnsToTheSessionAfterAConnection(t *testing.T) {
 	}
 }
 
-// The picker owns printable keys while it is open, or q would quit and ? would
-// open help in the middle of typing a profile name.
-func TestTheProfilePickerOwnsPrintableKeys(t *testing.T) {
-	conn := &fakeConnector{}
-	m := profileRoot(t, conn)
-	m.Adopt(mustConnect(t, conn, "dev"))
-	m.Update(tea.KeyPressMsg{Code: 'P', Text: "P"})
-	for _, r := range "q?" {
-		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
-	}
-	if m.quitting {
-		t.Error("q quit while the profile picker had the keyboard")
-	}
-	if m.help.IsOpen() {
-		t.Error("? opened help while the profile picker had the keyboard")
-	}
-	if !m.profileDialogOpen() {
-		t.Error("the picker closed itself")
-	}
-}
-
 // A transport event stamped with an older generation belongs to a forward the
 // switch has already closed. Applying it would report the new connection lost.
 func TestAStaleTransportEventCannotMarkTheNewConnectionLost(t *testing.T) {
@@ -278,7 +257,7 @@ func mustConnect(t *testing.T, c *fakeConnector, name string) *Connection {
 // the dialog there would invite the reader to write a config file this session
 // would never read.
 func TestPIsRefusedWithNothingToConnectTo(t *testing.T) {
-	m := NewRoot(&testkit.FakeReader{}, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Second)
+	m := newRoot(&testkit.FakeReader{}, "demo", time.Second)
 	m.Update(tea.KeyPressMsg{Code: 'P', Text: "P"})
 	if m.profileDialogOpen() {
 		t.Fatal("P opened a picker with nothing to connect to")

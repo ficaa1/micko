@@ -201,7 +201,7 @@ func TestAProfileSkinArrivesWithItsConnection(t *testing.T) {
 func TestHeaderBadgeFollowsTheSafetyMode(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	reader := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	armed := NewRootWithOptions(reader, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Second,
+	armed := NewRoot(reader, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Second,
 		actions.Options{AllowActions: true})
 	armed = resize(t, armed, 100, 20)
 	th := armed.Theme()

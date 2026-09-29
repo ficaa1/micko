@@ -76,7 +76,7 @@ func resume(m *Root, wait time.Duration, left []running) (*Root, []running) {
 func openOnEvents(t *testing.T, m *Root, name string) (*Root, []running) {
 	t.Helper()
 	for i := 0; i < 20 && m.listView.SelectedRef().Name != name; i++ {
-		m = typeKey(m, 'j')
+		typeKeys(m, "j")
 	}
 	next, cmd := m.Update(tea.KeyPressMsg{Code: 'E', Text: "E"})
 	m, left := pump(next.(*Root), 150*time.Millisecond, cmd)
@@ -97,18 +97,6 @@ func settledStarts(f *testkit.FakeReader) int {
 			return n
 		}
 		n = m
-	}
-}
-
-// waitFor polls cond until it holds or a second passes.
-func waitFor(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -175,7 +163,7 @@ func TestEventsStreamsAreCanceledWhenLeft(t *testing.T) {
 	if !m.hasInflight("events-workflow") || !m.hasInflight("events-pods") {
 		t.Fatal("the streams are not in flight")
 	}
-	m = typeKey(m, '1')
+	typeKeys(m, "1")
 	if m.hasInflight("events-workflow") || m.hasInflight("events-pods") || m.events.active {
 		t.Fatal("leaving the section left a stream running")
 	}

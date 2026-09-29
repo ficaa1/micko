@@ -7,7 +7,7 @@
 // completes too, from values the root supplies (namespace names, profile
 // names).
 //
-// The palette is a dialog (shared.KeyCtxDialog): while it is open it owns every
+// The palette is a dialog: while it is open it owns every
 // key except Ctrl-C, so q and ? type letters. It holds no client, starts
 // nothing and knows nothing about what a command does. Enter produces one of
 // two messages, RunMsg for a known command or UnknownMsg for anything else,

@@ -10,8 +10,7 @@ import (
 // The profile's redactValues setting reaches the detail view on screen and
 // every detail view rebuilt by a later switch.
 func TestRedactValuesFollowsTheConnection(t *testing.T) {
-	m := NewRoot(testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch)),
-		testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Second)
+	m := newRoot(testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch)), "demo", time.Second)
 	if !m.detailView.Reveal() {
 		t.Fatal("values must be shown by default")
 	}
