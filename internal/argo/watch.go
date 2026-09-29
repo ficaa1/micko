@@ -15,9 +15,9 @@ import (
 	"github.com/ficaa1/micko/internal/core"
 )
 
-// MaxWatchEventBytes bounds one wire event so a peer cannot grow the stream
+// maxWatchEventBytes bounds one wire event so a peer cannot grow the stream
 // parser without limit. Callers own reconnect/relist policy.
-const MaxWatchEventBytes = 2 * 1024 * 1024
+const maxWatchEventBytes = 2 * 1024 * 1024
 
 type watchEnvelope struct {
 	Type   string          `json:"type"`
@@ -83,7 +83,7 @@ func (c *Client) openWatch(ctx context.Context, path string, query url.Values, l
 
 // readWatchStream reads one gateway watch stream until it ends: JSON lines
 // or SSE frames, one envelope per line, each line bounded by
-// MaxWatchEventBytes, keepalive comments skipped, and an in-band error or an
+// maxWatchEventBytes, keepalive comments skipped, and an in-band error or an
 // ERROR event turned into a *core.WatchError. Every object goes to onObject
 // with the type its envelope named; onObject returns the resource version
 // the object carried, which becomes the cursor a reconnect resumes from, or
@@ -141,7 +141,7 @@ func readWatchLine(r *bufio.Reader) ([]byte, error) {
 	for {
 		part, err := r.ReadSlice('\n')
 		out = append(out, part...)
-		if len(out) > MaxWatchEventBytes {
+		if len(out) > maxWatchEventBytes {
 			return nil, core.NewWatchError(core.WatchProtocol, "watch event exceeds client size cap", "", nil)
 		}
 		if err == nil {

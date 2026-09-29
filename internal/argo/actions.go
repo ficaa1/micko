@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/ficaa1/micko/internal/core"
 )
@@ -54,7 +55,7 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 		return result, err
 	}
 	target := *base
-	target.Path = stringsTrimSlash(base.Path) + path
+	target.Path = strings.TrimRight(base.Path, "/") + path
 	target.RawQuery = ""
 	token, err := c.tokenFn()
 	if err != nil {
@@ -124,11 +125,4 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 		result.Affected = &ref
 	}
 	return result, nil
-}
-
-func stringsTrimSlash(s string) string {
-	for len(s) > 0 && s[len(s)-1] == '/' {
-		s = s[:len(s)-1]
-	}
-	return s
 }
