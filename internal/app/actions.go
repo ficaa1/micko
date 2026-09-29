@@ -197,10 +197,6 @@ func settledOutcome(o core.ActionOutcome, err error) core.ActionOutcome {
 	return o
 }
 
-func unknownAction(req core.ActionRequest) core.ActionResult {
-	return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionUnknown}
-}
-
 // refusedAction reports an action that never left this process.
 func refusedAction(req core.ActionRequest) core.ActionResult {
 	return core.ActionResult{Action: req.Action, Target: req.Ref, Outcome: core.ActionRefused}

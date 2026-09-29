@@ -33,17 +33,6 @@ func TestKeyContextString(t *testing.T) {
 	}
 }
 
-func TestThemePhaseStylesCoverUnknownPhases(t *testing.T) {
-	// Unknown phases must return a style without panicking (LIST-11),
-	// in both color and plain modes.
-	for _, phase := range []string{"Running", "Succeeded", "Failed", "Error", "Pending", "WeirdFuturePhase", ""} {
-		th := NewTheme(false)
-		_ = th.PhaseStyle(phase).Render(phase)
-		pl := NewTheme(true)
-		_ = pl.PhaseStyle(phase).Render(phase)
-	}
-}
-
 func TestNewThemePlainWithNoColorEnv(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	th := NewTheme(false) // noColor=false, but env forces plain

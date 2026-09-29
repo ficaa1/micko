@@ -642,13 +642,6 @@ const colGap = 2
 // minMessageWidth is the narrowest message column worth rendering.
 const minMessageWidth = 12
 
-func maxString(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // emptyStateView renders the no-rows line. Distinguishable states (UI-07):
 // loading ≠ empty ≠ filtered-empty ≠ error.
 func (m *Model) emptyStateView() string {

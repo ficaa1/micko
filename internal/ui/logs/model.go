@@ -184,12 +184,6 @@ func NewModel(ref core.Ref, podName, container string) *Model {
 // the root when attaching the component to a stream; ApplyRecords on a
 // fresh model with no header yet emits it lazily so tests and the demo
 // path cannot skip it).
-func (m *Model) ensureContextHeader() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.ensureContextHeaderLocked()
-}
-
 func (m *Model) ensureContextHeaderLocked() {
 	if m.headerDone {
 		return

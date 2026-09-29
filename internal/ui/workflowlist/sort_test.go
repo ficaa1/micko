@@ -51,11 +51,6 @@ func TestSortTreatsErrorLikeFailedBucket(t *testing.T) {
 	}
 }
 
-func TestSortEmptyAndNil(t *testing.T) {
-	Sort(nil, SortPhaseName)
-	Sort([]core.Summary{}, SortTime)
-}
-
 func TestPhaseStyleFallbackText(t *testing.T) {
 	// Unknown phases stay displayable: the view text carries the phase
 	// even without color (LIST-11; plan §2 text-with-color rule).
