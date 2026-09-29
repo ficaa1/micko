@@ -129,11 +129,15 @@ rejected. Never put literal tokens in command arguments or committed config.
 
 ### Actions
 
-Actions are disabled by default. Enable them for a session with:
+Actions are on, and every one asks for confirmation first. To browse a
+cluster without any way to change it, turn them off for a session with:
 
 ```sh
-./dist/micko --profile dev --allow-actions
+./dist/micko --profile prod --read-only
 ```
+
+The header then says `READ ONLY`. `--allow-actions`, which older versions
+needed to turn actions on, is still accepted and does nothing.
 
 Press `a` on the workflow list or in a workflow's detail view. The menu offers
 only the verbs that apply to the workflow's phase:
@@ -194,8 +198,8 @@ Every write attempt, refused ones included, appends one JSON line to
 `~/.local/state/micko/actions.jsonl`): time, profile, server, namespace,
 name, UID, verb, outcome and error text. The file is created readable by you
 only. A journal that cannot be written never blocks or changes an action; the
-footer reports the first failure of the session. Sessions without
-`--allow-actions` and the demo write nothing. To turn the journal off, set
+footer reports the first failure of the session. `--read-only`
+sessions and the demo write nothing. To turn the journal off, set
 `journal: false` at the top level of the config file.
 
 ## Everyday keys
@@ -536,7 +540,7 @@ spells out `READ ONLY` or `ACTIONS ENABLED`.
 | `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
 | `--token-file PATH`, `--ca-file PATH` | Override credential file or CA bundle |
 | `--refresh-interval DURATION` | Poll interval, default `5s`; accepted range `1s`–`10m` |
-| `--allow-actions` | Enable confirmed workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete) |
+| `--read-only` | Turn off workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete); they are on by default |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--debug` | Emit sanitized lifecycle diagnostics |
 | `--skin NAME` | Colour skin, overriding the config file (see [Skins](#skins)) |

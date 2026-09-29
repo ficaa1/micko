@@ -67,8 +67,8 @@ type OpenLogsMsg = shared.OpenLogsMsg
 type BackMsg struct{}
 
 // ActionIntentMsg is the frozen v0.2 action intent placeholder. Alpha and
-// demo never emit it; the root will refuse to convert it to a write unless
-// --allow-actions is set on that invocation (plan §6; not implemented in
+// demo never emit it; the root will refuse to convert it to a write when
+// --read-only is set on that invocation (plan §6; not implemented in
 // F1 — the message exists so the shared contract is stable).
 type ActionIntentMsg struct {
 	Ref    core.Ref

@@ -1,5 +1,5 @@
 # Copy to ~/.config/micko/config.yaml or select with --config.
-# Actions require --allow-actions and confirmation for each request.
+# Actions ask for confirmation for each request; --read-only turns them off.
 currentProfile: dev
 refreshInterval: 5s
 # Colour skin: default (the terminal's own palette), auto (dark or light

@@ -96,7 +96,7 @@ func helpLines() []string {
 		"          / search  n / N next / previous match  & only matching lines",
 		"          w wrap long lines  L source labels  | pipe to a program",
 		"          ctrl+t server timestamps (reopens the stream, keeps the lines)",
-		"Actions   a opens the pane (with --allow-actions); lists verbs that apply",
+		"Actions   a opens the pane (off with --read-only); lists verbs that apply",
 		"          u resume  z suspend  r retry  b resubmit  s stop",
 		"          t terminate (type the name)  d delete (then only D deletes)",
 		"          y confirms; enter and esc cancel; one result goes to the footer",

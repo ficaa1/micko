@@ -204,7 +204,7 @@ func (m *Model) Open(action core.Action) {
 	if !m.allowActions || m.readOnly || m.demo {
 		m.state = StateUnavailable
 		if !m.allowActions {
-			m.reason = "actions disabled; launch with --allow-actions"
+			m.reason = "actions disabled"
 		}
 		if m.readOnly {
 			m.reason = "read-only mode: actions unavailable"
