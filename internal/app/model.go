@@ -1006,7 +1006,6 @@ func (m *Root) View() tea.View {
 	case RouteLogs:
 		f.Route = "logs"
 		if m.logsView != nil {
-			m.logsView.SetPaneMode(true)
 			m.logsView.SetSize(f.BodyWidth(), bodyH)
 			f.Title = m.logsView.PaneTitle()
 			f.TitleRight = m.logSummary()

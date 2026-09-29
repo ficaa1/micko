@@ -13,7 +13,6 @@ import (
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/actions"
-	"github.com/ficaa1/micko/internal/ui/logs"
 )
 
 // archiveRecorder is the demo reader with its archive and live reads
@@ -167,7 +166,7 @@ func TestArchivedLogs(t *testing.T) {
 
 	m.handleLogRecord(logRecordMsg{genStamp: genStamp{Conn: m.connGen, Sel: m.selGen}, RequestID: m.logState.streamID,
 		Done: true, Err: core.ErrNotFoundf(`pods "gone-pod" not found`)})
-	if m.logsView.Phase() != logs.PhaseError || !strings.Contains(strings.Join(m.logsView.BodyLines(), "\n"), `pods "gone-pod" not found — this workflow is archived`) {
+	if !strings.HasPrefix(m.logsView.PaneStatus(), "ERROR") || !strings.Contains(strings.Join(m.logsView.BodyLines(), "\n"), `pods "gone-pod" not found — this workflow is archived`) {
 		t.Fatalf("failed archived stream:\n%s", strings.Join(m.logsView.BodyLines(), "\n"))
 	}
 
