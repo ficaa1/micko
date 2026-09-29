@@ -292,7 +292,7 @@ func TestTheToolbarShowsTheQueryError(t *testing.T) {
 // The error is styled as an error. The plain theme would pass any text, so
 // this renders with colour.
 func TestTheQueryErrorUsesTheErrorStyle(t *testing.T) {
-	m := New(colorTheme(), false)
+	m := New(colorTheme())
 	m.SetItems([]core.Summary{{Ref: core.Ref{Name: "a", UID: "a"}}}, testkit.FixtureEpoch)
 	m.SetSize(160, 10)
 	m.Update(runeKey('/'))

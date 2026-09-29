@@ -13,7 +13,7 @@ import (
 func renderOutlinePane(out Outline) string {
 	var b strings.Builder
 	if !out.Available {
-		// DET-04: explicit unavailable state — never an empty workflow.
+		// Explicit unavailable state — never an empty workflow.
 		b.WriteString("node status unavailable")
 		if out.UnavailableReason != "" {
 			b.WriteString(" (" + shared.Sanitize(out.UnavailableReason) + ")")
@@ -44,7 +44,7 @@ func renderOutlinePane(out Outline) string {
 		}
 	}
 	walk(out.Rows, 0)
-	// Ungrouped sections (DET-08): dangling references and unreachable
+	// Ungrouped sections: dangling references and unreachable
 	// nodes are listed explicitly.
 	if len(out.Dangling) > 0 {
 		b.WriteString("ungrouped (referenced but missing):\n")
@@ -95,7 +95,7 @@ func rowType(r OutlineRow) string {
 }
 
 func rowPhase(r OutlineRow) string {
-	// Absent phase ⇒ "not yet started" (protocol §2); never render an
+	// Absent phase ⇒ "not yet started"; never render an
 	// empty phase.
 	if r.Phase == "" {
 		return "not started"

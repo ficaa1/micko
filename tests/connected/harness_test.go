@@ -74,8 +74,7 @@ type syntheticArgo struct {
 	*httptest.Server
 	mu       sync.Mutex
 	requests []string
-	// phase is what Get reports; a Stop test flips it to imitate an exit
-	// handler that finishes after the action was accepted.
+	// phase is what List and Get report.
 	phase string
 	// stopCalls counts accepted PUT .../stop requests.
 	stopCalls, resumeCalls int
@@ -126,7 +125,6 @@ func newSynthetic(t *testing.T, detail []byte, list []byte, tls bool) *synthetic
 	return s
 }
 
-func (s *syntheticArgo) setPhase(p string) { s.mu.Lock(); s.phase = p; s.mu.Unlock() }
 func (s *syntheticArgo) snapshot() (reqs []string, auth []string, stops, resumes int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

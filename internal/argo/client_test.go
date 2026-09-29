@@ -2,6 +2,7 @@ package argo
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -23,7 +24,7 @@ import (
 // credential source returns a fixed token so tests can assert on the exact
 // Authorization header (and its absence from error strings). passBase
 // supplies the configured server base URL that must be preserved verbatim
-// (base-path slice: the Argo paths are appended, never rebuilt).
+// (the Argo paths are appended to it, never rebuilt).
 func newTestClient(t *testing.T, srv *httptest.Server) *Client {
 	t.Helper()
 	c, err := NewClient(Options{
@@ -37,11 +38,11 @@ func newTestClient(t *testing.T, srv *httptest.Server) *Client {
 	return c
 }
 
-// --- Slice 1: client transport ------------------------------------------------
+// --- client transport ------------------------------------------------
 
 // TestClientBasePathAndCredentials verifies base-path preservation, exact
 // endpoint paths, query encoding (limit/continue/uid always) and the
-// Authorization header (plan slice 1; CONN-07/09, SEC-06).
+// Authorization header.
 func TestClientBasePathAndCredentials(t *testing.T) {
 	var gotPath, gotQuery, gotAuth, gotAccept string
 	var listCalls int32
@@ -154,8 +155,7 @@ func TestClientBasePathAndCredentials(t *testing.T) {
 }
 
 // TestClientRejectsRedirect verifies no credentials are ever sent to a
-// redirect target and the response is explained as a typed error
-// (plan slice 1; CONN-05, SEC-07).
+// redirect target and the response is explained as a typed error.
 func TestClientRejectsRedirect(t *testing.T) {
 	var redirected int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +202,7 @@ func TestClientRejectsRedirect(t *testing.T) {
 }
 
 // TestClientTLS verifies the custom-CA path (httptest TLS server) and the
-// insecure-verify override (plan slice 1; CONN-02/03).
+// insecure-verify override.
 func TestClientTLS(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"metadata":{"continue":"","resourceVersion":"rv"},"items":[]}`)
@@ -254,7 +254,7 @@ func TestClientTLS(t *testing.T) {
 		t.Errorf("List with CA: %v", err)
 	}
 
-	// c) Explicit insecure override skips verification (CONN-02), with the
+	// c) Explicit insecure override skips verification, with the
 	// client still usable.
 	cInsecure, err := NewClient(Options{
 		Server:                srv.URL,
@@ -271,7 +271,7 @@ func TestClientTLS(t *testing.T) {
 }
 
 // TestClientURLContract verifies scheme/userinfo validation at construction
-// time (plan slice 1; CONN-06/08).
+// time.
 func TestClientURLContract(t *testing.T) {
 	cases := []struct {
 		name, server string
@@ -295,7 +295,7 @@ func TestClientURLContract(t *testing.T) {
 	}
 }
 
-// --- Slice 2: list pagination -------------------------------------------------
+// --- list pagination -------------------------------------------------
 
 // loadFixture reads a testdata fixture relative to this package.
 func loadFixture(t *testing.T, name string) []byte {
@@ -305,14 +305,6 @@ func loadFixture(t *testing.T, name string) []byte {
 		t.Fatalf("read fixture %s: %v", name, err)
 	}
 	return b
-}
-
-// newFixtureServer serves canned fixtures per exact path+query, recording
-// the raw query strings of every hit.
-type fixtureServer struct {
-	*httptest.Server
-	muHits   int32
-	hitQuery atomic.Value // string
 }
 
 // isGateScan reports whether a request is the narrow scan that fills the
@@ -349,7 +341,7 @@ func serveFixture(t *testing.T, status int, body []byte, check func(r *http.Requ
 }
 
 // TestListPaginationMetadata verifies summaries + opaque continuation +
-// resourceVersion decoding, with the exact fixture bytes (plan slice 2).
+// resourceVersion decoding, with the exact fixture bytes.
 func TestListPaginationMetadata(t *testing.T) {
 	body := loadFixture(t, "list_page1.json")
 	srv := serveFixture(t, http.StatusOK, body, func(r *http.Request) error {
@@ -403,7 +395,7 @@ func TestListPaginationMetadata(t *testing.T) {
 	}
 
 	// Item 1 has a phase the pinned v4.1.2 enum does not define. Unknown
-	// phases remain displayable — never an error (LIST-11).
+	// phases remain displayable — never an error.
 	second := page.Items[1]
 	if second.Phase != "WaitingForDependency" {
 		t.Errorf("item1 phase = %q, want verbatim unknown phase", second.Phase)
@@ -414,8 +406,7 @@ func TestListPaginationMetadata(t *testing.T) {
 }
 
 // TestListEmptyContinuedPage verifies the continuation is followed even when
-// a page contains zero items, passing the token back verbatim (plan slice 2;
-// LIST-02/03).
+// a page contains zero items, passing the token back verbatim.
 func TestListEmptyContinuedPage(t *testing.T) {
 	p1 := loadFixture(t, "list_page1.json")
 	p2 := loadFixture(t, "list_page2.json")
@@ -474,7 +465,7 @@ func TestListEmptyContinuedPage(t *testing.T) {
 
 // TestListUnknownPhase exercises the dedicated unknown-phase fixture via the
 // wire decoder: an undefined phase string must decode verbatim and the
-// summary stay fully populated (plan slice 2; LIST-11).
+// summary stay fully populated.
 func TestListUnknownPhase(t *testing.T) {
 	body := loadFixture(t, "list_unknown_phase.json")
 	srv := serveFixture(t, http.StatusOK, body, nil)
@@ -499,11 +490,11 @@ func TestListUnknownPhase(t *testing.T) {
 	}
 }
 
-// --- Slice 3: detail mapping ---------------------------------------------------
+// --- detail mapping ---------------------------------------------------
 
 // TestGetUIDMismatch verifies same-name replacement detection: a response
 // whose UID differs from the requested one is a typed mismatch error, never
-// silently swapped (plan slice 3; DET-02, LIST-12).
+// silently swapped.
 func TestGetUIDMismatch(t *testing.T) {
 	body := loadFixture(t, "workflow_detail.json")
 	srv := serveFixture(t, http.StatusOK, body, func(r *http.Request) error {
@@ -532,8 +523,7 @@ func TestGetUIDMismatch(t *testing.T) {
 
 // TestGetMissingNodes verifies explicit representation of missing node data:
 // offload markers ⇒ NodesAvailable=false + reason, node id references that
-// are absent from the map survive as-is for the outline's ungrouped section
-// (plan slice 3; DET-04).
+// are absent from the map survive as-is for the outline's ungrouped section.
 func TestGetMissingNodes(t *testing.T) {
 	off := loadFixture(t, "workflow_offloaded.json")
 	srv := serveFixture(t, http.StatusOK, off, nil)
@@ -558,8 +548,7 @@ func TestGetMissingNodes(t *testing.T) {
 }
 
 // TestGetUnknownFields verifies the hydrated detail mapping and that raw
-// resource JSON — including unknown fields — is preserved verbatim
-// (plan slice 3; DET-13, DET-06..08 fixtures feed).
+// resource JSON — including unknown fields — is preserved verbatim.
 func TestGetUnknownFields(t *testing.T) {
 	body := loadFixture(t, "workflow_detail.json")
 	srv := serveFixture(t, http.StatusOK, body, nil)
@@ -598,7 +587,7 @@ func TestGetUnknownFields(t *testing.T) {
 		t.Error("suspend must have nil timestamps (absent = not yet started)")
 	}
 	// The reference to a node id missing from the map is preserved verbatim;
-	// the outline (C1) renders it in an explicit ungrouped section.
+	// the outline renders it in an explicit ungrouped section.
 	ghost := wf.Nodes["node-ghost-parent"]
 	if len(ghost.Children) != 1 || ghost.Children[0] != "node-missing-id" {
 		t.Errorf("ghost children = %v", ghost.Children)
@@ -624,7 +613,7 @@ func TestGetUnknownFields(t *testing.T) {
 			Phase string `json:"phase"`
 		} `json:"status"`
 	}
-	if err := jsonUnmarshal(wf.Resource, &probe); err != nil {
+	if err := json.Unmarshal(wf.Resource, &probe); err != nil {
 		t.Fatalf("resource JSON: %v", err)
 	}
 	if probe.Spec.XCustomExtension != "preserve-me-42" {
@@ -635,7 +624,7 @@ func TestGetUnknownFields(t *testing.T) {
 	}
 }
 
-// --- Slice 4: log transport -----------------------------------------------------
+// --- log transport -----------------------------------------------------
 
 // streamingServer serves the given chunks with a small delay between them,
 // honoring request context cancellation (mimics the Argo gateway stream).
@@ -673,7 +662,7 @@ func streamingServer(t *testing.T, chunks [][]byte, delay time.Duration, check f
 
 // TestStreamLogsFixture checks the JSON-lines fixture end-to-end through the
 // parser: multiple records per read, split-tolerant buffering, missing
-// trailing newline, malformed UTF-8 → U+FFFD (plan slice 4; STR-02/04).
+// trailing newline, malformed UTF-8 → U+FFFD.
 func TestStreamLogsFixture(t *testing.T) {
 	raw := loadFixture(t, "logs_jsonl.txt")
 	srv := streamingServer(t, [][]byte{raw}, 0, nil)
@@ -735,7 +724,7 @@ func TestStreamLogsSSEFixture(t *testing.T) {
 }
 
 // TestStreamLogsFragmentation verifies records split across and coalesced
-// within reads parse identically (plan slice 4; STR-02).
+// within reads parse identically.
 func TestStreamLogsFragmentation(t *testing.T) {
 	c1 := []byte(`{"result":{"content":"alpha","podName":"p1"}}` + "\n" + `{"result":{"content":"bet`)
 	c2 := []byte(`a","podName":"p1"}}` + "\n" + `{"result":{"content":"gamma","podName":"p2"}}` + "\n")
@@ -766,7 +755,7 @@ func TestStreamLogsFragmentation(t *testing.T) {
 
 // TestStreamLogsInBandError verifies the final {"error":{...}} chunk after
 // HTTP 200 becomes a typed error with the gRPC-derived kind and no HTTP
-// status (plan slice 4; STR-04, docs/development.md).
+// status (docs/development.md).
 func TestStreamLogsInBandError(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -818,7 +807,7 @@ func TestStreamLogsInBandError(t *testing.T) {
 
 // TestStreamLogsCancel verifies prompt cancellation mid-stream: StreamLogs
 // returns an error wrapping context.Canceled — distinguishable from network
-// failure — and the in-flight HTTP body is closed (plan slice 4; STR-01/03/05).
+// failure — and the in-flight HTTP body is closed.
 func TestStreamLogsCancel(t *testing.T) {
 	c1 := []byte(`{"result":{"content":"first","podName":"p1"}}` + "\n")
 	c2 := []byte(`{"result":{"content":"second","podName":"p1"}}` + "\n")
@@ -855,7 +844,7 @@ func TestStreamLogsCancel(t *testing.T) {
 
 // TestStreamLogsOversize verifies a single record exceeding the client cap
 // is dropped with a visible marker instead of unbounded memory growth, and
-// bounded lines pass through (plan slice 4; STR-05, LOG-05/14).
+// bounded lines pass through.
 func TestStreamLogsOversize(t *testing.T) {
 	// Server pipeline caps at 1 MiB; our client cap is 2 MiB here — an
 	// attacker/misbehaving proxy may still deliver more.
@@ -909,7 +898,7 @@ func TestStreamLogsOversize(t *testing.T) {
 }
 
 // TestStreamLogsCallbackError verifies a callback error stops the stream and
-// is returned to the caller (plan slice 4; contract: callback error stops).
+// is returned to the caller.
 func TestStreamLogsCallbackError(t *testing.T) {
 	chunks := [][]byte{
 		[]byte(`{"result":{"content":"one","podName":"p1"}}` + "\n" +
@@ -950,11 +939,10 @@ func TestStreamLogsHTTPError(t *testing.T) {
 	}
 }
 
-// --- Slice 5: errors -------------------------------------------------------------
+// --- errors -------------------------------------------------------------
 
 // TestAPIErrorRedaction verifies typed errors are sanitized: server messages
-// pass through, but no token material ever appears in an error surface
-// (plan slice 5; SEC-02/06, CONN-11).
+// pass through, but no token material ever appears in an error surface.
 func TestAPIErrorRedaction(t *testing.T) {
 	token := "tok-sup3r-secret-0123456789abcdef"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1002,7 +990,7 @@ func TestAPIErrorRedaction(t *testing.T) {
 
 // TestErrorBodyNonJSON verifies a non-JSON error body (login HTML from an
 // SSO reverse proxy) maps to unauthenticated guidance with the content type
-// named, not a parse crash (CONN-14; docs/development.md).
+// named, not a parse crash (docs/development.md).
 func TestErrorBodyNonJSON(t *testing.T) {
 	srv := serveFixture(t, http.StatusOK,
 		[]byte("<html><body><form>Sign in to your identity provider</form></body></html>"),
@@ -1028,7 +1016,7 @@ func TestErrorBodyNonJSON(t *testing.T) {
 }
 
 // TestRateLimitRetryAfter verifies 429 mapping parses Retry-After in both
-// delay-seconds and HTTP-date forms (plan slice 5; LIST-08).
+// delay-seconds and HTTP-date forms.
 func TestRateLimitRetryAfter(t *testing.T) {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 	cases := []struct {
@@ -1087,7 +1075,7 @@ func TestRateLimitRetryAfter(t *testing.T) {
 
 // TestNoRetryOnMutations pins the "no retries of mutations" rule: this
 // package implements no write paths at all — there is no action method to
-// call, so no mutation can be retried (plan slice 5; §6).
+// call, so no mutation can be retried.
 func TestNoRetryOnMutations(t *testing.T) {
 	// The transport surface is read-only: List/Get/StreamLogs only.
 	var _ core.Reader = (*Client)(nil)

@@ -446,22 +446,8 @@ func TestStreamBatchingBoundedQueue(t *testing.T) {
 	}
 }
 
-func TestActionIntentNeverConvertedInF1(t *testing.T) {
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	m := testRoot(t, f)
-	updated, cmd := m.Update(ActionIntentMsg{
-		Ref:    core.Ref{Namespace: "ns", Name: "wf-1"},
-		Action: "terminate",
-	})
-	root := updated.(*Root)
-	if cmd != nil {
-		t.Fatal("action intent produced a command (write path must not exist in alpha)")
-	}
-	_ = root
-}
-
 func TestStreamContextCancellationDistinguished(t *testing.T) {
-	// STR-01 at the command layer: a canceled context must yield
+	// At the command layer: a canceled context must yield
 	// Canceled=true and not an opaque failure.
 	f := &testkit.FakeReader{
 		StreamDelay: time.Hour,
@@ -539,7 +525,7 @@ func TestListKeysMoveSelectionAndEnterOpensDetail(t *testing.T) {
 	}
 
 	// Enter on the moved selection opens detail for that workflow. The list
-	// child answers with an intent message wrapped in a command (plan §4: the
+	// child answers with an intent message wrapped in a command (the
 	// root converts intents to effects); the bubbletea runtime runs the
 	// returned command and re-delivers the message, so drive that same loop
 	// here to observe the end-to-end route change.
@@ -620,7 +606,7 @@ func TestListAgeRendersUsingInjectedClock(t *testing.T) {
 // Manual refresh: the root must convert the list child's refresh
 // intent (r) into a new collection and clear any terminal watch state — the
 // child emits workflowlist.RefreshListMsg; the root alone turns intents into
-// effects (plan §4), same as it does OpenWorkflowMsg/OpenLogsMsg.
+// effects, same as it does OpenWorkflowMsg/OpenLogsMsg.
 func TestRefreshIntentStartsNewListAndClearsWatchState(t *testing.T) {
 	m := loadDemoList(t)
 	m.watchMode = "authentication/permission required"

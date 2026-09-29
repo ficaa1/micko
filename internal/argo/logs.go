@@ -2,7 +2,7 @@
 // docs/development.md).
 //
 // Framing: the parser accepts BOTH candidate framings behind one choke
-// point (docs/development.md resolution, gate G-1):
+// point (docs/development.md resolution):
 //
 //	(a) bare JSON-lines: {"result": {...}}\n   (gateway v1.16.0 source)
 //	(b) SSE: "data: {"result": {...}}\n\n"     (client + e2e expectations)
@@ -37,11 +37,11 @@ import (
 // to the consumer. The server pipeline force-flushes single lines at
 // 1 MiB (maxTokenLength, docs/development.md); a misbehaving proxy could
 // deliver more — anything past this cap is dropped with a visible marker
-// instead of growing memory unboundedly (STR-05/LOG-05).
+// instead of growing memory unboundedly.
 const MaxLogRecordBytes = 2 * 1024 * 1024
 
 // OversizeRecordMarker is the Content delivered instead of an oversized
-// record — a visible truncation marker (plan §5).
+// record — a visible truncation marker.
 const OversizeRecordMarker = "[log record dropped: exceeds client size cap]"
 
 // logStreamEnvelope is one stream chunk: either {"result": <LogEntry>} or a
@@ -77,7 +77,7 @@ type errorChunk struct {
 // StreamLogs implements core.Reader. Records are delivered serially on the
 // reader goroutine; StreamLogs returns nil for a clean finite EOF, and an
 // error wrapping context.Canceled/DeadlineExceeded when cancellation ends
-// the stream (distinguishable from network failure — plan §4; STR-01).
+// the stream (distinguishable from network failure).
 func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(core.LogRecord) error) error {
 	// Workflow-wide or pod-scoped route per request.PodName; empty podName
 	// uses the non-deprecated WorkflowLogs route (docs/development.md).
@@ -119,7 +119,7 @@ func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(co
 
 	// Headers arrive well before the first payload (server flushes early,
 	// docs/development.md keepalive note). SSO/reverse-proxy interception
-	// with HTTP 200 (CONN-14) is caught inside the parser: the first
+	// with HTTP 200 is caught inside the parser: the first
 	// unparseable line that looks like HTML surfaces the login-page
 	// guidance instead of protocol-error noise.
 	return consumeLogStream(ctx, resp.Body, req, headerGet(resp, "Content-Type"), c.now, cb)
@@ -127,7 +127,7 @@ func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(co
 
 // consumeLogStream parses the response body chunk-by-chunk, dispatching
 // records to cb serially. It is the single framing-normalization choke
-// point for gate G-1. contentType is the response's Content-Type header,
+// point. contentType is the response's Content-Type header,
 // used only to give HTML-interception a precise message.
 func consumeLogStream(
 	ctx context.Context,
@@ -145,10 +145,10 @@ func consumeLogStream(
 
 	for {
 		// Abort promptly on cancellation even when the server does not
-		// close the pipe (bounded work per call, plan §5).
+		// close the pipe (bounded work per call).
 		if err := ctx.Err(); err != nil {
 			// Network failure vs cancellation is distinguishable at every
-			// exit path: cancellation wraps the context error (STR-01).
+			// exit path: cancellation wraps the context error.
 			return fmt.Errorf("log stream: %w", err)
 		}
 		line, readErr := readStreamLine(reader)
@@ -172,14 +172,14 @@ func consumeLogStream(
 				return err
 			}
 			// Clean finite EOF: HTTP body ended normally with no error
-			// chunk ⇒ nil (the caller owns reconnect policy; docs §6.3.7:
+			// chunk ⇒ nil (the caller owns reconnect policy; the protocol notes:
 			// mid-stream close without error chunk stays ambiguous but
 			// ends cleanly here).
 			return nil
 		}
 		if parser.byteOverflow {
 			// Oversized single line: drop with a visible marker, keep the
-			// stream usable (bounded memory, LOG-05/14).
+			// stream usable (bounded memory).
 			if err := emitRecord(ctx, req, OversizeRecordMarker, podNameOr(req.PodName, ""), now(), cb); err != nil {
 				return err
 			}
@@ -274,8 +274,8 @@ func (p *logChunkParser) consume(line []byte, req core.LogRequest, contentType s
 	// U+FFFD (Go semantics accepted per docs/development.md).
 	if err := json.Unmarshal(p.buf, &env); err != nil {
 		// Not complete JSON. Could be a split frame segment (keep
-		// buffering until the next line arrives) — or HTML interception
-		// (CONN-14): surface the login-page guidance once.
+		// buffering until the next line arrives) — or HTML interception:
+		// surface the login-page guidance once.
 		if isHTMLBody(p.buf, nil) ||
 			(contentType != "" && strings.Contains(strings.ToLower(contentType), "text/html")) {
 			return core.NewAPIError(core.ErrUnauthenticated, http.StatusUnauthorized,
@@ -408,7 +408,7 @@ func readStreamLine(reader *bufio.Reader) ([]byte, error) {
 }
 
 // bufioReader wraps with a generous buffer (bufio.Scanner's default token
-// size must not be relied on — plan slice 4; the manual ReadSlice loop
+// size must not be relied on; the manual ReadSlice loop
 // handles tokens of any size).
 func bufioReader(r io.Reader) *bufio.Reader {
 	return bufio.NewReaderSize(r, 64*1024)

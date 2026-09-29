@@ -2,8 +2,8 @@
 
 package integration
 
-// fixtures.go — explicitly synthetic ET-2 fixture builders (plan: "fixtures
-// explicitly synthetic, never mislabeled captures"). Timestamps use the
+// fixtures.go — explicitly synthetic fixture builders for the fixture server
+// (never mislabeled captures). Timestamps use the
 // shared synthetic epoch so tests are deterministic.
 
 import (

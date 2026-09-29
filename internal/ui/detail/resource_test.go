@@ -7,7 +7,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// Resource-redaction tests (DET-12 ⛨): parameter/output values are
+// Resource-redaction tests: parameter/output values are
 // collapsed by default; reveal is explicit and session-only — the reveal
 // state lives in the view model, never persisted anywhere.
 
@@ -30,7 +30,7 @@ func resourceFixture() core.Workflow {
 	return wf
 }
 
-// TestResourceViewRedactedByDefault pins DET-12: secret-shaped and
+// TestResourceViewRedactedByDefault pins: secret-shaped and
 // parameter/output values are collapsed in the default view.
 func TestResourceViewRedactedByDefault(t *testing.T) {
 	wf := resourceFixture()
@@ -70,7 +70,7 @@ func TestResourceViewExplicitReveal(t *testing.T) {
 	}
 }
 
-// TestResourceViewUnknownFieldsPreserved pins DET-03: unknown server fields
+// TestResourceViewUnknownFieldsPreserved pins: unknown server fields
 // survive the YAML normalization verbatim in structure.
 func TestResourceViewUnknownFieldsPreserved(t *testing.T) {
 	wf := resourceFixture()
@@ -82,7 +82,7 @@ func TestResourceViewUnknownFieldsPreserved(t *testing.T) {
 	}
 }
 
-// TestResourceViewSanitized pins DET-13 ⛨: terminal injection via resource
+// TestResourceViewSanitized pins: terminal injection via resource
 // metadata is impossible — control sequences are neutralized by the shared
 // sanitizer before the view is returned.
 func TestResourceViewSanitized(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 
 // Model is the detail route's child Tea model (bubbletea v2 Model surface
 // frozen in docs/development.md). It renders the composed detail view and
-// emits intents only — the root alone converts them to network effects
-// (plan §4). It never starts goroutines and holds no Reader.
+// emits intents only — the root alone converts them to network effects. It
+// never starts goroutines and holds no Reader.
 type Model struct {
 	// state is the loaded workflow detail (or zero value while loading).
 	state DetailViewState
@@ -41,7 +41,7 @@ type Model struct {
 	// flips it for the session.
 	redactByDefault bool
 	// revealResource is the session-only explicit reveal for the resource
-	// tab (DET-12 ⛨). It resets when the workflow (by UID) changes and is
+	// tab. It resets when the workflow (by UID) changes and is
 	// never persisted anywhere.
 	revealResource bool
 
@@ -213,7 +213,7 @@ func (m *Model) SetNotFound() {
 	m.notFound = true
 }
 
-// SetSize implements the child view sizing contract (contracts §7).
+// SetSize implements the child view sizing contract.
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 }
@@ -231,7 +231,7 @@ func (m *Model) Reveal() bool { return m.revealResource }
 
 // Update implements tea.Model. Tab switching (Tab), Esc back intent,
 // session-only resource reveal (`v`) live here; intents bubble to the
-// root as messages — the model never talks to a Reader (plan §4).
+// root as messages — the model never talks to a Reader.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -393,7 +393,7 @@ func (m *Model) SelectedNode() (OutlineRow, bool) {
 }
 
 // NodeLogsIntent is the "show me this node's logs" intent. The root alone
-// turns it into a stream (plan §4).
+// turns it into a stream.
 //
 // PodName is empty when the server did not state its pod-naming scheme; the
 // root then falls back to workflow-wide logs rather than requesting a pod
@@ -524,7 +524,7 @@ func (m *Model) jumpTo(pos int) {
 // BackMsg matches the root app's frozen back intent (app.BackMsg shape;
 // detail defines its own message struct so the child package stays
 // independent of internal/app — the root routes by type-agnostic handling
-// or app maps it; contracts §4 pins the intent names).
+// or app maps it; the intent names are part of the contract).
 type BackMsg struct{}
 
 func backCmd() tea.Cmd { return func() tea.Msg { return BackMsg{} } }
@@ -558,7 +558,7 @@ func (m *Model) View() tea.View {
 	return tea.NewView(RenderDetail(state, m.tab))
 }
 
-// PaneTitle is the shell border title: the sanitized workflow name (SEC-02).
+// PaneTitle is the shell border title: the sanitized workflow name.
 // Before a workflow loads there is no name to show, so the title states the
 // route instead of rendering an empty border.
 func (m *Model) PaneTitle() string {
@@ -608,7 +608,7 @@ func (m *Model) EscapeConsumed() bool {
 }
 
 // PaneStatus is the right-aligned footer cell: the workflow phase, carried
-// as symbol and word so color is never the only channel (UI-03/07).
+// as symbol and word so color is never the only channel.
 func (m *Model) PaneStatus() string {
 	if !m.loaded {
 		return ""
@@ -790,24 +790,8 @@ func itoaDetail(n int) string {
 	return string(b[i:])
 }
 
-// bodyText picks the body for the current state. Every state renders
-// something: an empty pane would say nothing about why it is empty.
-func (m *Model) bodyText() string {
-	switch {
-	case m.loading:
-		return "loading detail…"
-	case m.notFound:
-		return "workflow no longer available"
-	case m.lastErr != "":
-		return "detail error: " + shared.Sanitize(m.lastErr)
-	case !m.loaded:
-		return "(no workflow loaded)"
-	}
-	return RenderDetailBody(m.resolvedState(), m.tab)
-}
-
-// resolvedState applies the session-only resource reveal, which View also
-// does; both compositions must show the same content.
+// resolvedState applies the session-only resource reveal. Every resource
+// view reads through it, so the scroll bounds and the lines shown agree.
 func (m *Model) resolvedState() DetailViewState {
 	state := m.state
 	if m.revealResource {

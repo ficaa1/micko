@@ -1,5 +1,4 @@
-// Package config loads and validates micko connection configuration
-// (plan §3 "Connection and authentication contract").
+// Package config loads and validates micko connection configuration.
 //
 // Precedence: explicit CLI flag > selected profile value > config default;
 // defaults apply last. Validation happens before the TUI starts: missing
@@ -20,11 +19,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Default values applied last (plan §3 example config).
+// Default values applied last.
 const (
 	DefaultRefreshInterval = 5 * time.Second
-	// MinRefreshInterval is the sensible lower bound for polling
-	// (plan §5: "configurable with a sensible lower bound").
+	// MinRefreshInterval is the sensible lower bound for polling.
 	MinRefreshInterval = time.Second
 	// MaxRefreshInterval guards against effectively-disabled polling.
 	MaxRefreshInterval = 10 * time.Minute
@@ -36,7 +34,7 @@ const (
 // Profile is one named server connection. Token material is never stored
 // here: tokens come from the environment variable named by TokenEnv or the
 // file at TokenFile (mutually exclusive), and are read per request to
-// support rotation (plan §3).
+// support rotation.
 type Profile struct {
 	KubeContext string `yaml:"kubeContext"`
 	Service     string `yaml:"service"`
@@ -71,7 +69,7 @@ type Profile struct {
 	RedactValues *bool `yaml:"redactValues,omitempty"`
 }
 
-// File mirrors the on-disk config (plan §3 example).
+// File mirrors the on-disk config.
 type File struct {
 	CurrentProfile string             `yaml:"currentProfile"`
 	Profiles       map[string]Profile `yaml:"profiles"`
@@ -161,8 +159,7 @@ func (f File) refreshInterval() (time.Duration, error) {
 }
 
 // Config is the validated, UI-independent connection configuration
-// (plan §4: "Connection validated config is independent of UI, with
-// credential-source callbacks injected into A's client").
+// (credential-source callbacks are injected into the transport client).
 type Config struct {
 	ProfileName string
 	Server      string
@@ -188,7 +185,7 @@ type Config struct {
 	CAFile          string
 	RefreshInterval time.Duration
 	// InsecureSkipTLSVerify comes only from an explicit flag/config value;
-	// when set, the UI must render a permanent warning (plan §3).
+	// when set, the UI must render a permanent warning.
 	InsecureSkipTLSVerify bool
 	Target                Target
 	Debug                 Debug
@@ -288,8 +285,8 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 		return Config{Demo: true, RedactValues: opts.RedactValues}, nil
 	}
 
-	// Secret-source exclusivity (plan §3): tokenEnv and tokenFile together
-	// are rejected (CONN-19).
+	// Secret-source exclusivity: tokenEnv and tokenFile together
+	// are rejected.
 	if cfg.TokenEnv != "" && cfg.TokenFile != "" {
 		return Config{}, fmt.Errorf(
 			"config: profile %q: tokenEnv and tokenFile are mutually exclusive (tokenEnv=%q, tokenFile path set)",
@@ -342,12 +339,12 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	return cfg, nil
 }
 
-// validateURL enforces the plan §3 URL contract:
-//   - http/https schemes only (CONN-08)
+// validateURL enforces the URL contract:
+//   - http/https schemes only
 //   - no userinfo
 //   - no credential-looking query parameters
-//   - non-loopback plain HTTP rejected unless explicitly allowed (CONN-06;
-//     loopback HTTP allowed for dev/demo)
+//   - non-loopback plain HTTP rejected unless explicitly allowed
+//     (loopback HTTP allowed for dev/demo)
 func (c Config) validateURL() error {
 	if c.Server == "" {
 		return nil // missing-endpoint case handled by Load

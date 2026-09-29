@@ -1,10 +1,9 @@
 package logs
 
 // marker.go — stream-context annotations mixed into the retained buffer
-// (plan §8 D1 slice: disconnect/reconnect/gap marker; LOG-11: an explicit
-// "new stream; overlap/gap possible" marker, legitimate duplicates kept).
+// (stream open, dropped lines, timestamp reopen).
 // Markers are UI authoring, not data: they never count toward the byte
-// cap, and their wording is pinned by the acceptance matrix.
+// cap, and their wording is pinned by tests.
 
 // markerKind enumerates annotation rows stored alongside log lines.
 type markerKind int
@@ -12,14 +11,8 @@ type markerKind int
 const (
 	// markOpen starts one stream: pod/container context header.
 	markOpen markerKind = iota
-	// markReconnect marks a new stream after a disconnect (LOG-11).
-	markReconnect
-	// markEnd marks a normal end-of-stream.
-	markEnd
-	// markDropped marks oversize records dropped by the record cap (LOG-04).
+	// markDropped marks oversize records dropped by the record cap.
 	markDropped
-	// markCanceled marks a user-canceled / disconnected stream.
-	markCanceled
 	// markTimestampsOn and markTimestampsOff mark where the stream was
 	// reopened with server timestamps switched on or off.
 	markTimestampsOn
@@ -50,23 +43,17 @@ type logLine struct {
 	Truncated bool // per-line allowance cut it; view shows the marker
 }
 
-// markerText returns the visible body of a marker row. Wordings pinned by
-// acceptance LOG-11 ("new stream; overlap/gap possible") and LOG-04
-// (oversize handling is stated, never silent). The open marker carries
+// markerText returns the visible body of a marker row. Wordings are pinned
+// by tests: "new stream; overlap/gap possible", and oversize handling is
+// stated, never silent. The open marker carries
 // the stream context plus a live line count (supplied by the buffer at
 // render time).
 func markerText(kind markerKind, podName, container string) string {
 	switch kind {
 	case markOpen:
 		return markerLine(podName, container)
-	case markReconnect:
-		return "── reconnect: new stream; overlap/gap possible ──"
-	case markEnd:
-		return "── stream ended ──"
 	case markDropped:
 		return "── oversized lines dropped (per-record cap) ──"
-	case markCanceled:
-		return "── stream canceled ──"
 	case markTimestampsOn:
 		return "── server timestamps on: stream reopened from the start ──"
 	case markTimestampsOff:
@@ -77,7 +64,7 @@ func markerText(kind markerKind, podName, container string) string {
 }
 
 // markerLine is the per-stream context header. An empty pod renders as
-// "(all pods)" — workflow-wide logs stay visibly distinct (plan §2).
+// "(all pods)" — workflow-wide logs stay visibly distinct.
 func markerLine(podName, container string) string {
 	who := podName
 	if who == "" {

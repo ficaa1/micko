@@ -25,7 +25,7 @@ func crossNamespaceItems() []core.Summary {
 }
 
 func allNSModel(width int) Model {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	m.SetSize(width, 0)
 	m.SetAllNamespaces(true)
 	m.SetItems(crossNamespaceItems(), testkit.FixtureEpoch)
@@ -50,7 +50,7 @@ func TestAllNamespacesAddsTheNamespaceColumn(t *testing.T) {
 		t.Errorf("toolbar = %q, want the namespace-aware filter hint", lines[0])
 	}
 
-	one := New(testTheme(), true)
+	one := New(testTheme())
 	one.SetSize(120, 0)
 	one.SetItems(crossNamespaceItems(), testkit.FixtureEpoch)
 	if head := one.BodyLines(testkit.FixtureEpoch)[1]; strings.Contains(head, "NAMESPACE") {
@@ -75,7 +75,7 @@ func TestNamespaceColumnFitsEveryWidth(t *testing.T) {
 // A long namespace is clipped to the column's bound instead of pushing the
 // NAME column right.
 func TestNamespaceColumnIsBounded(t *testing.T) {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	m.SetSize(80, 0)
 	m.SetAllNamespaces(true)
 	long := core.Summary{Ref: core.Ref{Namespace: strings.Repeat("n", 40), Name: "wf", UID: "u"}, Phase: "Running"}
@@ -112,7 +112,7 @@ func TestAllNamespacesFilterMatchesTheNamespace(t *testing.T) {
 		}
 	}
 
-	one := New(testTheme(), true)
+	one := New(testTheme())
 	one.SetItems(crossNamespaceItems(), testkit.FixtureEpoch)
 	one.SetQuery("team-a")
 	if n := len(one.Rows()); n != 0 {
@@ -133,7 +133,7 @@ func TestSameNameSortsByNamespace(t *testing.T) {
 
 // An empty cluster-wide list says what it covered.
 func TestAllNamespacesEmptyState(t *testing.T) {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	m.SetAllNamespaces(true)
 	m.SetItems(nil, testkit.FixtureEpoch)
 	if v := m.View(); !strings.Contains(v, "no workflows in any namespace this token can read") {
@@ -143,7 +143,7 @@ func TestAllNamespacesEmptyState(t *testing.T) {
 
 // A failed first collection is an error, not an empty namespace.
 func TestStaleWithNothingCollectedIsAnError(t *testing.T) {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	m.SetItems(nil, testkit.FixtureEpoch)
 	m.SetStatus(StatusStale, "connection refused", 0)
 	v := m.View()

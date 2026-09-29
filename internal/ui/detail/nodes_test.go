@@ -8,14 +8,14 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// outlineFixture returns the F1 DAG fixture (retry, suspend, skipped-style
+// outlineFixture returns the DAG fixture (retry, suspend, skipped-style
 // phases, boundary grouping) for outline tests.
 func outlineFixture(t *testing.T) core.Workflow {
 	t.Helper()
 	return testkit.FixtureDAGWorkflow("ns", "fixture-dag")
 }
 
-// TestNodeOutlineDAGGroupsSharedChildrenOnce pins DET-06: children of one
+// TestNodeOutlineDAGGroupsSharedChildrenOnce pins: children of one
 // boundary group appear once, in deterministic order, under their boundary
 // node — never recursively duplicated.
 func TestNodeOutlineDAGGroupsSharedChildrenOnce(t *testing.T) {
@@ -61,7 +61,7 @@ func TestNodeOutlineDAGGroupsSharedChildrenOnce(t *testing.T) {
 	}
 }
 
-// TestNodeOutlineStableOrder pins DET-10: siblings order by start time then
+// TestNodeOutlineStableOrder pins: siblings order by start time then
 // node ID; nodes without timestamps sort after timestamped ones (explicit
 // documented rule), still deterministically by ID.
 func TestNodeOutlineStableOrder(t *testing.T) {
@@ -106,7 +106,7 @@ func TestNodeOutlineStableOrder(t *testing.T) {
 	}
 }
 
-// TestNodeOutlineDefensiveCycleAndMissing pins DET-08: cycles are cut and
+// TestNodeOutlineDefensiveCycleAndMissing pins: cycles are cut and
 // missing node references are surfaced in an explicit ungrouped section
 // instead of dropping or hanging.
 func TestNodeOutlineDefensiveCycleAndMissing(t *testing.T) {
@@ -161,7 +161,7 @@ func TestNodeOutlineDefensiveCycleAndMissing(t *testing.T) {
 	}
 	// "orphan" is present in the map but referenced by nobody and has no
 	// boundary: it surfaces as a top-level row (all relevant nodes must be
-	// reachable or listed in an ungrouped section — plan gate). It must
+	// reachable or listed in an ungrouped section). It must
 	// appear exactly once, not dropped.
 	if counts["orphan"] != 1 {
 		t.Fatalf("unreferenced node %q must appear exactly once as a top-level row (got %d)", "orphan", counts["orphan"])
@@ -169,7 +169,7 @@ func TestNodeOutlineDefensiveCycleAndMissing(t *testing.T) {
 }
 
 // TestNodeOutlineComplexCycleStillCompletes: a two-node cycle must terminate
-// quickly; guard against exponential re-walks (DET-08, PERF-02 spirit).
+// quickly; guard against exponential re-walks.
 func TestNodeOutlineComplexCycleStillCompletes(t *testing.T) {
 	nodes := map[string]core.Node{
 		"root": {ID: "root", Name: "wf", DisplayName: "wf", Type: "DAG", Phase: "Running",
@@ -200,7 +200,7 @@ func TestNodeOutlineComplexCycleStillCompletes(t *testing.T) {
 	}
 }
 
-// TestNodeOutlineOffloadedUnavailable pins DET-04: an offloaded/unhydrated
+// TestNodeOutlineOffloadedUnavailable pins: an offloaded/unhydrated
 // node map must produce the explicit unavailable state, never an empty
 // outline.
 func TestNodeOutlineOffloadedUnavailable(t *testing.T) {
@@ -233,7 +233,7 @@ func TestNodeOutlineEmptyButAvailable(t *testing.T) {
 	}
 }
 
-// TestNodeOutlineOutboundNotChildren pins DET-09: outboundNodes are never
+// TestNodeOutlineOutboundNotChildren pins: outboundNodes are never
 // used as outline grouping edges. task-b appears exactly once via its
 // boundaryID (root) grouping — the outline must be identical to a workflow
 // whose root carries no outboundNodes at all.

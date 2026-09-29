@@ -18,7 +18,7 @@ func themedList(t *testing.T) (*Model, shared.Theme) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(th, false)
+	m := New(th)
 	m.SetSize(100, 20)
 	m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 6)), testkit.FixtureEpoch)
 	return &m, th

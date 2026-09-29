@@ -10,10 +10,10 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// buffer_test.go — ring-buffer byte/line cap and eviction (plan §8 D1
-// slices; acceptance LOG-06: ≤10,000 lines and ≤8 MiB text, whichever hit
-// first; eviction order oldest-first; truncation visible; LOG-04: bounded
-// oversize handling; legitimate duplicate lines are never deduplicated).
+// buffer_test.go — ring-buffer byte/line cap and eviction (≤10,000
+// lines and ≤8 MiB text, whichever is hit first; eviction order oldest-first;
+// truncation visible; bounded oversize handling; legitimate duplicate lines
+// are never deduplicated).
 // ---------------------------------------------------------------------------
 
 // TestBufferLineCapEvictsOldestFirst pins ring semantics: when the line
@@ -39,7 +39,7 @@ func TestBufferLineCapEvictsOldestFirst(t *testing.T) {
 }
 
 // TestBufferByteCapEvictsOldestFirst pins the byte cap: it evicts oldest
-// first, exactly like the line cap (LOG-06: whichever limit is hit first).
+// first, exactly like the line cap (whichever limit is hit first).
 func TestBufferByteCapEvictsOldestFirst(t *testing.T) {
 	b := NewBuffer(0, 6) // 6 bytes; each 1-char line counts 1 stored byte
 	for i := 0; i < 8; i++ {
@@ -105,7 +105,7 @@ func TestBufferBothCapsBindTogether(t *testing.T) {
 }
 
 // TestBufferTruncatesOversizeLineWithVisibleMarker pins per-line truncation
-// with a visible marker (LOG-04: bounded oversize, never a silent clip).
+// with a visible marker (bounded oversize, never a silent clip).
 func TestBufferTruncatesOversizeLineWithVisibleMarker(t *testing.T) {
 	b := NewBuffer(1, 0)
 	huge := strings.Repeat("a", maxLineBytes+100)
@@ -126,7 +126,7 @@ func TestBufferTruncatesOversizeLineWithVisibleMarker(t *testing.T) {
 
 // TestBufferDropsRecordBeyondRecordCap pins the single-record bound: a
 // record beyond maxRecordBytes is dropped outright and leaves a visible
-// dropped marker (LOG-04).
+// dropped marker.
 func TestBufferDropsRecordBeyondRecordCap(t *testing.T) {
 	b := NewBuffer(4, 0)
 	huge := strings.Repeat("a", maxRecordBytes+1)
@@ -143,7 +143,7 @@ func TestBufferDropsRecordBeyondRecordCap(t *testing.T) {
 }
 
 // TestBufferDeduplicatesNothing pins that identical legitimate lines are
-// all kept (LOG-06 gate: duplicate text may be legitimate output).
+// all kept (duplicate text may be legitimate output).
 func TestBufferDeduplicatesNothing(t *testing.T) {
 	b := NewBuffer(0, 0)
 	for i := 0; i < 10; i++ {
@@ -164,25 +164,6 @@ func TestBufferMarkersDoNotCountAsBytes(t *testing.T) {
 	}
 	if _, bytes, _, _, _ := b.Counts(); bytes != 8 {
 		t.Fatalf("bytes = %d, want 8 (markers excluded from the byte budget)", bytes)
-	}
-}
-
-// TestBufferReconnectMarkerPrecedesNextLine pins LOG-11 ordering: the gap
-// annotation appears before the first line of the new stream.
-func TestBufferReconnectMarkerPrecedesNextLine(t *testing.T) {
-	b := NewBuffer(8, 0)
-	b.Push(rec("before"))
-	b.SetReconnect()
-	b.Push(rec("after"))
-	entries := b.Entries()
-	if len(entries) != 3 {
-		t.Fatalf("entries = %d, want 3", len(entries))
-	}
-	if entries[1].kind != markReconnect {
-		t.Fatalf("entry 1 kind = %v, want reconnect marker", entries[1].kind)
-	}
-	if entries[2].line.Content != "after" {
-		t.Fatalf("entry 2 = %q, want after", entries[2].line.Content)
 	}
 }
 
@@ -214,7 +195,7 @@ func TestBufferZeroCapIsTestOnlyButSane(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Search primitives (slice: retained-buffer search; acceptance LOG-09 —
+// Search primitives (retained-buffer search:
 // literal semantics, case-folded by default, scope bounded by the buffer).
 // ---------------------------------------------------------------------------
 
@@ -293,8 +274,8 @@ func TestSearchEmptyBufferReturnsNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Sanitize path (slice: sanitized long/unicode/log-control-sequence
-// rendering; LOG-05/SEC-01). The buffer stores sanitized content at Push
+// Sanitize path (sanitized long/unicode/log-control-sequence
+// rendering). The buffer stores sanitized content at Push
 // time so nothing unsafe can ever reach a later View.
 // ---------------------------------------------------------------------------
 
@@ -316,9 +297,8 @@ func TestBufferSanitizePreservesTabsAndNewlines(t *testing.T) {
 }
 
 // TestBufferMarkerContextSanitized pins that a hostile pod/container name
-// cannot smuggle control sequences into any rendered marker row: the
-// open-context header carries the (sanitized) name, the reconnect marker
-// never echoes it (SEC-01).
+// cannot smuggle control sequences into the open-context header, which
+// carries the (sanitized) name.
 func TestBufferMarkerContextSanitized(t *testing.T) {
 	b := NewBuffer(4, 0)
 	b.PushMarker(markOpen, "\x1b]0;pwned\x07pod", "main")
@@ -330,13 +310,9 @@ func TestBufferMarkerContextSanitized(t *testing.T) {
 	if !strings.Contains(got, "pod") {
 		t.Fatalf("sanitized context lost: %q", got)
 	}
-	// The reconnect marker is a fixed annotation: no untrusted context.
-	if r := markerText(markReconnect, "\x1b[2Jx", "y"); strings.ContainsRune(r, 0x1b) || strings.Contains(r, "x") {
-		t.Fatalf("reconnect marker must be a fixed, context-free annotation: %q", r)
-	}
 }
 
-// TestBufferSustainedStreamSettles pins LOG-14: a sustained high-volume
+// TestBufferSustainedStreamSettles pins: a sustained high-volume
 // stream keeps both caps obeyed — the retained counts stay at the caps
 // while pushes keep succeeding (no unbounded growth).
 func TestBufferSustainedStreamSettles(t *testing.T) {

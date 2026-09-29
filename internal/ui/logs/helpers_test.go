@@ -15,7 +15,7 @@ func testRef() core.Ref {
 }
 
 // testModel builds the standard log-viewer model sized like the
-// acceptance-matrix default terminal (80×24). Viewport rows: 24-4 = 20.
+// default terminal (80×24). Viewport rows: 24-4 = 20.
 func testModel(t *testing.T) *Model {
 	t.Helper()
 	m := NewModel(testRef(), "", "main")

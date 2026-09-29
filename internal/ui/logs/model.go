@@ -1,23 +1,22 @@
-// Package logs is the D1 log viewer component: a bounded, keyboard-driven
-// log surface over injected core values (plan §8 D1).
+// Package logs is the log viewer component: a bounded, keyboard-driven
+// log surface over injected core values.
 //
 // Contract rules pinned here:
 //   - It is a child Tea model (New/Update/View/SetSize) accepting core
 //     values, never HTTP clients; it never starts goroutines and never
-//     owns transport (plan §4: "no transport goroutines in component" —
-//     the root batches deliveries via ApplyRecords).
+//     owns transport (the root batches deliveries via ApplyRecords).
 //   - Retention is bounded two ways: MaxLines entries and MaxBytes of
 //     text, whichever hits first; oversize is truncated or dropped with
-//     visible markers, never silently clipped (LOG-04/06).
+//     visible markers, never silently clipped.
 //   - Pause (Space) freezes autoscroll only; incoming records keep
 //     flowing into the bounded buffer and can never grow memory without
-//     bound (LOG-07); while paused, arriving lines never move the
-//     viewport (no autoscroll jump while paused — plan gate).
-//   - `f` returns to follow (LOG-08). Search is over the retained buffer
-//     only, with the scope visible (LOG-09). Container default "main" is
-//     visible/editable and switching is an intent for the root (LOG-10).
-//   - Every untrusted string passes the shared sanitizer before render
-//     (SEC-01/02); duplicates are legitimate output and never deduped.
+//     bound; while paused, arriving lines never move the
+//     viewport (no autoscroll jump while paused).
+//   - `f` returns to follow. Search is over the retained buffer
+//     only, with the scope visible. Container default "main" is
+//     visible/editable and switching is an intent for the root.
+//   - Every untrusted string passes the shared sanitizer before render;
+//     duplicates are legitimate output and never deduped.
 package logs
 
 import (
@@ -32,7 +31,7 @@ import (
 )
 
 // Phase is the stream lifecycle surfaced by the status row (distinguishable
-// states, plan §2; UI-07).
+// states).
 type Phase int
 
 const (
@@ -46,13 +45,12 @@ const (
 	PhaseEnded
 	// PhaseError: stream failed; error text is shown (honest state).
 	PhaseError
-	// PhaseCanceled: the user navigated away / canceled; reconnects are
-	// labeled, never silent.
+	// PhaseCanceled: the user navigated away or canceled the stream.
 	PhaseCanceled
 )
 
 // String renders the phase as the status badge (text accompanies any
-// styling — color is never the only carrier, plan §2).
+// styling — color is never the only carrier).
 func (p Phase) String() string {
 	switch p {
 	case PhaseStreaming:
@@ -86,14 +84,14 @@ type Model struct {
 	rowsFor int   // number of buffer entries rows was built from (-1 = stale)
 
 	phase   Phase  // stream lifecycle
-	errText string // sanitized error/unavailable explanation (LOG-12)
+	errText string // sanitized error/unavailable explanation
 	// notice explains a stream that ended cleanly with nothing to show when
 	// there is a known reason, so an empty pane never reads as a quiet pod.
 	notice string
 
 	search       searchState // committed search
 	searchBuf    string      // keystroke buffer while focused
-	searchOn     bool        // search input has focus (UI-04 isolation)
+	searchOn     bool        // search input has focus (isolates keys)
 	hits         []int       // match indices over retained log lines
 	hitRows      []int       // hit → scrollable row index (-1 when off-buffer)
 	curHit       int         // the hit n/N last moved to
@@ -159,7 +157,7 @@ type Model struct {
 // NewModel builds a log viewer for ref with explicit context. podName ""
 // means workflow-wide logs (rendered "(all pods)"). container "" is
 // normalized to the visible, editable default "main" — never silently
-// guessed (plan §2; LOG-10).
+// guessed.
 func NewModel(ref core.Ref, podName, container string) *Model {
 	if container == "" {
 		container = "main"
@@ -180,16 +178,10 @@ func NewModel(ref core.Ref, podName, container string) *Model {
 	}
 }
 
-// init emits the stream-open marker for the current context (called by
-// the root when attaching the component to a stream; ApplyRecords on a
-// fresh model with no header yet emits it lazily so tests and the demo
-// path cannot skip it).
-func (m *Model) ensureContextHeader() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.ensureContextHeaderLocked()
-}
-
+// ensureContextHeaderLocked emits the stream-open marker for the current
+// context once. ApplyRecords calls it before the first records land, so no
+// stream shows records without saying which pod and container they came
+// from. The caller holds m.mu.
 func (m *Model) ensureContextHeaderLocked() {
 	if m.headerDone {
 		return
@@ -284,11 +276,11 @@ func (m *Model) pipeDefault() string {
 }
 
 // SetPhase records the stream lifecycle (root calls per logRecordMsg:
-// running/done/canceled/err — plan §4 batched delivery).
+// running/done/canceled/err — batched delivery).
 func (m *Model) SetPhase(p Phase) { m.phase = p }
 
-// SetError records a sanitized, honest unavailability explanation (LOG-12:
-// missing pods/GC'd logs name the cause; errors never include credentials).
+// SetError records a sanitized, honest unavailability explanation
+// (missing pods/GC'd logs name the cause; errors never include credentials).
 func (m *Model) SetError(text string) {
 	m.errText = strings.TrimSpace(text)
 	if m.errText != "" {
@@ -301,9 +293,9 @@ func (m *Model) SetError(text string) {
 func (m *Model) SetNotice(text string) { m.notice = strings.TrimSpace(text) }
 
 // ApplyRecords feeds one batch of records into the buffer (the root
-// delivers logRecordMsg batches — plan §5; the component owns no
-// transport). Applying records while paused must never move the viewport
-// (plan gate): the scroll position is only re-pinned to the tail when
+// delivers logRecordMsg batches; the component owns no
+// transport). Applying records while paused must never move the viewport: the
+// scroll position is only re-pinned to the tail when
 // following.
 func (m *Model) ApplyRecords(recs []core.LogRecord) {
 	m.mu.Lock()
@@ -314,30 +306,6 @@ func (m *Model) ApplyRecords(recs []core.LogRecord) {
 	for _, r := range recs {
 		m.buf.Push(r)
 	}
-	m.invalidateLocked()
-}
-
-// ApplyMarker appends one stream-context annotation (the root converts
-// stream events to these — disconnect/reconnect/gap; LOG-11).
-func (m *Model) ApplyMarker(kind markerKind, podName, container string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if kind == markOpen {
-		// An explicit open marker replaces the lazy one for this context.
-		m.headerDone = true
-	}
-	m.buf.PushMarker(kind, podName, container)
-	m.invalidateLocked()
-}
-
-// NewStream annotates a fresh stream attempt on the same buffer: the next
-// pushed line is preceded by the reconnect gap marker (LOG-11: "new
-// stream; overlap/gap possible").
-func (m *Model) NewStream() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.ensureContextHeaderLocked()
-	m.buf.SetReconnect()
 	m.invalidateLocked()
 }
 
@@ -360,7 +328,7 @@ func (m *Model) Clear() {
 // invalidateLocked marks the view snapshot stale (recomputed at render).
 func (m *Model) invalidateLocked() { m.rowsFor = -1 }
 
-// Update implements the child Tea model (plan §4 frozen surface: children
+// Update implements the child Tea model (children
 // return intents; the root alone converts them to network effects).
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
@@ -388,7 +356,7 @@ func (m *Model) SetSize(w, h int) {
 	m.rowsFor = -1
 }
 
-// handleKey routes keys by focus mode (UI-04 key isolation: text-entry
+// handleKey routes keys by focus mode (key isolation: text-entry
 // modes consume printable input and never interpret command keys).
 func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
@@ -416,7 +384,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	return m.handleBrowseKey(key)
 }
 
-// handleBrowseKey implements the log-viewer key matrix (plan §2 Logs row):
+// handleBrowseKey implements the log-viewer key matrix:
 // Space pauses, t follows, / searches, & filters to the search, w wraps,
 // L toggles the source labels, ctrl+t asks for server timestamps, c edits
 // context, pgup/pgdown and j/k/arrows scroll. No transport is ever touched:
@@ -427,18 +395,18 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 	}
 	switch key {
 	case " ":
-		// Space pauses autoscroll (LOG-07). Pure state change: the
+		// Space pauses autoscroll. Pure state change: the
 		// viewport freezes; collection upstream keeps flowing into the
 		// bounded buffer (pause never grows memory unboundedly).
 		m.paused = true
 		m.follow = false
 		// Freeze the window at the currently visible rows: while paused,
-		// the same rows stay visible when new lines arrive (plan gate).
+		// the same rows stay visible when new lines arrive.
 		m.bottom = m.bottomAt()
 		m.phase = PhasePaused
 		return nil
 	case "t":
-		// `t` (tail) returns to follow (LOG-08). `f` is the global
+		// `t` (tail) returns to follow. `f` is the global
 		// full-screen raw key on every route, so it cannot mean follow
 		// here as well.
 		m.paused = false
@@ -447,7 +415,7 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		m.phase = PhaseStreaming
 		return nil
 	case "/":
-		// `/` focuses retained-buffer search (LOG-09).
+		// `/` focuses retained-buffer search.
 		m.searchOn = true
 		m.searchBuf = m.search.term // prefill with the active term
 		return nil
@@ -459,7 +427,7 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		m.pipeBuf = m.pipeDefault()
 		return nil
 	case "c":
-		// `c` opens the pod/container context editor (LOG-10). The
+		// `c` opens the pod/container context editor. The
 		// current values prefill: default "main" is visible, editable.
 		m.contextOn = true
 		m.podBuf = m.podName
@@ -551,7 +519,7 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		intent := TimestampsIntent{Ref: m.ref, PodName: m.podName, Container: m.container, On: m.timestamps}
 		return func() tea.Msg { return intent }
 	default:
-		// Everything else (q, ?, ...) belongs to the root (UI-04):
+		// Everything else (q, ?, ...) belongs to the root:
 		// the child must not shadow global keys.
 		return nil
 	}
@@ -637,13 +605,13 @@ func printable(key string) (string, bool) {
 	return "", false
 }
 
-// handleSearchKey routes keys while search has focus (UI-04: printable
+// handleSearchKey routes keys while search has focus (printable
 // insertion only; enter applies over the retained buffer; esc cancels).
 func (m *Model) handleSearchKey(key string) tea.Cmd {
 	switch key {
 	case "esc":
 		// Cancel: drop the uncommitted buffer, restore the previous
-		// committed search state (Esc cancels, plan §2).
+		// committed search state (Esc cancels).
 		m.searchOn = false
 		m.searchBuf = ""
 		return nil
@@ -668,7 +636,7 @@ func (m *Model) handleSearchKey(key string) tea.Cmd {
 }
 
 // applySearch commits a search term and resolves hits over the retained
-// buffer (LOG-09: scope is the retained lines only; the view states it).
+// buffer (scope is the retained lines only; the view states it).
 func (m *Model) applySearch(term string) {
 	m.search = searchState{term: term}
 	m.curHit = 0
@@ -756,7 +724,7 @@ func (m *Model) ClearSearch() {
 
 // PipeIntent asks the root to run Command with the retained log lines on its
 // standard input. The component never starts a process: the root owns every
-// effect (plan §4), and this one takes the whole terminal.
+// effect, and this one takes the whole terminal.
 type PipeIntent struct {
 	Ref     core.Ref
 	Command string
@@ -797,7 +765,7 @@ func (m *Model) handlePipeKey(key string) tea.Cmd {
 // handleContextKey routes keys while the pod/container editor has focus.
 // Enter emits the SwitchContextIntent for the root; blank container is
 // refused with a visible message (the default "main" is prefilled and
-// editable — never silently guessed, plan §2/LOG-10). Esc cancels without
+// editable — never silently guessed). Esc cancels without
 // emitting anything.
 func (m *Model) handleContextKey(key string) tea.Cmd {
 	switch key {
@@ -809,7 +777,7 @@ func (m *Model) handleContextKey(key string) tea.Cmd {
 	case "enter":
 		container := strings.TrimSpace(m.containerBuf)
 		if container == "" {
-			// Refuse: no silent default, editor stays open (LOG-10).
+			// Refuse: no silent default, editor stays open.
 			m.contextErr = "container must not be empty (\"main\" is the editable default)"
 			return nil
 		}
@@ -864,7 +832,7 @@ func (m *Model) podRight() tea.Cmd {
 }
 
 // TimestampsIntent asks the root to reopen the stream with server
-// timestamps on or off. The component never dials anything (plan §4); it
+// timestamps on or off. The component never dials anything; it
 // has already marked the switch point in its buffer.
 type TimestampsIntent struct {
 	Ref       core.Ref
@@ -873,9 +841,9 @@ type TimestampsIntent struct {
 	On        bool
 }
 
-// SwitchContextIntent is the pod/container context-switch intent (LOG-10).
+// SwitchContextIntent is the pod/container context-switch intent.
 // The root alone converts it to a stream effect; this component never
-// dials anything (plan §4).
+// dials anything.
 type SwitchContextIntent struct {
 	Ref       core.Ref
 	PodName   string

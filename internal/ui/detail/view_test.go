@@ -9,7 +9,7 @@ import (
 
 // View tests: the composed detail view (summary | nodes | resource tabs)
 // renders deterministically for goldens; unavailable/loading/error states
-// are distinguishable (acceptance DET/UI rows).
+// are distinguishable.
 
 func TestDetailViewStateUnavailable(t *testing.T) {
 	wf := testkit.FixtureOffloadedWorkflow("ns", "fixture-offloaded")
@@ -62,7 +62,7 @@ func TestDetailViewStateTabSelection(t *testing.T) {
 	}
 }
 
-// TestDetailViewStateSanitization pins DET-13 at the composed-view level:
+// TestDetailViewStateSanitization pins sanitization at the composed-view level:
 // untrusted fields (message, labels) cannot smuggle control sequences into
 // the terminal output.
 func TestDetailViewStateSanitization(t *testing.T) {

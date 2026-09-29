@@ -1,7 +1,7 @@
-// sort.go — deterministic sort orders for the workflow list (B1).
+// sort.go — deterministic sort orders for the workflow list.
 //
 // All orders are total, stable and independent of map iteration order.
-// Missing timestamps must sort "sensibly" (plan gate): never crash, never
+// Missing timestamps must sort "sensibly": never crash, never
 // jump non-deterministically, and never bury unfinished work behind
 // finished work by accident — see each comparator's rule below.
 package workflowlist
@@ -21,13 +21,13 @@ type SortKey string
 const (
 	// SortPhaseName is the default: phase (canonical order, unknown last),
 	// then name. Unknown/missing phases sort deterministically last within
-	// their bucket so tolerant display stays stable (LIST-11).
+	// their bucket so tolerant display stays stable.
 	SortPhaseName SortKey = "phase"
 	// SortName is by name, case-insensitively.
 	SortName SortKey = "name"
 	// SortTime is newest-created first, but NOT-yet-CREATED (zero
 	// CreatedAt, i.e. timestamp missing) last, and among missing ones by
-	// name — "missing timestamps sensible" (plan B1 gate; DET-10 analogue).
+	// name, so a missing timestamp never reads as the oldest.
 	SortTime SortKey = "time"
 )
 
@@ -59,7 +59,7 @@ func phaseRank(p string) int {
 	case "Succeeded":
 		return 4
 	default:
-		return 5 // unknown/empty phases (LIST-11)
+		return 5 // unknown/empty phases
 	}
 }
 
@@ -147,37 +147,12 @@ func Sort(items []core.Summary, key SortKey) []core.Summary {
 
 // NewestFirst is the age-column presentation rule shared with tests: start
 // time if present, else created time; zero values sort last and a name
-// tiebreak keeps the order total (missing timestamps stay sensible, LIST-09).
+// tiebreak keeps the order total (missing timestamps stay sensible).
 func ageKey(s core.Summary) time.Time {
 	if s.StartedAt != nil && !s.StartedAt.IsZero() {
 		return *s.StartedAt
 	}
 	return s.CreatedAt
-}
-
-// AgeOrdered returns items ordered for the AGE column display: newest
-// activity first, missing-timestamp rows last by name. Sorting itself uses
-// Sort; this helper exists so the view and tests share one rule.
-func AgeOrdered(items []core.Summary) []core.Summary {
-	out := make([]core.Summary, len(items))
-	copy(out, items)
-	sort.SliceStable(out, func(i, j int) bool {
-		a, b := ageKey(out[i]), ageKey(out[j])
-		if a.IsZero() && b.IsZero() {
-			return out[i].Ref.Name < out[j].Ref.Name
-		}
-		if a.IsZero() {
-			return false
-		}
-		if b.IsZero() {
-			return true
-		}
-		if !a.Equal(b) {
-			return a.After(b)
-		}
-		return out[i].Ref.Name < out[j].Ref.Name
-	})
-	return out
 }
 
 func toLower(s string) string {

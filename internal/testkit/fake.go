@@ -1,11 +1,11 @@
 // Package testkit provides the independent fake core.Reader, a fake clock
-// and explicitly synthetic fixtures for deterministic tests (plan §8 F1
-// slice 3; environments ET-1 in docs/development.md).
+// and explicitly synthetic fixtures for deterministic tests (docs/development.md
+// describes the test environments).
 //
 // Fixture policy: everything here is SYNTHETIC and named as such. Nothing in
 // this package is a captured production payload, and nothing may be
-// presented as one (plan: "Fixtures explicitly synthetic, never mislabeled
-// captures").
+// presented as one (fixtures are explicitly synthetic, never mislabeled
+// captures).
 package testkit
 
 import (
@@ -42,9 +42,9 @@ func (c *FakeClock) Advance(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
-// FakeReader is an independent in-memory core.Reader for ET-1 tests and the
+// FakeReader is an independent in-memory core.Reader for in-process tests and the
 // --demo backend. It never performs I/O and never constructs HTTP clients
-// (ADR 0001: demo runs on the fake Reader only).
+// (the demo runs on the fake Reader only).
 type FakeReader struct {
 	mu        sync.Mutex
 	Workflows map[core.Ref]core.Workflow

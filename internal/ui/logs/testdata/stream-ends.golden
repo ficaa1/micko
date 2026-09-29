@@ -4,5 +4,4 @@ retained: 2/10000 lines (0 evicted)
 ── (all pods):main ── 2 lines recorded
 pod-1            step: starting
 pod-1            step: done
-── stream ended ──
 t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back

@@ -8,13 +8,13 @@
 //     not the tree. A node is drawn under the node that owns it, which is
 //     its Retry node for a retry attempt, its TaskGroup for a loop item,
 //     its container set for a container, and its boundary otherwise.
-//     outboundNodes are never tree edges (DET-09).
+//     outboundNodes are never tree edges.
 //   - StepGroup nodes are not drawn. Their steps are drawn under the Steps
 //     node in group order, the way `argo get` shows them.
 //   - Every other node in the map appears exactly once in the tree or in an
-//     explicit ungrouped section (DET-08); cycles are cut; traversal is
+//     explicit ungrouped section; cycles are cut; traversal is
 //     linear apart from sorting, never exponential.
-//   - Node IDs are never assumed to be pod names (DET-11).
+//   - Node IDs are never assumed to be pod names.
 package detail
 
 import (
@@ -41,11 +41,11 @@ type OutlineRow struct {
 	// PodName is the pod backing this node. It is filled in only when the
 	// server stated its pod-naming scheme on the workflow; empty means
 	// "unknown", and the pane then offers no node-scoped logs rather than
-	// guessing a pod that may belong to another workflow (DET-11).
+	// guessing a pod that may belong to another workflow.
 	PodName string
 	// StartedAt/FinishedAt pass through for the selected-node pane; nil
-	// means "not yet started" (protocol §2: absent phase/timestamps are
-	// meaningful, never rendered as empty success).
+	// means "not yet started" (an absent phase or timestamp is meaningful,
+	// never rendered as empty success).
 	StartedAt  *time.Time
 	FinishedAt *time.Time
 	// Template is the template the node ran: its own template name, or the
@@ -83,14 +83,14 @@ type Outline struct {
 	Rows []OutlineRow
 	// Available mirrors Workflow.NodesAvailable. false means the node map
 	// is unusable (offloaded/unhydrated) and Rows is empty — the view
-	// renders the explicit unavailable state with UnavailableReason (DET-04).
+	// renders the explicit unavailable state with UnavailableReason.
 	Available         bool
 	UnavailableReason string
 	// Dangling lists node IDs referenced by children/boundary grouping but
-	// missing from the node map (DET-08: explicit ungrouped section).
+	// missing from the node map (explicit ungrouped section).
 	Dangling []OutlineRow
 	// Unreachable lists nodes present in the map that the tree could not
-	// place (DET-08: never silently dropped).
+	// place (never silently dropped).
 	Unreachable []OutlineRow
 	// StepGroups is how many StepGroup nodes the tree drew as their steps
 	// instead of as rows. They are the only nodes absent from both the tree
@@ -119,7 +119,7 @@ type OutlineOptions struct {
 //
 // Traversal is linear: every node is visited at most once, so even
 // adversarial cyclic references terminate in O(n+e) plus the sorting, with
-// no exponential expansion (DET-08, PERF-02).
+// no exponential expansion.
 func BuildNodeOutline(wf core.Workflow, _ OutlineOptions) Outline {
 	if !wf.NodesAvailable {
 		return Outline{
@@ -208,7 +208,7 @@ func (b *treeBuilder) build() Outline {
 	}
 	b.orderRoots(out.Rows)
 
-	// Dangling: referenced IDs missing from the map (DET-08), sorted.
+	// Dangling: referenced IDs missing from the map, sorted.
 	for id := range b.referenced {
 		if _, ok := b.nodes[id]; !ok {
 			out.Dangling = append(out.Dangling, OutlineRow{
@@ -779,7 +779,7 @@ func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 // outlineRowOf maps a core.Node to an OutlineRow. HasPod follows the pinned
 // node-type list. PodName is carried through exactly as the adapter resolved
 // it: empty unless the server declared the workflow's pod-name format, so a
-// node ID is still never treated as a pod name (DET-11).
+// node ID is still never treated as a pod name.
 func outlineRowOf(n core.Node) OutlineRow {
 	name := n.Name
 	if name == "" {

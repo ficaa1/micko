@@ -113,10 +113,6 @@ func New(ref core.Ref, flags ...bool) *Model {
 	return m
 }
 
-// NewModel is an explicit alias for callers that use the other UI package
-// naming convention.
-func NewModel(ref core.Ref, flags ...bool) *Model { return New(ref, flags...) }
-
 func (m *Model) Init() tea.Cmd    { return nil }
 func (m *Model) State() State     { return m.state }
 func (m *Model) Ref() core.Ref    { return m.ref }

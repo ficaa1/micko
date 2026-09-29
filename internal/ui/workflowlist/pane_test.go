@@ -52,7 +52,7 @@ func TestBodyLinesFitTheHeightBudget(t *testing.T) {
 	}
 }
 
-// Color is never the only carrier of a status (UI-03/07). Each row shows a
+// Color is never the only carrier of a status. Each row shows a
 // glyph AND the phase word.
 func TestRowsCarryASymbolAndTheWord(t *testing.T) {
 	m := paneModel(t, 6, 100, 20)

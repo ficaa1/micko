@@ -1,11 +1,10 @@
 // Package core defines the frozen, transport-independent data contracts for
-// micko (plan §4 "Frozen contract surface"). These types are consumed by
-// UI workers (B1/C1/D1) and implemented by the transport adapter (A1, in
-// package internal/argo) and the fake backend (internal/testkit).
+// micko. These types are consumed by the UI packages and implemented by the
+// transport adapter (internal/argo) and the fake backend (internal/testkit).
 //
-// Freezing rules (plan §4):
-//   - Exact field/type names are recorded in docs/development.md; changes go
-//     through F with a plan/ADR amendment before dependent work resumes.
+// Freezing rules:
+//   - Exact field/type names are recorded in docs/development.md; a change
+//     to one is a change to a contract every consumer depends on.
 //   - DTOs carry only consumed fields; unknown server fields stay in
 //     Workflow.Resource as raw JSON (docs/development.md).
 //   - Resource versions and continuation tokens are opaque strings: compare
@@ -20,7 +19,7 @@ import (
 
 // Ref identifies a workflow by namespace, name and server-assigned UID.
 // UID is the authoritative identity: same name with a new UID is a
-// different workflow (plan §2; acceptance matrix LIST-12).
+// different workflow.
 type Ref struct {
 	Namespace string
 	Name      string
@@ -47,9 +46,12 @@ type Summary struct {
 	Phase           string
 	Message         string
 	CreatedAt       time.Time
-	StartedAt       *time.Time
-	FinishedAt      *time.Time
-	Labels          map[string]string
+	// StartedAt and FinishedAt are nil until the workflow starts or
+	// finishes. A nil time is never materialized as a zero time: a view
+	// shows the time as absent rather than inventing one.
+	StartedAt  *time.Time
+	FinishedAt *time.Time
+	Labels     map[string]string
 	// Suspended reports that the workflow waits for a human Resume: it
 	// holds at least one Suspend node in a Running phase, or it has not
 	// finished and its spec.suspend is set (the state the suspend action
@@ -103,7 +105,7 @@ type Node struct {
 	TemplateName        string
 	TemplateRefTemplate string
 	// PodName is populated only from verified version-aware resolution
-	// (docs/development.md; v0.1 policy: do not guess pod names).
+	// (docs/development.md); a pod name is never guessed.
 	PodName string
 
 	// Progress is the server's "done/total" count below this node, verbatim.
@@ -165,7 +167,7 @@ type Workflow struct {
 	Nodes   map[string]Node
 	// NodesAvailable reports whether the node map is usable. An empty
 	// Nodes map with NodesAvailable=false must be rendered as
-	// "node status unavailable", never as an empty workflow (plan §5).
+	// "node status unavailable", never as an empty workflow.
 	NodesAvailable         bool
 	NodesUnavailableReason string
 	// Resource is the raw server-returned workflow JSON, preserved
@@ -182,11 +184,11 @@ type Workflow struct {
 // LogRequest describes a log stream to open.
 type LogRequest struct {
 	Ref Ref
-	// PodName empty means workflow-wide logs (all pods). Pod-scoped
-	// streams require a verified pod name (user-entered in v0.1).
+	// PodName empty means workflow-wide logs (all pods). A pod-scoped
+	// stream takes the node's verified pod name (Node.PodName).
 	PodName string
 	// Container is always sent explicitly; the default "main" stays
-	// visible/editable in the UI, never silently guessed (plan §2).
+	// visible/editable in the UI, never silently guessed.
 	Container  string
 	Follow     bool
 	Timestamps bool
@@ -205,7 +207,7 @@ type LogRecord struct {
 }
 
 // Reader is the frozen transport-independent read contract. Implemented by
-// the REST adapter (A1), the testkit fake, and the demo backend; UI code
+// the REST adapter, the testkit fake, and the demo backend; UI code
 // never imports transport packages.
 type Reader interface {
 	List(context.Context, Query) (Page, error)
@@ -214,6 +216,6 @@ type Reader interface {
 	// runs on one goroutine, blocks only on a bounded cancelable queue,
 	// and returns an error to stop the stream. StreamLogs returns nil for
 	// a clean finite EOF; context cancellation is distinguishable from
-	// network failure; the caller owns the reconnect policy (plan §4).
+	// network failure; the caller owns the reconnect policy.
 	StreamLogs(context.Context, LogRequest, func(LogRecord) error) error
 }

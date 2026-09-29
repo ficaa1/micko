@@ -8,11 +8,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// benchmark_test.go — the plan §8/§9 D1 benchmark target.
+// benchmark_test.go — the log viewer's benchmark target.
 //
 //	go test ./internal/ui/logs -bench BenchmarkBuffer -benchmem
 //
-// The sustained high-volume synthetic stream (LOG-14, PERF-04) must obey
+// The sustained high-volume synthetic stream must obey
 // both caps; the bench pins push cost staying flat after eviction kicks
 // in (no reallocation blowup at the steady state, allocations bounded by
 // the retained window).

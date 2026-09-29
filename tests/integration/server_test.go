@@ -44,11 +44,11 @@ type harness struct {
 	queue []tea.Cmd
 
 	// dropTicks stops the poll cycle: fed-back tick messages (app's
-	// unexported tickMsg — identified via reflection, E1 may not edit
-	// internal/app) are dropped instead of delivered, so the queue
-	// drains and the model settles at loading=false. This makes view
+	// unexported tickMsg — identified via reflection, since an unexported
+	// type cannot be named from this package) are dropped instead of
+	// delivered, so the queue drains and the model settles at loading=false. This makes view
 	// assertions deterministic: the program's own tick guard otherwise
-	// restarts a poll the instant the previous one completes (plan §5).
+	// restarts a poll the instant the previous one completes.
 	dropTicks bool
 }
 
@@ -126,8 +126,7 @@ func (h *harness) pump(maxRounds int) {
 }
 
 // isTickMsg reports whether msg is the app package's unexported tickMsg
-// (an empty struct). Reflection is the only handle E1 has on it — the
-// tests must not modify internal/app (F-owned).
+// (an empty struct). Reflection is the only handle these tests have on it.
 func isTickMsg(msg tea.Msg) bool {
 	if msg == nil {
 		return false
@@ -173,7 +172,7 @@ func (h *harness) view() string {
 	return h.root.View().Content
 }
 
-// --- wire contract: list + pagination (LIST-01…04) ----------------------------
+// --- wire contract: list + pagination ----------------------------
 
 func TestListPaginationOverRealHTTP(t *testing.T) {
 	fs := newSeededServer(t)
@@ -198,7 +197,7 @@ func TestListPaginationOverRealHTTP(t *testing.T) {
 		t.Error("resourceVersion empty")
 	}
 
-	// Verbatim pass-back (plan §5): the token is opaque; return unchanged.
+	// Verbatim pass-back: the token is opaque; return unchanged.
 	page2, err := client.List(ctx, core.Query{Namespace: testNS, Limit: 2, Continue: page.Continue})
 	if err != nil {
 		t.Fatalf("list page2: %v", err)
@@ -262,7 +261,7 @@ func TestListServerErrorMapsToTypedKind(t *testing.T) {
 	}
 }
 
-// --- wire contract: detail + UID semantics (DET-01/02) -------------------------
+// --- wire contract: detail + UID semantics -------------------------
 
 func TestGetUIDFallbackAndMismatch(t *testing.T) {
 	fs := newSeededServer(t)
@@ -317,7 +316,7 @@ func TestGetNodesAndResourcePreserved(t *testing.T) {
 	}
 }
 
-// --- wire contract: log streams (LOG-01…05, §6.3 framing edges) ----------------
+// --- wire contract: log streams (framing edges) ----------------
 
 func TestStreamLogsJSONLinesFraming(t *testing.T) {
 	fs := newSeededServer(t)
@@ -410,7 +409,7 @@ func TestStreamLogsTruncatedFinalChunkSurfaces(t *testing.T) {
 	err := client.StreamLogs(context.Background(),
 		core.LogRequest{Ref: core.Ref{Namespace: testNS, Name: "wf-a", UID: "uid-a"}, Container: "main"},
 		func(core.LogRecord) error { return nil })
-	// §6.3 case 3: the final chunk arrives without its terminating newline;
+	// The final chunk arrives without its terminating newline;
 	// the last (incomplete) line must not be silently swallowed as if the
 	// stream had ended cleanly with all data intact.
 	if err == nil {
@@ -491,7 +490,7 @@ func TestStreamLogsCancelDuringDrip(t *testing.T) {
 	}
 }
 
-// --- deliberately broken API responses (E1 gate) -------------------------------
+// --- deliberately broken API responses -------------------------------
 
 func TestBrokenJSONListFails(t *testing.T) {
 	fs := NewFixtureServer(t, ServerConfig{BrokenJSONList: true})
@@ -507,7 +506,7 @@ func TestBrokenJSONListFails(t *testing.T) {
 	}
 }
 
-// --- security: write prohibition + redirect rejection (SEC-04, CONN-05) --------
+// --- security: write prohibition + redirect rejection --------
 
 func TestNoWriteRequestsEverSent(t *testing.T) {
 	fs := newSeededServer(t)
@@ -527,7 +526,7 @@ func TestNoWriteRequestsEverSent(t *testing.T) {
 	methods := fs.RequestsByMethod()
 	for m, n := range methods {
 		if m != http.MethodGet {
-			t.Errorf("non-GET %s request count = %d; alpha must never construct writes (SEC-04)", m, n)
+			t.Errorf("non-GET %s request count = %d; a read must never construct a write", m, n)
 		}
 	}
 	if methods[http.MethodGet] < 3 {
@@ -541,7 +540,7 @@ func TestRedirectRejectedByTransport(t *testing.T) {
 	client := NewWireClient(WireClientConfig{
 		BaseURL: fs.URL(),
 		HTTPClient: &http.Client{
-			// Adapter policy (plan §3): reject redirects — no credentials
+			// Adapter policy: reject redirects — no credentials
 			// ever reach the redirect target. The test pins the behavior
 			// the production client must implement.
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {

@@ -1,20 +1,20 @@
-// Package workflowlist is the B1 list component: a keyboard-driven list of
-// workflow summaries over injected core values (plan §8 B1).
+// Package workflowlist is the list component: a keyboard-driven list of
+// workflow summaries over injected core values.
 //
 // Contract rules pinned here:
 //   - It is a child Tea model (New/Update/View/SetSize) accepting core
-//     values, never HTTP clients, and never starts goroutines (plan §4).
-//   - Selection identity is UID (plus namespace+name), never a row index
-//     (plan §2; LIST-12): reordering or deletion keeps the selection on the
+//     values, never HTTP clients, and never starts goroutines.
+//   - Selection identity is UID (plus namespace+name), never a row index:
+//     reordering or deletion keeps the selection on the
 //     same workflow.
 //   - Open intent is emitted as app.OpenWorkflowMsg / app.OpenLogsMsg; the
-//     root alone converts intents to network effects (plan §4).
-//   - Search is local over the injected snapshot and the view says so
-//     (plan §5; LIST-05/09): no claim of searching un-fetched workflows.
-//   - Untrusted text is sanitized with the shared sanitizer before render
-//     (plan §5; SEC-01/02); styling is applied separately from content.
+//     root alone converts intents to network effects.
+//   - Search is local over the injected snapshot and the view says so: no claim
+//     of searching un-fetched workflows.
+//   - Untrusted text is sanitized with the shared sanitizer before render;
+//     styling is applied separately from content.
 //   - All state transitions (loading/stale/incomplete/forbidden/empty) are
-//     distinguishable in the view (UI-07).
+//     distinguishable in the view.
 package workflowlist
 
 import (
@@ -26,7 +26,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// Status is the list-level state surfaced distinctly by the view (UI-07).
+// Status is the list-level state surfaced distinctly by the view.
 // It mirrors the root's listState facts the parent passes down; the
 // component never guesses network state.
 type Status int
@@ -38,10 +38,10 @@ const (
 	StatusLoading
 	// StatusStale: last poll errored; last good data shown with age.
 	StatusStale
-	// StatusIncomplete: collection capped (plan §5: visible incomplete state
+	// StatusIncomplete: collection capped (visible incomplete state
 	// and search scope honesty — the snapshot is not the whole namespace).
 	StatusIncomplete
-	// StatusForbidden: the server denied the list (authoritative; CONN-13).
+	// StatusForbidden: the server denied the list (authoritative).
 	StatusForbidden
 	// StatusUnauthenticated: 401 with guidance; do not retry silently.
 	StatusUnauthenticated
@@ -77,7 +77,7 @@ type Model struct {
 	errAge time.Duration // stale age when StatusStale (root supplies)
 
 	// searchBuf holds the raw search text while the search input is
-	// focused (UI-04: navigation keys must not be reinterpreted while
+	// focused (navigation keys must not be reinterpreted while
 	// typing). The component owns this minimal buffer directly — no
 	// bubbles/textinput (its clipboard dependency is outside the pinned
 	// module set); rendering of the entry line is plain text.
@@ -100,12 +100,12 @@ type Model struct {
 	// scrollTop is the first visible row index of the viewport window. It is
 	// an anchor, not an identity: the window only moves far enough to keep
 	// the UID-selected row visible, so scrolling stays stable while the
-	// selection itself is never index-based (LIST-12).
+	// selection itself is never index-based.
 	scrollTop int
 
 	// winStart/winEnd are the row range the last render actually showed.
 	// WindowStatus reports them to the shell footer; they are render output,
-	// never input to selection (LIST-12 keeps selection UID-based).
+	// never input to selection (selection stays UID-based).
 	winStart, winEnd int
 
 	// counts for honest scope display: visible vs total snapshot size.
@@ -122,9 +122,6 @@ type Model struct {
 	// theme is injected (shared.Theme) so goldens can force no-color.
 	theme shared.Theme
 
-	// noColor mirrors the theme's plainness for ASCII snapshot tests.
-	noColor bool
-
 	// allNS marks a snapshot collected across namespaces. The table gains a
 	// NAMESPACE column and the filter matches it, because two rows of the
 	// same name in two namespaces are otherwise indistinguishable.
@@ -132,8 +129,8 @@ type Model struct {
 }
 
 // New builds an empty list model. Items/status arrive via SetItems and
-// SetStatus; the model never fetches by itself (plan §4).
-func New(theme shared.Theme, noColor bool) Model {
+// SetStatus; the model never fetches by itself.
+func New(theme shared.Theme) Model {
 	return Model{
 		phase: PhaseAll,
 		sort:  SortPhaseName,
@@ -143,7 +140,7 @@ func New(theme shared.Theme, noColor bool) Model {
 
 // SetItems replaces the snapshot (root calls after listLoadedMsg). The
 // selected workflow is preserved by UID identity across the replacement
-// (reorder/deletion-safe; LIST-12). Sorting/filtering is reapplied.
+// (reorder/deletion-safe). Sorting/filtering is reapplied.
 func (m *Model) SetItems(items []core.Summary, now time.Time) {
 	m.items = items
 	m.now = now
@@ -305,8 +302,8 @@ func (m *Model) CycleSort() {
 	m.applyView()
 }
 
-// SetQuery parses and applies the local filter (snapshot-scoped;
-// LIST-05/09). A query that does not parse changes nothing: the previous
+// SetQuery parses and applies the local filter (snapshot-scoped).
+// A query that does not parse changes nothing: the previous
 // filter stays applied, and the error is returned and kept for the toolbar.
 func (m *Model) SetQuery(q string) error {
 	match, err := ParseQuery(q)
@@ -344,7 +341,7 @@ func (m *Model) TotalCount() int   { return m.total }
 
 // applyView recomputes the display rows from items: filter by phase bucket
 // and the parsed query, then sort. Selection survives by UID (never
-// reindexed by position — plan gate "no row-index identity").
+// reindexed by position).
 //
 // Every filter goes through here. HiddenMarkCount compares the marks with
 // m.rows, so a filter applied anywhere else would miscount hidden marks.
@@ -385,7 +382,7 @@ func (m *Model) applyView() {
 }
 
 // reselect preserves the UID selection across a snapshot replacement and
-// clears it if the workflow disappeared (deletion between polls; LIST-12/13).
+// clears it if the workflow disappeared (deletion between polls).
 func (m *Model) reselect(_ time.Time) {
 	if m.selUID == "" {
 		return
@@ -430,7 +427,7 @@ func (m *Model) move(delta int) {
 }
 
 // OpenIntent returns the open-workflow intent for the selected row, or nil.
-// The ROOT converts it to a network effect (plan §4).
+// The ROOT converts it to a network effect.
 func (m *Model) OpenIntent() tea.Msg {
 	sel := m.Selected()
 	if sel.Ref.UID == "" {
@@ -450,8 +447,8 @@ func (m *Model) OpenSectionIntent(section string) tea.Msg {
 }
 
 // LogsIntent returns the open-logs intent for the selected row, or nil.
-// Container defaults to "main" visibly (plan §2; the UI for editing the
-// container lives in the logs view, D1).
+// Container defaults to "main" visibly (the UI for editing the
+// container lives in the logs view).
 func (m *Model) LogsIntent() tea.Msg {
 	sel := m.Selected()
 	if sel.Ref.UID == "" {
@@ -461,9 +458,8 @@ func (m *Model) LogsIntent() tea.Msg {
 }
 
 // RefreshIntent is the manual refresh request (r). The frozen app contract
-// has no RefreshListMsg; the root already polls and coalesces (LIST-07), so
+// has no RefreshListMsg; the root already polls and coalesces, so
 // the component emits a lightweight local signal the root can interpret.
-// A dedicated frozen message would need an F-gated contract amendment.
 type RefreshListMsg struct{}
 
 func (m *Model) RefreshIntent() tea.Msg { return RefreshListMsg{} }
@@ -521,7 +517,7 @@ func (m *Model) searchRight() {
 	}
 }
 
-// SetSize records the terminal size (child model contract, plan §4).
+// SetSize records the terminal size (child model contract).
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 }
@@ -530,5 +526,5 @@ func (m *Model) SetSize(w, h int) {
 func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
 // sanitizeOne is the single render-path sanitization choke point for
-// server-derived strings in this component (SEC-02).
+// server-derived strings in this component.
 func sanitizeOne(s string) string { return shared.Sanitize(s) }

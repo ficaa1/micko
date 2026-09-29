@@ -227,11 +227,6 @@ func HasBackground(s lipgloss.Style) bool {
 	return isColor(s.GetBackground())
 }
 
-// HasForeground reports whether s sets a foreground colour.
-func HasForeground(s lipgloss.Style) bool {
-	return isColor(s.GetForeground())
-}
-
 func isColor(c color.Color) bool {
 	if c == nil {
 		return false
@@ -261,7 +256,7 @@ func padCells(s string, width int) string {
 }
 
 // PhaseStyle returns the style for a workflow/node phase string. Unknown
-// phases get PhaseOther and must remain displayable (LIST-11).
+// phases get PhaseOther and must remain displayable.
 func (t Theme) PhaseStyle(phase string) lipgloss.Style {
 	switch phase {
 	case "Suspended":
@@ -281,7 +276,7 @@ func (t Theme) PhaseStyle(phase string) lipgloss.Style {
 
 // PhaseSymbol returns a one-cell glyph for a workflow or node phase.
 //
-// Color must never be the only carrier of a status (UI-03/07): a mono
+// Color must never be the only carrier of a status: a mono
 // terminal, NO_COLOR, and a color-blind reader all lose the hue but keep the
 // glyph. The glyph is supplementary to the phase word, which is still
 // rendered in full — it is a third channel, not a replacement.
@@ -305,7 +300,7 @@ func PhaseSymbol(phase string) string {
 	case "Pending":
 		return "○" // hollow circle: not started
 	default:
-		// LIST-11: a phase the server invented still needs a visible cell.
+		// A phase the server invented still needs a visible cell.
 		return "•"
 	}
 }

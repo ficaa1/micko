@@ -11,12 +11,11 @@ import (
 
 // ---------------------------------------------------------------------------
 // view tests — golden rendering and sanitization. These verify what the
-// terminal receives for the acceptance-matrix terminal cases (LOG-05,
-// SEC-01/02, LOG-04 truncation markers), plus the pinned disconnect/
-// reconnect/ended surfaces (LOG-11/LOG-12).
+// terminal receives for the standard terminal cases (control-sequence
+// stripping, truncation markers).
 // ---------------------------------------------------------------------------
 
-// TestViewReachesTerminalWithoutControlSequences pins LOG-05/SEC-01: hostile
+// TestViewReachesTerminalWithoutControlSequences pins: hostile
 // log content is sanitized before the terminal surface sees it.
 func TestViewReachesTerminalWithoutControlSequences(t *testing.T) {
 	m := testModel(t)
@@ -42,14 +41,14 @@ func TestViewUnicodeSurvives(t *testing.T) {
 	}
 }
 
-// TestViewTruncationMarkerVisible pins LOG-04 in the rendered surface: an
+// TestViewTruncationMarkerVisible pins the truncation marker in the rendered surface: an
 // over-allowance line shows the visible truncation marker.
 func TestViewTruncationMarkerVisible(t *testing.T) {
 	m := testModel(t)
 	long := strings.Repeat("y", maxLineBytes+50)
 	m.ApplyRecords([]core.LogRecord{{PodName: "pod-1", Container: "main", Content: long, ReceivedAt: testkit.FixtureEpoch}})
 	if v := m.View(); !strings.Contains(v, "truncated") {
-		t.Fatal("truncation marker missing from the rendered view (LOG-04)")
+		t.Fatal("truncation marker missing from the rendered view")
 	}
 }
 
@@ -91,51 +90,6 @@ func TestViewGoldenPaused(t *testing.T) {
 	}, "\n")
 	if got != want {
 		t.Errorf("golden paused mismatch:\n got: %q\nwant: %q", got, want)
-	}
-}
-
-// TestViewGoldenReconnect pins LOG-11 in the render: the reconnect gap
-// marker with pinned wording between the pre/post lines.
-func TestViewGoldenReconnect(t *testing.T) {
-	m := testModel(t)
-	m.ApplyRecords([]core.LogRecord{rec("before")})
-	m.NewStream()
-	m.ApplyRecords([]core.LogRecord{rec("after")})
-	got := m.View()
-	want := strings.Join([]string{
-		"logs: wf-1",
-		"Scope: workflow-wide · container: main · [FOLLOWING]",
-		"retained: 2/10000 lines (0 evicted)",
-		"── (all pods):main ── 2 lines recorded",
-		"pod-1            before",
-		"── reconnect: new stream; overlap/gap possible ──",
-		"pod-1            after",
-		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
-	}, "\n")
-	if got != want {
-		t.Errorf("golden reconnect mismatch:\n got: %q\nwant: %q", got, want)
-	}
-}
-
-// TestViewGoldenEnded pins the ended lifecycle: badge ENDED plus the
-// end-of-stream row.
-func TestViewGoldenEnded(t *testing.T) {
-	m := testModel(t)
-	m.ApplyRecords([]core.LogRecord{rec("only")})
-	m.ApplyMarker(markEnd, "pod-1", "main")
-	m.SetPhase(PhaseEnded)
-	got := m.View()
-	want := strings.Join([]string{
-		"logs: wf-1",
-		"Scope: workflow-wide · container: main · [ENDED]",
-		"retained: 1/10000 lines (0 evicted)",
-		"── (all pods):main ── 1 line recorded",
-		"pod-1            only",
-		"── stream ended ──",
-		"t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back",
-	}, "\n")
-	if got != want {
-		t.Errorf("golden ended mismatch:\n got: %q\nwant: %q", got, want)
 	}
 }
 

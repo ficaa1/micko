@@ -9,14 +9,14 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// RenderResource renders the workflow's raw server JSON as normalized YAML
-// (DET-03), with parameter/output and secret-shaped values redacted by
-// default (DET-12 ⛨) and every surface passed through the shared terminal
-// sanitizer (DET-13 ⛨).
+// RenderResource renders the workflow's raw server JSON as normalized YAML,
+// with parameter/output and secret-shaped values redacted by
+// default and every surface passed through the shared terminal
+// sanitizer.
 //
 // revealForSession is the explicit, session-only reveal state: it is a pure
 // function argument — the resource view keeps no persisted or sticky reveal
-// state (plan §2: "explicit reveal is session-only"). The caller (view
+// state. The caller (view
 // model) owns the per-session flag.
 //
 // The function never echoes invalid JSON raw: it reports an explicit
@@ -45,7 +45,7 @@ func RenderManifest(raw []byte, revealForSession bool) string {
 	if err != nil {
 		return fmt.Sprintf("(resource normalization failed: %v)\n", err)
 	}
-	// DET-13 ⛨: the resource content may embed attacker-controlled strings
+	// The resource content may embed attacker-controlled strings
 	// (labels, annotations, messages) — always sanitize before returning,
 	// preserving safe newlines and tabs (shared.Sanitize keeps \n and \t).
 	return shared.Sanitize(yamlOut)
@@ -59,7 +59,7 @@ const redactedMarker = "[REDACTED]"
 // sensitiveValueKeys are JSON keys whose string values are collapsed by
 // default wherever they appear: workflow arguments/outputs use "value" and
 // "result", and credential-shaped names are redacted unconditionally
-// (plan §2: collapse parameter/output values by default).
+// (collapse parameter/output values by default).
 var sensitiveValueKeys = map[string]bool{
 	"value":    true,
 	"result":   true,
@@ -117,8 +117,8 @@ func redactValue(v any, reveal bool, sensitiveCtx bool) any {
 }
 
 // jsonToYAML renders decoded JSON as normalized YAML using the pinned
-// yaml.v3 dependency (go.mod: gopkg.in/yaml.v3, introduced by F1 for
-// config — no new module requirements).
+// yaml.v3 dependency (go.mod: gopkg.in/yaml.v3, used by config too —
+// no new module requirements).
 func jsonToYAML(v any) (string, error) {
 	return yamlMarshalJSONShaped(v)
 }

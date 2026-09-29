@@ -70,7 +70,7 @@ func TestPhaseFilterCycle(t *testing.T) {
 }
 
 func TestFilterAndViewIntegration(t *testing.T) {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	items := summariesFrom(testkit.FixtureWorkflowList("ns", 12)) // phases rotate incl. unknown
 	m.SetItems(items, testkit.FixtureEpoch)
 	if m.VisibleCount() != 12 {
@@ -108,7 +108,7 @@ func TestFilterAndViewIntegration(t *testing.T) {
 
 func TestSortTimeMissingTimestampsSensible(t *testing.T) {
 	// Zero CreatedAt (never-created metadata) must not be treated as the
-	// oldest real time — it goes last with a name tiebreak (plan gate).
+	// oldest real time — it goes last with a name tiebreak.
 	base := testkit.FixtureEpoch
 	items := []core.Summary{
 		{Ref: core.Ref{Name: "b-missing"}, CreatedAt: time.Time{}},
@@ -125,34 +125,6 @@ func TestSortTimeMissingTimestampsSensible(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("time sort = %v, want %v", got, want)
-		}
-	}
-}
-
-func TestAgeOrderedHelper(t *testing.T) {
-	base := testkit.FixtureEpoch
-	t1 := base.Add(-time.Hour)
-	t2 := base.Add(-2 * time.Hour)
-	items := []core.Summary{
-		{Ref: core.Ref{Name: "created-only"}, CreatedAt: base.Add(-30 * time.Minute)},
-		{Ref: core.Ref{Name: "started-recent"}, CreatedAt: base.Add(-9 * time.Hour), StartedAt: &t1},
-		{Ref: core.Ref{Name: "started-old"}, CreatedAt: base.Add(-time.Minute), StartedAt: &t2},
-		{Ref: core.Ref{Name: "nothing"}},
-	}
-	// StartedAt wins over CreatedAt when present: started-old (2h ago) is
-	// newer activity than created-only? No — created-only was created
-	// 30m before the epoch while started-old started 2h before: the AGE
-	// column shows created-only (30m) as newest real activity, then
-	// started-recent (1h), then started-old (2h), missing last.
-	AgeOrdered(items)
-	got := []string{}
-	for _, it := range items {
-		got = append(got, it.Ref.Name)
-	}
-	want := []string{"created-only", "started-recent", "started-old", "nothing"}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("AgeOrdered = %v, want %v", got, want)
 		}
 	}
 }

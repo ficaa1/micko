@@ -1,7 +1,7 @@
 package testkit
 
-// Fixtures are explicitly synthetic reference datasets shared by F1 tests
-// and downstream worker cards. They are generated, never captured; names,
+// Fixtures are explicitly synthetic reference datasets shared by tests. They
+// are generated, never captured; names,
 // UIDs and labels are fabricated (see package doc).
 import (
 	"time"
@@ -13,7 +13,7 @@ import (
 var FixtureEpoch = time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 
 // SyntheticPhases covers the phase set listed in the pinned upstream types
-// plus an unknown phase to pin tolerant display behavior (LIST-11).
+// plus an unknown phase to pin tolerant display behavior.
 var SyntheticPhases = []string{"Pending", "Running", "Succeeded", "Failed", "Error", "WeirdFuturePhase"}
 
 // FixtureWorkflowList builds n synthetic workflows across phases,
@@ -81,15 +81,14 @@ func FixtureDAGWorkflow(ns, name string) core.Workflow {
 		},
 	}
 	// Raw resource JSON with unknown fields that must be preserved verbatim
-	// for the resource view (DET-03).
+	// for the resource view.
 	wf.Resource = []byte(`{"metadata":{"name":"` + name + `","namespace":"` + ns +
 		`"},"spec":{"entrypoint":"synthetic-dag","unknownFutureField":{"x":1}},"status":{"phase":"Failed"}}`)
 	return wf
 }
 
 // FixtureOffloadedWorkflow builds a synthetic workflow whose node status is
-// not available (offloaded and not hydrated) with an explicit reason —
-// DET-04's degraded shape.
+// not available (offloaded and not hydrated) with an explicit reason.
 func FixtureOffloadedWorkflow(ns, name string) core.Workflow {
 	wf := SyntheticWorkflow(ns, name, "Running", FixtureEpoch.Add(-10*time.Minute))
 	wf.Nodes = nil

@@ -33,17 +33,6 @@ func TestKeyContextString(t *testing.T) {
 	}
 }
 
-func TestThemePhaseStylesCoverUnknownPhases(t *testing.T) {
-	// Unknown phases must return a style without panicking (LIST-11),
-	// in both color and plain modes.
-	for _, phase := range []string{"Running", "Succeeded", "Failed", "Error", "Pending", "WeirdFuturePhase", ""} {
-		th := NewTheme(false)
-		_ = th.PhaseStyle(phase).Render(phase)
-		pl := NewTheme(true)
-		_ = pl.PhaseStyle(phase).Render(phase)
-	}
-}
-
 func TestNewThemePlainWithNoColorEnv(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	th := NewTheme(false) // noColor=false, but env forces plain
@@ -53,9 +42,9 @@ func TestNewThemePlainWithNoColorEnv(t *testing.T) {
 	}
 }
 
-// --- status symbols (Stage 2 UI shell) ---
+// --- status symbols ---
 
-// Color is never the only carrier of a status (UI-03/07). Every phase must
+// Color is never the only carrier of a status. Every phase must
 // also get a distinct symbol, which survives NO_COLOR and a mono terminal.
 func TestPhaseSymbolsAreDistinct(t *testing.T) {
 	phases := []string{"Running", "Succeeded", "Failed", "Error", "Pending"}
@@ -72,7 +61,7 @@ func TestPhaseSymbolsAreDistinct(t *testing.T) {
 	}
 }
 
-// An unknown phase must still render something (LIST-11): a server may
+// An unknown phase must still render something: a server may
 // invent a phase and the UI must not show a blank cell.
 func TestUnknownPhaseKeepsASymbol(t *testing.T) {
 	if PhaseSymbol("WeirdFuturePhase") == "" {

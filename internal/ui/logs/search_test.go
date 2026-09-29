@@ -5,7 +5,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// search_test.go — retained-buffer search UX (LOG-09). Additional
+// search_test.go — retained-buffer search UX. Additional
 // primitive coverage beyond buffer_test.go: scope bounded to retained
 // lines only, indices ordered, nil on no-match.
 // ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ func TestMatchIndicesNoMatchNil(t *testing.T) {
 
 func TestMatchIndicesScopeIsInput(t *testing.T) {
 	// The primitive searches exactly the lines passed in: scope honesty
-	// (LOG-09) is structural — the model only feeds retained lines.
+	// is structural — the model only feeds retained lines.
 	b := NewBuffer(0, 0)
 	b.Push(rec("hit"))
 	b.Push(rec("miss"))

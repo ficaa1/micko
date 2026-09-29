@@ -1,4 +1,4 @@
-// Package shared — key binding contracts (plan §2 Navigation).
+// Package shared — key binding contracts.
 //
 // Key semantics frozen here so every view binds identically:
 //   - arrows or j/k move; Enter opens; Esc backs out/cancels
@@ -7,7 +7,7 @@
 //   - q quits only outside text entry; Ctrl-C quits globally
 //
 // Text-entry views must consume printable input themselves and must not
-// interpret navigation keys as commands (acceptance UI-04).
+// interpret navigation keys as commands.
 package shared
 
 // KeyContext describes what a view is currently doing, so the same key can
@@ -21,7 +21,7 @@ const (
 	// entry, confirm-typing). q must not quit here.
 	KeyCtxTextEntry
 	// KeyCtxDialog means a modal dialog has focus; Esc cancels, default
-	// action is Cancel (plan §6).
+	// action is Cancel.
 	KeyCtxDialog
 )
 

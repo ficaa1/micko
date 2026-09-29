@@ -15,6 +15,11 @@ var truecolorSkins = []string{
 	"solarized-dark", "solarized-light", "tokyo-night",
 }
 
+// hasForeground reports whether s sets a foreground colour.
+func hasForeground(s lipgloss.Style) bool {
+	return isColor(s.GetForeground())
+}
+
 // styles returns every lipgloss.Style token of a theme by field name, so a
 // token added to Theme is covered by these tests without editing them.
 func styles(t Theme) map[string]lipgloss.Style {
@@ -104,7 +109,7 @@ func TestEveryTruecolorSkinDefinesEveryToken(t *testing.T) {
 			t.Errorf("%s: theme reports skin %q", name, th.Skin)
 		}
 		for field, s := range styles(th) {
-			if !HasForeground(s) {
+			if !hasForeground(s) {
 				t.Errorf("%s: %s has no foreground colour", name, field)
 			}
 			if backed[field] && !HasBackground(s) {

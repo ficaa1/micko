@@ -9,7 +9,7 @@ import (
 )
 
 // Tea child model tests: tab switching, session-only reveal lifecycle,
-// back intent, and the loading/not-found/error states (UI-04, DET-12 ⛨).
+// back intent, and the loading/not-found/error states.
 
 func TestTeaModelTabCycles(t *testing.T) {
 	m := New()
@@ -130,6 +130,6 @@ func TestTeaModelSetSize(t *testing.T) {
 
 func TestTeaModelInitNil(t *testing.T) {
 	if cmd := New().Init(); cmd != nil {
-		t.Fatal("detail child must not start autonomous effects (plan §4)")
+		t.Fatal("detail child must not start autonomous effects")
 	}
 }
