@@ -214,13 +214,6 @@ func indentFor(prefix, marker string, depth int) string {
 	return strings.TrimSuffix(prefix, "─ ") + marker + " "
 }
 
-// FlattenOutline is Flatten with no folds: every visible row, and how many
-// rows hideSkipped removed.
-func FlattenOutline(out Outline, hideSkipped bool) (rows []FlatRow, hidden int) {
-	f := Flatten(out, FlattenOptions{HideSkipped: hideSkipped})
-	return f.Rows, f.HiddenSkipped
-}
-
 func rowSkipped(r OutlineRow) bool {
 	return r.Phase == "Skipped" || r.Type == "Skipped"
 }

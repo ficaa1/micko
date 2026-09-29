@@ -1,9 +1,10 @@
 package detail
 
 import (
+	"strconv"
 	"strings"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/shared"
@@ -570,14 +571,14 @@ func (m *Model) nodesStatusLine() string {
 	}
 	parts := []string{plural(len(m.nodes), "node")}
 	if m.nodePhase != NodePhaseAll {
-		parts[0] = itoaDetail(len(m.nodes)) + " of " + itoaDetail(m.totalNodes) + " nodes"
+		parts[0] = strconv.Itoa(len(m.nodes)) + " of " + strconv.Itoa(m.totalNodes) + " nodes"
 		parts = append(parts, "phase "+string(m.nodePhase))
 	}
 	if m.hiddenSkipped > 0 {
-		parts = append(parts, itoaDetail(m.hiddenSkipped)+" skipped hidden")
+		parts = append(parts, strconv.Itoa(m.hiddenSkipped)+" skipped hidden")
 	}
 	if m.folds > 0 {
-		parts = append(parts, itoaDetail(m.foldedNodes)+" in "+plural(m.folds, "fold"))
+		parts = append(parts, strconv.Itoa(m.foldedNodes)+" in "+plural(m.folds, "fold"))
 	}
 	if m.showInfo && infoPlacementFor(m.width) == infoHidden {
 		parts = append(parts, "no room for info")
@@ -586,16 +587,16 @@ func (m *Model) nodesStatusLine() string {
 		q := "\"" + oneLine(m.find.query) + "\""
 		switch {
 		case len(m.find.ids) > 0:
-			parts = append(parts, "match "+itoaDetail(m.find.pos+1)+"/"+itoaDetail(len(m.find.ids))+" "+q)
+			parts = append(parts, "match "+strconv.Itoa(m.find.pos+1)+"/"+strconv.Itoa(len(m.find.ids))+" "+q)
 		case m.find.inSkipped > 0:
-			parts = append(parts, "no match for "+q+" ("+itoaDetail(m.find.inSkipped)+" among hidden skipped)")
+			parts = append(parts, "no match for "+q+" ("+strconv.Itoa(m.find.inSkipped)+" among hidden skipped)")
 		default:
 			parts = append(parts, "no match for "+q)
 		}
 	}
 	parts = append(parts, "sort "+string(m.nodeSort))
 	if len(m.nodes) > 0 {
-		parts = append(parts, itoaDetail(m.nodeCursor+1)+"/"+itoaDetail(len(m.nodes)))
+		parts = append(parts, strconv.Itoa(m.nodeCursor+1)+"/"+strconv.Itoa(len(m.nodes)))
 	}
 	if row, ok := m.SelectedNode(); ok && row.HasPod && row.PodName != "" {
 		parts = append(parts, "l logs")
@@ -614,7 +615,7 @@ func matchCount(n int) string {
 	case 1:
 		return "1 match"
 	default:
-		return itoaDetail(n) + " matches"
+		return strconv.Itoa(n) + " matches"
 	}
 }
 
@@ -622,7 +623,7 @@ func plural(n int, word string) string {
 	if n == 1 {
 		return "1 " + word
 	}
-	return itoaDetail(n) + " " + word + "s"
+	return strconv.Itoa(n) + " " + word + "s"
 }
 
 // nodesHints is the footer for the nodes tab. It names what the keys would
@@ -647,7 +648,7 @@ func (m *Model) nodesHints() string {
 	case !m.hideSkipped:
 		h = append(h, "h hide skipped")
 	case m.hiddenSkipped > 0:
-		h = append(h, "h show "+itoaDetail(m.hiddenSkipped)+" skipped")
+		h = append(h, "h show "+strconv.Itoa(m.hiddenSkipped)+" skipped")
 	default:
 		h = append(h, "h show skipped")
 	}

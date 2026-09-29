@@ -134,8 +134,8 @@ func TestArchivedDetail(t *testing.T) {
 	}
 	runLine(m, "wf")
 	deliver(m, pressKey(m, tea.KeyEnter))
-	if m.detailState.archived || m.detailView.Archived() || rec.liveGets != 1 {
-		t.Fatalf("live detail: archived %v view %v live reads %d", m.detailState.archived, m.detailView.Archived(), rec.liveGets)
+	if m.detailState.archived || strings.Contains(screen(m), "(archived)") || rec.liveGets != 1 {
+		t.Fatalf("live detail: archived %v, live reads %d:\n%s", m.detailState.archived, rec.liveGets, screen(m))
 	}
 	deliver(m, pressKey(m, tea.KeyEscape))
 	if m.route != RouteList {

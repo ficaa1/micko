@@ -1,6 +1,7 @@
 package detail
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -234,7 +235,7 @@ func (er explainRenderer) evidence(ev diagnose.Evidence, sev lipgloss.Style) []s
 	out := er.labelled(oneLine(ev.Label), t.Muted, text, t.Text, sev)
 	numW := 1
 	for _, l := range ev.Log {
-		numW = max(numW, len(itoaDetail(l.N)))
+		numW = max(numW, len(strconv.Itoa(l.N)))
 	}
 	for _, l := range ev.Log {
 		var p pieces
@@ -245,7 +246,7 @@ func (er explainRenderer) evidence(ev diagnose.Evidence, sev lipgloss.Style) []s
 			mark, style = logMatch, sev
 		}
 		p.add(mark+" ", style)
-		p.add(strings.Repeat(" ", numW-len(itoaDetail(l.N)))+itoaDetail(l.N)+"  ", t.Muted)
+		p.add(strings.Repeat(" ", numW-len(strconv.Itoa(l.N)))+strconv.Itoa(l.N)+"  ", t.Muted)
 		p.add(oneLine(l.Text), t.Text)
 		out = append(out, er.finish(p))
 	}
@@ -264,7 +265,7 @@ func explainCounts(r diagnose.Report) string {
 		parts = append(parts, plural(w, "warning"))
 	}
 	if i > 0 {
-		parts = append(parts, itoaDetail(i)+" info")
+		parts = append(parts, strconv.Itoa(i)+" info")
 	}
 	if len(parts) == 0 {
 		return "no findings"

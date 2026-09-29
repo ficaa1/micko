@@ -2,6 +2,7 @@ package detail
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -395,7 +396,7 @@ func tickLabel(d time.Duration) string {
 	var b strings.Builder
 	for i := first; i <= last; i++ {
 		if i == first {
-			b.WriteString(itoaDetail(int(units[i].n)))
+			b.WriteString(strconv.Itoa(int(units[i].n)))
 		} else {
 			b.WriteString(padZero(units[i].n))
 		}
@@ -406,9 +407,9 @@ func tickLabel(d time.Duration) string {
 
 func padZero(n int64) string {
 	if n < 10 {
-		return "0" + itoaDetail(int(n))
+		return "0" + strconv.Itoa(int(n))
 	}
-	return itoaDetail(int(n))
+	return strconv.Itoa(int(n))
 }
 
 // axisTick is one label on the axis, at a cell of the chart.
@@ -665,7 +666,7 @@ func tlNameCellWidth(r tlRow) int {
 		w += 1 + cellWidth(oneLine(tag))
 	}
 	if r.Folded {
-		w += 1 + len("+") + len(itoaDetail(r.FoldedCount))
+		w += 1 + len("+") + len(strconv.Itoa(r.FoldedCount))
 	}
 	return w
 }
@@ -690,7 +691,7 @@ func (tr tlRenderer) nameCell(r tlRow) pieces {
 		}
 	}
 	if r.Folded {
-		extras = append(extras, nameExtra{text: "+" + itoaDetail(r.FoldedCount), style: t.Accent})
+		extras = append(extras, nameExtra{text: "+" + strconv.Itoa(r.FoldedCount), style: t.Accent})
 	}
 	if over > 0 {
 		name = truncCell(name, max(cellWidth(name)-over, minNameText))

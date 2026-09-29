@@ -2,6 +2,7 @@ package detail
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ficaa1/micko/internal/core"
@@ -250,7 +251,7 @@ func (m *Model) eventsStatusLine() string {
 		parts = append(parts, "pod events hidden: the server did not name the pods")
 	}
 	if n := m.scrollLines(); n > m.viewRows() {
-		parts = append(parts, itoaDetail(m.ev.top+1)+"/"+itoaDetail(n))
+		parts = append(parts, strconv.Itoa(m.ev.top+1)+"/"+strconv.Itoa(n))
 	}
 	s := strings.Join(parts, " · ")
 	if m.width > 0 {

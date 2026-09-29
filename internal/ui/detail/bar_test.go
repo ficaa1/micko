@@ -30,8 +30,7 @@ func timedRow(phase string, start, end *time.Time) OutlineRow {
 	return OutlineRow{NodeID: "n", Type: "Pod", Phase: phase, StartedAt: start, FinishedAt: end}
 }
 
-// The bar places a node where it started and as long as it ran, on the
-// workflow's span: 10s to 30s of 100s is cells 1 and 2 of 10.
+// A node's bar starts where it started and is as long as it ran, on the workflow's span.
 func TestNodeBarPlacesTheNodeOnTheSpan(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -73,8 +72,7 @@ func TestNodeBarPlacesTheNodeOnTheSpan(t *testing.T) {
 	}
 }
 
-// A running node's bar runs to now in the running kind, and its ASCII form
-// ends in a head, because the plain theme has no colour to say "running".
+// A running node's bar runs to now, and its ASCII form ends in a head.
 func TestNodeBarForARunningNode(t *testing.T) {
 	row := timedRow("Running", sec(50), nil)
 	now := *sec(80)
@@ -97,8 +95,7 @@ func TestNodeBarForARunningNode(t *testing.T) {
 	}
 }
 
-// With no span (no node has started) every bar is bare track. A span of no
-// length, where everything started and ended in one instant, fills the bar.
+// With no span every bar is bare track; a span of no length fills it.
 func TestNodeBarDegenerateSpans(t *testing.T) {
 	row := timedRow("Succeeded", sec(0), sec(0))
 	if got := barText(nodeBar(timeSpan{}, row, *sec(0), 5, false)); got != "·····" {
@@ -113,9 +110,7 @@ func TestNodeBarDegenerateSpans(t *testing.T) {
 	}
 }
 
-// The span runs from the earliest start to the workflow's end, and to now
-// while the workflow runs. A node that started before the workflow widens
-// it; a clock that reads earlier than the last finish does not shrink it.
+// The span runs from the earliest start to the end, or to now, and never shrinks behind the data.
 func TestWorkflowSpan(t *testing.T) {
 	wf := core.Workflow{
 		Summary: core.Summary{StartedAt: sec(10), FinishedAt: sec(60)},
@@ -144,8 +139,7 @@ func TestWorkflowSpan(t *testing.T) {
 	}
 }
 
-// The header's bar shows done work, then running work, then the rest, in
-// whole cells; a non-zero count is never rounded away.
+// The progress bar shows done, running and the rest in whole cells, never rounding a count away.
 func TestProgressBar(t *testing.T) {
 	cases := []struct {
 		done, running, total int
