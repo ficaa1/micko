@@ -4,9 +4,9 @@ import (
 	"strings"
 )
 
-// search.go — retained-buffer search primitives (acceptance LOG-09:
+// search.go — retained-buffer search primitives:
 // search over the retained buffer only, scope visible; the search never
-// claims un-retained coverage). Matches are literal — no regex — and
+// claims un-retained coverage. Matches are literal — no regex — and
 // Unicode case-folded by default.
 
 // searchState holds the active search. Empty term = not a search.

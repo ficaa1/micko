@@ -8,7 +8,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// BenchmarkNodeOutline pins PERF-02: the outline build over a 1,000-node
+// BenchmarkNodeOutline pins: the outline build over a 1,000-node
 // synthetic workflow must be linear (no exponential DAG traversal) and fast
 // enough to stay keyboard-responsive.
 func BenchmarkNodeOutline(b *testing.B) {
@@ -169,7 +169,7 @@ func syntheticNestedDAGs(prefix string, depth int) core.Workflow {
 }
 
 // TestNodeOutlineScale1000Nodes is the deterministic companion to the
-// benchmark (PERF-02 evidence in ordinary `go test` runs): a 1,000-node
+// benchmark (evidence in ordinary `go test` runs): a 1,000-node
 // DAG outline completes and places every node exactly once.
 func TestNodeOutlineScale1000Nodes(t *testing.T) {
 	wf := syntheticWideDAG("scale", 1000)

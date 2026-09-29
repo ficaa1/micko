@@ -10,7 +10,7 @@ import (
 
 // DetailViewState carries everything the detail renderer needs, derived
 // from a core.Workflow. It is a plain value — the root app owns it; this
-// package never starts goroutines or issues network effects (plan §4).
+// package never starts goroutines or issues network effects.
 type DetailViewState struct {
 	Summary  core.Summary
 	Outline  Outline
@@ -38,7 +38,7 @@ func DetailViewStateFromWorkflow(wf core.Workflow, now time.Time) DetailViewStat
 
 // RenderDetail renders one detail tab. active selects the body pane;
 // unknown tabs render an explicit unknown-tab line (distinguishable
-// states, plan §2). Deterministic for identical state.
+// states). Deterministic for identical state.
 func RenderDetail(state DetailViewState, active string) string {
 	return "DETAIL " + shared.Sanitize(state.Summary.Ref.Name) + "\n" +
 		RenderDetailBody(state, active)

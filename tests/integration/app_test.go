@@ -16,7 +16,7 @@ import (
 	"github.com/ficaa1/micko/internal/core"
 )
 
-// --- distinguishable list states (LIST-08, UI-07) -------------------------------
+// --- distinguishable list states -------------------------------
 
 func TestRootListErrorKeepsLastGoodData(t *testing.T) {
 	fs := newSeededServer(t)
@@ -32,8 +32,8 @@ func TestRootListErrorKeepsLastGoodData(t *testing.T) {
 		t.Fatalf("precondition: list not loaded: %q", v)
 	}
 
-	// Poison the list endpoint: the NEXT poll (fed-back tick starts it,
-	// plan §5: next timer after completion) must keep the last good
+	// Poison the list endpoint: the NEXT poll (fed-back tick starts it;
+	// the next timer starts after completion) must keep the last good
 	// snapshot and enter the stale state, not blank the screen.
 	fs.SetFault("list", Fault{Status: 403, Code: grpcPermDenied, Message: "synthetic rbac denial"})
 	h.settle(200) // run pending polls, then stop the cycle at loading=false
@@ -50,7 +50,7 @@ func TestRootListEmptyNamespaceDistinctState(t *testing.T) {
 	fs := newSeededServer(t)
 	client := NewWireClient(WireClientConfig{BaseURL: fs.URL()})
 	// Point the root at a namespace with no workflows: empty must differ
-	// from loading and from error (LIST-01, UI-07).
+	// from loading and from error.
 	h := newHarnessForNS(t, client, "empty-ns")
 	h.settle(200)
 	v := h.view()
@@ -62,7 +62,7 @@ func TestRootListEmptyNamespaceDistinctState(t *testing.T) {
 	}
 }
 
-// --- poll discipline: one in-flight list per generation (LIST-07) ---------------
+// --- poll discipline: one in-flight list per generation ---------------
 
 func TestRootTickWhileLoadingDoesNotStartSecondList(t *testing.T) {
 	fs := newSeededServer(t)
@@ -105,7 +105,7 @@ func TestRootTickWhileLoadingDoesNotStartSecondList(t *testing.T) {
 	}
 }
 
-// --- log stream lifecycle: records before sentinel (LOG-01, STR-01) -------------
+// --- log stream lifecycle: records before sentinel -------------
 
 func TestRootLogStreamRecordsBeforeEndSentinel(t *testing.T) {
 	fs := newSeededServer(t)
@@ -147,17 +147,15 @@ func TestRootLogStreamErrorSurfacesInState(t *testing.T) {
 	}
 }
 
-// --- detail errors: not-found vs forbidden distinguishable (UI-07) --------------
+// --- detail errors: not-found vs forbidden distinguishable --------------
 
-// TestRootDetailNotFoundState pins the ACCEPTED state: a 404 detail must
-// surface as not-found, never as the live workflow. KNOWN F1 ROOT-MODEL GAP
-// (found by this harness, recorded for I1): handleDetailLoaded sets
-// notFound=true on 404 but does not clear detailState.loading, so the
-// placeholder view keeps rendering "loading detail for …" — the state is
-// internally correct (probe: notFound=true) but the view gate is
-// loading-first. This test asserts the observable view contract for the
-// wired binary; until I1 fixes the loading flag, it pins the internal
-// state instead (the E1 honest-labeling rule: no invented pass).
+// TestRootDetailNotFoundState pins that a 404 detail surfaces as not-found,
+// never as the live workflow. handleDetailLoaded sets notFound=true on 404
+// but does not clear detailState.loading, and the placeholder view is
+// loading-first, so it keeps rendering "loading detail for …". The test
+// therefore asserts the observable view contract (no live workflow is
+// shown) and pins the internal notFound state, without claiming more than
+// the view shows.
 func TestRootDetailNotFoundState(t *testing.T) {
 	fs := newSeededServer(t)
 	client := NewWireClient(WireClientConfig{BaseURL: fs.URL()})
@@ -174,18 +172,18 @@ func TestRootDetailNotFoundState(t *testing.T) {
 	if st := reflectDetailState(h); !st["notFound"].(bool) {
 		t.Fatalf("404 detail must mark notFound; state=%+v (view=%q)", st, v)
 	}
-	// Regression tripwire for the I1 fix: once handleDetailLoaded clears
-	// loading on the not-found path, the view MUST show the distinct
-	// state. Flip this assertion when the fix lands.
+	// Tripwire: once handleDetailLoaded clears loading on the not-found path,
+	// the view must show the distinct state. Strengthen this assertion then.
 	if !contains(v, "loading detail for gone") {
 		t.Logf("NOTE: loading gate fixed upstream; strengthen this test to assert %q", "\"workflow no longer available: gone\"")
 	}
 }
 
 // reflectDetailState reads the root's unexported detailState (loading /
-// notFound / lastErr kind) via reflection — E1 may not edit internal/app,
-// but the state must be observable for honest not-found/forbidden
-// distinction when the view gate hides it (see TestRootDetailNotFoundState).
+// notFound / lastErr kind) via reflection — this package cannot reach
+// internal/app's unexported state, but the state must be observable for
+// honest not-found/forbidden distinction when the view gate hides it (see
+// TestRootDetailNotFoundState).
 func reflectDetailState(h *harness) map[string]any {
 	st := reflect.ValueOf(h.root).Elem().FieldByName("detailState")
 	out := map[string]any{
@@ -218,7 +216,7 @@ func TestRootDetailForbiddenStateDistinct(t *testing.T) {
 	}
 }
 
-// --- no writes in alpha across the whole journey (SEC-04 umbrella) --------------
+// --- no writes in alpha across the whole journey --------------
 
 func TestJourneySendsOnlyGETs(t *testing.T) {
 	fs := newSeededServer(t)
@@ -238,7 +236,7 @@ func TestJourneySendsOnlyGETs(t *testing.T) {
 	methods := fs.RequestsByMethod()
 	for m, n := range methods {
 		if m != "GET" {
-			t.Errorf("journey produced %s x%d; alpha must never write (SEC-04)", m, n)
+			t.Errorf("journey produced %s x%d; alpha must never write", m, n)
 		}
 	}
 	if methods["GET"] < 4 {
@@ -246,7 +244,7 @@ func TestJourneySendsOnlyGETs(t *testing.T) {
 	}
 }
 
-// --- quit key discipline (UI-04, root-level portion) -----------------------------
+// --- quit key discipline (root-level portion) -----------------------------
 
 func TestRootCtrlCQuitsFromDetailRoute(t *testing.T) {
 	fs := newSeededServer(t)
@@ -256,12 +254,12 @@ func TestRootCtrlCQuitsFromDetailRoute(t *testing.T) {
 	h.send(app.OpenWorkflowMsg{Ref: core.Ref{Namespace: testNS, Name: "wf-b", UID: "uid-b"}})
 	h.pump(50)
 
-	// Ctrl-C in Tea v2 is Code 'c' with ModCtrl (F1's own model_test.go
-	// pins this shape; ETX byte 0x03 is the terminal encoding, not the
+	// Ctrl-C in Tea v2 is Code 'c' with ModCtrl (internal/app's own
+	// model_test.go pins this shape; ETX byte 0x03 is the terminal encoding, not the
 	// decoded event).
 	_, cmd := h.root.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
-		t.Fatal("ctrl+c must quit globally from any route (plan §2)")
+		t.Fatal("ctrl+c must quit globally from any route")
 	}
 }
 

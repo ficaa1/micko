@@ -1,14 +1,14 @@
 // Package argo implements the core.Reader transport adapter against Argo
 // Server's REST API, pinned to the v4.1.2 wire facts in docs/development.md.
 //
-// Scope and safety rules (plan §8 A1; ADR 0001):
+// Scope and safety rules:
 //   - Standard-library HTTP/JSON only; no official client, no Kubernetes
 //     client, no go.mod additions (F owns module files).
 //   - Read-only surface: List/Get/StreamLogs. No write methods exist, so no
-//     mutation can ever be retried by this package (plan §6).
+//     mutation can ever be retried by this package.
 //   - Tokens never appear in URLs, error messages or logs; the Authorization
 //     header is rebuilt per request from the injected credential source to
-//     support rotation (plan §3).
+//     support rotation.
 //   - Redirects are rejected (credentials must never reach another origin),
 //     TLS verification is on by default with opt-in custom CA.
 package argo
@@ -37,12 +37,12 @@ type Client struct {
 	// base is the full server base URL (scheme://host[/prefix]); endpoint
 	// paths are appended verbatim (docs/development.md base path rule).
 	base *url.URL
-	// tokenFn reloads credential material per request (rotation support,
-	// plan §3). Never stored, never logged.
+	// tokenFn reloads credential material per request (rotation support).
+	// Never stored, never logged.
 	tokenFn func() (string, error)
 	// tokenSource describes where credentials come from ("env var FOO",
 	// "token file /path") for sanitized error guidance — names only,
-	// never values (plan §3).
+	// never values.
 	tokenSource string
 	// caFile records the CA bundle path for error guidance only.
 	caFile string
@@ -59,7 +59,7 @@ type Client struct {
 	// clock enables deterministic Retry-After parsing in tests.
 	now func() time.Time
 	// maxRetries stays 0 forever: this package performs no automatic
-	// retries; the app layer owns bounded backoff policy (plan §5/§6).
+	// retries; the app layer owns bounded backoff policy.
 	maxRetries int
 	// userAgent is the resolved User-Agent header value.
 	userAgent string
@@ -73,7 +73,7 @@ type Client struct {
 	scopeNS    string
 }
 
-// assert the frozen read contract is satisfied at compile time (A1 gate).
+// assert the frozen read contract is satisfied at compile time.
 var _ core.Reader = (*Client)(nil)
 
 // Options configures the client. All credential material flows through a
@@ -85,9 +85,9 @@ type Options struct {
 	// ("token file /path", "env var ARGO_TOKEN"). Empty means unknown.
 	TokenSource string
 	CAFile      string
-	// InsecureSkipTLSVerify must be set only from an explicit user opt-in
-	// (plan §3); when true, verification is disabled and a permanent UI
-	// warning is the caller's obligation.
+	// InsecureSkipTLSVerify must be set only from an explicit user opt-in;
+	// when true, verification is disabled and a permanent UI warning is the
+	// caller's obligation.
 	InsecureSkipTLSVerify bool
 	// Now overrides time.Now for deterministic Retry-After parsing.
 	Now func() time.Time
@@ -141,7 +141,7 @@ func NewClient(opts Options) (*Client, error) {
 		}
 	}
 	// Plain HTTP to non-loopback is rejected here too (loopback stays
-	// allowed for dev/demo; the plan §3 contract mirrors internal/config).
+	// allowed for dev/demo; the same contract internal/config enforces).
 	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
 		return nil, fmt.Errorf("argo client: plain HTTP to non-loopback host %q rejected (use https; loopback http is allowed for dev/demo)", u.Hostname())
 	}
@@ -163,8 +163,7 @@ func NewClient(opts Options) (*Client, error) {
 		TLSHandshakeTimeout:   dialTimeout,
 		ResponseHeaderTimeout: dialTimeout,
 		// Streaming responses must not be buffered through HTTP/2; force
-		// HTTP/1.1 like the official client (ADR 0001 obligation: HTTP/1.1
-		// semantics end-to-end).
+		// HTTP/1.1 like the official client (HTTP/1.1 semantics end-to-end).
 		ForceAttemptHTTP2: false,
 		TLSClientConfig:   &tls.Config{InsecureSkipVerify: opts.InsecureSkipTLSVerify, MinVersion: tls.VersionTLS12}, //nolint:gosec // explicit user opt-in only
 	}
@@ -182,7 +181,7 @@ func NewClient(opts Options) (*Client, error) {
 
 	// Redirects are rejected via CheckRedirect returning an error; any
 	// credentials attached to the outstanding request are therefore never
-	// re-sent to the redirect target (plan §3; CONN-05).
+	// re-sent to the redirect target.
 	hc := &http.Client{
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -305,7 +304,7 @@ func (c *Client) newRequest(ctx context.Context, path string, query url.Values) 
 	setAuthorization(req, token)
 	req.Header.Set("User-Agent", c.userAgent)
 	// Deliberately NO Accept header at all: no SSE hint (docs/development.md
-	// §6 v0.1 policy) and no content-negotiation surprises. The gateway
+	// records the policy) and no content-negotiation surprises. The gateway
 	// marshaler ignores Accept.
 	return req, nil
 }
@@ -329,7 +328,7 @@ func (c *Client) do(ctx context.Context, req *http.Request) (*http.Response, err
 				"server attempted a redirect; refusing (credentials must never be sent to another origin); explain the response to your administrator (no credentials leaked)")
 		}
 		// Distinguish TLS failures from other transport errors for guidance
-		// (CONN-03: name the problem class, not a raw dump).
+		// (name the problem class, not a raw dump).
 		msg := err.Error()
 		// Only an https request can fail a TLS handshake. Classifying a plain
 		// http failure as a certificate problem sends the operator after the
@@ -339,7 +338,7 @@ func (c *Client) do(ctx context.Context, req *http.Request) (*http.Response, err
 		}
 		return nil, core.ErrUnavailablef("server unreachable: %s", sanitizeLine(msg))
 	}
-	// No redirect hop may ever carry our credentials (plan §3; CONN-05).
+	// No redirect hop may ever carry our credentials.
 	// A 3xx served as a *final* answer without a redirect hop (unusual
 	// gateway/proxy behavior) is still readable — but its Location, if
 	// present, must never be followed by us.
@@ -428,14 +427,14 @@ func classifyInBand(code int) (core.ErrorKind, int) {
 // mapHTTPError builds a typed APIError from a non-200 response. The server
 // body's message passes through (it may name the workflow/namespace — fine,
 // docs/development.md); no credential material is ever added by us, and
-// Retry-After is typed for 429s (plan slice 5; LIST-08). `now` injects the
+// Retry-After is typed for 429s. `now` injects the
 // clock for HTTP-date Retry-After parsing (nil ⇒ time.Now).
 func mapHTTPError(resp *http.Response, method, path string, body []byte, rawErr error, now func() time.Time) *core.APIError {
 	if now == nil {
 		now = time.Now
 	}
 	status := resp.StatusCode
-	// Login page / reverse proxy interception (plan §3, CONN-14) can
+	// Login page / reverse proxy interception can
 	// appear at any status (200 through 503 from SSO gateways). HTML
 	// bodies get unauthenticated-style guidance with the content type
 	// named, never retry-looped.
@@ -635,8 +634,8 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if len(body) == 0 {
 		return core.Page{}, core.ErrProtocalf("list: empty response body")
 	}
-	// SSO/reverse-proxy interception can answer 200 with a login page
-	// (plan §3, CONN-14): surface the guidance instead of a protocol error.
+	// SSO/reverse-proxy interception can answer 200 with a login page: surface
+	// the guidance instead of a protocol error.
 	if isHTMLBody(body, resp) {
 		return core.Page{}, mapHTTPError(resp, http.MethodGet, path, body, nil, c.now)
 	}
@@ -761,7 +760,7 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	query := url.Values{}
 	if ref.UID != "" {
 		// Always pass UID so the server can fall back to the archive for
-		// same-name workflows (docs/development.md; DET-02 prequisite).
+		// same-name workflows (docs/development.md).
 		query.Set("uid", ref.UID)
 	}
 	req, err := c.newRequest(ctx, path, query)
@@ -783,7 +782,7 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	if len(body) == 0 {
 		return core.Workflow{}, core.ErrProtocalf("get %s/%s: empty response body", ref.Namespace, ref.Name)
 	}
-	// Same 200-with-login-page interception guard as List (CONN-14).
+	// Same 200-with-login-page interception guard as List.
 	if isHTMLBody(body, resp) {
 		return core.Workflow{}, mapHTTPError(resp, http.MethodGet, path, body, nil, c.now)
 	}
@@ -792,7 +791,7 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 		return core.Workflow{}, core.WrapAPIError(core.ErrNotFound, http.StatusNotFound,
 			fmt.Sprintf("workflow %s/%s not found", ref.Namespace, ref.Name), nil)
 	}
-	// UID mismatch is same-name replacement detection (DET-02/LIST-12):
+	// UID mismatch is same-name replacement detection:
 	// returned UID differs from the requested one ⇒ typed conflict, never
 	// silently swapped.
 	if ref.UID != "" && wf.Summary.Ref.UID != ref.UID {
@@ -807,7 +806,7 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 
 // sanitizeLine strips control characters from text embedded into error
 // messages so server-provided strings cannot inject terminal sequences or
-// log-forgery newlines (SEC-01/02 applied to transport surfaces).
+// log-forgery newlines, the same protection every other surface gets.
 func sanitizeLine(s string) string {
 	var b strings.Builder
 	for _, r := range s {

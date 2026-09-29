@@ -2,34 +2,34 @@
 
 package integration
 
-// fakeserver.go — ET-2: an in-process httptest server speaking the pinned
-// Argo Workflows v4.1.2 wire contract (docs/development.md §9).
+// fakeserver.go — an in-process httptest server speaking the pinned
+// Argo Workflows v4.1.2 wire contract (docs/development.md).
 //
 // Verified wire facts implemented here (pinned sources in docs/development.md):
 //   - GET /api/v1/workflows/{namespace}: listOptions.limit is a
 //     string-encoded integer; listOptions.continue is the next integer
-//     OFFSET as a decimal string (v4.1.2 offset pagination, §4); response
+//     OFFSET as a decimal string (v4.1.2 offset pagination); response
 //     carries metadata.continue (only when more items exist) and
 //     metadata.resourceVersion (opaque string).
 //   - GET /api/v1/workflows/{namespace}/{name}?uid=…: a UID mismatch must
 //     not silently return the live object — the server falls back to the
 //     archive; the fake archives replaced generations so same-name
-//     replacement tests exercise the real semantics (§5).
+//     replacement tests exercise the real semantics.
 //   - GET /api/v1/workflows/{namespace}/{name}/log: JSON-lines framing
 //     {"result":{"content":…,"podName":…}}\n per chunk (gateway v1.16.0
-//     default, §6) with the SSE variant behind a server flag (both
+//     default) with the SSE variant behind a server flag (both
 //     framings per the v0.1 resolution). LogEntry carries exactly
-//     content+podName — no timestamp/container field exists (§6.2).
+//     content+podName — no timestamp/container field exists.
 //   - In-band errors are {"error":{"code":<grpc>,"message":…}} FINAL
 //     chunks with HTTP 200; pre-first-chunk errors are unary-style HTTP
-//     errors with the mapped status (§6, §10).
+//     errors with the mapped status.
 //   - GET /api/v1/version: {"version":"v4.1.2",…} for smoke checks.
 //   - Keepalive: streaming responses flush headers before the first
-//     payload (§6 keepalive behavior).
+//     payload.
 //
-// This server is independent of internal/testkit's FakeReader (the ET-1
+// This server is independent of internal/testkit's FakeReader (the in-memory
 // core.Reader fake). Here the CLIENT side is real HTTP; only the SERVER is
-// faked, exactly as ET-2 defines it. Every payload is SYNTHETIC.
+// faked. Every payload is SYNTHETIC.
 
 import (
 	"encoding/json"
@@ -128,7 +128,7 @@ type Fault struct {
 	// partial/invalid JSON fixtures).
 	ContentType string
 	Body        []byte
-	// Redirect: 3xx Location to test redirect rejection (CONN-05).
+	// Redirect: 3xx Location to test redirect rejection.
 	Redirect string
 }
 
@@ -139,8 +139,8 @@ type ServerConfig struct {
 	SSELogs bool
 	// SlowLogDrip delays between log chunks (cancellation tests).
 	SlowLogDrip time.Duration
-	// BrokenJSONList makes the list handler emit invalid JSON (E1 gate:
-	// "deliberately broken API response makes a test fail").
+	// BrokenJSONList makes the list handler emit invalid JSON
+	// (a deliberately broken API response must make a test fail).
 	BrokenJSONList bool
 	// TruncateLogNewline cuts the log body mid-final-line, simulating a
 	// connection severed mid-chunk (docs/development.md case 3: "mid-stream
@@ -149,7 +149,7 @@ type ServerConfig struct {
 	TruncateLogNewline bool
 }
 
-// FixtureServer is the ET-2 Argo v4.1.2 wire fixture.
+// FixtureServer is the Argo v4.1.2 wire fixture.
 type FixtureServer struct {
 	srv *httptest.Server
 
@@ -161,7 +161,7 @@ type FixtureServer struct {
 	faults  map[string]Fault // by endpoint key: list|get|get:ns/name|logs|version
 	cfg     ServerConfig
 
-	// Request log for assertions (SEC-04 style: proves only GETs were
+	// Request log for assertions (proves only GETs were
 	// sent; no mutation request is ever constructed).
 	muReqs   sync.Mutex
 	requests []recordedRequest
@@ -174,7 +174,7 @@ type recordedRequest struct {
 }
 
 // NewFixtureServer starts an httptest server (plain HTTP loopback —
-// CONN-06 allows loopback http for dev/demo/test).
+// loopback http is allowed for dev/demo/test).
 func NewFixtureServer(t *testing.T, cfg ServerConfig) *FixtureServer {
 	t.Helper()
 	fs := &FixtureServer{
@@ -335,13 +335,13 @@ func (fs *FixtureServer) routeWorkflows(w http.ResponseWriter, r *http.Request) 
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/workflows/")
 	if path == "" {
 		// /api/v1/workflows without a namespace — micko never scans all
-		// namespaces (plan §3); the fixture rejects it.
+		// namespaces; the fixture rejects it.
 		writeUnaryError(w, http.StatusNotFound, grpcNotFound, "namespace required")
 		return
 	}
 	if r.Method != http.MethodGet {
 		// Alpha write prohibition: any non-GET reaching the fake server is
-		// a client bug (SEC-04). Recorded (see record) and answered 405 so
+		// a client bug. Recorded (see record) and answered 405 so
 		// a request-count assertion catches it loudly.
 		writeUnaryError(w, http.StatusMethodNotAllowed, grpcInternal,
 			"fixture server: write requests are prohibited in alpha")
@@ -406,7 +406,7 @@ func applyFault(w http.ResponseWriter, r *http.Request, f Fault) {
 // pagination over the seeded live workflows (deterministic order: by name).
 func (fs *FixtureServer) handleList(w http.ResponseWriter, r *http.Request, ns string) {
 	if fs.cfg.BrokenJSONList {
-		// Deliberately broken API response (E1 gate): HTTP 200, invalid JSON.
+		// Deliberately broken API response: HTTP 200, invalid JSON.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"broken"`))
@@ -415,7 +415,7 @@ func (fs *FixtureServer) handleList(w http.ResponseWriter, r *http.Request, ns s
 	q := r.URL.Query()
 	limit := 0
 	if v := q.Get("listOptions.limit"); v != "" {
-		n, err := strconv.Atoi(v) // string-encoded integer on the wire (§4)
+		n, err := strconv.Atoi(v) // string-encoded integer on the wire
 		if err != nil || n < 0 {
 			writeUnaryError(w, http.StatusBadRequest, grpcInvalid, "listOptions.limit: invalid value")
 			return
@@ -505,7 +505,7 @@ func (fs *FixtureServer) handleGet(w http.ResponseWriter, r *http.Request, ns, n
 			writeJSON(w, http.StatusOK, archived)
 			return
 		}
-		// Neither matched: original (live) error preserved (§5).
+		// Neither matched: original (live) error preserved.
 		writeUnaryError(w, http.StatusNotFound, grpcNotFound,
 			fmt.Sprintf("workflow %s/%s with uid %q not found", ns, name, wantUID))
 		return
@@ -516,7 +516,7 @@ func (fs *FixtureServer) handleGet(w http.ResponseWriter, r *http.Request, ns, n
 
 // handleLogs implements GET /api/v1/workflows/{ns}/{name}/log with both
 // framings (docs/development.md). Server behavior mirrored: fetch-then-validate
-// the workflow first (§6.2); unknown workflow → 404 before any chunk.
+// the workflow first; unknown workflow → 404 before any chunk.
 func (fs *FixtureServer) handleLogs(w http.ResponseWriter, r *http.Request, ns, name string) {
 	q := r.URL.Query()
 	podName := q.Get("podName")
@@ -579,7 +579,7 @@ func (fs *FixtureServer) handleLogs(w http.ResponseWriter, r *http.Request, ns, 
 	if sse {
 		ct = "text/event-stream"
 	}
-	// Eager header flush before first payload (§6 keepalive behavior).
+	// Eager header flush before first payload.
 	w.Header().Set("Content-Type", ct)
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
@@ -644,7 +644,7 @@ func buildLogBody(logs []WireLogEntry, logErr *Fault, sse bool) []byte {
 }
 
 // truncateMidLine simulates a stream severed mid-chunk: the final line is
-// cut partway through its JSON payload (§6.3 case 3).
+// cut partway through its JSON payload.
 func truncateMidLine(b []byte) []byte {
 	// Locate the final (newline-terminated) line.
 	end := len(b)

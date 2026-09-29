@@ -1,4 +1,4 @@
-// Package e2e hosts the REAL-cluster tier (ET-4/ET-5 in
+// Package e2e hosts the REAL-cluster tier (see
 // docs/development.md): tests that require an explicitly provisioned
 // disposable Argo Workflows v4.1.2 environment (kind cluster or an
 // owner-authorized endpoint). Gate + fixtures live in gate.go; this file
@@ -28,7 +28,7 @@ type e2eWorkflowSpec struct {
 	Namespace string
 }
 
-// runE2EWorkflowJourney is the shared ET-4 journey used by the test below.
+// runE2EWorkflowJourney is the shared real-cluster journey used by the test below.
 // It is deliberately sequential: submit → wait phase → list → detail →
 // version check → delete → verify deletion, with the timeout discipline
 // from docs/development.md (poll, never busy-loop forever).
@@ -53,7 +53,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 		_ = client.deleteWorkflow(cctx, spec.Namespace, name)
 	})
 
-	// 2. Wait (bounded) for a terminal phase — CMP-01 precondition.
+	// 2. Wait (bounded) for a terminal phase.
 	phase, err := client.waitForPhase(ctx, spec.Namespace, name,
 		[]string{"Succeeded", "Failed", "Error"}, 3*time.Minute)
 	if err != nil {
@@ -61,7 +61,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 	}
 	t.Logf("workflow %s reached phase %s", name, phase)
 
-	// 3. List via the production Reader (CMP-01 list leg).
+	// 3. List via the production Reader.
 	page, err := client.reader.List(ctx, core.Query{Namespace: spec.Namespace, Limit: 50})
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -79,7 +79,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 		t.Errorf("workflow %s missing from list of %d items", name, len(page.Items))
 	}
 
-	// 4. Detail via the production Reader (CMP-01 detail leg).
+	// 4. Detail via the production Reader.
 	wf, err := client.reader.Get(ctx, core.Ref{Namespace: spec.Namespace, Name: name})
 	if err != nil {
 		t.Fatalf("get: %v", err)
@@ -88,7 +88,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 		t.Errorf("detail phase %q != observed %q", wf.Summary.Phase, phase)
 	}
 
-	// 5. Version endpoint identity (CMP-02).
+	// 5. Version endpoint identity.
 	ver, err := client.serverVersion(ctx)
 	if err != nil {
 		t.Logf("version endpoint unavailable: %v (compatibility note required)", err)
@@ -96,7 +96,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 		t.Errorf("unexpected server version %q: compatibility note required, not a crash", ver)
 	}
 
-	// 6. Delete + verify gone (cleanup contract, test-environment §4.5).
+	// 6. Delete + verify gone (cleanup contract).
 	if err := client.deleteWorkflow(ctx, spec.Namespace, name); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
@@ -106,7 +106,7 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 }
 
 // TestE2EWorkflowJourney runs the hello-world fixture through the full
-// submit/list/detail/delete journey. REAL-class (matrix CMP-01/CMP-02).
+// submit/list/detail/delete journey. REAL-class.
 // Testdata: testdata/hello-world.yaml — synthetic, labeled, never a
 // production manifest (docs/development.md).
 func TestE2EWorkflowJourney(t *testing.T) {

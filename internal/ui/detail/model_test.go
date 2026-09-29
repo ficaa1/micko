@@ -7,7 +7,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// Summary/timestamp tests (DET-01): phase, age/duration, message, labels
+// Summary/timestamp tests: phase, age/duration, message, labels
 // and arguments render deterministically; missing timestamps use the
 // documented explicit rule (never fabricated).
 
@@ -42,7 +42,7 @@ func TestDetailSummaryArgumentValuesRedacted(t *testing.T) {
 
 func TestDetailSummaryMissingTimestampsRule(t *testing.T) {
 	wf := testkit.SyntheticWorkflow("ns", "wf", "Pending", testkit.FixtureEpoch)
-	// no StartedAt/FinishedAt (not yet started — protocol §2)
+	// no StartedAt/FinishedAt (not yet started)
 	s := RenderSummary(wf, testkit.FixtureEpoch)
 	for _, bad := range []string{"not started\u00a0", "duration: -", "duration: 0s"} {
 		_ = bad

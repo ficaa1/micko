@@ -108,7 +108,7 @@ func TestFilterAndViewIntegration(t *testing.T) {
 
 func TestSortTimeMissingTimestampsSensible(t *testing.T) {
 	// Zero CreatedAt (never-created metadata) must not be treated as the
-	// oldest real time — it goes last with a name tiebreak (plan gate).
+	// oldest real time — it goes last with a name tiebreak.
 	base := testkit.FixtureEpoch
 	items := []core.Summary{
 		{Ref: core.Ref{Name: "b-missing"}, CreatedAt: time.Time{}},

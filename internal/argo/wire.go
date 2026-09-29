@@ -16,7 +16,7 @@ import (
 
 // listEnvelope mirrors GET /api/v1/workflows/{namespace}. metadata.continue
 // and metadata.resourceVersion are opaque strings — decoded verbatim, never
-// parsed (docs/development.md; LIST-02/03).
+// parsed (docs/development.md).
 type listEnvelope struct {
 	Metadata struct {
 		Continue        string `json:"continue"`
@@ -198,7 +198,7 @@ func wfFromRaw(raw json.RawMessage, rawForDetail []byte) (core.Workflow, error) 
 		wf.Resource = json.RawMessage(append([]byte(nil), rawForDetail...))
 	}
 	// Node-data availability: offload/compressed markers prove node data
-	// exists but is not hydrated — represent explicitly (DET-04), never as
+	// exists but is not hydrated — represent explicitly, never as
 	// an empty workflow.
 	switch {
 	case w.Status.OffloadNodeStatusVersion != "":

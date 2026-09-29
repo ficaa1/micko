@@ -10,9 +10,9 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// RenderSummary renders the one-screen workflow summary (DET-01): name,
+// RenderSummary renders the one-screen workflow summary: name,
 // namespace, phase, age, duration, message, labels and argument names
-// (values redacted per DET-12 policy — names only, never values).
+// (values are redacted — names only, never values).
 //
 // now is the injected "current time" for deterministic age/duration math —
 // the summary never reads the wall clock itself.
@@ -31,7 +31,7 @@ func RenderSummary(wf core.Workflow, now time.Time) string {
 		b.WriteString("age: " + humanDuration(now.Sub(s.CreatedAt)) + "\n")
 	}
 
-	// Duration rule (DET-01 companion): finished workflows measure
+	// Duration rule: finished workflows measure
 	// started→finished; running ones measure started→now (labeled running);
 	// a workflow without a start time has no duration — stated explicitly,
 	// never fabricated as 0s.
@@ -61,8 +61,8 @@ func RenderSummary(wf core.Workflow, now time.Time) string {
 		b.WriteString("labels: " + renderLabelsSorted(s.Labels) + "\n")
 	}
 
-	// Argument parameter names visible, values redacted (DET-12 ⛨ across
-	// surfaces: the summary shows argument names only).
+	// Argument parameter names visible, values redacted (the
+	// summary shows argument names only).
 	for _, p := range argumentParameters(wf) {
 		b.WriteString("argument: " + shared.Sanitize(p.name) + "=[REDACTED]\n")
 	}

@@ -290,7 +290,7 @@ func TestRefreshClearsTerminalWatchState(t *testing.T) {
 	m.watchMode = "authentication/permission required"
 	// KeyPressMsg "r" is routed into the list child, which answers with a
 	// RefreshListMsg intent command; the root converts that intent into the
-	// refresh effect (plan §4). Drive the same round-trip the Tea runtime
+	// refresh effect. Drive the same round-trip the Tea runtime
 	// would: execute the command, feed the message back into Update.
 	updated, cmd := m.Update(tea.KeyPressMsg{Text: "r"})
 	m = updated.(*Root)

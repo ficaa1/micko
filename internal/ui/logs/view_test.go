@@ -11,12 +11,12 @@ import (
 
 // ---------------------------------------------------------------------------
 // view tests — golden rendering and sanitization. These verify what the
-// terminal receives for the acceptance-matrix terminal cases (LOG-05,
-// SEC-01/02, LOG-04 truncation markers), plus the pinned disconnect/
-// reconnect/ended surfaces (LOG-11/LOG-12).
+// terminal receives for the standard terminal cases (control-sequence
+// stripping, truncation markers), plus the pinned disconnect/
+// reconnect/ended surfaces.
 // ---------------------------------------------------------------------------
 
-// TestViewReachesTerminalWithoutControlSequences pins LOG-05/SEC-01: hostile
+// TestViewReachesTerminalWithoutControlSequences pins: hostile
 // log content is sanitized before the terminal surface sees it.
 func TestViewReachesTerminalWithoutControlSequences(t *testing.T) {
 	m := testModel(t)
@@ -42,14 +42,14 @@ func TestViewUnicodeSurvives(t *testing.T) {
 	}
 }
 
-// TestViewTruncationMarkerVisible pins LOG-04 in the rendered surface: an
+// TestViewTruncationMarkerVisible pins the truncation marker in the rendered surface: an
 // over-allowance line shows the visible truncation marker.
 func TestViewTruncationMarkerVisible(t *testing.T) {
 	m := testModel(t)
 	long := strings.Repeat("y", maxLineBytes+50)
 	m.ApplyRecords([]core.LogRecord{{PodName: "pod-1", Container: "main", Content: long, ReceivedAt: testkit.FixtureEpoch}})
 	if v := m.View(); !strings.Contains(v, "truncated") {
-		t.Fatal("truncation marker missing from the rendered view (LOG-04)")
+		t.Fatal("truncation marker missing from the rendered view")
 	}
 }
 
@@ -94,8 +94,8 @@ func TestViewGoldenPaused(t *testing.T) {
 	}
 }
 
-// TestViewGoldenReconnect pins LOG-11 in the render: the reconnect gap
-// marker with pinned wording between the pre/post lines.
+// TestViewGoldenReconnect pins the reconnect gap marker in the render: the marker with
+// pinned wording between the pre/post lines.
 func TestViewGoldenReconnect(t *testing.T) {
 	m := testModel(t)
 	m.ApplyRecords([]core.LogRecord{rec("before")})

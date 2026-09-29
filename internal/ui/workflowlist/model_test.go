@@ -66,7 +66,7 @@ func TestSelectionAndOpenIntent(t *testing.T) {
 		t.Fatalf("intent UID = %q, want %q", ow.Ref.UID, second.UID)
 	}
 
-	// Logs intent for the same row with visible default container (plan §2).
+	// Logs intent for the same row with visible default container.
 	lm, ok := m.LogsIntent().(shared.OpenLogsMsg)
 	if !ok {
 		t.Fatalf("logs intent type = %T", m.LogsIntent())
@@ -85,7 +85,7 @@ func TestSearchTextEntryKeyIsolation(t *testing.T) {
 	}
 
 	// While in text entry: 'q' must TYPE a letter, never quit; 'j' must be
-	// typed too, never interpreted as a move (UI-04). The filter narrows as
+	// typed too, never interpreted as a move. The filter narrows as
 	// the letters arrive, so the visible rows legitimately change; what must
 	// NOT happen is a navigation command.
 	m.Update(runeKey('j'))
@@ -139,7 +139,7 @@ func TestSearchTextEntryKeyIsolation(t *testing.T) {
 func TestSearchScopeVisible(t *testing.T) {
 	m := tl(t)
 	// 12 fixtures but the (root) snapshot holds only 4: search must say
-	// it searched the collected snapshot, not the namespace (LIST-05/09).
+	// it searched the collected snapshot, not the namespace.
 	m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 4)), testkit.FixtureEpoch)
 	m.SetQuery("fixture-wf")
 	v := m.ViewAt(testkit.FixtureEpoch)
@@ -147,7 +147,7 @@ func TestSearchScopeVisible(t *testing.T) {
 		t.Fatalf("search scope not visible:\n%s", v)
 	}
 
-	// Incomplete snapshot must also show the incomplete marker (LIST-05).
+	// Incomplete snapshot must also show the incomplete marker.
 	m.SetStatus(StatusIncomplete, "snapshot cap reached", 0)
 	v = m.ViewAt(testkit.FixtureEpoch)
 	if !strings.Contains(v, "INCOMPLETE") {
@@ -235,7 +235,7 @@ func TestSelectionPreservedAcrossReorderAndDeletion(t *testing.T) {
 	}
 
 	// Reorder the snapshot (reverse) — selection must stay on the same UID
-	// even though the row index changed (plan gate: no row-index identity).
+	// even though the row index changed (no row-index identity).
 	rev := make([]core.Summary, len(wfs))
 	for i := range wfs {
 		rev[i] = wfs[len(wfs)-1-i]
@@ -245,8 +245,8 @@ func TestSelectionPreservedAcrossReorderAndDeletion(t *testing.T) {
 		t.Fatalf("reorder lost selection: %v != %v", got.UID, selected.UID)
 	}
 
-	// Deletion: remove the selected workflow; selection must drop (LIST-13
-	// path: it must not silently jump to a row that was elsewhere).
+	// Deletion: remove the selected workflow; selection must drop (it must not
+	// silently jump to a row that was elsewhere).
 	next := make([]core.Summary, 0, len(rev))
 	for _, it := range rev {
 		if it.Ref.UID != selected.UID {
@@ -261,7 +261,7 @@ func TestSelectionPreservedAcrossReorderAndDeletion(t *testing.T) {
 		t.Fatal("selection should re-anchor to first row, not vanish")
 	}
 
-	// Same name, new UID = a different workflow (LIST-12): selecting the
+	// Same name, new UID = a different workflow: selecting the
 	// old UID must not reattach to the new one.
 	replacement := core.Summary{
 		Ref:       core.Ref{Namespace: "ns", Name: selected.Name, UID: "brand-new-uid"},
@@ -298,7 +298,7 @@ func TestStatusesDistinguishable(t *testing.T) {
 		if !strings.Contains(v, tc.marker) {
 			t.Errorf("status %d: marker %q missing:\n%s", tc.status, tc.marker, v)
 		}
-		// Text must differ from the idle view for each state (UI-07).
+		// Text must differ from the idle view for each state.
 		if tc.status != StatusIncomplete && v == base {
 			t.Errorf("status %d view identical to idle", tc.status)
 		}
@@ -307,7 +307,7 @@ func TestStatusesDistinguishable(t *testing.T) {
 
 func TestForbiddenErrorSanitized(t *testing.T) {
 	m := tl(t)
-	// Malicious message must be neutralized before display (SEC-01/02).
+	// Malicious message must be neutralized before display.
 	m.SetStatus(StatusForbidden, "denied \x1b]8;;http://evil\x1b\\link\x07back", 0)
 	m.SetItems(nil, testkit.FixtureEpoch)
 	v := m.ViewAt(testkit.FixtureEpoch)
@@ -349,7 +349,7 @@ func TestResizeNoticeSmallTerminal(t *testing.T) {
 		t.Fatalf("resize notice missing:\n%s", v)
 	}
 	if !strings.Contains(v, "q quit") {
-		t.Fatal("quit hint must survive the tiny-terminal notice (plan §2)")
+		t.Fatal("quit hint must survive the tiny-terminal notice")
 	}
 }
 

@@ -9,15 +9,15 @@ import (
 )
 
 // ErrorKind classifies a server/transport failure for UI state selection
-// (plan §4; mapping table in docs/development.md).
+// (mapping table in docs/development.md).
 type ErrorKind string
 
 const (
 	// ErrUnauthenticated: HTTP 401 / auth challenge. Do not retry; surface
-	// token guidance (plan §3).
+	// token guidance.
 	ErrUnauthenticated ErrorKind = "unauthenticated"
 	// ErrForbidden: HTTP 403, authoritative; action availability is only
-	// advisory (plan §3).
+	// advisory.
 	ErrForbidden ErrorKind = "forbidden"
 	// ErrNotFound: live miss + archive miss (docs/development.md).
 	ErrNotFound ErrorKind = "not_found"
@@ -27,7 +27,7 @@ const (
 	// (docs/development.md) — context-dependent.
 	ErrRateLimited ErrorKind = "rate_limited"
 	// ErrUnavailable: 503/504/408 or network-level failure; transient,
-	// bounded backoff ok (plan §5).
+	// bounded backoff ok.
 	ErrUnavailable ErrorKind = "unavailable"
 	// ErrInvalid: HTTP 400, includes bad grep regex / bad timestamps
 	// (docs/development.md).
@@ -42,7 +42,7 @@ const (
 // APIError is the frozen typed error returned by every Reader failure.
 // Message is already sanitized: it must never contain credentials, and it
 // names the affected resource/endpoint, not the token source secret value
-// (plan §3: error messages identify the source variable/file, never the
+// (error messages identify the source variable/file, never the
 // secret).
 type APIError struct {
 	Kind    ErrorKind

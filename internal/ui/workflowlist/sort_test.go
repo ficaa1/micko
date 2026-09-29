@@ -22,7 +22,7 @@ func TestSortKeyCycle(t *testing.T) {
 }
 
 func TestSortUnknownPhasesLastDeterministic(t *testing.T) {
-	// Unknown phases (LIST-11) must be displayable AND sort after the
+	// Unknown phases must be displayable AND sort after the
 	// canonical buckets, deterministically by name.
 	items := []core.Summary{
 		{Ref: core.Ref{Name: "zeta"}, Phase: "MysteryPhase"},
@@ -53,7 +53,7 @@ func TestSortTreatsErrorLikeFailedBucket(t *testing.T) {
 
 func TestPhaseStyleFallbackText(t *testing.T) {
 	// Unknown phases stay displayable: the view text carries the phase
-	// even without color (LIST-11; plan §2 text-with-color rule).
+	// even without color (color is never the only carrier).
 	m := New(testTheme(), true)
 	if got := m.rowPhaseText("WeirdFuturePhase"); got != "WeirdFuturePhase" {
 		t.Fatalf("rowPhaseText = %q", got)

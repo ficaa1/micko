@@ -1,5 +1,5 @@
-// Package filter.go is part of the B1 list component: local filters over
-// the injected snapshot (plan §8 B1; LIST-05/09 scope rules).
+// filter.go — local filters over the injected snapshot.
+
 package workflowlist
 
 import (
@@ -10,7 +10,7 @@ import (
 
 // PhaseFilter is the local phase bucket. "Other" collects every phase the
 // pinned upstream type set does not define, so unknown server phases stay
-// visible and filterable instead of disappearing (LIST-11).
+// visible and filterable instead of disappearing.
 type PhaseFilter string
 
 const (

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// TestSmokeVersionString pins the build identity so the smoke slice has a
+// TestSmokeVersionString pins the build identity so the smoke check has a
 // real executable-shaped assertion.
 func TestSmokeVersionString(t *testing.T) {
 	if mainVersion == "" {

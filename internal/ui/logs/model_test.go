@@ -12,12 +12,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// model tests — follow/pause/autoscroll (plan §8 D1 slice; acceptance
-// LOG-07/LOG-08), the "no autoscroll jump while paused" plan gate,
-// retained-buffer search UX (LOG-09), and key isolation (UI-04).
+// model tests — follow/pause/autoscroll (including that no
+// autoscroll jump happens while paused), retained-buffer search UX, and key
+// isolation.
 // ---------------------------------------------------------------------------
 
-// TestSpacePausesFollow pins Space = pause (LOG-07): a pure state change
+// TestSpacePausesFollow pins Space = pause: a pure state change
 // with no transport effect.
 func TestSpacePausesFollow(t *testing.T) {
 	m := testModel(t)
@@ -33,7 +33,7 @@ func TestSpacePausesFollow(t *testing.T) {
 	}
 }
 
-// TestFollowResumesWithT pins `t` (tail) = resume follow (LOG-08). It used
+// TestFollowResumesWithT pins `t` (tail) = resume follow. It used
 // to be `f`, which now means the full-screen raw view on every route.
 func TestFollowResumesWithT(t *testing.T) {
 	m := testModel(t)
@@ -44,7 +44,7 @@ func TestFollowResumesWithT(t *testing.T) {
 	}
 }
 
-// TestNoAutoscrollJumpWhilePaused is the plan gate: while paused, arriving
+// TestNoAutoscrollJumpWhilePaused pins that while paused, arriving
 // lines must never move the viewport — the same rows stay visible. The
 // count line may change (retention counters are live), the window rows may
 // not.
@@ -68,7 +68,7 @@ func TestNoAutoscrollJumpWhilePaused(t *testing.T) {
 	}
 }
 
-// TestPauseDoesNotGrowMemory pins the LOG-07 memory bound at the component
+// TestPauseDoesNotGrowMemory pins the memory bound at the component
 // level: pausing stops viewport motion but collection still lands in the
 // bounded buffer — a sustained feed while paused stays capped.
 func TestPauseDoesNotGrowMemory(t *testing.T) {
@@ -84,7 +84,7 @@ func TestPauseDoesNotGrowMemory(t *testing.T) {
 }
 
 // TestFollowPinsTail pins that following re-pins the tail on each render:
-// the last line is visible while autoscrolling (LOG-07 follow semantics).
+// the last line is visible while autoscrolling.
 func TestFollowPinsTail(t *testing.T) {
 	m := testModel(t)
 	vh := viewportRows(m)
@@ -114,7 +114,7 @@ func TestManualScrollDetachesFollow(t *testing.T) {
 	}
 }
 
-// TestSearchScopeIsRetainedBuffer pins LOG-09 UX: after applying a search,
+// TestSearchScopeIsRetainedBuffer pins the search UX: after applying a search,
 // the count line states the retained-buffer scope explicitly and reports the
 // position within the matches.
 func TestSearchScopeIsRetainedBuffer(t *testing.T) {
@@ -222,7 +222,7 @@ func TestSearchApplyThenNavigate(t *testing.T) {
 	}
 }
 
-// TestContextEditorOpensWithPrefill pins LOG-10: the editor prefills the
+// TestContextEditorOpensWithPrefill pins: the editor prefills the
 // current pod (empty = workflow-wide) and the visible container default.
 func TestContextEditorOpensWithPrefill(t *testing.T) {
 	m := testModel(t)
@@ -272,7 +272,7 @@ func TestContextSwitchEmitsIntent(t *testing.T) {
 }
 
 // TestContextBlankContainerRefused pins that an emptied container is
-// refused with the editor kept open (never silently guessed, LOG-10).
+// refused with the editor kept open (never silently guessed).
 func TestContextBlankContainerRefused(t *testing.T) {
 	m := testModel(t)
 	press(m, 'c')
@@ -306,25 +306,25 @@ func TestContextEscCancelsWithoutIntent(t *testing.T) {
 	}
 }
 
-// TestSpaceDoesNotTypeInEditor pins UI-04 key isolation: while the
+// TestSpaceDoesNotTypeInEditor pins key isolation: while the
 // context editor has focus, Space is input, not pause.
 func TestSpaceDoesNotTypeInEditor(t *testing.T) {
 	m := testModel(t)
 	press(m, 'c')
 	press(m, ' ')
 	if m.Paused() {
-		t.Fatal("space paused while the editor had focus (UI-04 violation)")
+		t.Fatal("space paused while the editor had focus")
 	}
 }
 
-// TestSearchModeConsumesCommandKeys pins UI-04 for the search editor:
+// TestSearchModeConsumesCommandKeys pins key isolation for the search editor:
 // typed command letters do not trigger browse-mode actions.
 func TestSearchModeConsumesCommandKeys(t *testing.T) {
 	m := testModel(t)
 	press(m, '/') // focus search
 	press(m, 'c') // types 'c', must NOT open the context editor
 	if m.contextOn {
-		t.Fatal("command key leaked into the search editor (UI-04)")
+		t.Fatal("command key leaked into the search editor")
 	}
 	if m.searchBuf != "c" {
 		t.Fatalf("printable input not delivered to the editor: %q", m.searchBuf)
@@ -336,7 +336,7 @@ func TestSearchModeConsumesCommandKeys(t *testing.T) {
 }
 
 // TestGlobalKeysNotShadowed pins that browse mode leaves root-owned keys
-// (q/n/p/?) alone (UI-04: the child must not shadow them).
+// (q/n/p/?) alone (the child must not shadow them).
 func TestGlobalKeysNotShadowed(t *testing.T) {
 	m := testModel(t)
 	for _, k := range []rune{'q', 'n', 'p', '?'} {
@@ -364,7 +364,7 @@ func TestOpenIntentCarriesFrozenContract(t *testing.T) {
 	}
 }
 
-// TestSetErrorSurfacesHonestState pins LOG-12: an error state renders the
+// TestSetErrorSurfacesHonestState pins: an error state renders the
 // sanitized cause, distinguishably from ended.
 func TestSetErrorSurfacesHonestState(t *testing.T) {
 	m := testModel(t)

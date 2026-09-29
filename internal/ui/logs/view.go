@@ -9,7 +9,7 @@ import (
 // view.go — renders the retained buffer into terminal-safe text (the only
 // path any untrusted content takes before reaching the terminal).
 //
-// Rules (plan §8 D1; acceptance LOG-04..LOG-12):
+// Rules:
 //   - every untrusted string passes shared.Sanitize before it is placed
 //     in a row (log content is sanitized at Push time; marker context at
 //     PushMarker time; the header re-sanitizes defensively)
@@ -17,11 +17,11 @@ import (
 //   - truncated lines keep the visible markerTruncated suffix
 //   - search scope is stated: "search scope: retained buffer only"
 //   - the viewport never scrolls on its own while paused; following pins
-//     to the tail (LOG-07/08)
+//     to the tail
 //   - the only styling is the theme's: stream markers and the retention
 //     count are muted so the log lines read first, and search hits are
 //     highlighted; text accompanies every state so color is never the only
-//     carrier (plan §2)
+//     carrier
 
 // rowKind distinguishes rendered row provenance.
 type rowKind int
@@ -244,8 +244,8 @@ func (m *Model) clampBottom(base, delta int) int {
 
 // ensureSnapshot rebuilds the scrollable rows when the buffer changed.
 // While paused, the stored absolute bottom edge is honored exactly: the
-// same row that was visible stays visible when new lines arrive (plan
-// gate: no autoscroll jump while paused). While following, the tail is
+// same row that was visible stays visible when new lines arrive (no
+// autoscroll jump while paused). While following, the tail is
 // re-pinned every render.
 //
 // The rebuild must happen BEFORE any scroll decision that resolves
@@ -348,7 +348,7 @@ func (m *Model) View() string {
 // opt-in so any caller that renders logs standalone keeps a complete pane.
 func (m *Model) SetPaneMode(v bool) { m.paneMode = v }
 
-// PaneTitle is the shell border title: the sanitized workflow name (SEC-02).
+// PaneTitle is the shell border title: the sanitized workflow name.
 func (m *Model) PaneTitle() string { return "Logs " + shared.Sanitize(m.ref.Name) }
 
 // Hints is the log key contract, mirrored by the `?` overlay.
@@ -466,13 +466,13 @@ func (m *Model) windowLines() []string {
 	return out
 }
 
-// headerView is the pane title: sanitized workflow name (SEC-02).
+// headerView is the pane title: sanitized workflow name.
 func (m *Model) headerView() string {
 	return "logs: " + shared.Sanitize(m.ref.Name)
 }
 
-// statusView carries scope + lifecycle. States are distinguishable by text
-// (UI-07); errors surface the honest cause (LOG-12).
+// statusView carries scope + lifecycle. States are distinguishable by text;
+// errors surface the honest cause.
 func (m *Model) statusView() string {
 	scope := "workflow-wide"
 	if m.podName != "" {
@@ -496,7 +496,7 @@ func (m *Model) statusView() string {
 }
 
 // countView reports retention counts (bounded, visible) and, when a
-// search is committed, its honest scope (LOG-09: retained buffer only).
+// search is committed, its honest scope (retained buffer only).
 // Lines counts log lines only (markers are UI authoring, not data).
 func (m *Model) countView() string {
 	_, _, _, evicted, _ := m.buf.Counts()

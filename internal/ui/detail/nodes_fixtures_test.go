@@ -7,7 +7,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// Node-type fixtures (DET-07): every pinned node type renders
+// Node-type fixtures: every pinned node type renders
 // deterministically through the outline, with honest pod/log capability
 // flags. The fixtures here are synthetic (testkit policy).
 
@@ -75,8 +75,8 @@ func containerSetFixture() core.Workflow {
 	}
 }
 
-// skippedFixture pins Skipped/Omitted phase rendering (protocol §8: Skipped
-// is a node type; Omitted is a phase some servers emit).
+// skippedFixture pins Skipped/Omitted phase rendering (Skipped is a
+// node type; Omitted is a phase some servers emit).
 func skippedFixture() core.Workflow {
 	return core.Workflow{
 		Summary: core.Summary{
@@ -150,13 +150,13 @@ func TestNodeOutlineSkippedOmittedFixture(t *testing.T) {
 	if kids[0].Phase != "Omitted" || kids[1].Phase != "Skipped" {
 		t.Fatalf("phases = %q, %q; must pass through verbatim", kids[0].Phase, kids[1].Phase)
 	}
-	// HasPod is type-potential (protocol §8); an Omitted Pod node still has
+	// HasPod is type-potential; an Omitted Pod node still has
 	// Pod type, so potential stays true — the phase explains it never ran.
 	// The important bit is that the node remains visible with its verbatim
 	// phase (asserted above).
 }
 
-// TestNodeOutlineRetainFixture reuses the F1 retry fixture: retry children
+// TestNodeOutlineRetainFixture reuses the retry fixture: retry children
 // (retry-1, retry-2) nest under the Retry boundary node.
 func TestNodeOutlineRetainFixture(t *testing.T) {
 	wf := testkit.FixtureDAGWorkflow("ns", "fixture-dag")
@@ -206,7 +206,7 @@ func TestNodeOutlineSuspendFixture(t *testing.T) {
 }
 
 // TestNodeOutlineUnknownPhasePassthrough: unknown future phases remain
-// displayable verbatim (LIST-11 analog for nodes).
+// displayable verbatim, as they are in the workflow list.
 func TestNodeOutlineUnknownPhasePassthrough(t *testing.T) {
 	wf := core.Workflow{
 		Summary: core.Summary{

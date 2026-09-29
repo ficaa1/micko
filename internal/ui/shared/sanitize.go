@@ -1,10 +1,10 @@
 // Package shared holds UI primitives used by every view: theme, keys and
-// the terminal-attack sanitizer (plan §5: "Sanitize terminal control
-// sequences ... before rendering any untrusted text, not only logs").
+// the terminal-attack sanitizer, which every view applies to untrusted text
+// before rendering it, not only logs.
 package shared
 
 // Sanitize neutralizes terminal control sequences in untrusted text before
-// it reaches the terminal (acceptance SEC-01/DET-13/LOG-05):
+// it reaches the terminal:
 //
 //   - C0 control characters except \n and \t are removed (including CR, so
 //     carriage-return rewriting cannot redraw a line).
@@ -17,7 +17,7 @@ package shared
 //     through their ST terminator; unterminated ones swallow to end (the
 //     safe direction for untrusted input).
 //   - \n and \t are preserved (safe newline/tab behavior in multiline
-//     views, plan §5).
+//     views).
 //
 // The function never panics on malformed UTF-8: it operates on runes and
 // invalid bytes are replaced with the Unicode replacement character by the
@@ -121,7 +121,7 @@ func isEscapeFinal(r rune) bool { return r >= 0x30 && r <= 0x7E }
 
 // RedactTokens masks token-shaped secrets in text that might embed them
 // (error text surfaces, debug output). It is a defense-in-depth layer on
-// top of the discipline that errors never include credentials (plan §3).
+// top of the discipline that errors never include credentials.
 // Patterns:
 //   - "Authorization: Bearer <token>" and bare "Bearer <token>" forms
 //   - long hex/base64url blobs (>=24 chars) commonly produced by tokens

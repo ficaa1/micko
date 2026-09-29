@@ -50,7 +50,7 @@ type deps struct {
 	clock    Clock
 	interval time.Duration
 	// namespace is the active namespace; switching it bumps the connection
-	// generation (plan §2 journey 5).
+	// generation.
 	namespace string
 	// allNamespaces widens the list and the watch to every namespace the
 	// token may read. namespace keeps the session's own namespace, which the
@@ -63,10 +63,10 @@ type deps struct {
 	// drill-down.
 	drillNamespace string
 	labelSelector  string
-	// snapshotCap bounds collected summaries per generation (plan §5:
-	// snapshot cap 5,000; tests/demo may lower it).
+	// snapshotCap bounds collected summaries per generation
+	// (snapshot cap 5,000; tests/demo may lower it).
 	snapshotCap int
-	// pageSize is the requested page size (plan §5: default 100).
+	// pageSize is the requested page size (default 100).
 	pageSize int64
 }
 
@@ -111,8 +111,7 @@ func (p *requestIDProvider) last() uint64 { return p.next }
 // result message. The root discards stale results (model_test.go pins it).
 
 // listCmd collects one full snapshot page-by-page. One list operation per
-// generation; the next timer starts after completion, not concurrently
-// (plan §5; acceptance LIST-07).
+// generation; the next timer starts after completion, not concurrently.
 func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg {
 	return func() tea.Msg {
 		msg := listLoadedMsg{genStamp: g, RequestID: id}
@@ -159,7 +158,7 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 				break
 			}
 			// Follow continuation even when a page contains zero items
-			// (plan §5) — but bound repeated tokens (LIST-04 guard).
+			// — but bound repeated tokens.
 			cont = page.Continue
 			pages++
 			if maxPages > 0 && pages > maxPages {
@@ -228,14 +227,14 @@ func podSources(nodes map[string]core.Node) map[string]string {
 // could drop tail records when both were ready simultaneously).
 //
 // Backpressure: the queue is bounded; sends select on ctx.Done so a slow
-// consumer cannot grow it unboundedly (plan §5; STR-03/STR-05).
+// consumer cannot grow it unboundedly.
 
 // streamQueueCap bounds queued records between consumer reads; a full queue
 // blocks the StreamLogs callback, not the UI.
 const streamQueueCap = 256
 
 // emitBatchCap bounds records per delivered message (root batches delivery
-// instead of one full render per line, plan §5).
+// instead of one full render per line).
 const emitBatchCap = 64
 
 type streamItem struct {
@@ -272,7 +271,7 @@ func (d deps) streamLogsCmd(ctx context.Context, g genStamp, id uint64, req core
 
 // drainCmd emits one batched message and chains itself until the stream
 // ends. Clean finite EOF yields Done with nil Err; context cancellation is
-// distinguishable from network failure via Canceled (plan §4; STR-01).
+// distinguishable from network failure via Canceled.
 func (d deps) drainCmd(ctx context.Context, g genStamp, id uint64, ch chan streamItem) func() tea.Msg {
 	return func() tea.Msg {
 		var batch []core.LogRecord
@@ -331,7 +330,7 @@ func emitBatchThenEnd(g genStamp, id uint64, batch []core.LogRecord, err error, 
 	}
 }
 
-// tickCmd schedules the next poll after completion (plan §5: the next
+// tickCmd schedules the next poll after completion (the next
 // timer starts after completion).
 func (d deps) tickCmd() func() tea.Msg {
 	return func() tea.Msg {

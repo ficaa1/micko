@@ -11,8 +11,8 @@ package integration
 // the replica with TIOCPTYGRANT / TIOCPTYUNLK and names it with TIOCPTYGNAME,
 // which returns a /dev/ttys<nnn> path in a fixed 128-byte buffer.
 //
-// This file is why the ET-3 suite runs on a developer Mac at all. Without it
-// the whole acceptance harness is silently inert on darwin — which is how a
+// This file is why the PTY suite runs on a developer Mac at all. Without it
+// the whole PTY harness is silently inert on darwin — which is how a
 // demo with unroutable keys reached a beta handoff with the tests "passing".
 
 import (

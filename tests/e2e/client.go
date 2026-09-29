@@ -310,7 +310,7 @@ func (c *e2eClient) fetchPhase(ctx context.Context, ns, name string) (string, er
 	return wf.Status.Phase, nil
 }
 
-// serverVersion reads GET /api/v1/version (CMP-02 identity check).
+// serverVersion reads GET /api/v1/version (identity check).
 func (c *e2eClient) serverVersion(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/api/v1/version", nil)
 	if err != nil {

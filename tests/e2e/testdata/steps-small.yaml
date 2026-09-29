@@ -1,5 +1,5 @@
 # SYNTHETIC FIXTURE (docs/development.md): small steps shape for
-# ET-4 outline/detail checks. Synthetic; never a production manifest.
+# real-cluster outline/detail checks. Synthetic; never a production manifest.
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:

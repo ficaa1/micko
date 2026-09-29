@@ -42,7 +42,7 @@ func NewWireClient(cfg WireClientConfig) *WireClient {
 // compile-time proof the test client satisfies the frozen contract.
 var _ core.Reader = (*WireClient)(nil)
 
-// List implements core.Reader over the pinned list endpoint (§4).
+// List implements core.Reader over the pinned list endpoint.
 func (c *WireClient) List(ctx context.Context, q core.Query) (core.Page, error) {
 	u := c.url("/api/v1/workflows/" + url.PathEscape(q.Namespace))
 	qv := url.Values{}
@@ -84,7 +84,7 @@ func (c *WireClient) List(ctx context.Context, q core.Query) (core.Page, error) 
 	return page, nil
 }
 
-// Get implements core.Reader over the pinned detail endpoint (§5), always
+// Get implements core.Reader over the pinned detail endpoint, always
 // passing the UID (micko policy: UID on every detail GET).
 func (c *WireClient) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	u := c.url("/api/v1/workflows/" + url.PathEscape(ref.Namespace) + "/" + url.PathEscape(ref.Name))
@@ -111,7 +111,7 @@ func (c *WireClient) Get(ctx context.Context, ref core.Ref) (core.Workflow, erro
 	return out, nil
 }
 
-// StreamLogs implements core.Reader over the pinned log endpoint (§6).
+// StreamLogs implements core.Reader over the pinned log endpoint.
 // Parses both JSON-lines and SSE framings, detects in-band error chunks,
 // and honors context cancellation (drip tests).
 func (c *WireClient) StreamLogs(ctx context.Context, req core.LogRequest, cb func(core.LogRecord) error) error {
@@ -121,7 +121,7 @@ func (c *WireClient) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 	if req.PodName != "" {
 		qv.Set("podName", req.PodName)
 	}
-	qv.Set("logOptions.container", req.Container) // always explicit (§6.2)
+	qv.Set("logOptions.container", req.Container) // always explicit
 	if req.Follow {
 		qv.Set("logOptions.follow", "true")
 	}
@@ -138,11 +138,11 @@ func (c *WireClient) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 		return core.ErrInvalidf("logs: bad request: %v", err)
 	}
 	c.applyAuth(hreq)
-	// v0.1 policy (§6): do NOT send Accept: text/event-stream.
+	// v0.1 policy: do NOT send Accept: text/event-stream.
 	hresp, err := c.httpClient().Do(hreq)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err() // distinguishable from network failure (plan §4)
+			return ctx.Err() // distinguishable from network failure
 		}
 		return core.ErrUnavailablef("logs: transport error: %v", err)
 	}
@@ -174,7 +174,7 @@ func parseLogStream(ctx context.Context, r io.Reader, req core.LogRequest, cb fu
 			if line == "" {
 				continue // SSE event separator (or stray blank line)
 			}
-			payload := strings.TrimPrefix(line, "data: ") // SSE variant (§6)
+			payload := strings.TrimPrefix(line, "data: ") // SSE variant
 			if payload == line && strings.HasPrefix(line, "data:") {
 				payload = strings.TrimPrefix(line, "data:") // tolerate no-space form
 			}
@@ -187,7 +187,7 @@ func parseLogStream(ctx context.Context, r io.Reader, req core.LogRequest, cb fu
 			continue
 		}
 		if err == io.EOF {
-			// Final chunk without trailing newline (§6.3 case 3): parse
+			// Final chunk without trailing newline: parse
 			// only if complete JSON; a mid-JSON cut is a severed stream —
 			// report cancellation first, protocol error otherwise.
 			if line != "" {
@@ -228,7 +228,7 @@ func deliverLogChunk(ctx context.Context, chunk string, req core.LogRequest, cb 
 	case envelope.Result != nil:
 		rec := core.LogRecord{
 			PodName:    envelope.Result.PodName,
-			Container:  req.Container, // container context from the request (§6.2)
+			Container:  req.Container, // container context from the request
 			Content:    envelope.Result.Content,
 			ReceivedAt: time.Now(),
 		}
@@ -239,7 +239,7 @@ func deliverLogChunk(ctx context.Context, chunk string, req core.LogRequest, cb 
 	return nil
 }
 
-// inBandKind maps a gRPC code to the frozen ErrorKind table (§10).
+// inBandKind maps a gRPC code to the frozen ErrorKind table.
 func inBandKind(code int) core.ErrorKind {
 	switch code {
 	case grpcUnauth:
@@ -300,7 +300,7 @@ func (c *WireClient) applyAuth(r *http.Request) {
 }
 
 // unaryError converts a gateway {"code","message"} body to an APIError with
-// the mapped kind (§10).
+// the mapped kind.
 func unaryError(body []byte, status int) error {
 	var env struct {
 		Code    int    `json:"code"`

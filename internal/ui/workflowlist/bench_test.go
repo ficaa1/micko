@@ -8,7 +8,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// Benchmarks for PERF-01 (5,000 summaries keyboard-responsive): filter+sort
+// Benchmarks for 5,000 summaries staying keyboard-responsive: filter+sort
 // over the full snapshot and a full View render.
 func benchItems(n int) []core.Summary {
 	return summariesFrom(testkit.FixtureWorkflowList("ns", n))

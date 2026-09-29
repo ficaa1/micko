@@ -11,15 +11,15 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// View renders the full list pane. Layout (plan §2):
+// View renders the full list pane. Layout:
 //
 //	header:  <title>  ns:<ns>  READ ONLY
 //	toolbar: Search: <q> (snapshot scope)  Phase: <bucket>  Sort: <key>  Updated/stale
 //	table:   NAME  PHASE  AGE  DURATION  (+ message column when wide)
 //	footer:  states + key hints
 //
-// All server-derived text passes shared.Sanitize before render (SEC-01/02).
-// Statuses are distinguishable by text, never by color alone (UI-03/07).
+// All server-derived text passes shared.Sanitize before render.
+// Statuses are distinguishable by text, never by color alone.
 func (m *Model) View() string {
 	return m.ViewAt(time.Time{})
 }
@@ -174,7 +174,7 @@ func (m *Model) window(chromeLines int) (start, end int) {
 // phase word still say what the colour would have.
 func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	// Symbol AND word AND color: a mono terminal, NO_COLOR and a color-blind
-	// reader all keep two of the three channels (UI-03/07). A workflow parked
+	// reader all keep two of the three channels. A workflow parked
 	// on a manual gate reads "Suspended" rather than "Running", because
 	// "Running" would hide the one row that is waiting for the reader.
 	shown := DisplayPhase(r)
@@ -253,10 +253,10 @@ const markGutter = 2
 // never reads as a phase.
 const markGlyph = "◆" // black diamond
 
-// minUsableWidth below which the plan requires a resize notice (<60 cols).
+// minUsableWidth is the width below which a resize notice replaces the list (<60 cols).
 const minUsableWidth = 60
 
-// resizeNotice renders the <60-col notice while preserving quit/help (UI-01).
+// resizeNotice renders the <60-col notice while preserving quit/help.
 func (m *Model) resizeNotice() string {
 	var b strings.Builder
 	b.WriteString("micko: terminal too small (" + itoa(m.width) + "x" + itoa(m.height) + ")\n")
@@ -275,7 +275,7 @@ func (m *Model) headerView() string {
 }
 
 // toolbarView is the Search/Phase/Sort/state line. It must surface the
-// local search scope and the incomplete count visibly (plan gate; LIST-05/09).
+// local search scope and the incomplete count visibly.
 func (m *Model) toolbarView() string {
 	parts := []string{}
 	// The mark count leads the toolbar. The marks are the one state here
@@ -356,8 +356,7 @@ func (m *Model) toolbarPrefixParts() []string {
 // reader sees how the query was read.
 //
 // Scope honesty: the filter is LOCAL to the collected snapshot. The scope
-// is shown whenever a query is active or the snapshot is known incomplete
-// (LIST-05/09).
+// is shown whenever a query is active or the snapshot is known incomplete.
 func (m *Model) searchCell() string {
 	label := m.theme.Muted.Render("Search:")
 	cell := label + " (none)  / to filter by name"
@@ -642,7 +641,7 @@ const colGap = 2
 // minMessageWidth is the narrowest message column worth rendering.
 const minMessageWidth = 12
 
-// emptyStateView renders the no-rows line. Distinguishable states (UI-07):
+// emptyStateView renders the no-rows line. Distinguishable states:
 // loading ≠ empty ≠ filtered-empty ≠ error.
 func (m *Model) emptyStateView() string {
 	switch {

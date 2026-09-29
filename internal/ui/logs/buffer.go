@@ -8,10 +8,10 @@ import (
 )
 
 // buffer.go — bounded memory representation for retained log entries
-// (plan §8 D1; acceptance LOG-06: retain at most 10,000 lines and 8 MiB of
-// text, whichever limit is hit first; enforce single-record/frame size
-// bounds and visible truncation markers; LOG-14: sustained streams keep
-// memory settling, never growing unboundedly).
+// (retain at most 10,000 lines and 8 MiB of text, whichever limit is hit
+// first; enforce single-record/frame size bounds and visible truncation
+// markers; sustained streams keep memory settling, never growing
+// unboundedly).
 //
 // Caps are enforced per push: the oldest entries evict first (ring
 // semantics). A record beyond maxRecordBytes is dropped outright and a
@@ -19,20 +19,19 @@ import (
 // a visible marker. Nothing is ever silently clipped.
 //
 // Duplicates are legitimate log output: no deduplication ever happens
-// (LOG-06/LOG-11 gate).
 //
 // buffer is unexported: the model talks to it through
 // Push/PushMarker/ApplyMarker/Counts/Lines/Search.
 
-// Frozen caps (plan §5; docs/development.md LOG-06).
+// Frozen caps (docs/development.md).
 const (
 	// MaxLines caps the number of retained entries (lines + markers).
 	MaxLines = 10_000
 	// MaxBytes caps retained text bytes (log content only).
 	MaxBytes = 8 << 20 // 8 MiB
 	// maxRecordBytes bounds the largest single storable record; larger
-	// records are dropped outright with a visible dropped marker (LOG-04
-	// bounded oversize handling).
+	// records are dropped outright with a visible dropped marker
+	// (oversize handling is bounded).
 	maxRecordBytes = 1 << 20 // 1 MiB
 	// maxLineBytes is the per-line storage allowance; longer lines are
 	// truncated and carry a visible marker.
@@ -40,7 +39,7 @@ const (
 )
 
 // markerTruncated is the visible suffix appended to an oversized line
-// (never a silent clip, plan §5/LOG-04).
+// (never a silent clip).
 const markerTruncated = " …[truncated]"
 
 // buffer is the in-memory ring of retained entries (log lines + markers).
@@ -96,7 +95,7 @@ func (b *buffer) Push(r core.LogRecord) bool {
 }
 
 // PushMarker appends a stream-context annotation row. Marker context is
-// sanitized here so no caller can later render it raw (SEC-01).
+// sanitized here so no caller can later render it raw.
 func (b *buffer) PushMarker(kind markerKind, podName, container string) {
 	b.mu.Lock()
 	b.pushEntry(entry{kind: kind, ctxPod: shared.Sanitize(podName), ctxCont: shared.Sanitize(container)})
@@ -104,7 +103,7 @@ func (b *buffer) PushMarker(kind markerKind, podName, container string) {
 }
 
 // SetReconnect sets (or clears) the pending-gap flag: the next push
-// annotates a reconnect marker first (LOG-11). The root calls this on a
+// annotates a reconnect marker first. The root calls this on a
 // fresh stream attempt for the same buffer.
 func (b *buffer) SetReconnect() {
 	b.mu.Lock()
@@ -167,7 +166,7 @@ func (b *buffer) Entries() []entry {
 }
 
 // Lines returns a snapshot copy of the retained log lines (markers
-// skipped) — the search scope (LOG-09: retained buffer only).
+// skipped) — the search scope (retained buffer only).
 func (b *buffer) Lines() []logLine {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -180,7 +179,7 @@ func (b *buffer) Lines() []logLine {
 	return out
 }
 
-// Search runs s over the retained log lines only (LOG-09). Indices point
+// Search runs s over the retained log lines only. Indices point
 // into Entries()-ordered log lines (the same order Lines() returns).
 func (b *buffer) Search(s searchState) []int {
 	return matchIndices(b.Lines(), s.term, s.caseSensitive)

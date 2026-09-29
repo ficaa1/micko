@@ -12,8 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// Update implements the child Tea model. Key isolation rules (plan §2;
-// UI-04):
+// Update implements the child Tea model. Key isolation rules:
 //   - In search mode, printable keys go to the input; j/k/arrows/enter keep
 //     their navigation meaning ONLY as input editing/submit; `q` types a
 //     letter (does NOT quit) and no other command key fires. Esc leaves
@@ -25,7 +24,7 @@ import (
 //     (BackMsg passthrough stays with the root).
 //
 // The component never issues commands that touch the network; intents are
-// returned as messages for the root (plan §4).
+// returned as messages for the root.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -152,13 +151,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	default:
 		// Everything else (q, n, p, ?, ...) belongs to the root; the child
-		// must not shadow it (UI-04).
+		// must not shadow it.
 		return nil
 	}
 }
 
-// handleSearchKey routes keys while search has focus. Text-entry isolation
-// (UI-04): printable characters reach the buffer; `q` inserts a letter;
+// handleSearchKey routes keys while search has focus. Text-entry isolation:
+// printable characters reach the buffer; `q` inserts a letter;
 // navigation command keys are not interpreted; enter applies; esc cancels.
 // Home/End/Backspace/arrow-left/right are the only other editing keys the
 // input recognizes; everything else is ignored (never a command).
@@ -276,7 +275,7 @@ func (m *Model) moveTo(i int) {
 func isControlRune(r rune) bool { return r < 0x20 || r == 0x7f }
 
 // rowPhaseText renders the phase cell: text always present (color is
-// supplementary, plan §2).
+// supplementary).
 func (m *Model) rowPhaseText(phase string) string {
 	if phase == "" {
 		return "(no phase)"
@@ -285,7 +284,7 @@ func (m *Model) rowPhaseText(phase string) string {
 }
 
 // ageText renders the AGE cell from the most informative timestamp. Missing
-// timestamps render as "-" (LIST-09: sensible, never garbage).
+// timestamps render as "-" (sensible, never garbage).
 func ageText(s core.Summary, now time.Time) string {
 	t := s.CreatedAt
 	if s.StartedAt != nil && !s.StartedAt.IsZero() {
@@ -430,7 +429,7 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
-// padRight pads s to width cells (Unicode-aware, PLAN: wide names must not
+// padRight pads s to width cells (Unicode-aware: wide names must not
 // break alignment). Wide runes count as 2 cells via ansi.StringWidth.
 func padRight(s string, width int) string {
 	w := ansi.StringWidth(s)

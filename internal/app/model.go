@@ -24,9 +24,7 @@ import (
 )
 
 // Root is the top-level Tea model: it owns routing, generations,
-// cancellation and the update loop that alone mutates UI state (plan §4).
-// F1 implements empty routes without worker feature logic; I1 composes the
-// real views into it.
+// cancellation and the update loop that alone mutates UI state.
 type Root struct {
 	deps deps
 
@@ -34,7 +32,7 @@ type Root struct {
 	route Route
 
 	// connGen bumps on namespace/profile switch; selGen bumps on selected
-	// workflow change (plan §4 response stamping).
+	// workflow change; responses carry the generation they were requested under.
 	connGen, selGen int
 
 	// selection is the currently selected workflow (detail/logs scope).
@@ -290,10 +288,10 @@ type listState struct {
 	items []core.Summary
 	// loading is true while a snapshot collection runs for this generation.
 	loading bool
-	// incomplete marks a capped collection (plan §5: visible incomplete state).
+	// incomplete marks a capped collection (visible incomplete state).
 	incomplete bool
 	// staleSince is when the last successful snapshot finished; errors keep
-	// last good data and show stale age (plan §5).
+	// last good data and show stale age.
 	staleSince time.Time
 	// lastErr is the last error for the list (kept with last good data).
 	lastErr *core.APIError
@@ -511,7 +509,7 @@ func (m *Root) textEntryActive() bool {
 }
 
 // Update implements tea.Model. All state mutation happens here; async
-// commands only produce messages (plan §4).
+// commands only produce messages.
 func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -532,7 +530,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key == "ctrl+c" {
 			return m.handleKey(msg)
 		}
-		// A non-idle action modal owns all remaining input (UI-04).
+		// A non-idle action modal owns all remaining input.
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			had := m.actionView.State()
 			_, cmd := m.actionView.Update(msg)
@@ -577,7 +575,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// ? opens help everywhere except inside text entry, where it is an
-		// ordinary printable character (UI-04 text-entry isolation).
+		// ordinary printable character (text entry isolates its keys).
 		if key == "?" && !m.textEntryActive() {
 			m.help.Toggle()
 			return m, nil
@@ -680,7 +678,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// logs, refresh); the root converts them to effects below. Global
 		// keys (q, ctrl+c) stay at the root, and text-entry isolation means
 		// printable letters — including q and r — reach the search buffer
-		// while the search input is focused (UI-04).
+		// while the search input is focused.
 		if m.route == RouteList {
 			return m, m.updateChild(msg)
 		}
@@ -703,7 +701,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		// Only restart a poll when one is not already in flight for this
-		// generation (plan §5: exactly one list op per generation).
+		// generation (exactly one list op per generation).
 		m.tickArmed = false
 		// A kind's route polls its own list on the same tick. The workflow
 		// list's watch state does not stop it: a token refused workflows
@@ -1301,7 +1299,7 @@ func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Root) back() tea.Cmd {
 	switch m.route {
 	case RouteLogs:
-		// Leaving logs cancels the stream promptly (plan §5; STR-02).
+		// Leaving logs cancels the stream promptly.
 		m.cancelInflight("logs")
 		m.cancelInflight("logsources")
 		m.logState.running = false
@@ -1486,7 +1484,7 @@ func (m *Root) startLogStream(msg OpenLogsMsg) tea.Cmd {
 }
 
 // handleListLoaded applies a list result honoring generation/request
-// staleness (plan §4: ignore stale completions even after cancellation).
+// staleness (ignore stale completions even after cancellation).
 func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	m.clearInflight("list", msg.RequestID)
 	if msg.Canceled {
@@ -1499,7 +1497,7 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	st := &m.listState
 	st.loading = false
 	if msg.Err != nil {
-		// Keep last good data; record error + stale age (plan §5). The
+		// Keep last good data; record error + stale age. The
 		// snapshot is now stale, so mutations stay blocked until a fresh
 		// list is accepted, even if the transport itself never reported a
 		// loss (a server-side failure is just as stale as a dead forward).
@@ -1574,7 +1572,7 @@ func (m *Root) listErrorText(ae *core.APIError) string {
 }
 
 // handleDetailLoaded applies a detail result honoring staleness + UID
-// validation (same-name replacement is a different workflow, LIST-12).
+// validation (same-name replacement is a different workflow).
 func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	m.clearInflight("detail", msg.RequestID)
 	st := &m.detailState

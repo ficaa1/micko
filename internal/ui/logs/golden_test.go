@@ -11,8 +11,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// golden tests — deterministic render snapshots for the acceptance-matrix
-// terminal cases (LOG-04/05/11/12, UI-07). Regenerate with:
+// golden tests — deterministic render snapshots for the standard
+// terminal cases. Regenerate with:
 //
 //	UPDATE_GOLDEN=1 go test ./internal/ui/logs -run TestGoldenSnapshots
 //
@@ -58,13 +58,13 @@ func goldenTestcases() map[string]func(*Model) {
 			m.ApplyRecords([]core.LogRecord{rec("line one"), rec("line two")})
 			press(m, ' ')
 		},
-		// Reconnect gap annotation between the two halves (LOG-11).
+		// Reconnect gap annotation between the two halves.
 		"reconnect": func(m *Model) {
 			m.ApplyRecords([]core.LogRecord{rec("before disconnect")})
 			m.NewStream()
 			m.ApplyRecords([]core.LogRecord{rec("after reconnect"), rec("after reconnect")})
 		},
-		// Honest unavailability (LOG-12).
+		// Honest unavailability.
 		"unavailable": func(m *Model) {
 			m.ApplyRecords([]core.LogRecord{rec("partial output before failure")})
 			m.SetError("pod logs unavailable: pod deleted (log source gone)")
@@ -75,7 +75,7 @@ func goldenTestcases() map[string]func(*Model) {
 			m.ApplyMarker(markCanceled, "pod-1", "main")
 			m.SetPhase(PhaseCanceled)
 		},
-		// Truncation marker visible on an oversized line (LOG-04).
+		// Truncation marker visible on an oversized line.
 		"oversize": func(m *Model) {
 			long := strings.Repeat("x", maxLineBytes+42)
 			m.ApplyRecords([]core.LogRecord{rec(long)})
@@ -89,14 +89,14 @@ func goldenTestcases() map[string]func(*Model) {
 			m.headerDone = false
 			m.ApplyRecords([]core.LogRecord{rec("sidecar says hi")})
 		},
-		// Committed search with match overlay + visible scope (LOG-09).
+		// Committed search with match overlay + visible scope.
 		"search": func(m *Model) {
 			m.ApplyRecords(recs(6))
 			press(m, '/')
 			typeInto(m, "line-2")
 			pressKey(m, keyEnter)
 		},
-		// Context editor open with prefilled editable default (LOG-10).
+		// Context editor open with prefilled editable default.
 		"context-editor": func(m *Model) {
 			m.ApplyRecords([]core.LogRecord{rec("buffered while editing")})
 			press(m, 'c')

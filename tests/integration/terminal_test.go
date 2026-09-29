@@ -41,7 +41,7 @@ const demoListed = "list: 12 workflows"
 func buildBinary(t *testing.T) string {
 	t.Helper()
 	if _, err := os.Stat("/dev/ptmx"); err != nil {
-		t.Skipf("ET-3 unavailable: /dev/ptmx missing on this host (%v)", err)
+		t.Skipf("PTY suite unavailable: /dev/ptmx missing on this host (%v)", err)
 	}
 	bin := "/tmp/micko-e1-" + strings.ReplaceAll(t.Name(), "/", "_")
 	cmd := exec.Command("go", "build", "-o", bin, "github.com/ficaa1/micko/cmd/micko")
@@ -84,8 +84,7 @@ func waitScreen(p *PTYProcess, timeout time.Duration, cond func(string) bool) bo
 }
 
 // TestPTYDemoJourney: launch --demo → header + list render → 'q' exits
-// cleanly (exit 0) → raw capture contains teardown bytes. (UI-05 alpha
-// journey over the F1 placeholder; full journey re-run by I1/Q1.)
+// cleanly (exit 0) → raw capture contains teardown bytes.
 func TestPTYDemoJourney(t *testing.T) {
 	bin := buildBinary(t)
 	p, err := StartPTY(bin, "--demo")
@@ -118,7 +117,7 @@ func TestPTYDemoJourney(t *testing.T) {
 	}
 }
 
-// TestPTYDemoQuitViaCtrlC: Ctrl-C quits globally (UI-04).
+// TestPTYDemoQuitViaCtrlC: Ctrl-C quits globally.
 func TestPTYDemoQuitViaCtrlC(t *testing.T) {
 	bin := buildBinary(t)
 	p, err := StartPTY(bin, "--demo")
@@ -238,7 +237,7 @@ func TestPTYThePickerListsConfiguredProfiles(t *testing.T) {
 
 // TestPTYTerminalRestoreMarkers: the raw capture of a clean quit contains
 // teardown output after the final view render (terminal restoration —
-// UI-06, asserted against actual bytes, not assumed).
+// asserted against actual bytes, not assumed).
 func TestPTYTerminalRestoreMarkers(t *testing.T) {
 	bin := buildBinary(t)
 	p, err := StartPTY(bin, "--demo")
@@ -263,7 +262,7 @@ func TestPTYTerminalRestoreMarkers(t *testing.T) {
 }
 
 // TestPTYSmallTerminalStillQuits: below 60×15 the app must remain usable
-// (resize notice per plan §2) and q must still quit (UI-01 graceful floor).
+// (a resize notice shows) and q must still quit.
 func TestPTYSmallTerminalStillQuits(t *testing.T) {
 	bin := buildBinary(t)
 	p, err := StartPTYSize(40, 10, bin, "--demo")
@@ -289,11 +288,10 @@ func TestPTYSmallTerminalStillQuits(t *testing.T) {
 	}
 }
 
-// TestPTYNoEgressInDemo: --demo never contacts non-loopback hosts. The
-// demo binary is built from the F1 baseline; a full offline guarantee
-// also holds at the adapter level (SEC-03 negative test — the demo path
-// constructs no HTTP clients at all, verified in code by ADR 0001 and by
-// the fixture-server tests above using an explicit client).
+// TestPTYNoEgressInDemo: --demo never contacts non-loopback hosts. A full
+// offline guarantee also holds at the adapter level: the demo path
+// constructs no HTTP clients at all, verified in code and by the
+// fixture-server tests above using an explicit client.
 func TestPTYNoEgressInDemo(t *testing.T) {
 	// Guard assertion: the demo path in main.go wires ONLY the fake
 	// Reader (no transport construction). Re-verify at runtime that the
@@ -875,7 +873,7 @@ func TestPTYDemoShowsContextAndHelpHint(t *testing.T) {
 	_, _ = p.Wait()
 }
 
-// Statuses must never be carried by color alone (UI-03/07): each row shows
+// Statuses must never be carried by color alone: each row shows
 // a glyph and the phase word.
 func TestPTYDemoRowsCarrySymbolAndWord(t *testing.T) {
 	p := startDemo(t, 100, 30)

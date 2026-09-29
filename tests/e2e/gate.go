@@ -13,15 +13,15 @@ import (
 	"testing"
 )
 
-// e2eConfig is the explicit allowlist (plan §9: "an explicit
-// disposable-context/endpoint allowlist and namespace; the environment
-// flag alone is not permission to mutate a production cluster").
+// e2eConfig is the explicit allowlist: a disposable
+// context/endpoint and namespace. The environment flag alone is not
+// permission to mutate a production cluster.
 type e2eConfig struct {
 	// Server is the base URL of the allowlisted Argo Server (loopback
 	// port-forward per docs/development.md).
 	Server string
 	// Namespace is the single allowlisted test namespace
-	// (argo-tui-e2e per §4.4).
+	// (argo-tui-e2e).
 	Namespace string
 	// Token is an optional bearer token (server-mode SA token from a
 	// temp file path instead — never a literal in config).
@@ -91,8 +91,7 @@ func e2eGate() (allowed bool, reason string) {
 }
 
 // requireGate skips the test with the recorded cause when the gate is
-// closed — an explicit skip with a recorded cause, never a silent pass
-// (acceptance matrix rule of trust).
+// closed — an explicit skip with a recorded cause, never a silent pass.
 func requireGate(t *testing.T) e2eConfig {
 	t.Helper()
 	allowed, reason := e2eGate()

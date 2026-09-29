@@ -59,7 +59,7 @@ func StartPTY(binPath string, args ...string) (*PTYProcess, error) {
 }
 
 // StartPTYSize spawns the binary with an explicit terminal size (resize
-// and small-terminal acceptance cases).
+// and small-terminal cases).
 func StartPTYSize(cols, rows int, binPath string, args ...string) (*PTYProcess, error) {
 	master, slave, err := openPTY()
 	if err != nil {

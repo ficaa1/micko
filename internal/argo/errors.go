@@ -24,11 +24,11 @@ func retryAfterOf(resp *http.Response, now func() time.Time) *time.Duration {
 // redactMessage applies defense-in-depth token redaction to a message that
 // may embed server-provided strings (which can, in compromised setups,
 // echo back request material). Every message this package surfaces goes
-// through it (plan §3; SEC-06).
+// through it.
 func redactMessage(s string) string {
 	return shared.RedactTokens(sanitizeLine(s))
 }
 
-// compile-time guard: KindOf remains the single status→kind table; A1 adds
+// compile-time guard: KindOf remains the single status→kind table; the client adds
 // no parallel mapping of its own for HTTP statuses.
 var _ = core.KindOf

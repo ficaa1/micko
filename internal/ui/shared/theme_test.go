@@ -42,9 +42,9 @@ func TestNewThemePlainWithNoColorEnv(t *testing.T) {
 	}
 }
 
-// --- status symbols (Stage 2 UI shell) ---
+// --- status symbols ---
 
-// Color is never the only carrier of a status (UI-03/07). Every phase must
+// Color is never the only carrier of a status. Every phase must
 // also get a distinct symbol, which survives NO_COLOR and a mono terminal.
 func TestPhaseSymbolsAreDistinct(t *testing.T) {
 	phases := []string{"Running", "Succeeded", "Failed", "Error", "Pending"}
@@ -61,7 +61,7 @@ func TestPhaseSymbolsAreDistinct(t *testing.T) {
 	}
 }
 
-// An unknown phase must still render something (LIST-11): a server may
+// An unknown phase must still render something: a server may
 // invent a phase and the UI must not show a blank cell.
 func TestUnknownPhaseKeepsASymbol(t *testing.T) {
 	if PhaseSymbol("WeirdFuturePhase") == "" {
