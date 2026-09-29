@@ -20,7 +20,7 @@ func tl(t *testing.T) Model {
 	t.Helper()
 	th := shared.NewTheme(true)
 	os.Unsetenv("NO_COLOR") // theme already forced plain; keep env clean for golden tests
-	return New(th, true)
+	return New(th)
 }
 
 // summariesFrom converts fixture workflows to summaries.

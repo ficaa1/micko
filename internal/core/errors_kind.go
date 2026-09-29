@@ -5,8 +5,8 @@ import (
 	"net/http"
 )
 
-// Convenience constructors for the remaining kinds, mirroring the
-// errors.go trio so call sites stay consistent across transport/fakes.
+// Convenience constructors for more error kinds, mirroring the ones in
+// errors.go so call sites stay consistent across transport/fakes.
 
 func ErrUnavailablef(format string, args ...any) *APIError {
 	return NewAPIError(ErrUnavailable, http.StatusServiceUnavailable, fmt.Sprintf(format, args...))

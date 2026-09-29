@@ -122,9 +122,6 @@ type Model struct {
 	// theme is injected (shared.Theme) so goldens can force no-color.
 	theme shared.Theme
 
-	// noColor mirrors the theme's plainness for ASCII snapshot tests.
-	noColor bool
-
 	// allNS marks a snapshot collected across namespaces. The table gains a
 	// NAMESPACE column and the filter matches it, because two rows of the
 	// same name in two namespaces are otherwise indistinguishable.
@@ -133,7 +130,7 @@ type Model struct {
 
 // New builds an empty list model. Items/status arrive via SetItems and
 // SetStatus; the model never fetches by itself.
-func New(theme shared.Theme, noColor bool) Model {
+func New(theme shared.Theme) Model {
 	return Model{
 		phase: PhaseAll,
 		sort:  SortPhaseName,
@@ -463,7 +460,6 @@ func (m *Model) LogsIntent() tea.Msg {
 // RefreshIntent is the manual refresh request (r). The frozen app contract
 // has no RefreshListMsg; the root already polls and coalesces, so
 // the component emits a lightweight local signal the root can interpret.
-// A dedicated frozen message would need an F-gated contract amendment.
 type RefreshListMsg struct{}
 
 func (m *Model) RefreshIntent() tea.Msg { return RefreshListMsg{} }

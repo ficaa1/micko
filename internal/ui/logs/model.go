@@ -179,10 +179,10 @@ func NewModel(ref core.Ref, podName, container string) *Model {
 	}
 }
 
-// init emits the stream-open marker for the current context (called by
-// the root when attaching the component to a stream; ApplyRecords on a
-// fresh model with no header yet emits it lazily so tests and the demo
-// path cannot skip it).
+// ensureContextHeaderLocked emits the stream-open marker for the current
+// context once. ApplyRecords and NewStream call it, so no stream shows
+// records without saying which pod and container they came from. The caller
+// holds m.mu.
 func (m *Model) ensureContextHeaderLocked() {
 	if m.headerDone {
 		return

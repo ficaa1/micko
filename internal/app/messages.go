@@ -64,15 +64,6 @@ type OpenLogsMsg = shared.OpenLogsMsg
 // BackMsg is an intent to go back one route (Esc).
 type BackMsg struct{}
 
-// ActionIntentMsg is the frozen v0.2 action intent placeholder. Alpha and
-// demo never emit it; the root will refuse to convert it to a write when
-// --read-only is set on that invocation (not implemented yet — the message
-// exists so the shared contract is stable).
-type ActionIntentMsg struct {
-	Ref    core.Ref
-	Action string // "retry" | "resubmit" | "stop" | "terminate"
-}
-
 // genStamp carries the two generation counters every response message must
 // include: the connection generation, the selection generation and the
 // request ID.

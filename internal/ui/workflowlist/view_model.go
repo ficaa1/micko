@@ -343,13 +343,6 @@ func (m *Model) wrapStatusReason(full string, style func(...string) string) stri
 	return "\n" + style(shared.Wrap(full, m.width))
 }
 
-// toolbarPrefixParts returns the non-status toolbar cells so wrapStatusReason
-// can measure how much width remains for the (last) status reason. It mirrors
-// the search/scope/phase/sort cells built in toolbarView.
-func (m *Model) toolbarPrefixParts() []string {
-	return []string{m.searchCell(), "Phase: " + string(m.phase), "Sort: " + sortLabel(m.sort)}
-}
-
 // searchCell is the toolbar's filter cell. While the input has focus it is
 // the text being typed, followed by the parse error when there is one.
 // Otherwise it is the applied filter in its parsed, canonical form, so the

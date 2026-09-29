@@ -2,10 +2,11 @@
 // Server's REST API, pinned to the v4.1.2 wire facts in docs/development.md.
 //
 // Scope and safety rules:
-//   - Standard-library HTTP/JSON only; no official client, no Kubernetes
-//     client, no go.mod additions (F owns module files).
-//   - Read-only surface: List/Get/StreamLogs. No write methods exist, so no
-//     mutation can ever be retried by this package.
+//   - Standard-library HTTP/JSON only; no official client and no Kubernetes
+//     client.
+//   - The package never retries a request; the app layer owns backoff.
+//     Execute is the only method that writes (a workflow action), and a
+//     retried write could act twice.
 //   - Tokens never appear in URLs, error messages or logs; the Authorization
 //     header is rebuilt per request from the injected credential source to
 //     support rotation.

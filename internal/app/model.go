@@ -336,8 +336,8 @@ func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duratio
 	return NewRootWithOptions(r, clock, namespace, interval, actions.Options{ReadOnly: true})
 }
 
-// NewRootWithOptions wires optional beta capabilities while retaining the
-// alpha-safe NewRoot constructor.
+// NewRootWithOptions wires optional capabilities such as workflow actions.
+// NewRoot is the same root with actions read-only.
 func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval time.Duration, opts actions.Options) *Root {
 	var watcher core.Watcher
 	if w, ok := r.(core.Watcher); ok {
@@ -382,7 +382,7 @@ func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval t
 		skin:            shared.SkinDefault,
 		nsView:          namespaces.New(theme),
 		profView:        profiles.New(theme),
-		listView:        workflowlist.New(theme, false),
+		listView:        workflowlist.New(theme),
 		actionOpts:      opts,
 		profileCurrent:  opts.Profile,
 		connectionReady: true,
@@ -894,10 +894,6 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case bulkStepMsg:
 		return m, m.handleBulkStep(msg)
-
-	case ActionIntentMsg:
-		// Retain the obsolete app message as a no-op compatibility boundary.
-		return m, nil
 
 	default:
 		return m, nil

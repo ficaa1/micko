@@ -149,13 +149,9 @@ func TestRootLogStreamErrorSurfacesInState(t *testing.T) {
 
 // --- detail errors: not-found vs forbidden distinguishable --------------
 
-// TestRootDetailNotFoundState pins that a 404 detail surfaces as not-found,
-// never as the live workflow. handleDetailLoaded sets notFound=true on 404
-// but does not clear detailState.loading, and the placeholder view is
-// loading-first, so it keeps rendering "loading detail for …". The test
-// therefore asserts the observable view contract (no live workflow is
-// shown) and pins the internal notFound state, without claiming more than
-// the view shows.
+// TestRootDetailNotFoundState pins that a 404 detail surfaces as the
+// not-found state: never as the live workflow, and never as a load that is
+// still in progress.
 func TestRootDetailNotFoundState(t *testing.T) {
 	fs := newSeededServer(t)
 	client := NewWireClient(WireClientConfig{BaseURL: fs.URL()})
@@ -172,10 +168,8 @@ func TestRootDetailNotFoundState(t *testing.T) {
 	if st := reflectDetailState(h); !st["notFound"].(bool) {
 		t.Fatalf("404 detail must mark notFound; state=%+v (view=%q)", st, v)
 	}
-	// Tripwire: once handleDetailLoaded clears loading on the not-found path,
-	// the view must show the distinct state. Strengthen this assertion then.
-	if !contains(v, "loading detail for gone") {
-		t.Logf("NOTE: loading gate fixed upstream; strengthen this test to assert %q", "\"workflow no longer available: gone\"")
+	if contains(v, "loading detail for gone") || !contains(v, "workflow no longer available") {
+		t.Fatalf("404 detail must show the not-found state, got %q", v)
 	}
 }
 
@@ -216,7 +210,7 @@ func TestRootDetailForbiddenStateDistinct(t *testing.T) {
 	}
 }
 
-// --- no writes in alpha across the whole journey --------------
+// --- no writes across a read-only journey ---------------------
 
 func TestJourneySendsOnlyGETs(t *testing.T) {
 	fs := newSeededServer(t)
@@ -236,7 +230,7 @@ func TestJourneySendsOnlyGETs(t *testing.T) {
 	methods := fs.RequestsByMethod()
 	for m, n := range methods {
 		if m != "GET" {
-			t.Errorf("journey produced %s x%d; alpha must never write", m, n)
+			t.Errorf("journey produced %s x%d; a read-only journey must never write", m, n)
 		}
 	}
 	if methods["GET"] < 4 {

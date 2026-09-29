@@ -790,24 +790,8 @@ func itoaDetail(n int) string {
 	return string(b[i:])
 }
 
-// bodyText picks the body for the current state. Every state renders
-// something: an empty pane would say nothing about why it is empty.
-func (m *Model) bodyText() string {
-	switch {
-	case m.loading:
-		return "loading detail…"
-	case m.notFound:
-		return "workflow no longer available"
-	case m.lastErr != "":
-		return "detail error: " + shared.Sanitize(m.lastErr)
-	case !m.loaded:
-		return "(no workflow loaded)"
-	}
-	return RenderDetailBody(m.resolvedState(), m.tab)
-}
-
-// resolvedState applies the session-only resource reveal, which View also
-// does; both compositions must show the same content.
+// resolvedState applies the session-only resource reveal. Every resource
+// view reads through it, so the scroll bounds and the lines shown agree.
 func (m *Model) resolvedState() DetailViewState {
 	state := m.state
 	if m.revealResource {

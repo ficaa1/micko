@@ -155,31 +155,6 @@ func ageKey(s core.Summary) time.Time {
 	return s.CreatedAt
 }
 
-// AgeOrdered returns items ordered for the AGE column display: newest
-// activity first, missing-timestamp rows last by name. Sorting itself uses
-// Sort; this helper exists so the view and tests share one rule.
-func AgeOrdered(items []core.Summary) []core.Summary {
-	out := make([]core.Summary, len(items))
-	copy(out, items)
-	sort.SliceStable(out, func(i, j int) bool {
-		a, b := ageKey(out[i]), ageKey(out[j])
-		if a.IsZero() && b.IsZero() {
-			return out[i].Ref.Name < out[j].Ref.Name
-		}
-		if a.IsZero() {
-			return false
-		}
-		if b.IsZero() {
-			return true
-		}
-		if !a.Equal(b) {
-			return a.After(b)
-		}
-		return out[i].Ref.Name < out[j].Ref.Name
-	})
-	return out
-}
-
 func toLower(s string) string {
 	b := []byte(s)
 	for i := range b {

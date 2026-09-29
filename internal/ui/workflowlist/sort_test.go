@@ -54,7 +54,7 @@ func TestSortTreatsErrorLikeFailedBucket(t *testing.T) {
 func TestPhaseStyleFallbackText(t *testing.T) {
 	// Unknown phases stay displayable: the view text carries the phase
 	// even without color (color is never the only carrier).
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	if got := m.rowPhaseText("WeirdFuturePhase"); got != "WeirdFuturePhase" {
 		t.Fatalf("rowPhaseText = %q", got)
 	}
@@ -66,7 +66,7 @@ func TestPhaseStyleFallbackText(t *testing.T) {
 func TestPhaseStyleUsesTheme(t *testing.T) {
 	// The phase style is consulted so colors accompany text where the
 	// theme has them; the plain theme renders identical text.
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	if m.theme.PhaseStyle("Running").Value() != "" {
 		t.Fatal("plain theme should carry no color value")
 	}

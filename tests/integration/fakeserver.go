@@ -17,8 +17,8 @@ package integration
 //     replacement tests exercise the real semantics.
 //   - GET /api/v1/workflows/{namespace}/{name}/log: JSON-lines framing
 //     {"result":{"content":…,"podName":…}}\n per chunk (gateway v1.16.0
-//     default) with the SSE variant behind a server flag (both
-//     framings per the v0.1 resolution). LogEntry carries exactly
+//     default) with the SSE variant behind a server flag, since the
+//     client must parse both framings. LogEntry carries exactly
 //     content+podName — no timestamp/container field exists.
 //   - In-band errors are {"error":{"code":<grpc>,"message":…}} FINAL
 //     chunks with HTTP 200; pre-first-chunk errors are unary-style HTTP
@@ -340,11 +340,11 @@ func (fs *FixtureServer) routeWorkflows(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if r.Method != http.MethodGet {
-		// Alpha write prohibition: any non-GET reaching the fake server is
-		// a client bug. Recorded (see record) and answered 405 so
+		// The fixture serves reads only: any non-GET reaching it is a
+		// client bug. Recorded (see record) and answered 405 so
 		// a request-count assertion catches it loudly.
 		writeUnaryError(w, http.StatusMethodNotAllowed, grpcInternal,
-			"fixture server: write requests are prohibited in alpha")
+			"fixture server: write requests are not served")
 		return
 	}
 	parts := strings.Split(path, "/")
@@ -468,7 +468,7 @@ func (fs *FixtureServer) handleList(w http.ResponseWriter, r *http.Request, ns s
 	})
 }
 
-// selectorMatches implements the exact-match selector form micko v0.1
+// selectorMatches implements the exact-match selector form micko
 // sends (`key=value`, comma-joined pairs are ANDed).
 func selectorMatches(selector string, labels map[string]string) bool {
 	if selector == "" {

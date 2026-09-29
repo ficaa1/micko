@@ -15,9 +15,6 @@ type searchState struct {
 	caseSensitive bool
 }
 
-// active reports whether a search is in effect.
-func (s searchState) active() bool { return s.term != "" }
-
 // matchIndices returns indices of lines containing term under the given
 // case mode. Empty term or empty lines = nil (no matches). The needle is
 // bounded by the longest retained line, which keeps long-needle searches

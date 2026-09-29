@@ -227,11 +227,6 @@ func HasBackground(s lipgloss.Style) bool {
 	return isColor(s.GetBackground())
 }
 
-// HasForeground reports whether s sets a foreground colour.
-func HasForeground(s lipgloss.Style) bool {
-	return isColor(s.GetForeground())
-}
-
 func isColor(c color.Color) bool {
 	if c == nil {
 		return false

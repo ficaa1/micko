@@ -138,7 +138,8 @@ func (c *WireClient) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 		return core.ErrInvalidf("logs: bad request: %v", err)
 	}
 	c.applyAuth(hreq)
-	// v0.1 policy: do NOT send Accept: text/event-stream.
+	// No Accept header, so no SSE hint: the real adapter sends none
+	// either, and the server answers in its default JSON-lines framing.
 	hresp, err := c.httpClient().Do(hreq)
 	if err != nil {
 		if ctx.Err() != nil {

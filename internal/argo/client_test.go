@@ -2,6 +2,7 @@ package argo
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -304,14 +305,6 @@ func loadFixture(t *testing.T, name string) []byte {
 		t.Fatalf("read fixture %s: %v", name, err)
 	}
 	return b
-}
-
-// newFixtureServer serves canned fixtures per exact path+query, recording
-// the raw query strings of every hit.
-type fixtureServer struct {
-	*httptest.Server
-	muHits   int32
-	hitQuery atomic.Value // string
 }
 
 // isGateScan reports whether a request is the narrow scan that fills the
@@ -620,7 +613,7 @@ func TestGetUnknownFields(t *testing.T) {
 			Phase string `json:"phase"`
 		} `json:"status"`
 	}
-	if err := jsonUnmarshal(wf.Resource, &probe); err != nil {
+	if err := json.Unmarshal(wf.Resource, &probe); err != nil {
 		t.Fatalf("resource JSON: %v", err)
 	}
 	if probe.Spec.XCustomExtension != "preserve-me-42" {

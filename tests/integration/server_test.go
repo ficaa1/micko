@@ -526,7 +526,7 @@ func TestNoWriteRequestsEverSent(t *testing.T) {
 	methods := fs.RequestsByMethod()
 	for m, n := range methods {
 		if m != http.MethodGet {
-			t.Errorf("non-GET %s request count = %d; alpha must never construct writes", m, n)
+			t.Errorf("non-GET %s request count = %d; a read must never construct a write", m, n)
 		}
 	}
 	if methods[http.MethodGet] < 3 {

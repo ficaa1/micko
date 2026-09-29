@@ -15,7 +15,7 @@ func benchItems(n int) []core.Summary {
 }
 
 func BenchmarkApplyView5k(b *testing.B) {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	items := benchItems(5000)
 	m.SetItems(items, testkit.FixtureEpoch)
 	m.SetSize(120, 40)
@@ -25,7 +25,7 @@ func BenchmarkApplyView5k(b *testing.B) {
 }
 
 func BenchmarkViewRender5k(b *testing.B) {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	m.SetItems(benchItems(5000), testkit.FixtureEpoch)
 	m.SetSize(120, 40)
 	b.ResetTimer()

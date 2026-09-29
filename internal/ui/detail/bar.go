@@ -2,7 +2,6 @@ package detail
 
 import (
 	"math"
-	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -155,15 +154,6 @@ func (k barKind) style(t shared.Theme) lipgloss.Style {
 	default:
 		return t.BarEmpty
 	}
-}
-
-// barText is the bar's plain text.
-func barText(segs []barSeg) string {
-	var b strings.Builder
-	for _, s := range segs {
-		b.WriteString(s.text)
-	}
-	return b.String()
 }
 
 // Glyphs. The eighth blocks fill a cell from the left, which gives a bar's

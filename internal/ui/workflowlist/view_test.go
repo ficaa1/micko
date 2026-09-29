@@ -53,7 +53,7 @@ func TestDurationTextRules(t *testing.T) {
 }
 
 func TestSanitizeInRenderPath(t *testing.T) {
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	evil := core.Summary{
 		Ref:       core.Ref{Namespace: "ns", Name: "ok\x1b]0;pwned\x07name", UID: "uid"},
 		Phase:     "Running",
@@ -79,7 +79,7 @@ func TestWideUnicodeAlignment(t *testing.T) {
 	// Two rows, one with wide glyphs: name column alignment must keep the
 	// phase columns aligned measured in CELLS (rune indexes legitimately
 	// differ with wide glyphs; ansi.StringWidth is the truth).
-	m := New(testTheme(), true)
+	m := New(testTheme())
 	w1 := core.Summary{
 		Ref:       core.Ref{Name: "日本語のワークフロー名前", UID: "u1"},
 		Phase:     "Running",
@@ -114,7 +114,7 @@ func TestWideUnicodeAlignment(t *testing.T) {
 // is the one cell with no natural length, and a wider terminal should show
 // more of it rather than the same clipped fragment.
 func TestTheMessageColumnGrowsWithThePane(t *testing.T) {
-	m := New(shared.NewTheme(true), false)
+	m := New(shared.NewTheme(true))
 	prev := 0
 	for _, w := range []int{100, 140, 200} {
 		m.SetSize(w, 20)
@@ -134,7 +134,7 @@ func TestARowNeverOverflowsThePane(t *testing.T) {
 		Phase:   "Failed",
 		Message: strings.Repeat("m", 400),
 	}
-	m := New(shared.NewTheme(true), false)
+	m := New(shared.NewTheme(true))
 	for _, w := range []int{60, 80, 100, 120, 200} {
 		m.SetSize(w, 20)
 		m.SetItems([]core.Summary{row}, testkit.FixtureEpoch)
@@ -152,7 +152,7 @@ func TestARowNeverOverflowsThePane(t *testing.T) {
 // A pane too narrow to carry a readable message drops the column instead of
 // spending the width on a fragment that only says a message exists.
 func TestANarrowPaneDropsTheMessageColumn(t *testing.T) {
-	m := New(shared.NewTheme(true), false)
+	m := New(shared.NewTheme(true))
 	m.SetSize(70, 20)
 	if msg := m.columnWidth(colMessage); msg != 0 {
 		t.Errorf("message column = %d at width 70, want it dropped", msg)

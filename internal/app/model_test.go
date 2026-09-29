@@ -446,20 +446,6 @@ func TestStreamBatchingBoundedQueue(t *testing.T) {
 	}
 }
 
-func TestActionIntentNeverConvertedInF1(t *testing.T) {
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	m := testRoot(t, f)
-	updated, cmd := m.Update(ActionIntentMsg{
-		Ref:    core.Ref{Namespace: "ns", Name: "wf-1"},
-		Action: "terminate",
-	})
-	root := updated.(*Root)
-	if cmd != nil {
-		t.Fatal("action intent produced a command (write path must not exist in alpha)")
-	}
-	_ = root
-}
-
 func TestStreamContextCancellationDistinguished(t *testing.T) {
 	// At the command layer: a canceled context must yield
 	// Canceled=true and not an opaque failure.

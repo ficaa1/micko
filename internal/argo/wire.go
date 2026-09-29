@@ -372,8 +372,8 @@ type rawNode struct {
 	} `json:"templateRef"`
 	// Pod-capable node types may carry a pod name in outputs/inputs, but
 	// PodName on the DTO is only ever populated from verified resolution
-	// (docs/development.md rule). The adapter intentionally never guesses
-	// from node ID (v0.1 policy, docs/development.md).
+	// (docs/development.md rule). The adapter never guesses one from the
+	// node ID: a wrong guess would stream another pod's logs.
 
 	Progress          string           `json:"progress"`
 	EstimatedDuration int64            `json:"estimatedDuration"`

@@ -13,23 +13,6 @@ import (
 	"unsafe"
 )
 
-const (
-	ioctlReadTermios  = 0x5401 // TCGETS
-	ioctlWriteTermios = 0x5402 // TCSETS
-)
-
-// termios mirrors the kernel struct for amd64 linux (asm-generic/termbits.h).
-type termios struct {
-	Iflag  uint32
-	Oflag  uint32
-	Cflag  uint32
-	Lflag  uint32
-	Line   uint8
-	Cc     [32]uint8
-	Ispeed uint32
-	Ospeed uint32
-}
-
 // openPTY allocates a pty pair (equivalent of posix_openpt+grantpt+unlockpt+ptsname).
 func openPTY() (master, slave *os.File, err error) {
 	masterFD, err := syscall.Open("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY, 0)

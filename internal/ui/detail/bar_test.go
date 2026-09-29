@@ -1,6 +1,7 @@
 package detail
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,15 @@ func sec(s int) *time.Time {
 }
 
 var testSpan = timeSpan{start: *sec(0), end: *sec(100)}
+
+// barText is the bar's plain text.
+func barText(segs []barSeg) string {
+	var b strings.Builder
+	for _, s := range segs {
+		b.WriteString(s.text)
+	}
+	return b.String()
+}
 
 func timedRow(phase string, start, end *time.Time) OutlineRow {
 	return OutlineRow{NodeID: "n", Type: "Pod", Phase: phase, StartedAt: start, FinishedAt: end}

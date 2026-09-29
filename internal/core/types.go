@@ -46,9 +46,12 @@ type Summary struct {
 	Phase           string
 	Message         string
 	CreatedAt       time.Time
-	StartedAt       *time.Time
-	FinishedAt      *time.Time
-	Labels          map[string]string
+	// StartedAt and FinishedAt are nil until the workflow starts or
+	// finishes. A nil time is never materialized as a zero time: a view
+	// shows the time as absent rather than inventing one.
+	StartedAt  *time.Time
+	FinishedAt *time.Time
+	Labels     map[string]string
 	// Suspended reports that the workflow waits for a human Resume: it
 	// holds at least one Suspend node in a Running phase, or it has not
 	// finished and its spec.suspend is set (the state the suspend action
@@ -102,7 +105,7 @@ type Node struct {
 	TemplateName        string
 	TemplateRefTemplate string
 	// PodName is populated only from verified version-aware resolution
-	// (docs/development.md; v0.1 policy: do not guess pod names).
+	// (docs/development.md); a pod name is never guessed.
 	PodName string
 
 	// Progress is the server's "done/total" count below this node, verbatim.
@@ -181,8 +184,8 @@ type Workflow struct {
 // LogRequest describes a log stream to open.
 type LogRequest struct {
 	Ref Ref
-	// PodName empty means workflow-wide logs (all pods). Pod-scoped
-	// streams require a verified pod name (user-entered in v0.1).
+	// PodName empty means workflow-wide logs (all pods). A pod-scoped
+	// stream takes the node's verified pod name (Node.PodName).
 	PodName string
 	// Container is always sent explicitly; the default "main" stays
 	// visible/editable in the UI, never silently guessed.
