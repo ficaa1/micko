@@ -35,10 +35,8 @@ import (
 type Phase int
 
 const (
-	// PhaseIdle: attached, no stream yet (or after a context reset).
-	PhaseIdle Phase = iota
-	// PhaseStreaming: a stream is delivering records.
-	PhaseStreaming
+	// PhaseStreaming: a stream is open or being opened. A pane starts here.
+	PhaseStreaming Phase = iota
 	// PhasePaused: collection continues upstream, viewport is frozen.
 	PhasePaused
 	// PhaseEnded: clean end-of-stream.
@@ -53,8 +51,6 @@ const (
 // styling — color is never the only carrier).
 func (p Phase) String() string {
 	switch p {
-	case PhaseStreaming:
-		return "FOLLOWING"
 	case PhasePaused:
 		return "PAUSED"
 	case PhaseEnded:
@@ -64,7 +60,7 @@ func (p Phase) String() string {
 	case PhaseCanceled:
 		return "CANCELED"
 	default:
-		return "IDLE"
+		return "FOLLOWING"
 	}
 }
 
@@ -106,16 +102,11 @@ type Model struct {
 	contextErr   string // editor validation message (blank container refused)
 
 	width, height int // last known terminal size (SetSize)
-	noColor       bool
 	// theme styles the search highlight and mutes the pane's own
 	// annotations. Log lines are never coloured as a whole, so the highlight
 	// is the one channel that says "this is the word you searched for"
 	// without editing the line.
 	theme shared.Theme
-
-	// paneMode says a shell draws this pane's title and footer bands, so the
-	// pane renders content only and reclaims those two rows.
-	paneMode bool
 
 	headerDone bool // stream-open marker emitted for this context
 
@@ -191,14 +182,6 @@ func (m *Model) ensureContextHeaderLocked() {
 	m.rowsFor = -1
 }
 
-// SetNoColor forces the plain theme (golden determinism; NO_COLOR).
-func (m *Model) SetNoColor(v bool) {
-	m.noColor = v
-	if v {
-		m.theme = shared.NewTheme(true)
-	}
-}
-
 // SetTheme injects the style set used for the highlight and annotations.
 func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
@@ -211,15 +194,6 @@ func (m *Model) Context() (podName, container string) {
 	return m.podName, m.container
 }
 
-// Phase reports the stream lifecycle.
-func (m *Model) Phase() Phase { return m.phase }
-
-// Paused reports the manual pause state.
-func (m *Model) Paused() bool { return m.paused }
-
-// Following reports autoscroll state.
-func (m *Model) Following() bool { return m.follow }
-
 // EscapeConsumed reports whether Esc currently belongs to a text editor.
 func (m *Model) EscapeConsumed() bool { return m.searchOn || m.contextOn || m.pipeOn }
 
@@ -227,15 +201,6 @@ func (m *Model) EscapeConsumed() bool { return m.searchOn || m.contextOn || m.pi
 // than leaving it: the & filter. It is not text entry, so q and ? keep
 // their global meaning; only Esc stops meaning "back".
 func (m *Model) EscapeClears() bool { return m.filterOn }
-
-// Wrapping reports whether long lines are wrapped.
-func (m *Model) Wrapping() bool { return m.wrap }
-
-// Labelled reports whether lines carry their source label.
-func (m *Model) Labelled() bool { return m.labels }
-
-// Filtering reports whether the view shows only matching lines.
-func (m *Model) Filtering() bool { return m.filterOn }
 
 // Timestamps reports whether the stream is asked for server timestamps.
 func (m *Model) Timestamps() bool { return m.timestamps }
@@ -306,22 +271,6 @@ func (m *Model) ApplyRecords(recs []core.LogRecord) {
 	for _, r := range recs {
 		m.buf.Push(r)
 	}
-	m.invalidateLocked()
-}
-
-// Clear drops all retained entries (route change to a different
-// workflow/context starts empty; stale streams never bleed across).
-func (m *Model) Clear() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.buf = NewBuffer(MaxLines, MaxBytes)
-	m.hits = nil
-	m.hitRows = nil
-	m.curHit = 0
-	m.search = searchState{}
-	m.searchBuf = ""
-	m.searchOn = false
-	m.headerDone = false
 	m.invalidateLocked()
 }
 
@@ -710,18 +659,6 @@ func (m *Model) hitRawRow() int {
 	return m.hitRowAt(m.curHit)
 }
 
-// ClearSearch drops the active search (root/test entry point).
-func (m *Model) ClearSearch() {
-	m.filterOn = false
-	m.invalidateLocked()
-	m.search = searchState{}
-	m.searchBuf = ""
-	m.hits = nil
-	m.hitRows = nil
-	m.curHit = 0
-	m.searchScopeN = 0
-}
-
 // PipeIntent asks the root to run Command with the retained log lines on its
 // standard input. The component never starts a process: the root owns every
 // effect, and this one takes the whole terminal.
@@ -848,18 +785,4 @@ type SwitchContextIntent struct {
 	Ref       core.Ref
 	PodName   string
 	Container string
-}
-
-// OpenIntent returns the frozen app intent to (re)open logs for the
-// current ref/context — the fresh-open path uses the shared contract
-// (docs/development.md). Nil when the context is degenerate.
-func (m *Model) OpenIntent() tea.Msg {
-	if m.ref.Name == "" {
-		return nil
-	}
-	return shared.OpenLogsMsg{
-		Ref:       m.ref,
-		PodName:   m.podName,
-		Container: m.container,
-	}
 }

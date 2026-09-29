@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/ficaa1/micko/internal/ui/shared"
@@ -45,14 +46,11 @@ type row struct {
 	pod string
 }
 
-// layout fixed chrome: header, status, [editor line], count line, footer.
+// The body's fixed chrome is the status and count lines, plus an editor
+// line while one is focused. The shell draws the title and footer bands.
 const (
-	chromeRows   = 3 // header + status + count
-	chromeFooter = 1
-	editorRows   = 1 // search or context input line when focused
-	// paneChromeSaved is the header and footer the shell draws instead, and
-	// which the pane therefore gets back as content rows.
-	paneChromeSaved = 2
+	chromeRows = 2 // status + count
+	editorRows = 1 // search or context input line when focused
 )
 
 // snapshot builds the full scrollable row list from the buffer (match
@@ -137,17 +135,11 @@ func hitRowIndex(hits []int, hitLogIdx []int) []int {
 	return out
 }
 
-// viewRows is the scrollable window height (fixed chrome + footer + an
-// editor line when one is focused).
-//
-// In pane mode the shell draws the title and the footer as its own bands, so
-// the pane gets those two lines back for content. Scroll paging reads this
-// number, so it must agree with what View/BodyLines actually emits.
+// viewRows is the scrollable window height: the body height less its fixed
+// chrome and a focused editor line. Scroll paging reads this number, so it
+// must agree with what BodyLines actually emits.
 func (m *Model) viewRows() int {
-	h := m.height - chromeRows - chromeFooter
-	if m.paneMode {
-		h += paneChromeSaved
-	}
+	h := m.height - chromeRows
 	if m.searchOn || m.contextOn || m.pipeOn {
 		h -= editorRows
 	}
@@ -332,22 +324,6 @@ func (m *Model) windowAt() ([]row, int, int) {
 	return m.rows[top : bottom+1], top, 0
 }
 
-// View renders the log pane (header, status, editors, count, window,
-// footer). The terminal receives only sanitized text from here.
-func (m *Model) View() string {
-	var b strings.Builder
-	b.WriteString(m.headerView())
-	b.WriteString("\n")
-	b.WriteString(strings.Join(m.bodyLines(), "\n"))
-	b.WriteString("\n")
-	b.WriteString(m.footerView())
-	return b.String()
-}
-
-// SetPaneMode tells the pane that a shell draws its title and footer. It is
-// opt-in so any caller that renders logs standalone keeps a complete pane.
-func (m *Model) SetPaneMode(v bool) { m.paneMode = v }
-
 // PaneTitle is the shell border title: the sanitized workflow name.
 func (m *Model) PaneTitle() string { return "Logs " + shared.Sanitize(m.ref.Name) }
 
@@ -368,6 +344,7 @@ func (m *Model) PaneStatus() string {
 }
 
 // BodyLines renders the pane content for the shell: no title, no footer.
+// The terminal receives only sanitized text from here.
 func (m *Model) BodyLines() []string { return m.bodyLines() }
 
 // RawLines is every retained line with no window: the borderless full-screen
@@ -383,8 +360,7 @@ func (m *Model) RawLines() []string {
 	return out
 }
 
-// bodyLines is the shared middle of the pane (status, editors, counts and
-// the scroll window) that both compositions place between their own chrome.
+// bodyLines is the pane body: status, editors, counts and the scroll window.
 func (m *Model) bodyLines() []string {
 	var b strings.Builder
 	b.WriteString(m.statusView())
@@ -466,11 +442,6 @@ func (m *Model) windowLines() []string {
 	return out
 }
 
-// headerView is the pane title: sanitized workflow name.
-func (m *Model) headerView() string {
-	return "logs: " + shared.Sanitize(m.ref.Name)
-}
-
 // statusView carries scope + lifecycle. States are distinguishable by text;
 // errors surface the honest cause.
 func (m *Model) statusView() string {
@@ -487,7 +458,7 @@ func (m *Model) statusView() string {
 	// line that is always shown, beside the stream state.
 	if m.filterOn && m.search.term != "" {
 		m.ensureSnapshot()
-		s += " · & \"" + m.search.term + "\": showing " + itoaView(len(m.rows)) + " of " + itoaView(m.retainedLogs)
+		s += " · & \"" + m.search.term + "\": showing " + strconv.Itoa(len(m.rows)) + " of " + strconv.Itoa(m.retainedLogs)
 	}
 	if m.note != "" {
 		s += " · " + m.note
@@ -501,16 +472,16 @@ func (m *Model) statusView() string {
 func (m *Model) countView() string {
 	_, _, _, evicted, _ := m.buf.Counts()
 	lines := len(m.buf.Lines())
-	s := "retained: " + itoaView(lines) + "/" + itoaView(MaxLines) +
-		" lines (" + itoa64(evicted) + " evicted)"
+	s := "retained: " + strconv.Itoa(lines) + "/" + strconv.Itoa(MaxLines) +
+		" lines (" + strconv.FormatInt(evicted, 10) + " evicted)"
 	if m.search.term != "" {
 		s += " · search \"" + m.search.term + "\": "
 		if len(m.hits) == 0 {
 			s += "no match"
 		} else {
-			s += itoaView(m.curHit+1) + "/" + itoaView(len(m.hits)) + " (n next, N previous)"
+			s += strconv.Itoa(m.curHit+1) + "/" + strconv.Itoa(len(m.hits)) + " (n next, N previous)"
 		}
-		s += " · search scope: retained buffer only (" + itoaView(m.searchScopeN) + " lines searched)"
+		s += " · search scope: retained buffer only (" + strconv.Itoa(m.searchScopeN) + " lines searched)"
 	}
 	return s
 }

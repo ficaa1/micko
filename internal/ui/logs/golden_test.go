@@ -7,21 +7,16 @@ import (
 	"testing"
 
 	"github.com/ficaa1/micko/internal/core"
-	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// ---------------------------------------------------------------------------
-// golden tests — deterministic render snapshots for the standard
-// terminal cases. Regenerate with:
+// golden compares got with testdata/<name>.golden. Regenerate with
 //
-//	UPDATE_GOLDEN=1 go test ./internal/ui/logs -run TestGoldenSnapshots
+//	UPDATE_GOLDEN=1 go test ./internal/ui/logs -run Golden
 //
-// Goldens pin exactly what reaches the terminal: no color (SetNoColor),
-// fixture-epoch timestamps only in ReceivedAt (never rendered).
-// ---------------------------------------------------------------------------
-
-func golden(t *testing.T, path, got string) {
+// and review the diff: a golden is the pane exactly as the shell draws it.
+func golden(t *testing.T, name, got string) {
 	t.Helper()
+	path := filepath.Join("testdata", name+".golden")
 	if os.Getenv("UPDATE_GOLDEN") == "1" {
 		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
 			t.Fatal(err)
@@ -30,83 +25,76 @@ func golden(t *testing.T, path, got string) {
 	}
 	want, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.Fatalf("golden missing (%s); run UPDATE_GOLDEN=1 once and review: %v", path, err)
-		}
-		t.Fatal(err)
+		t.Fatalf("golden %s: %v (run UPDATE_GOLDEN=1 once and review)", path, err)
 	}
 	if string(want) != got {
 		t.Fatalf("golden mismatch for %s:\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
 	}
 }
 
-func goldenTestcases() map[string]func(*Model) {
-	return map[string]func(*Model){
-		// Fresh viewer, no stream attached yet.
-		"idle": func(m *Model) { m.SetPhase(PhaseIdle) },
-		// A short finished stream: two lines, then end-of-stream.
-		"stream-ends": func(m *Model) {
-			m.ApplyRecords([]core.LogRecord{
-				{PodName: "pod-1", Container: "main", Content: "step: starting", ReceivedAt: testkit.FixtureEpoch},
-				{PodName: "pod-1", Container: "main", Content: "step: done", ReceivedAt: testkit.FixtureEpoch},
-			})
-			m.SetPhase(PhaseEnded)
+// Every lifecycle state and editor, plain. Each golden pins the pane's
+// wording for that state: the status badge, the stream header and its
+// count, labels, the search scope and position, the editors' prompts, and
+// the visible truncation marker.
+func TestGoldenSnapshots(t *testing.T) {
+	cases := map[string]func() *Model{
+		"empty": func() *Model { return testModel(t) },
+		"following": func() *Model {
+			m := testModel(t)
+			m.ApplyRecords([]core.LogRecord{rec("one"), rec("日本語 ünïcode ✓")})
+			return m
 		},
-		// Paused viewport (Space).
-		"paused": func(m *Model) {
+		"paused": func() *Model {
+			m := testModel(t)
 			m.ApplyRecords([]core.LogRecord{rec("line one"), rec("line two")})
 			press(m, ' ')
+			return m
 		},
-		// Honest unavailability.
-		"unavailable": func(m *Model) {
+		"stream-ends": func() *Model {
+			m := testModel(t)
+			m.ApplyRecords([]core.LogRecord{rec("step: starting"), rec("step: done")})
+			m.SetPhase(PhaseEnded)
+			return m
+		},
+		"unavailable": func() *Model {
+			m := testModel(t)
 			m.ApplyRecords([]core.LogRecord{rec("partial output before failure")})
 			m.SetError("pod logs unavailable: pod deleted (log source gone)")
+			return m
 		},
-		// Canceled stream (navigating away or context switch).
-		"canceled": func(m *Model) {
+		"canceled": func() *Model {
+			m := testModel(t)
 			m.ApplyRecords([]core.LogRecord{rec("so far, so good")})
 			m.SetPhase(PhaseCanceled)
+			return m
 		},
-		// Truncation marker visible on an oversized line.
-		"oversize": func(m *Model) {
-			long := strings.Repeat("x", maxLineBytes+42)
-			m.ApplyRecords([]core.LogRecord{rec(long)})
+		"oversize": func() *Model {
+			m := testModel(t)
+			m.ApplyRecords([]core.LogRecord{rec(strings.Repeat("x", maxLineBytes+42))})
 			m.SetPhase(PhaseEnded)
+			return m
 		},
-		// Pod-scoped context (non-default pod/container visible).
-		"pod-scoped": func(m *Model) {
-			m.podName = "mypod-abc"
-			m.container = "sidecar"
-			m.labels = false // NewModel's default for one pod's log
-			m.headerDone = false
-			m.ApplyRecords([]core.LogRecord{rec("sidecar says hi")})
+		"pod-scoped": func() *Model {
+			m := sizedModel(NewModel(testRef(), "mypod-abc", "sidecar"))
+			m.ApplyRecords([]core.LogRecord{podRec("mypod-abc", "sidecar says hi")})
+			return m
 		},
-		// Committed search with match overlay + visible scope.
-		"search": func(m *Model) {
+		"search": func() *Model {
+			m := testModel(t)
 			m.ApplyRecords(recs(6))
 			press(m, '/')
 			typeInto(m, "line-2")
 			pressKey(m, keyEnter)
+			return m
 		},
-		// Context editor open with prefilled editable default.
-		"context-editor": func(m *Model) {
+		"context-editor": func() *Model {
+			m := testModel(t)
 			m.ApplyRecords([]core.LogRecord{rec("buffered while editing")})
 			press(m, 'c')
+			return m
 		},
 	}
-}
-
-func TestGoldenSnapshots(t *testing.T) {
-	dir := filepath.Join("testdata")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for name, setup := range goldenTestcases() {
-		t.Run(name, func(t *testing.T) {
-			m := testModel(t)
-			setup(m)
-			got := m.View()
-			golden(t, filepath.Join(dir, name+".golden"), got)
-		})
+	for name, build := range cases {
+		t.Run(name, func(t *testing.T) { golden(t, name, pane(build())) })
 	}
 }

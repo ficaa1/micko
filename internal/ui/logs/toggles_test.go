@@ -1,7 +1,6 @@
 package logs
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -98,23 +97,33 @@ func TestWrapTopFloor(t *testing.T) {
 }
 
 // A page in wrap mode moves by the rows on screen, not by screen lines, so
-// pgup and pgdn neither skip a row nor stall.
+// pgup and pgdn neither skip a row nor stall: the row at the edge the page
+// moves away from is still on screen after the move. Rows here are one and
+// three screen lines tall, so every pane height lands a page differently.
 func TestWrapPagesByVisibleRows(t *testing.T) {
-	m := wrapModel(t, 60)
-	press(m, 'w')
-	for i := 0; i < 30; i++ {
-		press(m, 'k')
-	}
-	before := m.window()
-	pressKey(m, tea.KeyPgUp)
-	after := m.window()
-	// The row that was at the top is now at the bottom: one row of overlap.
-	if got, want := after[len(after)-1].logIdx, before[0].logIdx; got != want {
-		t.Fatalf("pgup moved the bottom to line %d, want the old top line %d", got, want)
-	}
-	pressKey(m, tea.KeyPgDown)
-	if got, want := m.window()[len(m.window())-1].logIdx, before[len(before)-1].logIdx; got != want {
-		t.Fatalf("pgdn did not come back: bottom line %d, want %d", got, want)
+	for h := 12; h <= 20; h++ {
+		m := wrapModel(t, 60)
+		m.SetSize(40, h)
+		press(m, 'w')
+		for i := 0; i < 30; i++ {
+			press(m, 'k')
+		}
+		for _, key := range []rune{tea.KeyPgUp, tea.KeyPgDown} {
+			before := m.window()
+			pressKey(m, key)
+			after := m.window()
+			edge, moved := before[0].logIdx, after[0].logIdx < before[0].logIdx
+			if key == tea.KeyPgDown {
+				edge, moved = before[len(before)-1].logIdx, after[len(after)-1].logIdx > edge
+			}
+			shown := false
+			for _, r := range after {
+				shown = shown || r.logIdx == edge
+			}
+			if !shown || !moved {
+				t.Fatalf("height %d, key %d: line %d shown=%v, moved=%v", h, key, edge, shown, moved)
+			}
+		}
 	}
 }
 
@@ -133,17 +142,17 @@ func TestFilterShowsOnlyMatchingLines(t *testing.T) {
 	}
 	m.ApplyRecords(rs)
 	press(m, '&')
-	if m.Filtering() || !strings.Contains(m.View(), "search first") {
-		t.Fatalf("& without a search filtered, or did not say why:\n%s", m.View())
+	if m.filterOn || !strings.Contains(body(m), "search first") {
+		t.Fatalf("& without a search filtered, or did not say why:\n%s", body(m))
 	}
 	press(m, '/')
 	typeInto(m, "error")
 	pressKey(m, keyEnter)
 	press(m, '&')
-	if !m.Filtering() {
+	if !m.filterOn {
 		t.Fatal("& did not filter")
 	}
-	v := m.View()
+	v := body(m)
 	if !strings.Contains(v, `& "error": showing 4 of 40`) {
 		t.Fatalf("status does not count the filter:\n%s", v)
 	}
@@ -156,12 +165,12 @@ func TestFilterShowsOnlyMatchingLines(t *testing.T) {
 		t.Fatal("esc does not clear the filter first")
 	}
 	pressKey(m, keyEscape)
-	if m.Filtering() {
+	if m.filterOn {
 		t.Fatal("esc did not clear the filter")
 	}
 	press(m, '&')
 	press(m, '&')
-	if m.Filtering() {
+	if m.filterOn {
 		t.Fatal("a second & did not clear the filter")
 	}
 	if lines := len(m.buf.Lines()); lines != 40 {
@@ -174,7 +183,7 @@ func TestFilterShowsOnlyMatchingLines(t *testing.T) {
 		pressKey(m, keyBackspace)
 	}
 	pressKey(m, keyEnter)
-	if m.Filtering() {
+	if m.filterOn {
 		t.Fatal("the filter outlived its search")
 	}
 }
@@ -223,7 +232,7 @@ func TestFilterWithTheRetentionCap(t *testing.T) {
 	if !strings.Contains(m.statusView(), "showing "+itoa(want)+" of "+itoa(len(m.buf.Lines()))) {
 		t.Fatalf("status %q after late lines, want showing %d", m.statusView(), want)
 	}
-	if last := m.window()[len(m.window())-1]; last.text != "match late" && m.Following() {
+	if last := m.window()[len(m.window())-1]; last.text != "match late" && m.follow {
 		t.Fatalf("a following filtered pane does not end on the late match: %q", last.text)
 	}
 }
@@ -277,7 +286,7 @@ func TestTimestampsToggleMarksAndAsks(t *testing.T) {
 	if !m.Timestamps() {
 		t.Fatal("the pane does not record timestamps on")
 	}
-	v := m.View()
+	v := body(m)
 	if !strings.Contains(v, "before") || !strings.Contains(v, "── server timestamps on: stream reopened from the start ──") {
 		t.Fatalf("switch point missing:\n%s", v)
 	}
@@ -285,7 +294,7 @@ func TestTimestampsToggleMarksAndAsks(t *testing.T) {
 	if intent.On || m.Timestamps() {
 		t.Fatal("a second ctrl+t did not switch timestamps off")
 	}
-	if !strings.Contains(m.View(), "server timestamps off") {
+	if !strings.Contains(body(m), "server timestamps off") {
 		t.Fatal("the off switch point is not marked")
 	}
 }
@@ -299,13 +308,13 @@ func TestViewPrefsCarryOver(t *testing.T) {
 	prev.Update(ctrlT())
 	next := NewModel(testRef(), "", "sidecar")
 	next.KeepViewPrefs(prev)
-	if !next.Wrapping() || !next.Timestamps() || next.Labelled() {
-		t.Fatalf("prefs lost: wrap=%v ts=%v labels=%v", next.Wrapping(), next.Timestamps(), next.Labelled())
+	if !next.wrap || !next.Timestamps() || next.labels {
+		t.Fatalf("prefs lost: wrap=%v ts=%v labels=%v", next.wrap, next.Timestamps(), next.labels)
 	}
 	pod := NewModel(testRef(), "wf-1-a-1", "main")
 	press(prev, 'L') // labels back on
 	pod.KeepViewPrefs(prev)
-	if pod.Labelled() {
+	if pod.labels {
 		t.Fatal("a pod-scoped pane took the workflow-wide labels choice")
 	}
 }
@@ -342,7 +351,7 @@ func TestToggleGoldens(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			m := build()
 			setup(m)
-			golden(t, filepath.Join("testdata", "toggle-"+name+".golden"), m.View())
+			golden(t, "toggle-"+name, pane(m))
 		})
 	}
 }

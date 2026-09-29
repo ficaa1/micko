@@ -1,33 +1,13 @@
 package logs
 
 import (
-	"os"
 	"strings"
 	"testing"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/core"
-	"github.com/ficaa1/micko/internal/testkit"
-	"github.com/ficaa1/micko/internal/ui/shared"
 )
-
-// colorModel is the standard test model with the coloured theme, for the
-// tests that check a style was applied and where.
-func colorModel(t *testing.T) *Model {
-	t.Helper()
-	os.Unsetenv("NO_COLOR")
-	m := NewModel(testRef(), "", "main")
-	m.SetTheme(shared.NewTheme(false))
-	m.SetSize(80, 24)
-	return m
-}
-
-// podRec is one record from the named pod.
-func podRec(pod, content string) core.LogRecord {
-	return core.LogRecord{PodName: pod, Container: "main", Content: content, ReceivedAt: testkit.FixtureEpoch}
-}
 
 // The level word is found after up to two timestamps, bracketed or
 // followed by a colon, in capitals or decorated; a JSON line's level or
@@ -101,19 +81,6 @@ func TestLevelStylingTouchesOnlyTheWord(t *testing.T) {
 	}
 }
 
-// A hostile level word cannot smuggle control bytes: the content was
-// sanitized when it was retained, before any styling.
-func TestLevelStylingRendersSanitizedText(t *testing.T) {
-	m := colorModel(t)
-	m.ApplyRecords([]core.LogRecord{podRec("pod-1", "ERROR\x1b]0;pwned\x07 and \x1b[2Jmore")})
-	for _, l := range m.BodyLines() {
-		stripped := ansi.Strip(l)
-		if strings.ContainsRune(stripped, 0x1b) || strings.ContainsRune(stripped, 0x07) {
-			t.Fatalf("control byte reached the rendered line: %q", l)
-		}
-	}
-}
-
 // A line is labelled by the step that ran its pod, or by its pod name
 // without the workflow's name in front, clipped to the label column.
 func TestSourceLabels(t *testing.T) {
@@ -173,9 +140,7 @@ func TestLabelsDefaultAndToggle(t *testing.T) {
 	if got := m.windowLines()[1]; got != "alpha" {
 		t.Fatalf("L did not hide the labels: %q", got)
 	}
-	pod := NewModel(testRef(), "wf-1-a-1", "main")
-	pod.SetNoColor(true)
-	pod.SetSize(80, 24)
+	pod := sizedModel(NewModel(testRef(), "wf-1-a-1", "main"))
 	pod.ApplyRecords([]core.LogRecord{podRec("wf-1-a-1", "alpha")})
 	if got := pod.windowLines()[1]; got != "alpha" {
 		t.Fatalf("a pod-scoped pane starts labelled: %q", got)
@@ -234,6 +199,3 @@ func TestSearchHighlightSurvivesWrapping(t *testing.T) {
 		}
 	}
 }
-
-// ctrl+t in the pane: the key is reported as "ctrl+t".
-func ctrlT() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl} }

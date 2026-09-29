@@ -10,7 +10,6 @@ import (
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
-	"github.com/ficaa1/micko/internal/ui/logs"
 )
 
 // requestLog records every log request a fake reader receives.
@@ -158,7 +157,7 @@ func TestAReplacedStreamsRepliesAreIgnored(t *testing.T) {
 	if got := len(m.logsView.RawLines()); got != lines {
 		t.Fatalf("a replaced stream's batch was applied: %d lines, had %d", got, lines)
 	}
-	if m.logsView.Phase() == logs.PhaseCanceled || !m.logState.running {
+	if strings.HasPrefix(m.logsView.PaneStatus(), "CANCELED") || !m.logState.running {
 		t.Fatal("a replaced stream's cancellation ended the live one")
 	}
 	m.Update(logRecordMsg{genStamp: g, RequestID: m.logState.streamID, Records: []core.LogRecord{{Content: "live line"}}})
@@ -176,15 +175,15 @@ func TestEscClearsTheLogFilterBeforeLeaving(t *testing.T) {
 		{Code: 'R', Text: "R"}, {Code: tea.KeyEnter}, {Code: '&', Text: "&"}} {
 		m.Update(k)
 	}
-	if !m.logsView.Filtering() {
+	if !m.logsView.EscapeClears() {
 		t.Fatal("& did not filter")
 	}
 	if m.textEntryActive() {
 		t.Fatal("the filter counts as text entry")
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.route != RouteLogs || m.logsView.Filtering() {
-		t.Fatalf("esc: route %v, filtering %v", m.route, m.logsView.Filtering())
+	if m.route != RouteLogs || m.logsView.EscapeClears() {
+		t.Fatalf("esc: route %v, filter on %v", m.route, m.logsView.EscapeClears())
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.route == RouteLogs {

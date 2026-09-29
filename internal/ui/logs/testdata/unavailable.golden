@@ -1,6 +1,7 @@
-logs: wf-1
+Logs wf-1
 Scope: workflow-wide · container: main · [ERROR] — pod logs unavailable: pod deleted (log source gone)
 retained: 1/10000 lines (0 evicted)
 ── (all pods):main ── 1 line recorded
 pod-1            partial output before failure
 t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back
+ERROR · follow

@@ -21,7 +21,7 @@ import (
 // Duplicates are legitimate log output: no deduplication ever happens
 //
 // buffer is unexported: the model talks to it through
-// Push/PushMarker/Counts/Entries/Lines/Search.
+// Push/PushMarker/Counts/Entries/Lines.
 
 // Frozen caps (docs/development.md).
 const (
@@ -157,10 +157,4 @@ func (b *buffer) Lines() []logLine {
 		}
 	}
 	return out
-}
-
-// Search runs s over the retained log lines only. Indices point
-// into Entries()-ordered log lines (the same order Lines() returns).
-func (b *buffer) Search(s searchState) []int {
-	return matchIndices(b.Lines(), s.term, s.caseSensitive)
 }

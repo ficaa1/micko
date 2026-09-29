@@ -192,7 +192,7 @@ func TestPrintableGlobalKeysReachLogsSearch(t *testing.T) {
 	if m.quitting {
 		t.Fatal("q quit while typing a logs search query")
 	}
-	if got := m.logsView.View(); !strings.Contains(got, "search: ?q_") {
+	if got := strings.Join(m.logsView.BodyLines(), "\n"); !strings.Contains(got, "search: ?q_") {
 		t.Fatalf("printable keys did not reach logs search buffer:\n%s", got)
 	}
 }

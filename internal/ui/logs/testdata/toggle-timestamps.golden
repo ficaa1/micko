@@ -1,4 +1,4 @@
-logs: wf-1
+Logs wf-1
 Scope: workflow-wide · container: main · [FOLLOWING]
 retained: 5/10000 lines (0 evicted)
 ── (all pods):main ── 5 lines recorded
@@ -9,3 +9,4 @@ extra-3          errors: 0
 ── server timestamps on: stream reopened from the start ──
 transform(0)     2026-09-07T10:00:00.137000000Z 2026-09-07T10:00:00Z reading raw-extract (184022 rows)
 t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back
+FOLLOWING · follow

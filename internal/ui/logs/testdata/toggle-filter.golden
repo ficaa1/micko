@@ -1,6 +1,7 @@
-logs: wf-1
+Logs wf-1
 Scope: workflow-wide · container: main · [PAUSED] · & "rows": showing 2 of 4
 retained: 4/10000 lines (0 evicted) · search "rows": 1/2 (n next, N previous) · search scope: retained buffer only (4 lines searched)
 transform(0)     2026-09-07T10:00:00Z reading raw-extract (184022 rows)
 load             {"level":"warn","msg":"slow insert","rows":184022}
 t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back
+PAUSED · paused

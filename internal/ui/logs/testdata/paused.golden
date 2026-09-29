@@ -1,7 +1,8 @@
-logs: wf-1
+Logs wf-1
 Scope: workflow-wide · container: main · [PAUSED]
 retained: 2/10000 lines (0 evicted)
 ── (all pods):main ── 2 lines recorded
 pod-1            line one
 pod-1            line two
 t follow  space pause  / search  n next  & only matches  w wrap  L labels  c container  | pipe  esc back
+PAUSED · paused

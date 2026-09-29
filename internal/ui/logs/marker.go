@@ -1,5 +1,7 @@
 package logs
 
+import "strconv"
+
 // marker.go — stream-context annotations mixed into the retained buffer
 // (stream open, dropped lines, timestamp reopen).
 // Markers are UI authoring, not data: they never count toward the byte
@@ -82,23 +84,5 @@ func markerLineWithCount(podName, container string, lines int) string {
 	if lines != 1 {
 		unit = "lines recorded"
 	}
-	return markerLine(podName, container) + " " + itoaView(lines) + " " + unit
+	return markerLine(podName, container) + " " + strconv.Itoa(lines) + " " + unit
 }
-
-// itoaView is the view's minimal integer formatter (no fmt at render).
-func itoaView(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
-}
-
-// itoa64 formats int64 counters (same minimal formatter, wider input).
-func itoa64(n int64) string { return itoaView(int(n)) }
