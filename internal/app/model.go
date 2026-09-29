@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -331,14 +332,8 @@ type logState struct {
 	streamID uint64
 }
 
-// NewRoot constructs the root model.
-func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duration) *Root {
-	return NewRootWithOptions(r, clock, namespace, interval, actions.Options{ReadOnly: true})
-}
-
-// NewRootWithOptions wires optional capabilities such as workflow actions.
-// NewRoot is the same root with actions read-only.
-func NewRootWithOptions(r core.Reader, clock Clock, namespace string, interval time.Duration, opts actions.Options) *Root {
+// NewRoot builds the root model; the reader's optional interfaces enable their features.
+func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duration, opts actions.Options) *Root {
 	var watcher core.Watcher
 	if w, ok := r.(core.Watcher); ok {
 		watcher = w
@@ -563,7 +558,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.profView.Update(msg)
 		}
-		// The help overlay is a dialog (shared.KeyCtxDialog): while it is
+		// The help overlay is a dialog: while it is
 		// open it owns every remaining key, so the view behind it cannot
 		// move. q closes it instead of quitting; only Ctrl-C, handled
 		// above, still quits globally.
@@ -1214,29 +1209,7 @@ func plural(n int, noun string) string {
 	if n == 1 {
 		return "1 " + noun
 	}
-	return itoa(n) + " " + noun + "s"
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
+	return strconv.Itoa(n) + " " + noun + "s"
 }
 
 func (m *Root) detailSummary() string {
@@ -1276,7 +1249,7 @@ func (m *Root) logSummary() string {
 
 func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
-	if shared.QuitKeySet(key == "ctrl+c", key, shared.KeyCtxBrowsing) {
+	if key == "ctrl+c" {
 		return m, m.quit()
 	}
 	switch key {

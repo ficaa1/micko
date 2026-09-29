@@ -11,19 +11,17 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// templateRoot is a demo root with the workflow list loaded, the reads
-// recorded.
+// templateRoot is a demo root with the list loaded and queries recorded.
 func templateRoot(t *testing.T) (*Root, *queryRecorder) {
 	t.Helper()
 	rec := &queryRecorder{FakeReader: testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))}
-	m := NewRoot(rec, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(rec, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	deliver(m, m.startListGeneration())
 	return m, rec
 }
 
-// Every word of both template commands reaches its list, with the
-// namespace's templates or the cluster's.
+// Every template command word shows its list.
 func TestTemplateCommands(t *testing.T) {
 	cases := []struct {
 		word  string
@@ -54,8 +52,7 @@ func TestTemplateCommands(t *testing.T) {
 	}
 }
 
-// enter on a template lists the workflows submitted from it, by the
-// controller's label, in the template's namespace; esc returns.
+// enter lists the template's workflows by label; esc returns.
 func TestTemplateDrillDown(t *testing.T) {
 	m, rec := templateRoot(t)
 	runLine(m, "tmpl")
@@ -102,8 +99,7 @@ func TestClusterTemplateDrillDown(t *testing.T) {
 	}
 }
 
-// On the cluster route n and 0 change nothing and say why, and the header
-// says the list is cluster-scoped.
+// On the cluster route n and 0 do nothing and say why.
 func TestClusterTemplatesIgnoreNamespaceKeys(t *testing.T) {
 	m, rec := templateRoot(t)
 	runLine(m, "cwftmpl")
@@ -132,8 +128,7 @@ func TestClusterTemplatesIgnoreNamespaceKeys(t *testing.T) {
 	}
 }
 
-// f shows a template's manifest with its values, redacted under
-// redactValues; o links to the right Argo UI page for each kind.
+// f shows a template's manifest, redacted under redactValues; o links per kind.
 func TestTemplateManifestAndLinks(t *testing.T) {
 	m, _ := templateRoot(t)
 	m.SetWebURL("https://argo.example")
@@ -155,12 +150,11 @@ func TestTemplateManifestAndLinks(t *testing.T) {
 	}
 }
 
-// Each kind reports its own refusal: a token may read templates and not
-// cluster templates.
+// Each template kind reports its own refusal.
 func TestTemplateErrors(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	f.ClusterTemplateErr = core.ErrForbiddenf(`clusterworkflowtemplates.argoproj.io is forbidden: cannot list resource "clusterworkflowtemplates" at the cluster scope`)
-	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cwftmpl")
 	if v := screen(m); !strings.Contains(v, "no cluster workflow templates visible: list forbidden") || !strings.Contains(v, "at the cluster scope") {
@@ -170,7 +164,7 @@ func TestTemplateErrors(t *testing.T) {
 	if v := screen(m); !strings.Contains(v, "4 workflow templates") {
 		t.Fatalf("the namespaced list was affected:\n%s", v)
 	}
-	m = NewRoot(onlyReader{f}, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m = newRoot(onlyReader{f}, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "tmpl")
 	if v := screen(m); !strings.Contains(v, "cannot list workflow templates") {

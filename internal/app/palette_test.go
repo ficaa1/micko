@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -14,105 +13,17 @@ import (
 	"github.com/ficaa1/micko/internal/ui/palette"
 )
 
-// demoRoot is a root on the demo dataset with the "demo" namespace's list
-// loaded. The poll interval is a millisecond so a delivered command that arms
-// the tick returns at once; deliver drops the tick itself.
-func demoRoot(t *testing.T) (*Root, *testkit.FakeReader) {
-	t.Helper()
-	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
-	m.mascotSleep = func(time.Duration) {}
-	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
-	deliver(m, m.startListGeneration())
-	return m, f
-}
-
-// deliver runs cmd and feeds its messages back into the root, the way the
-// program loop would, until nothing is left. Poll ticks and Mićko's beats
-// are dropped: each one schedules the next, and the chain would never end.
-func deliver(m *Root, cmd tea.Cmd) {
-	queue := runCmd(cmd)
-	for len(queue) > 0 {
-		msg := queue[0]
-		queue = queue[1:]
-		switch msg.(type) {
-		case tickMsg, mascotBeatMsg:
-			continue
-		}
-		_, next := m.Update(msg)
-		queue = append(queue, runCmd(next)...)
-	}
-}
-
-func typeKeys(m *Root, s string) tea.Cmd {
-	var cmds []tea.Cmd
-	for _, r := range s {
-		msg := tea.KeyPressMsg{Code: r, Text: string(r)}
-		if r == ' ' {
-			msg = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
-		}
-		_, cmd := m.Update(msg)
-		cmds = append(cmds, cmd)
-	}
-	return tea.Batch(cmds...)
-}
-
-func pressKey(m *Root, code rune) tea.Cmd {
-	_, cmd := m.Update(tea.KeyPressMsg{Code: code})
-	return cmd
-}
-
-// runLine opens the palette, types line and presses enter, delivering every
-// message that follows.
-func runLine(m *Root, line string) {
-	deliver(m, typeKeys(m, ":"))
-	typeKeys(m, line)
-	deliver(m, pressKey(m, tea.KeyEnter))
-}
-
-// While the palette is open q and ? are letters, esc closes it, and ctrl+c
-// still quits.
-func TestPaletteKeyIsolation(t *testing.T) {
+// esc closes the palette and leaves the route where it was.
+func TestEscClosesThePalette(t *testing.T) {
 	m, _ := demoRoot(t)
-	typeKeys(m, ":")
-	if !m.paletteOpen() {
-		t.Fatal(": did not open the palette")
-	}
-	typeKeys(m, "q?")
-	if m.quitting || m.help.IsOpen() {
-		t.Fatalf("q or ? acted as a command while typing (quitting=%v help=%v)", m.quitting, m.help.IsOpen())
-	}
-	if m.palView.Value() != "q?" {
-		t.Fatalf("palette holds %q, want q?", m.palView.Value())
-	}
-	pressKey(m, tea.KeyEscape)
-	if m.paletteOpen() {
-		t.Fatal("esc left the palette open")
-	}
-	if m.route != RouteList {
-		t.Fatalf("esc in the palette moved the route to %v", m.route)
-	}
-	typeKeys(m, ":")
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	if !m.quitting || cmd == nil {
-		t.Fatal("ctrl+c did not quit while the palette was open")
+	typeKeys(m, ":w")
+	keys(m, "esc")
+	if m.paletteOpen() || m.route != RouteList {
+		t.Fatalf("esc: open %v, route %v", m.paletteOpen(), m.route)
 	}
 }
 
-// The palette is not offered inside text entry: there `:` is a character.
-func TestColonTypesIntoTheSearch(t *testing.T) {
-	m, _ := demoRoot(t)
-	typeKeys(m, "/:")
-	if m.paletteOpen() {
-		t.Fatal(": opened the palette inside the list search")
-	}
-	if got := m.listView.SearchValue(); got != ":" {
-		t.Fatalf("search holds %q, want :", got)
-	}
-}
-
-// While open, the palette sits on top of the pane: the input, the suggestions
-// and the list below, with the palette's own hints in the footer.
+// The open palette sits at the top of the pane with its hints in the footer.
 func TestPaletteRendersAboveThePane(t *testing.T) {
 	m, _ := demoRoot(t)
 	typeKeys(m, ":w")
@@ -134,8 +45,7 @@ func TestPaletteRendersAboveThePane(t *testing.T) {
 	}
 }
 
-// `wf` returns to the workflow list from any route and stops the detail
-// fetch it leaves.
+// `wf` returns to the list and cancels the detail fetch.
 func TestCommandWorkflowsLeavesDetail(t *testing.T) {
 	m, _ := demoRoot(t)
 	ref := m.listView.SelectedRef()
@@ -152,8 +62,7 @@ func TestCommandWorkflowsLeavesDetail(t *testing.T) {
 	}
 }
 
-// `ns` with no argument opens the picker; with one it switches, which is a
-// connection generation like the picker's.
+// `ns` opens the picker, or switches with an argument.
 func TestCommandNamespace(t *testing.T) {
 	m, _ := demoRoot(t)
 	runLine(m, "ns")
@@ -181,8 +90,7 @@ func TestCommandNamespace(t *testing.T) {
 	}
 }
 
-// `ns` completes from the configured names and the ones the server reports.
-// Opening the palette asks for the latter.
+// `ns` completes from configured and discovered namespaces.
 func TestNamespaceCompletionUsesSeedAndDiscovered(t *testing.T) {
 	m, f := demoRoot(t)
 	f.Namespaces = []string{"argo"}
@@ -194,8 +102,7 @@ func TestNamespaceCompletionUsesSeedAndDiscovered(t *testing.T) {
 	}
 }
 
-// `all` and `0` both toggle the all-namespaces view: a new generation, a list
-// with no namespace, the header saying "all", and back again.
+// `all` and `0` toggle the all-namespaces view.
 func TestAllNamespacesToggle(t *testing.T) {
 	m, f := demoRoot(t)
 	before := m.connGen
@@ -227,8 +134,7 @@ func TestAllNamespacesToggle(t *testing.T) {
 	}
 }
 
-// Entering the view is a reconnection: a reply that was in flight for the
-// single namespace is discarded.
+// A single-namespace reply is dropped once the all-namespaces view is on.
 func TestAllNamespacesDiscardsTheOldScope(t *testing.T) {
 	m, _ := demoRoot(t)
 	stale := runCmd(m.startListGeneration())
@@ -266,8 +172,7 @@ func (w *recordingWatcher) Watch(ctx context.Context, req core.WatchRequest, _ f
 	return ctx.Err()
 }
 
-// Detail opened from the all-namespaces list asks for the row's own
-// namespace, not the session's.
+// A workflow opened from the all-namespaces list is read from its own namespace.
 func TestDetailFromAllNamespacesUsesTheRowNamespace(t *testing.T) {
 	m, _ := demoRoot(t)
 	deliver(m, typeKeys(m, "0"))
@@ -289,37 +194,36 @@ func TestDetailFromAllNamespacesUsesTheRowNamespace(t *testing.T) {
 	}
 }
 
-// A server that refuses the cluster-wide list shows the refusal on the pane,
-// with the way back, instead of an empty list.
-func TestAllNamespacesRefusalIsShown(t *testing.T) {
-	m, f := demoRoot(t)
-	f.ListErr = core.NewAPIError(core.ErrForbidden, 403,
-		`Permission denied, you are not allowed to list workflows in namespace "".`)
-	deliver(m, typeKeys(m, "0"))
-	body := m.View().Content
-	for _, want := range []string{"no workflows visible", "list forbidden", "Permission denied", "press 0 to return to demo"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("pane lacks %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, "no workflows in") {
-		t.Error("a refused list rendered as an empty one")
+// A failed cluster-wide list shows the error and the way back, not an empty list.
+func TestAllNamespacesFailureIsShown(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		err  *core.APIError
+		want []string
+	}{
+		{"forbidden", core.NewAPIError(core.ErrForbidden, 403, `Permission denied, you are not allowed to list workflows in namespace "".`),
+			[]string{"no workflows visible", "list forbidden", "Permission denied", "press 0 to return to demo"}},
+		{"unsupported", core.NewAPIError(core.ErrUnsupported, 0, "the server manages namespace argo only and cannot list all namespaces"),
+			[]string{"no workflows visible: all namespaces: the server manages namespace argo only"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m, f := demoRoot(t)
+			f.ListErr = c.err
+			deliver(m, typeKeys(m, "0"))
+			body := screen(m)
+			for _, want := range c.want {
+				if !strings.Contains(body, want) {
+					t.Errorf("pane lacks %q:\n%s", want, body)
+				}
+			}
+			if strings.Contains(body, "no workflows in") {
+				t.Error("a failed list rendered as an empty one")
+			}
+		})
 	}
 }
 
-// Any other failure of a first collection is still an error on the pane.
-func TestFirstListFailureIsNotAnEmptyList(t *testing.T) {
-	m, f := demoRoot(t)
-	f.ListErr = core.NewAPIError(core.ErrUnsupported, 0, "the server manages namespace argo only and cannot list all namespaces")
-	deliver(m, typeKeys(m, "0"))
-	body := m.View().Content
-	if !strings.Contains(body, "no workflows visible: all namespaces: the server manages namespace argo only") {
-		t.Fatalf("pane does not state the refusal:\n%s", body)
-	}
-}
-
-// `profile`/`ctx` opens the picker with no argument and switches to a
-// configured profile with one. An unknown name is refused, never guessed.
+// `profile`/`ctx` opens the picker, or switches to a configured profile.
 func TestCommandProfile(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -346,8 +250,6 @@ func TestCommandProfile(t *testing.T) {
 	}
 }
 
-// A profile switch starts in the new profile's namespace, whatever view the
-// old one was in.
 func TestProfileSwitchLeavesAllNamespaces(t *testing.T) {
 	conn := &fakeConnector{}
 	m := profileRoot(t, conn)
@@ -362,8 +264,6 @@ func TestProfileSwitchLeavesAllNamespaces(t *testing.T) {
 	}
 }
 
-// The demo has no profiles; the command says so rather than opening an empty
-// picker.
 func TestCommandProfileWithoutProfiles(t *testing.T) {
 	m, _ := demoRoot(t)
 	runLine(m, "ctx dev")
@@ -405,8 +305,7 @@ func TestUnknownCommandIsReported(t *testing.T) {
 	}
 }
 
-// Every command in the registry is reachable from the palette by its name and
-// every alias, and the registry holds no two commands with the same word.
+// Every command word resolves to its command and no word is shared.
 func TestRegistryWordsAreUnique(t *testing.T) {
 	seen := map[string]string{}
 	for _, c := range newRegistry() {

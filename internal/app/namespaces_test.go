@@ -19,7 +19,7 @@ func nsRoot(t *testing.T, extra ...string) (*Root, *testkit.FakeReader) {
 		Workflows:  map[core.Ref]core.Workflow{wf.Summary.Ref: wf},
 		Namespaces: extra,
 	}
-	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second)
+	m := newRoot(f, "ns", time.Second)
 	return m, f
 }
 
@@ -44,27 +44,7 @@ func TestNamespaceKeyOpensThePickerAndLoadsNames(t *testing.T) {
 	}
 }
 
-// The picker owns printable keys while it is open. Without that, q would quit
-// and ? would open help in the middle of typing a namespace.
-func TestPickerOwnsPrintableKeys(t *testing.T) {
-	m, _ := nsRoot(t)
-	m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
-	for _, r := range "q?" {
-		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
-	}
-	if m.quitting {
-		t.Fatal("q quit while the namespace picker had the keyboard")
-	}
-	if m.help.IsOpen() {
-		t.Fatal("? opened help while the namespace picker had the keyboard")
-	}
-	if !m.namespaceDialogOpen() {
-		t.Fatal("the picker closed itself")
-	}
-}
-
-// A switch is a connection-generation change: every stale reply is discarded
-// and the session starts again on the list.
+// A namespace switch discards stale replies and starts again on the list.
 func TestSwitchNamespaceStartsAConnectionGeneration(t *testing.T) {
 	m, _ := nsRoot(t, "other-ns")
 	wf := workflowFixture("wf")

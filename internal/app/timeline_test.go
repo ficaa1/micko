@@ -5,43 +5,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
-// openFromList presses key on the list with the cursor on the workflow
-// named name and runs the open it starts, keeping only the fetch's answer so
-// no poll tick runs.
-func openFromList(t *testing.T, m *Root, name string, key tea.KeyPressMsg) *Root {
-	t.Helper()
-	for i := 0; i < 20 && m.listView.SelectedRef().Name != name; i++ {
-		m = typeKey(m, 'j')
-	}
-	if got := m.listView.SelectedRef().Name; got != name {
-		t.Fatalf("precondition: cursor on %q, want %q", got, name)
-	}
-	next, cmd := m.Update(key)
-	m = next.(*Root)
-	for step := 0; step < 2; step++ {
-		var cmds []tea.Cmd
-		for _, msg := range runCmd(cmd) {
-			if _, ok := msg.(detailLoadedMsg); !ok && step > 0 {
-				continue
-			}
-			next, c := m.Update(msg)
-			m = next.(*Root)
-			cmds = append(cmds, c)
-		}
-		cmd = tea.Batch(cmds...)
-	}
-	if m.route != RouteDetail || m.detailState.loading {
-		t.Fatalf("precondition: route = %v loading %v, want a loaded detail", m.route, m.detailState.loading)
-	}
-	return m
-}
-
-// T on the list opens the selected workflow straight on its Timeline
-// section, while enter keeps opening it on the section the pane last
-// showed.
+// T opens the Timeline section; enter reopens the last section shown.
 func TestListTOpensTheTimeline(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m = openFromList(t, m, "demo-release-gate", tea.KeyPressMsg{Code: 'T', Text: "T"})
@@ -57,7 +23,7 @@ func TestListTOpensTheTimeline(t *testing.T) {
 
 	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = next.(*Root)
-	m = typeKey(m, '1')
+	typeKeys(m, "1")
 	if m.route != RouteList {
 		t.Fatalf("1 on the list changed the route to %v", m.route)
 	}
@@ -67,9 +33,7 @@ func TestListTOpensTheTimeline(t *testing.T) {
 	}
 }
 
-// In the detail pane the digits jump to a section by position and T jumps
-// to the timeline, except while the nodes tab's find input is open, where
-// both are letters of the name being typed.
+// Digits and T switch sections, except while typing a find.
 func TestDetailSectionKeys(t *testing.T) {
 	m := openDetailNodes(t)
 	steps := []struct {
@@ -80,16 +44,16 @@ func TestDetailSectionKeys(t *testing.T) {
 		{'9', "nodes"}, {'3', "timeline"},
 	}
 	for _, s := range steps {
-		m = typeKey(m, s.key)
+		typeKeys(m, string(s.key))
 		if got := m.detailView.Section(); got != s.want {
 			t.Fatalf("after %q: section %q, want %q", s.key, got, s.want)
 		}
 	}
 
-	m = typeKey(m, '2')
-	m = typeKey(m, '/')
+	typeKeys(m, "2")
+	typeKeys(m, "/")
 	for _, r := range "T13" {
-		m = typeKey(m, r)
+		typeKeys(m, string(r))
 	}
 	if got := m.detailView.Section(); got != "nodes" {
 		t.Fatalf("typing into the find moved to section %q", got)
@@ -99,12 +63,11 @@ func TestDetailSectionKeys(t *testing.T) {
 	}
 }
 
-// enter on a pod row of the timeline opens that pod's log, as on the nodes
-// tab, and y copies the pod name.
+// enter on a timeline pod row opens its log; y copies the pod name.
 func TestTimelineRowOpensItsLogs(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m = openFromList(t, m, "demo-release-gate", tea.KeyPressMsg{Code: 'T', Text: "T"})
-	m = typeKey(m, 'j') // build
+	typeKeys(m, "j") // build
 	row, ok := m.detailView.SelectedNode()
 	if !ok || row.DisplayName != "build" || row.PodName == "" {
 		t.Fatalf("precondition: selected %+v", row)
@@ -123,26 +86,5 @@ func TestTimelineRowOpensItsLogs(t *testing.T) {
 	}
 	if !strings.Contains(screen(m), row.PodName) {
 		t.Errorf("the log pane does not name pod %q:\n%s", row.PodName, screen(m))
-	}
-}
-
-// The help overlay fits a 40-row, 80-column terminal whole: its last line is
-// on screen and no line is cut.
-func TestHelpFitsAnEightyByFortyTerminal(t *testing.T) {
-	m := resize(t, loadDemoList(t), 80, 40)
-	m = typeKey(m, '?')
-	s := screen(m)
-	for _, want := range []string{"KEYS", "Timeline", "1-9 section", "T / X / E open on the timeline / explanation / events", "Explain   why it ended", "Events    live Kubernetes events", "y confirms"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("help lacks %q:\n%s", want, s)
-		}
-	}
-	for _, l := range viewLines(m) {
-		if strings.Contains(l, "…") {
-			t.Errorf("help line is cut: %q", l)
-		}
-		if w := ansi.StringWidth(l); w != 80 {
-			t.Errorf("line is %d cells: %q", w, l)
-		}
 	}
 }

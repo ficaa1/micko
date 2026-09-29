@@ -82,7 +82,7 @@ func run(args []string) int {
 	var root *app.Root
 	if *demo {
 		opts.Server, opts.Profile = "synthetic demo", "demo"
-		root = app.NewRootWithOptions(testkit.DemoReader(demoClock), clock, "demo", config.DefaultRefreshInterval, opts)
+		root = app.NewRoot(testkit.DemoReader(demoClock), clock, "demo", config.DefaultRefreshInterval, opts)
 		// The demo reads no config file, so the flag is its only skin.
 		_, _ = root.ApplySkin(demoSkin(*skin))
 		root.SetRedactValues(*redactValues)
@@ -112,7 +112,7 @@ func run(args []string) int {
 		// last one on every exit path, including a failed Run.
 		defer connector.Close()
 
-		root = app.NewRootWithOptions(nil, clock, "", config.DefaultRefreshInterval, opts)
+		root = app.NewRoot(nil, clock, "", config.DefaultRefreshInterval, opts)
 		// The journal records write attempts, so only a session that can
 		// write gets one. The demo, which never writes, has none at all.
 		if !*readOnly && connector.JournalEnabled() {

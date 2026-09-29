@@ -164,3 +164,16 @@ func TestRenderedActionTextSanitizesTargetAndStatesConsequences(t *testing.T) {
 		}
 	}
 }
+
+// The confirmation names the server, profile and phase.
+func TestConfirmationNamesServerProfileAndPhase(t *testing.T) {
+	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
+	m := NewWithOptions(ref, Options{AllowActions: true, Server: "https://argo.test", Profile: "dev", Phase: "Running"})
+	m.Open(core.ActionRetry)
+	view := m.View().Content
+	for _, want := range []string{"server: https://argo.test", "profile: dev", "phase: Running"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("confirmation lacks %q:\n%s", want, view)
+		}
+	}
+}

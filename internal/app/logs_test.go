@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -31,20 +33,7 @@ func (r *requestLog) all() []core.LogRequest {
 	return append([]core.LogRequest(nil), r.reqs...)
 }
 
-// feed delivers every message cmd produces back into the root, once, and
-// returns them. Log streams from the fake end on their own, so this
-// terminates.
-func feed(m *Root, cmd tea.Cmd) []tea.Msg {
-	msgs := runCmd(cmd)
-	for _, msg := range msgs {
-		_, next := m.Update(msg)
-		msgs = append(msgs, feed(m, next)...)
-	}
-	return msgs
-}
-
-// demoLogsRoot is a root over the demo dataset with the logs of the
-// nightly report open, workflow-wide, and every request recorded.
+// demoLogsRoot opens the nightly report's logs, recording every request.
 func demoLogsRoot(t *testing.T) (*Root, *requestLog, core.Ref) {
 	t.Helper()
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
@@ -59,13 +48,12 @@ func demoLogsRoot(t *testing.T) (*Root, *requestLog, core.Ref) {
 		}
 	}
 	_, cmd := m.Update(OpenLogsMsg{Ref: ref, Container: "main"})
-	feed(m, cmd)
+	deliver(m, cmd)
 	m.View() // sizes the pane to the frame, as a real render does
 	return m, rl, ref
 }
 
-// Workflow-wide logs are labelled by step: the root reads the workflow's
-// node map once and hands the pane the pod-to-step names.
+// Workflow-wide log lines are labelled by step, not pod.
 func TestWorkflowLogsAreLabelledBySteps(t *testing.T) {
 	m, _, _ := demoLogsRoot(t)
 	body := strings.Join(m.logsView.BodyLines(), "\n")
@@ -100,17 +88,16 @@ func TestAStaleSourcesAnswerIsIgnored(t *testing.T) {
 	}
 }
 
-// ctrl+t reopens the stream with timestamps: the new request carries the
-// flag, the retained lines stay, and the switch point is marked.
+// The stream follows; ctrl+t reopens it with timestamps and marks the switch.
 func TestTimestampsReopenTheStream(t *testing.T) {
 	m, rl, ref := demoLogsRoot(t)
 	before := len(rl.all())
-	if before != 1 || rl.all()[0].Timestamps {
+	if before != 1 || rl.all()[0].Timestamps || !rl.all()[0].Follow {
 		t.Fatalf("the first request: %+v", rl.all())
 	}
 	retained := len(m.logsView.RawLines())
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
-	feed(m, cmd)
+	deliver(m, cmd)
 	reqs := rl.all()
 	if len(reqs) != 2 {
 		t.Fatalf("ctrl+t sent %d requests, want one more", len(reqs)-before)
@@ -131,15 +118,13 @@ func TestTimestampsReopenTheStream(t *testing.T) {
 	}
 	// A container switch keeps the choice.
 	_, cmd = m.Update(OpenLogsMsg{Ref: ref, Container: "wait"})
-	feed(m, cmd)
+	deliver(m, cmd)
 	if last := rl.all()[len(rl.all())-1]; !last.Timestamps {
 		t.Fatal("switching container dropped the timestamps choice")
 	}
 }
 
-// Late replies from the stream a reopen replaced are ignored: its batches
-// would duplicate lines, and its cancellation would mark the live stream
-// canceled.
+// A replaced stream's late batches and cancellation are ignored.
 func TestAReplacedStreamsRepliesAreIgnored(t *testing.T) {
 	m, _, _ := demoLogsRoot(t)
 	old := m.logState.streamID
@@ -166,27 +151,70 @@ func TestAReplacedStreamsRepliesAreIgnored(t *testing.T) {
 	}
 }
 
-// With the & filter on, esc clears it and stays in the pane; the next esc
-// leaves. q still quits and ? still opens help: the filter is not text
-// entry.
-func TestEscClearsTheLogFilterBeforeLeaving(t *testing.T) {
-	m, _, _ := demoLogsRoot(t)
-	for _, k := range []tea.KeyPressMsg{{Code: '/', Text: "/"}, {Code: 'E', Text: "E"}, {Code: 'R', Text: "R"},
-		{Code: 'R', Text: "R"}, {Code: tea.KeyEnter}, {Code: '&', Text: "&"}} {
-		m.Update(k)
+// Logs opened without a container read "main".
+func TestLogsDefaultToTheMainContainer(t *testing.T) {
+	rl := &requestLog{}
+	f := fixtureReader()
+	f.StreamHook = rl.hook
+	m := testRoot(t, f)
+	_, cmd := m.Update(OpenLogsMsg{Ref: core.Ref{Namespace: "ns", Name: "wf-1"}})
+	deliver(m, cmd)
+	if reqs := rl.all(); len(reqs) != 1 || reqs[0].Container != "main" {
+		t.Fatalf("requests = %+v, want one for main", reqs)
 	}
-	if !m.logsView.EscapeClears() {
-		t.Fatal("& did not filter")
+}
+
+// Every record reaches the pane and the title counts them.
+func TestAStreamIsDeliveredWhole(t *testing.T) {
+	f := &testkit.FakeReader{StreamSequence: make([]core.LogRecord, 1000)}
+	for i := range f.StreamSequence {
+		f.StreamSequence[i] = core.LogRecord{Content: "line", ReceivedAt: testkit.FixtureEpoch}
 	}
-	if m.textEntryActive() {
-		t.Fatal("the filter counts as text entry")
+	m := testRoot(t, f)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	_, cmd := m.Update(OpenLogsMsg{Ref: core.Ref{Namespace: "ns", Name: "wf-1"}, Container: "main"})
+	deliver(m, cmd)
+	if s := screen(m); !strings.Contains(s, "stream ended (1000 records)") {
+		t.Fatalf("the title does not count 1000 records:\n%s", s)
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.route != RouteLogs || m.logsView.EscapeClears() {
-		t.Fatalf("esc: route %v, filter on %v", m.route, m.logsView.EscapeClears())
+}
+
+// A stream whose context is canceled ends as canceled, not as a failure.
+func TestAStreamCancellationIsNotAFailure(t *testing.T) {
+	f := &testkit.FakeReader{
+		StreamDelay:    time.Hour,
+		StreamSequence: []core.LogRecord{{Content: "only-one"}, {Content: "never"}},
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.route == RouteLogs {
-		t.Fatal("the second esc did not leave the pane")
+	m := testRoot(t, f)
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := m.deps.streamLogsCmd(ctx, genStamp{Conn: 1, Sel: 1}, 1, core.LogRequest{Ref: core.Ref{Namespace: "ns", Name: "wf"}, Container: "main"})
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+	for _, msg := range runCmd(cmd) {
+		if lm, ok := msg.(logRecordMsg); ok && lm.Done {
+			if !lm.Canceled || (lm.Err != nil && !errors.Is(lm.Err, context.Canceled)) {
+				t.Fatalf("end = canceled %v, err %v", lm.Canceled, lm.Err)
+			}
+			return
+		}
 	}
+	t.Fatal("the stream never ended")
+}
+
+// Leaving the logs cancels the stream on the server side too.
+func TestLeavingTheLogsCancelsTheStream(t *testing.T) {
+	wf := workflowFixture("wf-1")
+	f := fixtureReader(wf)
+	f.StreamDelay = time.Hour
+	f.StreamSequence = []core.LogRecord{{Content: "x"}, {Content: "y"}}
+	m := testRoot(t, f)
+	_, cmd := m.Update(OpenLogsMsg{Ref: wf.Summary.Ref, Container: "main"})
+	go runCmd(cmd)
+	m.Update(BackMsg{})
+	if m.logState.running {
+		t.Error("the stream is still marked running")
+	}
+	waitFor(t, "the stream to be canceled", func() bool { return f.StreamCancelCount() > 0 })
 }

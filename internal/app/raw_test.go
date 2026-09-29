@@ -17,20 +17,14 @@ func rawRoot(t *testing.T) (*Root, core.Workflow) {
 	t.Helper()
 	wf := workflowFixture("deploy-multi-layer-abc")
 	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
-	m := NewRootWithOptions(f, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second,
+	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second,
 		actions.Options{ReadOnly: true, Server: "http://127.0.0.1:2746", Profile: "team-prod"})
 	m.width, m.height = 120, 30
 	m.listView.SetItems([]core.Summary{wf.Summary}, testkit.FixtureEpoch)
 	return m, wf
 }
 
-func rawKey(m *Root, key string) tea.Cmd {
-	_, cmd := m.Update(tea.KeyPressMsg{Code: rune(key[0]), Text: key})
-	return cmd
-}
-
-// The bordered pane wraps every content line, so a mouse selection picks up
-// border columns. The raw view exists to remove them.
+// The raw view drops the border and the bands.
 func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 	m, wf := rawRoot(t)
 	framed := screen(m)
@@ -38,7 +32,7 @@ func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 		t.Fatal("the normal view is expected to be bordered")
 	}
 
-	rawKey(m, "f")
+	keys(m, "f")
 	if !m.rawMode {
 		t.Fatal("f did not enter the raw view")
 	}
@@ -53,14 +47,13 @@ func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 		t.Fatal("the raw view must say how to leave it")
 	}
 
-	rawKey(m, "esc")
+	keys(m, "esc")
 	if m.rawMode {
 		t.Fatal("esc did not leave the raw view")
 	}
 }
 
-// f is the full-screen key on every route, logs included: one key, one
-// meaning. Follow moved to t (tail). ctrl+f stays as a second way in.
+// f and ctrl+f enter the raw view from the logs too.
 func TestFEntersTheRawViewFromLogs(t *testing.T) {
 	m, wf := rawRoot(t)
 	m.Update(OpenLogsMsg{Ref: wf.Summary.Ref, Container: "main"})
@@ -79,11 +72,10 @@ func TestFEntersTheRawViewFromLogs(t *testing.T) {
 	}
 }
 
-// A copy that silently produced nothing is the failure mode here, so the key
-// always reports what it did.
+// y copies the selection and says so.
 func TestCopyReportsWhatItPutOnTheClipboard(t *testing.T) {
 	m, wf := rawRoot(t)
-	cmd := rawKey(m, "y")
+	cmd := keys(m, "y")
 	if cmd == nil {
 		t.Fatal("y produced no clipboard command")
 	}
@@ -95,28 +87,25 @@ func TestCopyReportsWhatItPutOnTheClipboard(t *testing.T) {
 	}
 }
 
-// The report is cleared by the next key, or a stale "copied" line would sit
-// beside a screen it does not describe.
 func TestTheReportClearsOnTheNextKey(t *testing.T) {
 	m, _ := rawRoot(t)
-	rawKey(m, "y")
+	keys(m, "y")
 	if m.flash == "" {
 		t.Fatal("expected a report after copying")
 	}
-	rawKey(m, "j")
+	keys(m, "j")
 	if m.flash != "" {
 		t.Fatalf("the report survived the next key: %q", m.flash)
 	}
 }
 
-// Without a webURL there is no honest link to build, so the key says so
-// instead of opening something wrong.
+// o needs a webURL and says so without one.
 func TestOpenInBrowserNeedsAConfiguredWebAddress(t *testing.T) {
 	m, _ := rawRoot(t)
 	var opened []string
 	m.openURL = func(u string) error { opened = append(opened, u); return nil }
 
-	rawKey(m, "o")
+	keys(m, "o")
 	if len(opened) != 0 {
 		t.Fatalf("opened %v with no web address configured", opened)
 	}
@@ -125,7 +114,7 @@ func TestOpenInBrowserNeedsAConfiguredWebAddress(t *testing.T) {
 	}
 
 	m.SetWebURL("https://argo.example.com/")
-	rawKey(m, "o")
+	keys(m, "o")
 	want := "https://argo.example.com/workflows/ns/deploy-multi-layer-abc"
 	if len(opened) != 1 || opened[0] != want {
 		t.Fatalf("opened %v, want [%s]", opened, want)
@@ -138,7 +127,7 @@ func TestAFailedBrowserOpenStillCopiesTheLink(t *testing.T) {
 	m.SetWebURL("https://argo.example.com")
 	m.openURL = func(string) error { return errors.New("no browser") }
 
-	cmd := rawKey(m, "o")
+	cmd := keys(m, "o")
 	if cmd == nil {
 		t.Fatal("a failed open must still return the clipboard command")
 	}
@@ -147,13 +136,12 @@ func TestAFailedBrowserOpenStillCopiesTheLink(t *testing.T) {
 	}
 }
 
-// Actions must never be reachable by accident from the raw view; it is a
-// read-only surface over content the reader already sees.
+// The raw view only scrolls and leaves; no key there starts an action.
 func TestTheRawViewOnlyScrollsAndLeaves(t *testing.T) {
 	m, _ := rawRoot(t)
-	rawKey(m, "f")
+	keys(m, "f")
 	for _, k := range []string{"a", "s", "u", "r", "enter"} {
-		rawKey(m, k)
+		keys(m, k)
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			t.Fatalf("key %q opened the action pane from the raw view", k)
 		}

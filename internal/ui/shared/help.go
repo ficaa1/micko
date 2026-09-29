@@ -12,7 +12,7 @@ import (
 // renders it inside the frame, so the surrounding header/footer geometry
 // never moves when help opens.
 //
-// While open the overlay is a dialog (KeyCtxDialog): it consumes navigation
+// While open the overlay is a dialog: it consumes navigation
 // keys so the view behind it cannot move, `q` closes it instead of quitting,
 // and only Ctrl-C still quits globally.
 type HelpOverlay struct {

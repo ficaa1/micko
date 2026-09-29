@@ -93,3 +93,26 @@ func TestRootKeysPassThrough(t *testing.T) {
 		t.Fatal("a root key opened an editor")
 	}
 }
+
+// | prefills the configured command and enter emits it; an empty command emits nothing.
+func TestPipeEditorEmitsTheTypedCommand(t *testing.T) {
+	m := testModel(t)
+	m.SetPipeCommand("less")
+	press(m, '|')
+	typeInto(m, " -q")
+	cmd := pressKey(m, keyEnter)
+	if cmd == nil {
+		t.Fatal("enter emitted no pipe intent")
+	}
+	if intent, ok := cmd().(PipeIntent); !ok || intent.Command != "less -q" {
+		t.Fatalf("intent = %#v, want the prefilled command plus what was typed", cmd())
+	}
+
+	press(m, '|')
+	for range "less" {
+		pressKey(m, keyBackspace)
+	}
+	if cmd := pressKey(m, keyEnter); cmd != nil {
+		t.Fatalf("an empty command was accepted: %#v", cmd())
+	}
+}

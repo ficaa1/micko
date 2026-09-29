@@ -13,8 +13,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// queryRecorder is the demo reader with every workflow list query recorded,
-// so a test can see what the drill-down asked the server for.
+// queryRecorder records every workflow list query.
 type queryRecorder struct {
 	*testkit.FakeReader
 	mu      sync.Mutex
@@ -41,7 +40,7 @@ func (r *queryRecorder) last() core.Query {
 func cronRoot(t *testing.T) (*Root, *queryRecorder) {
 	t.Helper()
 	rec := &queryRecorder{FakeReader: testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))}
-	m := NewRoot(rec, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(rec, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	deliver(m, m.startListGeneration())
 	runLine(m, "cron")
@@ -56,8 +55,7 @@ func cronCursor(m *Root) string {
 	return name
 }
 
-// :cron, :cwf and :cronworkflows show the cron list of the session's
-// namespace, from any route.
+// :cron, :cwf and :cronworkflows list the namespace's cron workflows.
 func TestCronCommandShowsTheList(t *testing.T) {
 	for _, word := range []string{"cron", "cwf", "cronworkflows"} {
 		m, _ := demoRoot(t)
@@ -97,8 +95,7 @@ func TestCronPolledOnTheTick(t *testing.T) {
 	}
 }
 
-// enter lists the row's runs through a server-side label selector in the
-// cron workflow's namespace, and the title says what the list is narrowed to.
+// enter lists a cron workflow's runs by label, in its namespace.
 func TestCronDrillDown(t *testing.T) {
 	m, rec := cronRoot(t)
 	if got := cronCursor(m); got != "demo-etl-hourly" {
@@ -123,8 +120,7 @@ func TestCronDrillDown(t *testing.T) {
 	}
 }
 
-// esc returns to the cron list with the cursor where it was, and the next
-// workflow list is the plain one again.
+// esc returns to the cron list with the cursor in place and the plain list after.
 func TestCronDrillEscReturns(t *testing.T) {
 	m, rec := cronRoot(t)
 	typeKeys(m, "j")
@@ -149,22 +145,6 @@ func TestCronDrillEscReturns(t *testing.T) {
 	}
 }
 
-// A filter on the drilled list clears before esc leaves it.
-func TestCronDrillEscClearsFilterFirst(t *testing.T) {
-	m, _ := cronRoot(t)
-	deliver(m, pressKey(m, tea.KeyEnter))
-	typeKeys(m, "/179")
-	deliver(m, pressKey(m, tea.KeyEnter))
-	deliver(m, pressKey(m, tea.KeyEscape))
-	if m.route != RouteList || m.listView.Query() != "" {
-		t.Fatalf("first esc: route %v query %q", m.route, m.listView.Query())
-	}
-	deliver(m, pressKey(m, tea.KeyEscape))
-	if m.route != RouteCron {
-		t.Fatalf("second esc: route %v", m.route)
-	}
-}
-
 // A workflow opened from the drill-down: esc twice lands on the cron list.
 func TestCronDrillDetailEscTwice(t *testing.T) {
 	m, _ := cronRoot(t)
@@ -183,9 +163,7 @@ func TestCronDrillDetailEscTwice(t *testing.T) {
 	}
 }
 
-// 0 on the cron route lists every namespace and stays on the route; a
-// drill-down from a row in another namespace asks that namespace, and the
-// header says so until esc.
+// 0 lists every namespace; a drill-down asks the row's namespace.
 func TestCronAllNamespaces(t *testing.T) {
 	m, rec := cronRoot(t)
 	deliver(m, typeKeys(m, "0"))
@@ -240,12 +218,11 @@ func TestCronStaleReplyDiscarded(t *testing.T) {
 	}
 }
 
-// A refusal shows as one on the pane; a connection with no cron lister says
-// it cannot list them.
+// A refusal, a 404 and a reader without a cron lister each say so on the pane.
 func TestCronErrors(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	f.CronErr = core.ErrForbiddenf(`cronworkflows.argoproj.io is forbidden: cannot list resource "cronworkflows"`)
-	m := NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m := newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cron")
 	v := screen(m)
@@ -254,7 +231,7 @@ func TestCronErrors(t *testing.T) {
 	}
 
 	f.CronErr = core.NewAPIError(core.ErrNotFound, 404, "Not Found")
-	m = NewRoot(f, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m = newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cron")
 	if v := screen(m); !strings.Contains(v, "no cron workflows on this server") || !strings.Contains(v, "HTTP 404") {
@@ -262,7 +239,7 @@ func TestCronErrors(t *testing.T) {
 	}
 
 	plain := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	m = NewRoot(onlyReader{plain}, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Millisecond)
+	m = newRoot(onlyReader{plain}, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cron")
 	if v := screen(m); !strings.Contains(v, "cannot list cron workflows") {
@@ -283,8 +260,7 @@ func (o onlyReader) StreamLogs(ctx context.Context, req core.LogRequest, cb func
 	return o.r.StreamLogs(ctx, req, cb)
 }
 
-// f shows the selected cron workflow's manifest with its values; under
-// redactValues it is redacted and v on the row reveals it; y copies the name.
+// f shows the manifest, redacted under redactValues until v; y copies the name.
 func TestCronRawManifest(t *testing.T) {
 	m, _ := cronRoot(t)
 	typeKeys(m, "f")

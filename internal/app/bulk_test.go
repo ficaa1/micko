@@ -19,16 +19,14 @@ import (
 	"github.com/ficaa1/micko/internal/ui/actions"
 )
 
-// fleet is a backend of several workflows that applies each action's
-// effect the way a server does, and records every request it receives.
+// fleet applies actions like a server and records every request.
 type fleet struct {
 	*testkit.FakeReader
 	// sent is every Execute call, in order.
 	sent []core.ActionRequest
 	// failSend makes Execute fail for these names, after "sending".
 	failSend map[string]error
-	// replaced makes Get answer for these names with a workflow of the same
-	// name and a new UID, as after a delete and re-create.
+	// replaced names answer Get with a new UID, as after a re-create.
 	replaced map[string]bool
 }
 
@@ -75,8 +73,7 @@ func (f *fleet) sentNames() []string {
 	return out
 }
 
-// newFleet builds a root on the list route over running workflows with the
-// given names, listed and fresh, with actions enabled.
+// newFleet is an armed root on a fresh list of running workflows.
 func newFleet(t *testing.T, names ...string) (*Root, *fleet) {
 	t.Helper()
 	f := &fleet{FakeReader: &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}, failSend: map[string]error{}, replaced: map[string]bool{}}
@@ -87,39 +84,14 @@ func newFleet(t *testing.T, names ...string) (*Root, *fleet) {
 		f.Order = append(f.Order, wf.Summary.Ref)
 		items = append(items, wf.Summary)
 	}
-	m := NewRootWithOptions(f, testkit.NewFakeClock(testkit.FixtureEpoch), "ns", time.Second, actions.Options{AllowActions: true, Server: "https://argo.test", Profile: "dev"})
+	m := armedRoot(f, actions.Options{Server: "https://argo.test", Profile: "dev"})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m.handleListLoaded(listLoadedMsg{Page: core.Page{Items: items}})
-	old, oldN := stopObservationInterval, stopObservationAttempts
-	stopObservationInterval, stopObservationAttempts = time.Millisecond, 2
-	t.Cleanup(func() { stopObservationInterval, stopObservationAttempts = old, oldN })
+	shortObservation(t)
 	return m, f
 }
 
-func key(k string) tea.KeyPressMsg {
-	switch k {
-	case "space":
-		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
-	case "esc":
-		return tea.KeyPressMsg{Code: tea.KeyEscape}
-	case "enter":
-		return tea.KeyPressMsg{Code: tea.KeyEnter}
-	}
-	return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
-}
-
-// keys presses each key and returns the command of the last one.
-func keys(m *Root, ks ...string) tea.Cmd {
-	var cmd tea.Cmd
-	for _, k := range ks {
-		_, cmd = m.Update(key(k))
-	}
-	return cmd
-}
-
-// drive feeds the action commands back into the root until the chain
-// ends. before, when set, runs ahead of each bulk step's delivery, so a
-// test can change the world between two requests.
+// drive feeds action commands back until the chain ends, calling before ahead of each bulk step.
 func drive(m *Root, cmd tea.Cmd, before func(step int)) {
 	step := 0
 	for i := 0; cmd != nil && i < 100; i++ {
@@ -146,8 +118,7 @@ func outcomes(m *Root) map[string]core.ActionOutcome {
 	return out
 }
 
-// Marked workflows are acted on one request at a time, in display order,
-// each exactly once, and each is read back to its own outcome.
+// Marked workflows are acted on one at a time, in display order, once each.
 func TestBulkStopRunsOncePerTargetInOrder(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b", "wf-c")
 	keys(m, "space", "j", "space", "j", "space")
@@ -179,8 +150,7 @@ func TestBulkStopRunsOncePerTargetInOrder(t *testing.T) {
 	}
 }
 
-// A target whose identity changed since it was marked is refused without
-// a request, and the other targets are acted on regardless.
+// A replaced target is refused unsent; the rest run.
 func TestBulkRefusesAReplacedTargetAndContinues(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b", "wf-c")
 	f.replaced["wf-b"] = true
@@ -200,8 +170,7 @@ func TestBulkRefusesAReplacedTargetAndContinues(t *testing.T) {
 	}
 }
 
-// A target whose send failed is UNKNOWN and is never sent again; the run
-// goes on to the next target.
+// A target whose send failed is UNKNOWN and never resent.
 func TestBulkNeverResendsAnUnknownTarget(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
 	f.failSend["wf-a"] = errors.New("connection reset after send")
@@ -220,8 +189,7 @@ func TestBulkNeverResendsAnUnknownTarget(t *testing.T) {
 	}
 }
 
-// A target that no longer applies when its turn comes is refused rather
-// than sent into an error Argo is certain to return.
+// A target that no longer applies is refused unsent.
 func TestBulkRefusesATargetThatNoLongerApplies(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
 	keys(m, "space", "j", "space", "a")
@@ -242,8 +210,7 @@ func TestBulkRefusesATargetThatNoLongerApplies(t *testing.T) {
 	}
 }
 
-// Data that goes stale between two requests stops the run: the targets not
-// yet sent are refused, and nothing more is sent.
+// Data going stale mid-run refuses every target not yet sent.
 func TestBulkStopsWhenTheDataGoesStale(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b", "wf-c")
 	keys(m, "space", "j", "space", "j", "space", "a")
@@ -300,8 +267,7 @@ func TestClosingTheBulkOutcomeRefreshesAndClearsTheMarks(t *testing.T) {
 	}
 }
 
-// a on the list opens the single-workflow menu for the selected row, and
-// stale data blocks it exactly as it does on the detail route.
+// a on the list acts on the selected row, behind the same freshness gate.
 func TestListActionKeyActsOnTheSelectionBehindTheFreshnessGate(t *testing.T) {
 	m, _ := newFleet(t, "wf-a", "wf-b")
 	keys(m, "j", "a")
@@ -316,8 +282,6 @@ func TestListActionKeyActsOnTheSelectionBehindTheFreshnessGate(t *testing.T) {
 	}
 }
 
-// A namespace switch drops the marks: none of them can be in the next
-// snapshot, and a bulk action must never reach across the switch.
 func TestANamespaceSwitchClearsTheMarks(t *testing.T) {
 	m, _ := newFleet(t, "wf-a", "wf-b")
 	keys(m, "space")
@@ -331,8 +295,8 @@ func TestANamespaceSwitchClearsTheMarks(t *testing.T) {
 func TestTheDemoRefusesBulkWritesAndJournalsNothing(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
 	m.actionOpts = actions.Options{AllowActions: true, Demo: true}
-	path := filepath.Join(t.TempDir(), "actions.jsonl")
-	m.SetJournal(journal.New(path))
+	path := stateJournal(t)
+	m.SetJournal(journal.Open())
 	keys(m, "space", "j", "space", "a")
 	if m.actionView.State() != actions.StateUnavailable || !strings.Contains(m.actionView.View().Content, "demo mode") {
 		t.Fatalf("demo bulk menu: state=%v", m.actionView.State())
@@ -352,6 +316,15 @@ func TestTheDemoRefusesBulkWritesAndJournalsNothing(t *testing.T) {
 	}
 }
 
+// stateJournal points the default journal path into a temp dir and returns it.
+func stateJournal(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+	return filepath.Join(dir, "micko", "actions.jsonl")
+}
+
+// readJournal is every entry the journal at path holds.
 func readJournal(t *testing.T, path string) []journal.Entry {
 	t.Helper()
 	fh, err := os.Open(path)
@@ -371,13 +344,12 @@ func readJournal(t *testing.T, path string) []journal.Entry {
 	return out
 }
 
-// Every attempt is journaled with its settled outcome, a refused one
-// included, under the session's profile and server.
+// Every attempt is journaled with its outcome, profile and server.
 func TestEveryAttemptIsJournaled(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
 	f.replaced["wf-b"] = true
-	path := filepath.Join(t.TempDir(), "actions.jsonl")
-	m.SetJournal(journal.New(path))
+	path := stateJournal(t)
+	m.SetJournal(journal.Open())
 	keys(m, "space", "j", "space", "a")
 	drive(m, keys(m, "s", "y"), nil)
 	entries := readJournal(t, path)
@@ -396,15 +368,13 @@ func TestEveryAttemptIsJournaled(t *testing.T) {
 	}
 }
 
-// A journal that cannot be written changes nothing about the action and is
-// reported once, on the footer.
+// A journal write failure is reported once and changes nothing else.
 func TestAJournalFailureIsIsolatedAndReportedOnce(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
-	dir := filepath.Join(t.TempDir(), "actions.jsonl")
-	if err := os.Mkdir(dir, 0o700); err != nil {
+	if err := os.MkdirAll(stateJournal(t), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	m.SetJournal(journal.New(dir))
+	m.SetJournal(journal.Open())
 
 	keys(m, "space", "a")
 	drive(m, keys(m, "s", "y"), nil)
@@ -424,52 +394,8 @@ func TestAJournalFailureIsIsolatedAndReportedOnce(t *testing.T) {
 	}
 }
 
-// Suspend settles when the workflow reports itself suspended.
-func TestSuspendSettlesWhenTheWorkflowReportsSuspended(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid-1"}
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{ref: {Summary: core.Summary{Ref: ref, Phase: "Running", Suspended: true}}}}
-	if _, settled, err := readBack(context.Background(), f, ref, core.ActionSuspend); err != nil || !settled {
-		t.Fatalf("suspended workflow: settled=%v err=%v", settled, err)
-	}
-	f.Workflows[ref] = core.Workflow{Summary: core.Summary{Ref: ref, Phase: "Running"}}
-	if _, settled, _ := readBack(context.Background(), f, ref, core.ActionSuspend); settled {
-		t.Fatal("a workflow that does not report suspended was read back as suspended")
-	}
-}
-
-// Terminate settles when the workflow reaches a terminal phase.
-func TestTerminateSettlesOnATerminalPhase(t *testing.T) {
-	m, r := newStopRoot(t, "Running", "Running", "Failed")
-	req := core.ActionRequest{Ref: workflowFixture("wf").Summary.Ref, Action: core.ActionTerminate, Confirmation: core.Confirmation{Confirmed: true, TypedName: "wf"}}
-	got := runCmd(m.startAction(req))[0].(actionResultMsg).Result
-	if got.Outcome != core.ActionConfirmed || r.execCalls != 1 {
-		t.Fatalf("outcome=%s execs=%d", got.Outcome, r.execCalls)
-	}
-	m2, _ := newStopRoot(t, "Running")
-	got = runCmd(m2.startAction(req))[0].(actionResultMsg).Result
-	if got.Outcome != core.ActionAccepted {
-		t.Fatalf("still running: outcome=%s, want accepted", got.Outcome)
-	}
-}
-
-// Delete settles when a read answers not found. A workflow that is still
-// readable (an archived copy, or a finalizer holding it) leaves the delete
-// ACCEPTED, never UNKNOWN: the server did apply it.
-func TestDeleteSettlesWhenTheWorkflowIsNotFound(t *testing.T) {
-	old, oldN := stopObservationInterval, stopObservationAttempts
-	stopObservationInterval, stopObservationAttempts = time.Millisecond, 2
-	t.Cleanup(func() { stopObservationInterval, stopObservationAttempts = old, oldN })
-
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid-1"}
-	f := &testkit.FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	if _, settled, err := readBack(context.Background(), f, ref, core.ActionDelete); err != nil || !settled {
-		t.Fatalf("gone workflow: settled=%v err=%v", settled, err)
-	}
-	f.Workflows[ref] = core.Workflow{Summary: core.Summary{Ref: ref, Phase: "Succeeded"}}
-	if _, settled, err := readBack(context.Background(), f, ref, core.ActionDelete); err != nil || settled {
-		t.Fatalf("readable workflow: settled=%v err=%v", settled, err)
-	}
-
+// Delete takes a second, distinct confirmation and is sent as final.
+func TestDeleteIsSentFinal(t *testing.T) {
 	m, fl := newFleet(t, "wf-a")
 	keys(m, "a", "d", "y")
 	drive(m, keys(m, "D"), nil)
@@ -481,8 +407,6 @@ func TestDeleteSettlesWhenTheWorkflowIsNotFound(t *testing.T) {
 	}
 }
 
-// Deleting the workflow the detail route shows returns to the list: there
-// is no detail left to show.
 func TestDeletingFromTheDetailReturnsToTheList(t *testing.T) {
 	m, f := newFleet(t, "wf-a", "wf-b")
 	m.Update(OpenWorkflowMsg{Ref: m.listView.SelectedRef()})

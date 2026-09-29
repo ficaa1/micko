@@ -101,9 +101,6 @@ func (p *requestIDProvider) newID() uint64 {
 	return p.next
 }
 
-// last returns the most recently handed out id without consuming one.
-func (p *requestIDProvider) last() uint64 { return p.next }
-
 // command constructors -------------------------------------------------------
 //
 // Each async command receives a context that the root cancels on generation

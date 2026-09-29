@@ -5,9 +5,7 @@ import (
 	"time"
 )
 
-// Every relative time on screen is measured from the clock: a workflow's
-// age, and how long the snapshot has been stale. A clock that does not move
-// reports the same age forever, which reads as a workflow frozen at 0s.
+// The system clock reports UTC and advances.
 func TestTheSystemClockMoves(t *testing.T) {
 	c := SystemClock{}
 	first := c.Now()

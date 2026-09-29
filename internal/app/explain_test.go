@@ -31,47 +31,23 @@ func recordStreams(m *Root) (*testkit.FakeReader, func() []core.LogRequest) {
 	}
 }
 
-// settle runs cmd and every command its messages start, applying only the
-// detail fetch and the explain log read, so no poll tick or watch runs.
-func settle(m *Root, cmd tea.Cmd) *Root {
-	for i := 0; i < 6 && cmd != nil; i++ {
-		var cmds []tea.Cmd
-		for _, msg := range runCmd(cmd) {
-			switch msg.(type) {
-			case detailLoadedMsg, explainLogMsg, OpenWorkflowMsg:
-			default:
-				continue
-			}
-			next, c := m.Update(msg)
-			m = next.(*Root)
-			cmds = append(cmds, c)
-		}
-		cmd = tea.Batch(cmds...)
-	}
-	return m
-}
-
-// openOnExplain presses X on the list with the cursor on name and settles
-// the fetch and the log read it starts.
+// openOnExplain presses X on the named workflow and settles the log read.
 func openOnExplain(t *testing.T, m *Root, name string) *Root {
 	t.Helper()
 	for i := 0; i < 20 && m.listView.SelectedRef().Name != name; i++ {
-		m = typeKey(m, 'j')
+		typeKeys(m, "j")
 	}
 	if got := m.listView.SelectedRef().Name; got != name {
 		t.Fatalf("precondition: cursor on %q, want %q", got, name)
 	}
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'X', Text: "X"})
-	m = settle(next.(*Root), cmd)
+	settle(m, keys(m, "X"))
 	if m.route != RouteDetail || m.detailView.Section() != "explain" {
 		t.Fatalf("X opened route %v section %q", m.route, m.detailView.Section())
 	}
 	return m
 }
 
-// X on the list opens the workflow on its Explain section, which reads the
-// last 200 lines of the failing pod's main container once, without
-// following, and quotes the lines that matter.
+// X opens the Explain section, which reads the failing pod's last 200 lines once.
 func TestListXOpensTheExplanation(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	_, reqs := recordStreams(m)
@@ -102,16 +78,13 @@ func TestListXOpensTheExplanation(t *testing.T) {
 	}
 
 	// A refresh of the same workflow reads nothing again.
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
-	m = settle(next.(*Root), cmd)
+	settle(m, keys(m, "r"))
 	if n := len(reqs()); n != 1 {
 		t.Errorf("a refresh read the log again: %d requests", n)
 	}
 }
 
-// X in the detail pane jumps to the section and starts the read; leaving
-// the section, or the workflow, cancels a read under way, and coming back
-// asks again.
+// Leaving the section or the workflow cancels the read; coming back reads again.
 func TestExplainReadIsCanceledWhenLeft(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m = openFromList(t, m, "demo-oom-backfill", tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -124,7 +97,7 @@ func TestExplainReadIsCanceledWhenLeft(t *testing.T) {
 		t.Errorf("the section does not say it is reading:\n%s", screen(m))
 	}
 
-	m = typeKey(m, '1')
+	typeKeys(m, "1")
 	if m.hasInflight("explain") {
 		t.Fatal("leaving the section left the read running")
 	}
@@ -147,8 +120,6 @@ func TestExplainReadIsCanceledWhenLeft(t *testing.T) {
 		t.Fatal("coming back to the section does not read again")
 	}
 
-	// l opens the failing pod's full log, which cancels the read; back on
-	// the section it starts again.
 	next, cmd = m.Update(tea.KeyPressMsg{Code: 'l', Text: "l"})
 	m = next.(*Root)
 	for _, msg := range runCmd(cmd) {
@@ -175,15 +146,12 @@ func TestExplainReadIsCanceledWhenLeft(t *testing.T) {
 	}
 }
 
-// A reply stamped with another workflow's generation, or answering a
-// request the section has moved past, changes nothing; the reply to the
-// latest request does.
 func TestExplainDropsStaleReplies(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m = openFromList(t, m, "demo-oom-backfill", tea.KeyPressMsg{Code: tea.KeyEnter})
 	next, _ := m.Update(tea.KeyPressMsg{Code: 'X', Text: "X"})
 	m = next.(*Root)
-	id := m.ids.last()
+	id := m.ids.next
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 
 	apply := func(msg explainLogMsg) {
@@ -229,8 +197,6 @@ func TestExplainCopiesTheReport(t *testing.T) {
 	}
 }
 
-// A read that runs out of time says so; a server that says the pod is not
-// found marks the log gone; the tail keeps the last lines only.
 func TestExplainLogHelpers(t *testing.T) {
 	if msg, gone := explainLogError(context.DeadlineExceeded); msg != "the read timed out after 20s" || gone {
 		t.Errorf("timeout: %q %v", msg, gone)

@@ -17,6 +17,7 @@ import (
 
 	"github.com/ficaa1/micko/internal/app"
 	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/actions"
 )
 
 const testNS = "synthetic-ns"
@@ -57,7 +58,7 @@ func newHarness(t *testing.T, client *WireClient, interval time.Duration) *harne
 	clock := newPumpClock()
 	h := &harness{
 		t:    t,
-		root: app.NewRoot(client, clock, testNS, interval),
+		root: app.NewRoot(client, clock, testNS, interval, actions.Options{ReadOnly: true}),
 	}
 	h.enqueue(h.root.Init())
 	return h
@@ -87,7 +88,7 @@ func newHarnessForNS(t *testing.T, client *WireClient, ns string) *harness {
 	clock := newPumpClock()
 	h := &harness{
 		t:    t,
-		root: app.NewRoot(client, clock, ns, time.Nanosecond),
+		root: app.NewRoot(client, clock, ns, time.Nanosecond, actions.Options{ReadOnly: true}),
 	}
 	h.enqueue(h.root.Init())
 	return h
