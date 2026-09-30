@@ -95,7 +95,7 @@ func isSubsequence(q, t string) bool {
 	return true
 }
 
-// Rank orders the candidates that match query, best first.
+// rank orders the candidates that match query, best first.
 //
 // A candidate scores as its best term. Ties break on the shorter matching
 // term, because the shorter term is closer to what was typed, then on the
@@ -104,7 +104,7 @@ func isSubsequence(q, t string) bool {
 //
 // An empty query matches everything in the given order: an empty palette is
 // the list of every command.
-func Rank(query string, cands []Candidate) []Match {
+func rank(query string, cands []Candidate) []Match {
 	query = strings.TrimSpace(query)
 	out := make([]Match, 0, len(cands))
 	if query == "" {

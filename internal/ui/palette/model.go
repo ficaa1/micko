@@ -122,18 +122,6 @@ func (m *Model) Open() {
 // Close hides the palette.
 func (m *Model) Close() { m.open = false }
 
-// Value returns the typed line.
-func (m *Model) Value() string { return m.buf }
-
-// SetValue replaces the typed line, as typing it would.
-func (m *Model) SetValue(s string) { m.edit(s) }
-
-// History returns the executed lines, oldest first.
-func (m *Model) History() []string { return append([]string(nil), m.history...) }
-
-// Selected is the index of the highlighted suggestion.
-func (m *Model) Selected() int { return m.sel }
-
 // Parse splits a line into its command word and argument. The argument is the
 // trimmed rest of the line; staged reports whether the reader has typed past
 // the word, which is what moves completion from commands to arguments.
@@ -164,8 +152,8 @@ func Find(cmds []Command, word string) (Command, bool) {
 	return Command{}, false
 }
 
-// Suggestion is one row of the list under the input.
-type Suggestion struct {
+// suggestion is one row of the list under the input.
+type suggestion struct {
 	// Value is the whole line tab puts in the input.
 	Value string
 	// Label is what the row names: a command's usage or an argument value.
@@ -177,21 +165,21 @@ type Suggestion struct {
 	Desc string
 }
 
-// Suggestions ranks the candidates for the current line, best first.
+// suggestions ranks the candidates for the current line, best first.
 //
 // Before a space the candidates are the commands. After a known command that
 // takes an argument and a space, they are that argument's values. Anything
 // else — an unknown word followed by a space, an argument to a command that
 // takes none — has no candidates, and the list says so instead.
-func (m *Model) Suggestions() []Suggestion {
+func (m *Model) suggestions() []suggestion {
 	word, arg, staged := Parse(m.buf)
 	if !staged {
 		cands := make([]Candidate, len(m.commands))
 		for i, c := range m.commands {
 			cands[i] = Candidate{Terms: c.Terms()}
 		}
-		ranked := Rank(word, cands)
-		out := make([]Suggestion, 0, len(ranked))
+		ranked := rank(word, cands)
+		out := make([]suggestion, 0, len(ranked))
 		for _, r := range ranked {
 			c := m.commands[r.Index]
 			value := r.Term
@@ -200,7 +188,7 @@ func (m *Model) Suggestions() []Suggestion {
 				// both finishes the word and starts completing its value.
 				value += " "
 			}
-			out = append(out, Suggestion{Value: value, Label: c.Usage(), Aliases: c.Aliases, Desc: c.Desc})
+			out = append(out, suggestion{Value: value, Label: c.Usage(), Aliases: c.Aliases, Desc: c.Desc})
 		}
 		return out
 	}
@@ -213,10 +201,10 @@ func (m *Model) Suggestions() []Suggestion {
 	for i, v := range values {
 		cands[i] = Candidate{Terms: []string{v}}
 	}
-	ranked := Rank(arg, cands)
-	out := make([]Suggestion, 0, len(ranked))
+	ranked := rank(arg, cands)
+	out := make([]suggestion, 0, len(ranked))
 	for _, r := range ranked {
-		out = append(out, Suggestion{Value: word + " " + r.Term, Label: r.Term, Desc: c.Arg})
+		out = append(out, suggestion{Value: word + " " + r.Term, Label: r.Term, Desc: c.Arg})
 	}
 	return out
 }
@@ -243,7 +231,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case "enter":
 		return m.submit()
 	case "tab":
-		if s := m.Suggestions(); len(s) > 0 {
+		if s := m.suggestions(); len(s) > 0 {
 			m.edit(s[m.clampSel(len(s))].Value)
 		}
 		return nil
@@ -333,7 +321,7 @@ func (m *Model) recall(delta int) {
 }
 
 func (m *Model) moveSel(delta int) {
-	n := len(m.Suggestions())
+	n := len(m.suggestions())
 	if n == 0 {
 		m.sel = 0
 		return

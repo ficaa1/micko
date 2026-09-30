@@ -36,7 +36,7 @@ func (m *Model) BodyLines(width, rows int) []string {
 	}
 	lines := []string{m.theme.Title.Render(":") + " " + shared.Sanitize(m.buf) + "_"}
 
-	sugg := m.Suggestions()
+	sugg := m.suggestions()
 	if len(sugg) == 0 {
 		lines = append(lines, m.theme.Dim.Render("  "+m.emptyReason()))
 	} else {
@@ -73,7 +73,7 @@ func (m *Model) BodyLines(width, rows int) []string {
 // unselected row dims its description so the command names are what the eye
 // lands on; the selected row is styled whole, since a dim span inside it
 // would end the selection style halfway along the row.
-func (m *Model) row(s Suggestion, selected bool, labelW, aliasW int) string {
+func (m *Model) row(s suggestion, selected bool, labelW, aliasW int) string {
 	mark := "  "
 	if selected {
 		mark = "› "
@@ -118,7 +118,7 @@ func (m *Model) emptyReason() string {
 func quote(s string) string { return "“" + shared.Sanitize(s) + "”" }
 
 // columnWidths sizes the label and alias columns to the rows on screen.
-func columnWidths(rows []Suggestion) (label, alias int) {
+func columnWidths(rows []suggestion) (label, alias int) {
 	for _, s := range rows {
 		if w := ansi.StringWidth(shared.Sanitize(s.Label)); w > label {
 			label = w
