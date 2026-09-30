@@ -32,16 +32,13 @@ type LogLine struct {
 // words, so "terror" or "errorless" do not match, and case does not matter.
 var errorWords = regexp.MustCompile(`(?i)\b(error|errors|err|fatal|panic|panicked|exception|traceback|killed|oomkilled|out of memory|segmentation fault|sigsegv|sigkill|fail|failed|failure|denied|refused|timed out|no such file|not found|exit status|exit code|abort|aborted|critical)\b`)
 
-// pickLog chooses at most limit lines of a log tail that explain a failure:
+// pickLog chooses at most eight lines of a log tail that explain a failure:
 // lines with an error word, whole tracebacks, and one line of context
 // before each. The matches nearest the end win when there are more than fit,
 // since the cause of a failure is usually printed last. A tail with no such
 // line gives its last three lines, so the card still shows how the log
 // ends.
-func pickLog(lines []string, limit int) []LogLine {
-	if limit <= 0 || len(lines) == 0 {
-		return nil
-	}
+func pickLog(lines []string) []LogLine {
 	match := make([]bool, len(lines))
 	found := false
 	inTrace := false
@@ -66,7 +63,7 @@ func pickLog(lines []string, limit int) []LogLine {
 	keep := make([]bool, len(lines))
 	kept := 0
 	take := func(i int) {
-		if i >= 0 && !keep[i] && kept < limit {
+		if i >= 0 && !keep[i] && kept < maxLogLines {
 			keep[i] = true
 			kept++
 		}
@@ -76,7 +73,7 @@ func pickLog(lines []string, limit int) []LogLine {
 			take(i)
 		}
 	} else {
-		for i := len(lines) - 1; i >= 0 && kept < limit; i-- {
+		for i := len(lines) - 1; i >= 0 && kept < maxLogLines; i-- {
 			if !match[i] {
 				continue
 			}

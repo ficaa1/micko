@@ -35,6 +35,20 @@ func evidence(f Finding) string {
 	return b.String()
 }
 
+// explainOne is the report for a synthetic workflow.
+func explainOne(b *wfBuilder) Report { return Explain(b.input()) }
+
+func findRule(t *testing.T, r Report, rule string) Finding {
+	t.Helper()
+	for _, f := range r.Findings {
+		if f.Rule == rule {
+			return f
+		}
+	}
+	t.Fatalf("no %s finding in %v", rule, keys(r))
+	return Finding{}
+}
+
 // Successful runs report their duration and the work that completed or was skipped.
 func TestExplainSucceeded(t *testing.T) {
 	for _, c := range []struct {
@@ -85,8 +99,7 @@ func TestExplainValidation(t *testing.T) {
 	}
 }
 
-// Findings come most severe first, and the same input always gives the
-// same report.
+// Findings come most severe first and identical input produces the same complete report.
 func TestExplainOrdersBySeverityAndIsDeterministic(t *testing.T) {
 	b := newWF("Failed")
 	b.task("a", "Succeeded", ran(0, 10), exit("0"))
@@ -102,28 +115,9 @@ func TestExplainOrdersBySeverityAndIsDeterministic(t *testing.T) {
 			t.Fatalf("run %d report = %+v, want %+v", i, again, first)
 		}
 	}
-	for i := 1; i < len(first.Findings); i++ {
-		if first.Findings[i].Severity > first.Findings[i-1].Severity {
-			t.Fatalf("finding %d is more severe than the one before: %v", i, keys(first))
-		}
-	}
 	if got := strings.Join(keys(first), " | "); got != "error root-failure exit-code | error exit-handler exit-code | warning retried | info dependents" {
 		t.Fatalf("findings = %q, want root error, handler error, retry warning, dependent info", got)
 	}
-}
-
-// explainOne is the report for a synthetic workflow.
-func explainOne(b *wfBuilder) Report { return Explain(b.input()) }
-
-func findRule(t *testing.T, r Report, rule string) Finding {
-	t.Helper()
-	for _, f := range r.Findings {
-		if f.Rule == rule {
-			return f
-		}
-	}
-	t.Fatalf("no %s finding in %v", rule, keys(r))
-	return Finding{}
 }
 
 // Failure causes prefer the recorded message and explain the exit code when it is the only cause.
@@ -271,38 +265,50 @@ func TestExplainRetries(t *testing.T) {
 	}
 }
 
-// A failed exit handler is an error of its own; a hook that failed is
-// reported, and one that succeeded is not.
-func TestExitHandlerAndHooks(t *testing.T) {
-	b := newWF("Succeeded")
-	b.task("work", "Succeeded", ran(0, 10), exit("0"))
-	b.exitHandler("Failed", ran(12, 3), exit("127"), msg("Error (exit code 127)"))
-	r := explainOne(b)
-	f := findRule(t, r, RuleExitHandler)
-	if f.Severity != Error || !strings.Contains(f.Headline, "The exit handler failed: exit code 127") {
-		t.Errorf("exit handler: %s %q", f.Severity, f.Headline)
-	}
-	if !strings.Contains(evidence(f), "was not found") {
-		t.Errorf("exit handler evidence:\n%s", evidence(f))
-	}
-	if strings.Contains(strings.Join(keys(r), "|"), "root-failure") {
-		t.Errorf("the exit handler counted as a root failure: %v", keys(r))
-	}
-
-	h := newWF("Succeeded")
-	h.task("work", "Succeeded", ran(0, 10), exit("0"))
-	h.hook("slack", "Failed", ran(11, 2), exit("1"))
-	h.hook("audit", "Succeeded", ran(11, 2), exit("0"))
-	r = explainOne(h)
-	if got := strings.Join(keys(r), " | "); got != "error hook exit-code | info succeeded" {
-		t.Fatalf("hook findings = %s", got)
+// Failed handlers and hooks are separate errors, while successful hooks add no finding.
+func TestExplainHandlers(t *testing.T) {
+	for _, c := range []struct {
+		name                           string
+		build                          func(*wfBuilder)
+		keys, rule, headline, evidence string
+	}{
+		{
+			name:  "failed exit handler",
+			build: func(b *wfBuilder) { b.exitHandler("Failed", ran(12, 3), exit("127"), msg("Error (exit code 127)")) },
+			keys:  "error exit-handler exit-code | info succeeded", rule: RuleExitHandler,
+			headline: "The exit handler failed: exit code 127", evidence: "was not found",
+		},
+		{
+			name: "failed and successful hooks",
+			build: func(b *wfBuilder) {
+				b.hook("slack", "Failed", ran(11, 2), exit("1"))
+				b.hook("audit", "Succeeded", ran(11, 2), exit("0"))
+			},
+			keys: "error hook exit-code | info succeeded", rule: RuleHook,
+			headline: "The slack hook failed: exit code 1", evidence: "exit code: 1: the program reported a general error",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			b := newWF("Succeeded")
+			b.task("work", "Succeeded", ran(0, 10), exit("0"))
+			c.build(b)
+			r := explainOne(b)
+			if got := strings.Join(keys(r), " | "); got != c.keys {
+				t.Fatalf("findings = %q, want %q", got, c.keys)
+			}
+			f := findRule(t, r, c.rule)
+			if f.Headline != c.headline {
+				t.Errorf("headline = %q, want %q", f.Headline, c.headline)
+			}
+			if got := evidence(f); !strings.Contains(got, c.evidence) {
+				t.Errorf("evidence = %q, want it to contain %q", got, c.evidence)
+			}
+		})
 	}
 }
 
-// Nodes that did not run because of a failure are listed: omitted ones,
-// skipped ones whose reason is not their own condition, and nodes a finished
-// run never started. A node its own condition skipped is not.
-func TestDependentsOfAFailure(t *testing.T) {
+// Failure fallout lists omitted and unstarted dependents without counting nodes skipped by their own conditions.
+func TestExplainDependents(t *testing.T) {
 	b := newWF("Failed")
 	b.task("build", "Failed", ran(0, 10), exit("1"))
 	b.task("test", "Omitted", notRun(), msg("omitted: depends condition not met"), after("build"))
@@ -317,38 +323,37 @@ func TestDependentsOfAFailure(t *testing.T) {
 		}
 	}
 	if strings.Contains(ev, "deploy") || f.Headline != "2 nodes did not run because of the failure: test, notify" {
-		t.Errorf("dependents = %q\n%s", f.Headline, ev)
+		t.Errorf("dependents headline = %q and evidence = %q, want headline %q without deploy evidence", f.Headline, ev, "2 nodes did not run because of the failure: test, notify")
 	}
 }
 
-// A workflow its deadline stopped says so, with the spec's deadline, when
-// no failing node already carries that cause.
-func TestWorkflowDeadline(t *testing.T) {
-	b := newWF("Failed")
-	b.wf.Summary.Message = "Step exceeded its deadline"
-	b.wf.Resource = []byte(`{"spec":{"activeDeadlineSeconds":300}}`)
-	b.task("slow", "Failed", ran(0, 300), exit("143"), msg("terminated"))
-	r := explainOne(b)
-	f := findRule(t, r, RuleDeadline)
-	if !strings.Contains(evidence(f), "deadline: activeDeadlineSeconds 300") {
-		t.Errorf("deadline evidence:\n%s", evidence(f))
-	}
-
-	n := newWF("Failed")
-	n.wf.Summary.Message = "Step exceeded its deadline"
-	n.wf.Resource = []byte(`{"spec":{"activeDeadlineSeconds":300}}`)
-	n.task("slow", "Failed", ran(0, 300), msg("Step exceeded its deadline"))
-	r = explainOne(n)
-	if got := strings.Join(keys(r), " | "); got != "error root-failure deadline" {
-		t.Fatalf("a node carrying the deadline gets one finding, got %s", got)
-	}
-	if !strings.Contains(evidence(r.Findings[0]), "activeDeadlineSeconds 300 on the workflow") {
-		t.Errorf("node deadline evidence:\n%s", evidence(r.Findings[0]))
+// Deadline findings keep the workflow limit and are not duplicated when a failing node names the cause.
+func TestExplainDeadline(t *testing.T) {
+	for _, c := range []struct {
+		name, exit, message, keys, rule, evidence string
+	}{
+		{"workflow deadline", "143", "terminated", "error root-failure exit-code | error deadline deadline", RuleDeadline, "deadline: activeDeadlineSeconds 300"},
+		{"node deadline", "", "Step exceeded its deadline", "error root-failure deadline", RuleRootFailure, "activeDeadlineSeconds 300 on the workflow"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			b := newWF("Failed")
+			b.wf.Summary.Message = "Step exceeded its deadline"
+			b.wf.Resource = []byte(`{"spec":{"activeDeadlineSeconds":300}}`)
+			b.task("slow", "Failed", ran(0, 300), exit(c.exit), msg(c.message))
+			r := explainOne(b)
+			if got := strings.Join(keys(r), " | "); got != c.keys {
+				t.Fatalf("findings = %q, want %q", got, c.keys)
+			}
+			f := findRule(t, r, c.rule)
+			if got := evidence(f); !strings.Contains(got, c.evidence) {
+				t.Errorf("evidence = %q, want it to contain %q", got, c.evidence)
+			}
+		})
 	}
 }
 
 // A workflow failed from above keeps the controller's message even when every node succeeded.
-func TestFailedWithoutAFailingNode(t *testing.T) {
+func TestExplainWorkflowFailed(t *testing.T) {
 	b := newWF("Failed")
 	b.wf.Summary.Message = "workflow shutdown with strategy: Terminate"
 	b.task("a", "Succeeded", ran(0, 10), exit("0"))
@@ -359,7 +364,7 @@ func TestFailedWithoutAFailingNode(t *testing.T) {
 }
 
 // Pods an unfinished run cannot start are warnings with Kubernetes reasons and concrete next steps.
-func TestPodPending(t *testing.T) {
+func TestExplainPendingPods(t *testing.T) {
 	b := newWF("Running")
 	b.task("fetch", "Pending", ran(0, -1), msg("ImagePullBackOff: Back-off pulling image \"registry.example/fetch:9\""))
 	b.task("big", "Pending", ran(0, -1), msg("Unschedulable: 0/3 nodes are available: 3 Insufficient memory."))
@@ -371,15 +376,15 @@ func TestPodPending(t *testing.T) {
 		}
 	}
 	if len(pend) != 2 {
-		t.Fatalf("pod-pending findings = %v", keys(r))
+		t.Fatalf("pending pod findings = %+v, want exactly fetch and big; all findings = %v", pend, keys(r))
 	}
 	if f := pend["fetch"]; f.Cause != CauseImagePull || f.Severity != Warning ||
 		!strings.Contains(f.Headline, "fetch cannot start: ImagePullBackOff") || !strings.Contains(f.Next, "imagePullSecrets") {
-		t.Errorf("image pull: %s %q / %q", f.Severity, f.Headline, f.Next)
+		t.Errorf("image pull finding = %+v, want cause %q, severity warning, headline containing %q and advice containing %q", f, CauseImagePull, "fetch cannot start: ImagePullBackOff", "imagePullSecrets")
 	}
 	if f := pend["big"]; f.Cause != CausePodPending ||
 		!strings.Contains(f.Headline, "big cannot start: Unschedulable") || !strings.Contains(f.Next, "requests") {
-		t.Errorf("unschedulable: %q / %q", f.Headline, f.Next)
+		t.Errorf("scheduling finding = %+v, want cause %q, headline containing %q and advice containing %q", f, CausePodPending, "big cannot start: Unschedulable", "requests")
 	}
 }
 
@@ -492,25 +497,25 @@ func TestExplainNotStarted(t *testing.T) {
 }
 
 // Failed nodes in a workflow that succeeded anyway are pointed out.
-func TestToleratedFailures(t *testing.T) {
+func TestExplainToleratedFailures(t *testing.T) {
 	b := newWF("Succeeded")
 	b.task("lint", "Failed", ran(0, 5), exit("1"))
 	b.task("build", "Succeeded", ran(0, 20), exit("0"))
 	r := explainOne(b)
 	if got := strings.Join(keys(r), " | "); got != "warning tolerated | info succeeded" {
-		t.Fatalf("findings = %s", got)
+		t.Fatalf("findings = %q, want %q", got, "warning tolerated | info succeeded")
 	}
 }
 
 // The node map the server withheld is a finding, not an empty section.
-func TestNodesUnavailable(t *testing.T) {
+func TestExplainNodesUnavailable(t *testing.T) {
 	b := newWF("Running")
 	b.wf.NodesAvailable = false
 	b.wf.NodesUnavailableReason = "node status offloaded and not hydrated by the server"
 	r := explainOne(b)
 	f := findRule(t, r, RuleNodesUnavailable)
 	if !strings.Contains(evidence(f), "offloaded and not hydrated") {
-		t.Errorf("evidence:\n%s", evidence(f))
+		t.Errorf("unavailable evidence = %q, want it to contain %q", evidence(f), "offloaded and not hydrated")
 	}
 }
 
@@ -579,9 +584,8 @@ func TestExplainLogStates(t *testing.T) {
 	}
 }
 
-// Parameter values travel apart from the text, so the view decides whether
-// to show them.
-func TestInputsAreParameters(t *testing.T) {
+// Parameter values travel separately from text so the view controls their visibility.
+func TestExplainParameters(t *testing.T) {
 	b := newWF("Failed")
 	b.task("job", "Failed", ran(0, 30), exit("1"), inputs("token", "s3cr3t"))
 	f := findRule(t, explainOne(b), RuleRootFailure)
