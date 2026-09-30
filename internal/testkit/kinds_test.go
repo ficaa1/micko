@@ -10,54 +10,40 @@ import (
 	"github.com/ficaa1/micko/internal/cronexpr"
 )
 
-// The equality-based selector forms the drill-down and the gate scan send
-// are understood; a set-based one matches nothing rather than everything.
-func TestMatchLabels(t *testing.T) {
-	labels := map[string]string{"owner": "etl", "workflows.argoproj.io/completed": "true"}
-	cases := map[string]bool{
-		"":                  true,
-		"owner=etl":         true,
-		"owner==etl":        true,
-		"owner=other":       false,
-		"owner!=etl":        false,
-		"owner!=other":      true,
-		"owner":             true,
-		"!owner":            false,
-		"missing":           false,
-		"!missing":          true,
-		"missing!=x":        true,
-		"owner=etl,missing": false,
-		"owner=etl, workflows.argoproj.io/completed=true": true,
-		"owner in (etl)": false,
+// Workflow lists apply equality selectors and reject unsupported set selectors.
+func TestFakeReaderListLabels(t *testing.T) {
+	wf := SyntheticWorkflow("ns", "run", "Running", FixtureEpoch)
+	wf.Summary.Labels = map[string]string{"owner": "etl", "workflows.argoproj.io/completed": "true"}
+	f := &FakeReader{Workflows: map[core.Ref]core.Workflow{wf.Summary.Ref: wf}}
+	cases := []struct {
+		name, selector string
+		want           bool
+	}{
+		{"empty", "", true}, {"equality", "owner=etl", true}, {"double equality", "owner==etl", true},
+		{"different value", "owner=other", false}, {"equal excluded", "owner!=etl", false}, {"different excluded", "owner!=other", true},
+		{"present", "owner", true}, {"present excluded", "!owner", false}, {"absent required", "missing", false},
+		{"absent excluded", "!missing", true}, {"absent inequality", "missing!=x", true},
+		{"all terms required", "owner=etl,missing", false}, {"trimmed conjunction", "owner=etl, workflows.argoproj.io/completed=true", true},
+		{"unsupported set", "owner in (etl)", false},
 	}
-	for sel, want := range cases {
-		if got := MatchLabels(sel, labels); got != want {
-			t.Errorf("MatchLabels(%q) = %v, want %v", sel, got, want)
-		}
-	}
-}
-
-// List honours the label selector, which is how the demo's drill-down
-// finds a cron workflow's runs.
-func TestDemoListByOwnerLabel(t *testing.T) {
-	f := DemoReader(NewFakeClock(FixtureEpoch))
-	f.PageLimit = 0
-	page, err := f.List(context.Background(), core.Query{
-		Namespace: DemoNamespace, LabelSelector: "workflows.argoproj.io/cron-workflow=demo-etl-hourly",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(page.Items) != 3 {
-		t.Fatalf("demo-etl-hourly owns %d runs, want 3", len(page.Items))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			page, err := f.List(context.Background(), core.Query{LabelSelector: c.selector})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if c.want {
+				want = 1
+			}
+			if len(page.Items) != want {
+				t.Fatalf("items = %d, want %d for %q", len(page.Items), want, c.selector)
+			}
+		})
 	}
 }
 
-// The demo's cron workflows: the hourly ETL owns runs that exist and its
-// last run is the newest of them, one is suspended, one has two schedules in
-// a named zone in the second namespace, and one has a schedule the
-// controller refuses. Every schedule but that one parses, and each carries a
-// manifest.
+// Demo cron schedules and manifests agree with their owned workflows.
 func TestDemoCronWorkflows(t *testing.T) {
 	f := DemoReader(NewFakeClock(FixtureEpoch))
 	all, err := f.ListCronWorkflows(context.Background(), "")
@@ -111,9 +97,7 @@ func TestDemoCronWorkflows(t *testing.T) {
 	}
 }
 
-// Every template a demo workflow names in its label exists in that
-// workflow's namespace, with a manifest, and the cluster template is named
-// by the workflow submitted from it.
+// Demo workflows reference complete templates in their own namespace or cluster scope.
 func TestDemoTemplatesMatchTheRuns(t *testing.T) {
 	f := DemoReader(NewFakeClock(FixtureEpoch))
 	templates, err := f.ListWorkflowTemplates(context.Background(), "")

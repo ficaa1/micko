@@ -37,7 +37,7 @@ func (f *FakeReader) ListArchivedWorkflows(ctx context.Context, q core.ArchiveQu
 		if q.Namespace != "" && wf.Summary.Ref.Namespace != q.Namespace {
 			continue
 		}
-		if !MatchLabels(q.LabelSelector, wf.Summary.Labels) {
+		if !matchLabels(q.LabelSelector, wf.Summary.Labels) {
 			continue
 		}
 		all = append(all, wf)
@@ -134,13 +134,13 @@ func (f *FakeReader) ListCronWorkflows(ctx context.Context, namespace string) ([
 	return out, nil
 }
 
-// MatchLabels reports whether labels satisfy a Kubernetes equality-based
+// matchLabels reports whether labels satisfy a Kubernetes equality-based
 // label selector: comma-separated requirements, each `k=v`, `k==v`, `k!=v`,
 // `k` (present) or `!k` (absent), all of which must hold. An empty selector
 // matches everything. A set-based requirement (`k in (a,b)`) is not
 // understood and matches nothing, so a test that sends one sees an empty
 // list instead of a silently unfiltered one.
-func MatchLabels(selector string, labels map[string]string) bool {
+func matchLabels(selector string, labels map[string]string) bool {
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
 		return true
