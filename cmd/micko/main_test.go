@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -157,5 +158,25 @@ func TestRunStillAcceptsAllowActions(t *testing.T) {
 		if code := run(args); code != 0 {
 			t.Errorf("run(%q) = %d, want 0", args, code)
 		}
+	}
+}
+
+// A commit injected with -X, as the Makefile and the release workflow do, is
+// the one --version reports.
+func TestVersionReportsTheInjectedCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary")
+	}
+	bin := filepath.Join(t.TempDir(), "micko")
+	build := exec.Command("go", "build", "-ldflags", "-X github.com/ficaa1/micko/internal/buildinfo.Commit=feedfac", "-o", bin, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		t.Fatalf("--version: %v", err)
+	}
+	if !strings.Contains(string(out), "(feedfac)") {
+		t.Errorf("--version = %q, want the injected commit feedfac", out)
 	}
 }
