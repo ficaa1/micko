@@ -288,9 +288,6 @@ func nameHint(f field) string {
 // Expr is the expression as written.
 func (s *Schedule) Expr() string { return s.expr }
 
-// Location is the zone the schedule runs in.
-func (s *Schedule) Location() *time.Location { return s.loc }
-
 // Every is the interval of an @every schedule, zero for a calendar one. An
 // @every schedule counts from the controller's previous run of it, so its
 // next time is known only relative to that run: Next does not answer for it.
