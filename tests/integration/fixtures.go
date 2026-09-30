@@ -2,9 +2,7 @@
 
 package integration
 
-// fixtures.go — explicitly synthetic fixture builders for the fixture server
-// (never mislabeled captures). Timestamps use the
-// shared synthetic epoch so tests are deterministic.
+// Synthetic payloads for the fixture server, timed from the shared epoch.
 
 import (
 	"fmt"
@@ -72,13 +70,4 @@ func FixtureLogEntries(count int) []WireLogEntry {
 		})
 	}
 	return out
-}
-
-// FixtureArchiveWorkflow builds an archived-generation workflow (same
-// ns/name as a live one but a different UID) for UID-fallback tests.
-func FixtureArchiveWorkflow(ns, name string, oldUID string) WireWorkflow {
-	wf := FixtureWorkflow(ns, name, "Failed", oldUID)
-	wf.Metadata.ResourceVersion = "99"
-	wf.Status.Message = "synthetic archived generation"
-	return wf
 }

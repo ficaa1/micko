@@ -1,8 +1,6 @@
 //go:build integration
 
-// Package integration tests the fixture-server wire contract, root-model
-// journeys and real-binary terminal lifecycle. The HTTP harness uses a
-// test-only WireClient; production adapter tests live in internal/argo.
-// Run with: go test -tags=integration ./tests/integration/...
-// See docs/development.md for prerequisites and coverage limits.
+// Package integration runs the root model over the production Argo client
+// against an in-process Argo Server, and drives the built binary in a
+// pseudo-terminal. Run with: go test -tags=integration ./tests/integration/...
 package integration
