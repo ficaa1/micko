@@ -9,8 +9,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// skinned builds the theme of a named skin with colour forced on, whatever
-// the environment running the tests says.
+// skinned returns a named skin with color enabled.
 func skinned(t *testing.T, name string) shared.Theme {
 	t.Helper()
 	t.Setenv("NO_COLOR", "")
@@ -18,65 +17,88 @@ func skinned(t *testing.T, name string) shared.Theme {
 	if !ok {
 		t.Fatalf("unknown skin %q", name)
 	}
-	th := skin.Theme(false)
-	return th
+	return skin.Theme(false)
 }
 
-// The stable-geometry guarantee holds in colour as well as in plain text:
-// every skin, at every width, fills exactly the terminal, keeps its footer
-// on the last row, and drops the border below the minimum width. Styling
-// that leaked a cell, or a painted band that forgot one, would tear the
-// alternate screen.
+// Every skin keeps the terminal dimensions and reserves the border and footer rows for chrome.
 func TestEverySkinKeepsTheFrameGeometry(t *testing.T) {
-	for _, name := range shared.SkinNames() {
-		th := skinned(t, name)
-		for _, w := range []int{140, 80, 60, 48} {
-			for _, mode := range []bool{false, true} {
-				f := base()
-				f.Width, f.Height = w, 12
-				f.Hints, f.Help = "/ filter   enter open", "? help"
-				f.ActionsEnabled = mode
-				if mode {
-					f.Mode = "ACTIONS ENABLED"
-				}
-				out := f.Render(th)
-				got := lines(out)
-				if len(got) != f.Height {
-					t.Fatalf("%s at %d: %d lines, want %d", name, w, len(got), f.Height)
-				}
-				for i, l := range got {
-					if cw := ansi.StringWidth(l); cw != w {
-						t.Fatalf("%s at %d: line %d is %d cells: %q", name, w, i, cw, l)
-					}
-				}
-				last := ansi.Strip(got[len(got)-1])
-				if !strings.Contains(last, "? help") {
-					t.Fatalf("%s at %d: footer lost the help hint: %q", name, w, last)
-				}
-				head := ansi.Strip(got[0])
-				if !strings.Contains(head, f.Mode) {
-					t.Fatalf("%s at %d: header lost the mode %q: %q", name, w, f.Mode, head)
-				}
-				b := th.Borders()
-				plainOut := ansi.Strip(out)
-				if w < minBorderWidth {
-					if strings.Contains(plainOut, b.TopLeft) || strings.Contains(plainOut, b.Left) {
-						t.Fatalf("%s at %d: border drawn below the minimum width:\n%s", name, w, plainOut)
-					}
-					continue
-				}
-				if !strings.HasPrefix(ansi.Strip(got[1]), b.TopLeft) || !strings.HasPrefix(ansi.Strip(got[len(got)-2]), b.BottomLeft) {
-					t.Fatalf("%s at %d: border not in its rows:\n%s", name, w, plainOut)
-				}
+	for _, name := range append([]string{"plain"}, shared.SkinNames()...) {
+		t.Run(name, func(t *testing.T) {
+			th := plain()
+			if name != "plain" {
+				th = skinned(t, name)
 			}
-		}
+			for _, c := range []struct {
+				name          string
+				w, h, rows    int
+				mascot, floor bool
+			}{
+				{"wide short body", 140, 12, 1, false, false},
+				{"bordered empty body", 80, 7, 0, false, false},
+				{"bordered long body", 80, 6, 50, false, false},
+				{"border threshold", 60, 12, 2, false, false},
+				{"below border threshold", 59, 12, 2, false, false},
+				{"narrow", 48, 12, 2, false, false},
+				{"perch", 80, 40, 2, true, false},
+				{"floor", 80, 40, 2, true, true},
+			} {
+				t.Run(c.name, func(t *testing.T) {
+					for _, armed := range []bool{false, true} {
+						f := base()
+						f.Width, f.Height, f.Mascot, f.MascotFloor = c.w, c.h, c.mascot, c.floor
+						f.Body = make([]string, c.rows)
+						for i := range f.Body {
+							f.Body[i] = "body row"
+						}
+						f.Hints, f.Help = "/ filter   enter open", "? help"
+						f.ActionsEnabled = armed
+						if armed {
+							f.Mode = "ACTIONS ENABLED"
+						}
+						out := f.Render(th)
+						got := lines(out)
+						if len(got) != c.h {
+							t.Fatalf("armed=%v: height = %d, want %d", armed, len(got), c.h)
+						}
+						for i, l := range got {
+							if cw := ansi.StringWidth(l); cw != c.w {
+								t.Fatalf("armed=%v row %d: width = %d, want %d: %q", armed, i, cw, c.w, l)
+							}
+						}
+						last := ansi.Strip(got[len(got)-1])
+						if !strings.Contains(last, "? help") {
+							t.Fatalf("footer = %q, want help", last)
+						}
+						if head := ansi.Strip(got[0]); !strings.Contains(head, f.Mode) {
+							t.Fatalf("header = %q, want mode %q", head, f.Mode)
+						}
+						b := th.Borders()
+						if c.w < 60 {
+							if strings.Contains(ansi.Strip(out), b.TopLeft) || strings.Contains(ansi.Strip(out), b.Left) {
+								t.Fatalf("narrow render has border: %q", out)
+							}
+							for _, want := range []string{"list", "filter", "watch"} {
+								if !strings.Contains(last, want) {
+									t.Fatalf("footer = %q, want %q", last, want)
+								}
+							}
+						} else {
+							top := 1
+							if c.mascot && !c.floor {
+								top = 4
+							}
+							if !strings.HasPrefix(ansi.Strip(got[top]), b.TopLeft) || !strings.HasPrefix(ansi.Strip(got[len(got)-2]), b.BottomLeft) {
+								t.Fatalf("borders moved from rows %d/%d: %q", top, len(got)-2, out)
+							}
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
-// The default skin styles the frame without changing a character of it: a
-// reader of the screen text, or a test of it, sees exactly the plain frame.
-// The painted skins add a margin cell at each end of the header band and
-// pad the badge, and round the corners, so only the default is held to it.
+// The default skin preserves the plain frame text.
 func TestDefaultSkinIsThePlainFrameStyled(t *testing.T) {
 	th := skinned(t, shared.SkinDefault)
 	for _, w := range []int{100, 48, 0} {
@@ -91,8 +113,7 @@ func TestDefaultSkinIsThePlainFrameStyled(t *testing.T) {
 	}
 }
 
-// Each key in the footer is drawn as a key and its description as muted
-// text. The hint text itself is unchanged, separators included.
+// Footer keys and descriptions have distinct styles without changing their text or separators.
 func TestFooterStylesKeysApartFromDescriptions(t *testing.T) {
 	th := skinned(t, "catppuccin-mocha")
 	f := base()
@@ -110,8 +131,7 @@ func TestFooterStylesKeysApartFromDescriptions(t *testing.T) {
 	}
 }
 
-// The safety mode is a badge, and the armed state gets the louder one. The
-// words stay: the badge colour only repeats them.
+// The safety badge style follows whether actions are enabled.
 func TestModeBadgeFollowsActionsEnabled(t *testing.T) {
 	th := skinned(t, "nord")
 	f := base()
@@ -124,8 +144,7 @@ func TestModeBadgeFollowsActionsEnabled(t *testing.T) {
 	}
 }
 
-// A notice is the answer to the last key, so it replaces the hints and is
-// drawn as a message: its first word is not a key.
+// A notice replaces the hints and renders as a message.
 func TestNoticeReplacesTheHints(t *testing.T) {
 	th := skinned(t, "nord")
 	f := base()
@@ -139,8 +158,7 @@ func TestNoticeReplacesTheHints(t *testing.T) {
 	}
 }
 
-// A painted band has no holes: every span on it, and the gap between the
-// sides, carries the band's background.
+// The header background covers its margins, labels and gaps.
 func TestPaintedHeaderBandHasNoHoles(t *testing.T) {
 	th := skinned(t, "gruvbox-dark")
 	f := base()
@@ -157,19 +175,30 @@ func TestPaintedHeaderBandHasNoHoles(t *testing.T) {
 	}
 }
 
-// Truncating a run of spans keeps the styles of what survives and ends in
-// an ellipsis inside the span that crossed the edge.
-func TestTruncSpansCutsInsideTheCrossingSpan(t *testing.T) {
+// Footer truncation preserves the surviving span's style and marks the cut with an ellipsis.
+func TestFooterTruncation(t *testing.T) {
 	th := skinned(t, "nord")
-	ss := []span{{"abc", th.Accent}, {"defgh", th.Muted}}
-	got := truncSpans(ss, 6)
-	if spansWidth(got) != 6 || len(got) != 2 || got[1].text != "de…" {
-		t.Fatalf("truncSpans = %+v", got)
-	}
-	if got := truncSpans(ss, 20); len(got) != 2 {
-		t.Fatalf("truncSpans cut a run that fit: %+v", got)
-	}
-	if got := truncSpans(ss, 0); got != nil {
-		t.Fatalf("truncSpans(0) = %+v", got)
+	for _, c := range []struct {
+		name                             string
+		width                            int
+		route, hints, help, want, styled string
+	}{
+		{"description cut", 9, "", "a abcdefgh", "", "a abcdef…", th.HintDesc.Render(" abcdef…")},
+		{"key cut", 2, "", "abcdef", "", "a…", th.HintKey.Render("a…")},
+		{"help takes available width", 6, "list", "a open", "? help", "? help", th.HintDesc.Render(" help")},
+		{"unknown width", 0, "", "a abcdefgh", "", "a abcdefgh", th.HintDesc.Render(" abcdefgh")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := base()
+			f.Width, f.Route, f.Hints, f.Help, f.Status = c.width, c.route, c.hints, c.help, ""
+			out := lines(f.Render(th))
+			foot := out[len(out)-1]
+			if got := ansi.Strip(foot); got != c.want {
+				t.Fatalf("footer = %q, want %q", got, c.want)
+			}
+			if !strings.Contains(foot, c.styled) {
+				t.Fatalf("footer = %q, want styled surviving span %q", foot, c.styled)
+			}
+		})
 	}
 }

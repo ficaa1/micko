@@ -5,175 +5,214 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/ficaa1/micko/internal/core"
 )
 
-func TestDisabledReadOnlyAndDemoCannotOpenAction(t *testing.T) {
-	ref := core.Ref{Namespace: "workflows", Name: "train", UID: "uid-1"}
-	for _, tc := range []struct {
-		name string
-		m    *Model
-		want string
+// Safety modes refuse single and bulk actions before confirmation can emit a request.
+func TestSafetyModesBlockActions(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		options Options
+		reason  string
 	}{
-		{"disabled", New(ref, false, false, false), "disabled"},
-		{"read-only", New(ref, true, true, false), "read-only"},
-		{"demo", New(ref, true, false, true), "demo"},
+		{"disabled", Options{}, "actions disabled"},
+		{"read-only", Options{AllowActions: true, ReadOnly: true}, "read-only"},
+		{"demo", Options{AllowActions: true, Demo: true}, "demo mode"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.m.Open(core.ActionTerminate)
-			if tc.m.State() != StateUnavailable || !strings.Contains(strings.ToLower(tc.m.View().Content), tc.want) {
-				t.Fatalf("state=%v view=%q", tc.m.State(), tc.m.View().Content)
+		t.Run(c.name, func(t *testing.T) {
+			for _, bulk := range []bool{false, true} {
+				for _, menu := range []bool{false, true} {
+					m := NewWithOptions(summary("wf", "Running", false).Ref, c.options)
+					if bulk {
+						m.SetTargets(mixed())
+					}
+					if menu {
+						m.OpenMenu()
+					} else {
+						m.Open(core.ActionTerminate)
+					}
+					if m.State() != StateUnavailable || !strings.Contains(m.View().Content, c.reason) {
+						t.Fatalf("bulk=%v menu=%v: state=%v, want unavailable naming %q:\n%s", bulk, menu, m.State(), c.reason, m.View().Content)
+					}
+					if bulk && !strings.Contains(m.View().Content, "targets: 3 marked workflows") {
+						t.Fatalf("view lacks the marked target count:\n%s", m.View().Content)
+					}
+					for _, key := range []string{"s", "y", "D", "enter"} {
+						if cmd := press(m, key); cmd != nil {
+							t.Fatalf("%s emitted a request, want none", key)
+						}
+					}
+				}
 			}
 		})
 	}
 }
 
-func TestCancelIsDefaultAndShowsFullTarget(t *testing.T) {
-	ref := core.Ref{Namespace: "workflows", Name: "train", UID: "uid-1"}
-	m := New(ref, true, false, false)
-	m.Open(core.ActionStop)
-	if m.State() != StateConfirm || !strings.Contains(m.View().Content, "workflows/train") || !strings.Contains(m.View().Content, "Cancel") {
-		t.Fatalf("confirmation view = %q", m.View().Content)
-	}
-	m.Cancel()
-	if m.State() != StateIdle || m.IntentCount() != 0 {
-		t.Fatalf("cancel state=%v intents=%d", m.State(), m.IntentCount())
+// Unconfirmed keys cancel without sending the named workflow's action.
+func TestConfirmationCancelsByDefault(t *testing.T) {
+	for _, key := range []string{"n", "enter", "esc"} {
+		t.Run(key, func(t *testing.T) {
+			m := NewWithOptions(core.Ref{Namespace: "workflows", Name: "train", UID: "uid-1"}, Options{AllowActions: true})
+			m.Open(core.ActionStop)
+			for _, want := range []string{"workflows/train (UID: uid-1)", "Cancel is the default"} {
+				if !strings.Contains(m.View().Content, want) {
+					t.Fatalf("confirmation lacks %q: %s", want, m.View().Content)
+				}
+			}
+			if cmd := press(m, key); cmd != nil || m.State() != StateIdle {
+				t.Fatalf("state=%v command=%v, want idle and no command", m.State(), cmd != nil)
+			}
+		})
 	}
 }
 
-func TestTerminateRequiresTypedNameAndStopWordingDiffers(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	m := New(ref, true, false, false)
+// An explicit yes emits the selected request once and leaves the pane waiting.
+func TestSingleIntentOnce(t *testing.T) {
+	m := NewWithOptions(core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}, Options{AllowActions: true})
+	m.Open(core.ActionRetry)
+	cmd := press(m, "y")
+	if cmd == nil || m.State() != StateSubmitting {
+		t.Fatalf("state=%v command=%v, want submitting and a command", m.State(), cmd != nil)
+	}
+	msg, ok := cmd().(ActionIntentMsg)
+	want := core.ActionRequest{Ref: core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}, Action: core.ActionRetry, Confirmation: core.Confirmation{Confirmed: true}}
+	if !ok || msg.Request.Ref != want.Ref || msg.Request.Action != want.Action || msg.Request.Confirmation != want.Confirmation {
+		t.Fatalf("intent = %+v, want %+v", msg.Request, want)
+	}
+	for _, key := range []string{"y", "enter", "esc"} {
+		if cmd := press(m, key); cmd != nil || m.State() != StateSubmitting {
+			t.Fatalf("%s: state=%v command=%v, want submitting and no command", key, m.State(), cmd != nil)
+		}
+	}
+}
+
+// Terminate requires the exact workflow name, entered as literal text.
+func TestTerminateGate(t *testing.T) {
+	m := NewWithOptions(core.Ref{Namespace: "ns", Name: "Wf-01", UID: "uid"}, Options{AllowActions: true})
 	m.Open(core.ActionStop)
 	if strings.Contains(strings.ToLower(m.View().Content), "irreversible") {
-		t.Fatal("stop must not be described as irreversible")
+		t.Fatalf("stop confirmation calls itself irreversible:\n%s", m.View().Content)
 	}
 	m.Open(core.ActionTerminate)
-	if m.State() != StateTypedName || !strings.Contains(strings.ToLower(m.View().Content), "type wf") {
-		t.Fatalf("typed gate view = %q", m.View().Content)
+	if m.State() != StateTypedName || !strings.Contains(m.View().Content, "Type Wf-01") {
+		t.Fatalf("state=%v, want the name prompt for Wf-01:\n%s", m.State(), m.View().Content)
 	}
-	m.SetTypedName("wrong")
-	if m.Submit() || m.State() != StateTypedName {
-		t.Fatal("wrong typed name must not submit")
+	press(m, "wf-01")
+	if cmd := press(m, "enter"); cmd != nil || m.State() != StateTypedName {
+		t.Fatal("wrong case passed name gate")
 	}
-	m.SetTypedName("wf")
-	if !m.Submit() || m.State() != StateSubmitting {
-		t.Fatal("matching typed name must submit")
+	for range 5 {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	}
-	if m.Submit() || m.IntentCount() != 1 {
-		t.Fatal("double submit must be suppressed")
-	}
-	intent := m.LastIntent()
-	if intent.Ref != ref || intent.Action != core.ActionTerminate || !intent.Confirmation.Confirmed {
-		t.Fatalf("intent=%#v", intent)
-	}
-}
-
-func TestUnknownOutcomeIsExplicit(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	m := New(ref, true, false, false)
-	m.Open(core.ActionRetry)
-	m.Confirm()
-	if m.State() != StateSubmitting {
-		t.Fatalf("state=%v", m.State())
-	}
-	m.SetOutcome(core.ActionResult{Action: core.ActionRetry, Target: ref, Outcome: core.ActionUnknown})
-	if m.State() != StateOutcome || !strings.Contains(strings.ToLower(m.View().Content), "unknown") || strings.Contains(strings.ToLower(m.View().Content), "success") {
-		t.Fatalf("unknown view = %q", m.View().Content)
-	}
-}
-
-func TestTeaUpdateEmitsIntentOnlyAfterConfirmation(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	m := New(ref, true, false, false)
-	m.Open(core.ActionRetry)
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	press(m, "Wf-01")
+	cmd := press(m, "enter")
 	if cmd == nil || m.State() != StateSubmitting {
-		t.Fatalf("confirm update state=%v cmd=%v", m.State(), cmd == nil)
+		t.Fatalf("state=%v command=%v, want submitting and a command", m.State(), cmd != nil)
 	}
-	if msg := cmd(); msg == nil {
-		t.Fatal("expected intent message")
+	req := cmd().(ActionIntentMsg).Request
+	if req.Ref != m.Ref() || req.Action != core.ActionTerminate || req.Confirmation != (core.Confirmation{Confirmed: true, TypedName: "Wf-01"}) {
+		t.Fatalf("request = %+v, want terminate of %v typed Wf-01", req, m.Ref())
 	}
-}
-
-func TestTerminateKeyboardInputPreservesTextBackspacesAndBoundsPaste(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "Wf-01", UID: "uid"}
-	m := New(ref, true, false, false)
-	m.Open(core.ActionTerminate)
-	for _, text := range []string{"q", "N", "y", "r", "Wf"} {
-		m.Update(tea.KeyPressMsg{Text: text})
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	m.Update(tea.KeyPressMsg{Text: "f-01"})
-	if got := m.TypedName(); got != "qNyrWf-01" {
-		t.Fatalf("typed name = %q", got)
-	}
-	tooLong := strings.Repeat("x", maxTypedNameLength+1)
-	m.SetTypedName("")
-	m.Update(tea.KeyPressMsg{Text: tooLong})
-	if len(m.TypedName()) != maxTypedNameLength {
-		t.Fatalf("paste bound length = %d", len(m.TypedName()))
+	if press(m, "enter") != nil {
+		t.Fatal("second enter emitted a request")
 	}
 }
 
-func TestTerminateInputIsolatedAndExactEnterOnly(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	m := New(ref, true, false, false)
-	m.Open(core.ActionTerminate)
-	for _, text := range []string{"q", "n", "y", "r"} {
-		m.Update(tea.KeyPressMsg{Text: text})
-	}
-	if m.State() != StateTypedName || m.TypedName() != "qnyr" {
-		t.Fatalf("input shortcuts leaked: state=%v text=%q", m.State(), m.TypedName())
-	}
-	m.SetTypedName("wf")
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.State() != StateSubmitting || m.IntentCount() != 1 {
-		t.Fatalf("exact name should submit: state=%v intents=%d", m.State(), m.IntentCount())
+// Name entry preserves shortcut letters and rune editing while dropping controls and bounding paste.
+func TestTerminateInput(t *testing.T) {
+	for _, c := range []struct {
+		name, input     string
+		backspace, keys bool
+		want            string
+	}{
+		{"literal shortcuts", "qnNyrWf", true, true, "qnNyrW"},
+		{"unicode", "é猫", true, false, "é"},
+		{"controls", "a\x00\x1bb\n", false, false, "ab"},
+		{"paste", strings.Repeat("猫", 257), false, false, strings.Repeat("猫", 256)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := NewWithOptions(core.Ref{Name: "wf"}, Options{AllowActions: true})
+			m.Open(core.ActionTerminate)
+			if c.keys {
+				for _, r := range c.input {
+					m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+				}
+			} else {
+				m.Update(tea.KeyPressMsg{Text: c.input})
+			}
+			if c.backspace {
+				m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+			}
+			if m.state != StateTypedName || m.typedName != c.want {
+				t.Fatalf("state=%v text=%q want=%q", m.state, m.typedName, c.want)
+			}
+			if cmd := press(m, "esc"); cmd != nil || m.State() != StateIdle || m.typedName != "" {
+				t.Fatalf("after esc: state=%v text=%q, want idle and empty", m.state, m.typedName)
+			}
+		})
 	}
 }
 
-func TestBareEnterCancelsConfirmationAndOutcomeIsDismissible(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	m := New(ref, true, false, false)
-	m.Open(core.ActionRetry)
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.State() != StateIdle || m.IntentCount() != 0 {
-		t.Fatalf("bare enter must cancel: state=%v intents=%d", m.State(), m.IntentCount())
-	}
-	m.Open(core.ActionRetry)
-	m.Update(tea.KeyPressMsg{Text: "y"})
-	m.SetOutcome(core.ActionResult{Action: core.ActionRetry, Target: ref, Outcome: core.ActionConfirmed})
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.State() != StateIdle {
-		t.Fatalf("outcome should dismiss: state=%v", m.State())
+// Outcome reports distinguish uncertainty from success and can be dismissed without sending again.
+func TestSingleOutcome(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		outcome      core.ActionOutcome
+		want, footer string
+	}{
+		{"unknown", core.ActionUnknown, "not known whether", "retry outcome unknown"},
+		{"confirmed", core.ActionConfirmed, "outcome: confirmed", "retry confirmed"},
+		{"accepted", core.ActionAccepted, "has not finished yet", "retry accepted — the server applied it, it has not finished"},
+		{"refused", core.ActionRefused, "nothing changed", "retry refused — nothing was sent"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, key := range []string{"enter", "esc"} {
+				m := NewWithOptions(core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}, Options{AllowActions: true})
+				m.Open(core.ActionRetry)
+				press(m, "y")
+				m.SetOutcome(core.ActionResult{Action: core.ActionRetry, Target: m.Ref(), Outcome: c.outcome})
+				view := m.View().Content
+				if m.State() != StateOutcome || !strings.Contains(view, c.want) {
+					t.Fatalf("state=%v, want the outcome pane with %q:\n%s", m.State(), c.want, view)
+				}
+				if got := m.OutcomeLine(); got != c.footer {
+					t.Fatalf("outcome line = %q, want %q", got, c.footer)
+				}
+				if c.outcome == core.ActionUnknown && strings.Contains(strings.ToLower(view), "success") {
+					t.Fatalf("unknown outcome claims success:\n%s", view)
+				}
+				if cmd := press(m, key); cmd != nil || m.State() != StateIdle {
+					t.Fatalf("%s: state=%v command=%v, want idle and no command", key, m.state, cmd != nil)
+				}
+			}
+		})
 	}
 }
 
+// Confirmation sanitizes terminal text and names the target, context and action consequences.
 func TestRenderedActionTextSanitizesTargetAndStatesConsequences(t *testing.T) {
-	ref := core.Ref{Namespace: "ns\x1b[31m", Name: "wf\x1b]8;;evil", UID: "uid"}
-	m := New(ref, true, false, false)
-	for _, action := range []core.Action{core.ActionRetry, core.ActionResubmit, core.ActionStop, core.ActionTerminate} {
-		m.Open(action)
-		view := m.View().Content
-		if strings.Contains(view, "\x1b") || !strings.Contains(view, "ns") || !strings.Contains(view, "uid") {
-			t.Fatalf("unsafe target rendering for %s: %q", action, view)
-		}
-		if !strings.Contains(view, "workflow") {
-			t.Fatalf("missing full-target consequence copy for %s: %q", action, view)
-		}
-	}
-}
-
-// The confirmation names the server, profile and phase.
-func TestConfirmationNamesServerProfileAndPhase(t *testing.T) {
-	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	m := NewWithOptions(ref, Options{AllowActions: true, Server: "https://argo.test", Profile: "dev", Phase: "Running"})
-	m.Open(core.ActionRetry)
-	view := m.View().Content
-	for _, want := range []string{"server: https://argo.test", "profile: dev", "phase: Running"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("confirmation lacks %q:\n%s", want, view)
-		}
+	for _, c := range []struct {
+		action      core.Action
+		consequence string
+	}{
+		{core.ActionRetry, "restart the existing workflow"},
+		{core.ActionResubmit, "create a new workflow"},
+		{core.ActionStop, "allowing exit handlers"},
+		{core.ActionTerminate, "irreversible"},
+	} {
+		t.Run(string(c.action), func(t *testing.T) {
+			m := NewWithOptions(core.Ref{Namespace: "ns\x1b[31m", Name: "wf\x1b]8;;evil", UID: "uid"}, Options{AllowActions: true, Server: "https://argo.test", Profile: "dev", Phase: "Running"})
+			m.Open(c.action)
+			view := m.View().Content
+			if strings.Contains(view, "\x1b") {
+				t.Fatalf("unsafe view=%q", view)
+			}
+			for _, want := range []string{"ns", "wf", "uid", c.consequence, "server: https://argo.test", "profile: dev", "phase: Running"} {
+				if !strings.Contains(view, want) {
+					t.Fatalf("missing %q: %s", want, view)
+				}
+			}
+		})
 	}
 }

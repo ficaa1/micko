@@ -29,13 +29,6 @@ import (
 // on its way to the screen, and parameter values follow the pane's reveal
 // state, as in the resource tab and the info panel.
 
-// ExplainInput is the diagnose rules' input for a workflow at now, built
-// from the same node tree the Nodes tab and the Timeline draw. It carries no
-// log; the live section adds the log it has read.
-func ExplainInput(wf core.Workflow, now time.Time) diagnose.Input {
-	return explainInput(BuildNodeOutline(wf, OutlineOptions{}), wf, now)
-}
-
 // explainInput hands the rules the tree in pipeline order with what each
 // node waited for (OutlineRow.After) and when each ran, measured the way the
 // bars measure it (nodeInterval), and the run's start as the Timeline's

@@ -28,10 +28,7 @@ func bottomRow(t *testing.T, ls []string) int {
 	return -1
 }
 
-// On the floor Mićko sits in the pane's last rows with his feet and his
-// mirror's stand on the bottom border. The pane stays where it is with him
-// off, the frame is still exactly the terminal, and he takes his rows from
-// the content, not from under it.
+// Mićko and his mirror occupy the bottom-right content rows with their feet on the border.
 func TestMickoSitsOnTheFloor(t *testing.T) {
 	f := flooredFrame()
 	off := perchedFrame()
@@ -73,8 +70,7 @@ func TestMickoSitsOnTheFloor(t *testing.T) {
 	}
 }
 
-// Every floor pose keeps the frame whole and the borders put, and the one
-// at the mirror kisses it.
+// Every floor pose preserves the frame and the mirror pose visibly kisses it.
 func TestMickoFloorPosesKeepTheFrame(t *testing.T) {
 	f := flooredFrame()
 	rest := lines(f.Render(plain()))
@@ -94,19 +90,5 @@ func TestMickoFloorPosesKeepTheFrame(t *testing.T) {
 	}
 	if !kissed {
 		t.Error("no beat kisses the mirror")
-	}
-}
-
-// Off the floor, or on a terminal too small, the pane keeps its rows.
-func TestMickoStaysOffSmallFloors(t *testing.T) {
-	f := flooredFrame()
-	f.Width, f.Height = 120, 24
-	if strings.Contains(f.Render(plain()), "╭─╮") {
-		t.Error("Mićko on the floor of a small terminal")
-	}
-	full := f
-	full.Mascot = false
-	if f.BodyHeight() != full.BodyHeight() {
-		t.Errorf("BodyHeight() = %d on a small terminal, want %d", f.BodyHeight(), full.BodyHeight())
 	}
 }

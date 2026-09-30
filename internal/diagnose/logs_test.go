@@ -1,115 +1,94 @@
-package diagnose_test
+package diagnose
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/ficaa1/micko/internal/diagnose"
 )
 
-// picked renders picked lines as "N>text" for a match and "N text" for
-// context.
-func picked(ls []diagnose.LogLine) string {
-	var out []string
-	for _, l := range ls {
-		mark := " "
-		if l.Match {
-			mark = ">"
-		}
-		out = append(out, fmt.Sprint(l.N)+mark+l.Text)
-	}
-	return strings.Join(out, "\n")
-}
-
-// A Python traceback is kept whole, frames and exception, with the line
-// before it for context; timestamps do not hide the frames' indentation.
-func TestPickLogKeepsATraceback(t *testing.T) {
-	lines := []string{
-		"2026-09-08T10:00:00Z loading",
-		"2026-09-08T10:00:01Z applying transforms",
-		"2026-09-08T10:00:02Z Traceback (most recent call last):",
-		"2026-09-08T10:00:02Z   File \"/app/t.py\", line 88, in <module>",
-		"2026-09-08T10:00:02Z     run()",
-		"2026-09-08T10:00:02Z ValueError: bad row",
-		"2026-09-08T10:00:03Z shutting down",
-	}
-	want := strings.Join([]string{
-		"2 2026-09-08T10:00:01Z applying transforms",
-		"3>2026-09-08T10:00:02Z Traceback (most recent call last):",
-		"4>2026-09-08T10:00:02Z   File \"/app/t.py\", line 88, in <module>",
-		"5>2026-09-08T10:00:02Z     run()",
-		"6>2026-09-08T10:00:02Z ValueError: bad row",
-	}, "\n")
-	if got := picked(diagnose.PickLog(lines, 8)); got != want {
-		t.Fatalf("picked:\n%s\nwant:\n%s", got, want)
-	}
-}
-
-// Error words match whole words in any case, with the line before each
-// match as context.
-func TestPickLogMatchesErrorWords(t *testing.T) {
-	lines := []string{
-		"connecting",
-		"FATAL: password authentication failed for user app",
-		"terror is not an error word inside another word? it is here: error",
-		"errorless",
-		"partition 8 written",
-		"Killed",
-		"panic: runtime error: index out of range",
-		"goroutine 1 [running]:",
-	}
-	got := picked(diagnose.PickLog(lines, 8))
-	want := strings.Join([]string{
-		"1 connecting",
-		"2>FATAL: password authentication failed for user app",
-		"3>terror is not an error word inside another word? it is here: error",
-		"5 partition 8 written",
-		"6>Killed",
-		"7>panic: runtime error: index out of range",
-	}, "\n")
-	if got != want {
-		t.Fatalf("picked:\n%s\nwant:\n%s", got, want)
-	}
-}
-
-// With more matches than fit, the ones nearest the end win, and the limit
-// counts the context lines too.
-func TestPickLogPrefersTheEnd(t *testing.T) {
-	var lines []string
+// Log evidence keeps error context and tracebacks, preferring bounded lines nearest the tail.
+func TestExplainLogSelection(t *testing.T) {
+	var chatty []string
 	for i := 1; i <= 200; i++ {
 		if i%10 == 0 {
-			lines = append(lines, fmt.Sprintf("ERROR batch %d failed", i))
+			chatty = append(chatty, fmt.Sprintf("ERROR batch %d failed", i))
 		} else {
-			lines = append(lines, fmt.Sprintf("batch %d ok", i))
+			chatty = append(chatty, fmt.Sprintf("batch %d ok", i))
 		}
 	}
-	got := diagnose.PickLog(lines, 8)
-	if len(got) != 8 {
-		t.Fatalf("picked %d lines, want 8", len(got))
+	cases := []struct {
+		name  string
+		lines []string
+		want  []LogLine
+		intro string
+	}{
+		{
+			name: "timestamped traceback",
+			lines: []string{
+				"2026-09-08T10:00:00Z loading",
+				"2026-09-08T10:00:01Z applying transforms",
+				"2026-09-08T10:00:02Z Traceback (most recent call last):",
+				"2026-09-08T10:00:02Z   File \"/app/t.py\", line 88, in <module>",
+				"2026-09-08T10:00:02Z     run()",
+				"2026-09-08T10:00:02Z ValueError: bad row",
+				"2026-09-08T10:00:03Z shutting down",
+			},
+			want: []LogLine{
+				{2, "2026-09-08T10:00:01Z applying transforms", false},
+				{3, "2026-09-08T10:00:02Z Traceback (most recent call last):", true},
+				{4, "2026-09-08T10:00:02Z   File \"/app/t.py\", line 88, in <module>", true},
+				{5, "2026-09-08T10:00:02Z     run()", true},
+				{6, "2026-09-08T10:00:02Z ValueError: bad row", true},
+			},
+			intro: "picked from the last 7 lines of job's log (container main)",
+		},
+		{
+			name:  "whole words and predecessor context",
+			lines: []string{"connecting", "FATAL: password authentication failed for user app", "terror", "errorless", "partition 8 written", "Killed", "panic: runtime error: index out of range", "goroutine 1 [running]:"},
+			want:  []LogLine{{1, "connecting", false}, {2, "FATAL: password authentication failed for user app", true}, {5, "partition 8 written", false}, {6, "Killed", true}, {7, "panic: runtime error: index out of range", true}},
+			intro: "picked from the last 8 lines of job's log (container main)",
+		},
+		{
+			name: "last four errors within eight lines", lines: chatty,
+			want: []LogLine{
+				{169, "batch 169 ok", false}, {170, "ERROR batch 170 failed", true},
+				{179, "batch 179 ok", false}, {180, "ERROR batch 180 failed", true},
+				{189, "batch 189 ok", false}, {190, "ERROR batch 190 failed", true},
+				{199, "batch 199 ok", false}, {200, "ERROR batch 200 failed", true},
+			},
+			intro: "picked from the last 200 lines of job's log (container main)",
+		},
+		{
+			name: "no errors", lines: []string{"a", "b", "c", "d", "e"},
+			want:  []LogLine{{3, "c", false}, {4, "d", false}, {5, "e", false}},
+			intro: "no error in the last 5 lines of job's log (container main); it ends",
+		},
+		{
+			name: "long unicode error", lines: []string{"error " + strings.Repeat("界", 5000)},
+			want:  []LogLine{{1, "error " + strings.Repeat("界", 393) + "…", true}},
+			intro: "picked from the last 1 line of job's log (container main)",
+		},
 	}
-	if got[0].N != 169 || got[len(got)-1].N != 200 {
-		t.Fatalf("picked lines %d..%d, want the last four matches from 169 to 200:\n%s", got[0].N, got[len(got)-1].N, picked(got))
-	}
-}
-
-// A tail without an error word gives its last three lines, and an empty
-// tail or a zero limit gives nothing.
-func TestPickLogWithoutErrors(t *testing.T) {
-	got := picked(diagnose.PickLog([]string{"a", "b", "c", "d", "e"}, 8))
-	if got != "3 c\n4 d\n5 e" {
-		t.Fatalf("picked:\n%s", got)
-	}
-	if diagnose.PickLog(nil, 8) != nil || diagnose.PickLog([]string{"error"}, 0) != nil {
-		t.Fatal("an empty tail or a zero limit picked lines")
-	}
-}
-
-// A very long line is cut, so a card never holds a megabyte of one line.
-func TestPickLogCutsLongLines(t *testing.T) {
-	long := "error " + strings.Repeat("x", 5000)
-	got := diagnose.PickLog([]string{long}, 8)
-	if len(got) != 1 || len([]rune(got[0].Text)) != 400 || !strings.HasSuffix(got[0].Text, "…") {
-		t.Fatalf("long line kept as %d runes", len([]rune(got[0].Text)))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			b := newWF("Failed")
+			b.task("job", "Failed", ran(0, 30), exit("1"), pod())
+			in := b.input()
+			in.Log = &Log{NodeID: "job", PodName: "wf-job", State: LogRead, Tail: 200, Lines: c.lines}
+			f := findRule(t, Explain(in), RuleRootFailure)
+			var got *Evidence
+			for i := range f.Evidence {
+				if f.Evidence[i].Label == "log" {
+					got = &f.Evidence[i]
+				}
+			}
+			if got == nil {
+				t.Fatal("root failure omitted log evidence")
+			}
+			if got.Text != c.intro || !reflect.DeepEqual(got.Log, c.want) {
+				t.Fatalf("log evidence = %+v, want intro %q and lines %+v", got, c.intro, c.want)
+			}
+		})
 	}
 }

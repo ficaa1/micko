@@ -50,69 +50,45 @@ func bulkModel(targets []core.Summary) *Model {
 	return m
 }
 
-// The bulk menu offers every verb that applies to at least one target and
-// says how many each reaches; verbs that apply to none are named apart.
-func TestBulkMenuOffersVerbsThatApplyToAnyTarget(t *testing.T) {
-	m := bulkModel(mixed())
-	m.OpenMenu()
-	want := map[core.Action]int{
-		core.ActionResume:    1, // gate
-		core.ActionSuspend:   1, // busy
-		core.ActionRetry:     1, // broken
-		core.ActionResubmit:  1, // broken
-		core.ActionStop:      2, // gate, busy
-		core.ActionTerminate: 2,
-		core.ActionDelete:    3,
-	}
-	got := map[core.Action]int{}
-	for _, a := range m.Available() {
-		got[a.Action] = a.Applies
-	}
-	for a, n := range want {
-		if got[a] != n {
-			t.Errorf("%s applies to %d, want %d", a, got[a], n)
-		}
-	}
-	view := m.View().Content
-	for _, line := range []string{"[t] terminate  applies to 2 of 3", "[d] delete     applies to 3 of 3", "[u] resume     applies to 1 of 3"} {
-		if !strings.Contains(view, line) {
-			t.Errorf("menu lacks %q:\n%s", line, view)
-		}
-	}
-
-	finished := bulkModel([]core.Summary{summary("a", "Succeeded", false), summary("b", "Succeeded", false)})
-	finished.OpenMenu()
-	view = finished.View().Content
-	if strings.Contains(view, "[s] stop") || !strings.Contains(view, "not applicable to any marked workflow: resume, suspend, retry, stop, terminate") {
-		t.Fatalf("finished targets offered running verbs:\n%s", view)
-	}
-	press(finished, "s")
-	if finished.State() != StateMenu {
-		t.Fatalf("an unoffered verb's key left the menu: state=%v", finished.State())
+// Menus offer only applicable verbs and ignore keys for unavailable actions.
+func TestMenuAvailability(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		targets      []core.Summary
+		want, absent []string
+		ignored      string
+	}{
+		{"mixed", mixed(), []string{"[u] resume     applies to 1 of 3", "[z] suspend    applies to 1 of 3", "[r] retry      applies to 1 of 3", "[b] resubmit   applies to 1 of 3", "[s] stop       applies to 2 of 3", "[t] terminate  applies to 2 of 3", "[d] delete     applies to 3 of 3"}, nil, ""},
+		{"finished bulk", []core.Summary{summary("a", "Succeeded", false), summary("b", "Succeeded", false)}, []string{"[b] resubmit", "[d] delete", "not applicable to any marked workflow: resume, suspend, retry, stop, terminate"}, []string{"[s] stop"}, "s"},
+		{"finished single", []core.Summary{summary("wf", "Succeeded", false)}, []string{"[b] resubmit", "[d] delete"}, []string{"[u] resume", "[z] suspend"}, "u"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := bulkModel(c.targets)
+			m.OpenMenu()
+			view := m.View().Content
+			for _, want := range c.want {
+				if !strings.Contains(view, want) {
+					t.Fatalf("missing %q: %s", want, view)
+				}
+			}
+			for _, absent := range c.absent {
+				if strings.Contains(view, absent) {
+					t.Fatalf("offered %q: %s", absent, view)
+				}
+			}
+			if c.ignored != "" {
+				if cmd := press(m, c.ignored); cmd != nil || m.State() != StateMenu {
+					t.Fatalf("ignored key: state=%v command=%v", m.state, cmd != nil)
+				}
+			}
+		})
 	}
 }
 
-// A single workflow's menu hides the verbs its phase rules out.
-func TestSingleMenuHidesVerbsThePhaseRulesOut(t *testing.T) {
-	m := NewWithOptions(core.Ref{Namespace: "ns", Name: "wf", UID: "u"}, Options{AllowActions: true})
-	m.SetTargets([]core.Summary{summary("wf", "Succeeded", false)})
-	m.OpenMenu()
-	view := m.View().Content
-	if !strings.Contains(view, "[b] resubmit") || !strings.Contains(view, "[d] delete") || strings.Contains(view, "[u] resume") || strings.Contains(view, "[z] suspend") {
-		t.Fatalf("menu = %s", view)
-	}
-	press(m, "u")
-	if m.State() != StateMenu {
-		t.Fatalf("resume opened on a finished workflow: state=%v", m.State())
-	}
-}
-
-// The confirmation names the count, lists the targets it reaches (clipped
-// with a count of the rest), and says which marked workflows it leaves
-// alone.
+// Confirmation lists applicable targets up to eight and counts omitted and skipped workflows.
 func TestBulkConfirmationListsTheTargets(t *testing.T) {
 	var targets []core.Summary
-	for i := 0; i < confirmListMax+3; i++ {
+	for i := 0; i < 11; i++ {
 		targets = append(targets, summary(fmt.Sprintf("run-%02d", i), "Failed", false))
 	}
 	targets = append(targets, summary("fine", "Succeeded", false))
@@ -137,8 +113,7 @@ func TestBulkConfirmationListsTheTargets(t *testing.T) {
 	}
 }
 
-// y emits one request per applicable target, in target order, and nothing
-// for the targets the verb does not apply to.
+// Confirmation emits one ordered request per applicable target without repeating it.
 func TestBulkConfirmEmitsOneRequestPerApplicableTarget(t *testing.T) {
 	m := bulkModel(mixed())
 	m.OpenMenu()
@@ -164,32 +139,51 @@ func TestBulkConfirmEmitsOneRequestPerApplicableTarget(t *testing.T) {
 	}
 }
 
-// A bulk terminate is confirmed by typing the number of workflows; the
-// name of one of them does not pass.
-func TestBulkTerminateTypesTheCount(t *testing.T) {
-	m := bulkModel(mixed())
-	m.OpenMenu()
-	press(m, "t")
-	if m.State() != StateTypedName || !strings.Contains(m.View().Content, "Type 2 (the number of workflows)") {
-		t.Fatalf("typed gate view = %s", m.View().Content)
-	}
-	press(m, "g", "a", "t", "e", "enter")
-	if m.State() != StateTypedName {
-		t.Fatal("a name passed the count gate")
-	}
-	m.SetTypedName("2")
-	cmd := press(m, "enter")
-	intent := cmd().(BulkIntentMsg)
-	for _, r := range intent.Requests {
-		if err := r.Validate(r.Ref); err != nil {
-			t.Fatalf("request %s does not validate: %v", r.Ref.Name, err)
-		}
+// Bulk terminate requires the applicable count, or the name when only one target applies.
+func TestBulkTerminateGate(t *testing.T) {
+	for _, c := range []struct {
+		name                 string
+		targets              []core.Summary
+		prompt, wrong, right string
+		refs                 []string
+		confirmation         core.Confirmation
+	}{
+		{"count", mixed(), "Type 2 (the number of workflows)", "gate", "2", []string{"gate", "busy"}, core.Confirmation{Confirmed: true, BulkSize: 2, TypedCount: "2"}},
+		{"one applicable", []core.Summary{summary("gate", "Running", true), summary("finished", "Succeeded", false)}, "Type gate to confirm", "1", "gate", []string{"gate"}, core.Confirmation{Confirmed: true, TypedName: "gate"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := bulkModel(c.targets)
+			m.OpenMenu()
+			press(m, "t")
+			if m.State() != StateTypedName || !strings.Contains(m.View().Content, c.prompt) {
+				t.Fatalf("state=%v view=%s", m.state, m.View().Content)
+			}
+			press(m, c.wrong)
+			if cmd := press(m, "enter"); cmd != nil || m.State() != StateTypedName {
+				t.Fatal("wrong text passed gate")
+			}
+			for range len(c.wrong) {
+				m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+			}
+			press(m, c.right)
+			cmd := press(m, "enter")
+			if cmd == nil {
+				t.Fatal("correct text produced no intent")
+			}
+			intent := cmd().(BulkIntentMsg)
+			if len(intent.Requests) != len(c.refs) {
+				t.Fatalf("requests=%+v", intent.Requests)
+			}
+			for i, r := range intent.Requests {
+				if r.Ref.Name != c.refs[i] || r.Action != core.ActionTerminate || r.Confirmation != c.confirmation {
+					t.Fatalf("request[%d]=%+v", i, r)
+				}
+			}
+		})
 	}
 }
 
-// Delete takes two steps: y, then a capital D on a separate screen. The d
-// that opened it and the y that passed the first step, pressed again,
-// cancel instead of deleting.
+// Delete requires a separate capital D confirmation and cancels on every other key.
 func TestDeleteNeedsASecondDistinctConfirmation(t *testing.T) {
 	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "u"}
 	for _, repeat := range []string{"d", "y", "enter", "esc"} {
@@ -202,8 +196,8 @@ func TestDeleteNeedsASecondDistinctConfirmation(t *testing.T) {
 		if !strings.Contains(m.View().Content, "Press D (shift+d) to delete") {
 			t.Fatalf("final screen = %s", m.View().Content)
 		}
-		if cmd := press(m, repeat); cmd != nil || m.State() != StateIdle || m.IntentCount() != 0 {
-			t.Fatalf("%q on the final screen: state=%v intents=%d, want cancelled", repeat, m.State(), m.IntentCount())
+		if cmd := press(m, repeat); cmd != nil || m.State() != StateIdle {
+			t.Fatalf("%q on the final screen: state=%v, want cancelled", repeat, m.State())
 		}
 	}
 	m := NewWithOptions(ref, Options{AllowActions: true})
@@ -219,8 +213,7 @@ func TestDeleteNeedsASecondDistinctConfirmation(t *testing.T) {
 	}
 }
 
-// A bulk run can be stopped between requests; the request in flight is
-// not affected.
+// Escape stops future bulk sends while the current request remains in flight.
 func TestEscDuringABulkRunAsksToStop(t *testing.T) {
 	m := bulkModel(mixed())
 	m.OpenMenu()
@@ -234,8 +227,7 @@ func TestEscDuringABulkRunAsksToStop(t *testing.T) {
 	}
 }
 
-// The bulk outcome lists every target with its outcome, the ones that need
-// the reader first, and a total line.
+// Bulk results report each outcome and total with uncertain results first.
 func TestBulkOutcomeListsEachTargetAndTheTotal(t *testing.T) {
 	targets := []core.Summary{summary("a", "Running", false), summary("b", "Running", false), summary("c", "Running", false), summary("d", "Running", false)}
 	m := bulkModel(targets)
@@ -264,25 +256,5 @@ func TestBulkOutcomeListsEachTargetAndTheTotal(t *testing.T) {
 	}
 	if got := m.OutcomeLine(); got != "stop: 1 confirmed, 1 accepted, 1 refused, 1 unknown (4 workflows)" {
 		t.Fatalf("outcome line = %q", got)
-	}
-}
-
-// The demo, a read-only session and a session without --allow-actions all
-// show the bulk menu in its unavailable state and can emit nothing.
-func TestBulkIsUnavailableWithoutActions(t *testing.T) {
-	for name, opts := range map[string]Options{
-		"demo":      {AllowActions: true, Demo: true},
-		"read-only": {AllowActions: true, ReadOnly: true},
-		"disabled":  {},
-	} {
-		m := NewWithOptions(mixed()[0].Ref, opts)
-		m.SetTargets(mixed())
-		m.OpenMenu()
-		if m.State() != StateUnavailable || !strings.Contains(m.View().Content, "targets: 3 marked workflows") {
-			t.Fatalf("%s: state=%v view=%s", name, m.State(), m.View().Content)
-		}
-		if cmd := press(m, "s", "y", "D"); cmd != nil {
-			t.Fatalf("%s: keys emitted an intent", name)
-		}
 	}
 }

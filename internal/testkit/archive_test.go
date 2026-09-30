@@ -7,9 +7,7 @@ import (
 	"github.com/ficaa1/micko/internal/core"
 )
 
-// The archive pages by offset, filters by namespace and label, and answers
-// a UID; the demo's archived runs are older than every live workflow and
-// carry their owners' labels.
+// Demo archive pages filter old finished runs and resolve their UIDs.
 func TestDemoArchive(t *testing.T) {
 	f := DemoReader(NewFakeClock(FixtureEpoch))
 	p1, err := f.ListArchivedWorkflows(context.Background(), core.ArchiveQuery{Namespace: DemoNamespace, Limit: 4})

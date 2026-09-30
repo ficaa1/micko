@@ -3,25 +3,14 @@ package testkit
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/ficaa1/micko/internal/core"
 )
 
-// collect reads a fake event stream until it has been quiet for a moment.
-func collect(t *testing.T, f *FakeReader, req core.EventWatchRequest) ([]core.Event, error) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	var out []core.Event
-	err := f.WatchEvents(ctx, req, func(e core.Event) error { out = append(out, e); return nil })
-	return out, err
-}
-
-// The demo serves the events a cluster would record: the controller's on
-// the workflow, the scheduler's and kubelet's on the pods, and the
-// warnings of a failing retry and an out-of-memory kill.
+// Demo events cover controller, scheduler, kubelet, retry, and out-of-memory outcomes.
 func TestDemoEvents(t *testing.T) {
 	f := DemoReader(NewFakeClock(FixtureEpoch))
 	reasons := map[string]bool{}
@@ -39,66 +28,82 @@ func TestDemoEvents(t *testing.T) {
 	}
 }
 
-// The stream filters by namespace and by the equality terms of the field
-// selector, sends the stored events oldest first, passes on published
-// events, rejects terms the API server does not support for events, and
-// ends with the context.
+// Event streams filter stored and published records, preserve time order, and stop on cancellation.
 func TestFakeWatchEvents(t *testing.T) {
-	f := DemoReader(NewFakeClock(FixtureEpoch))
-	evs, err := collect(t, f, core.EventWatchRequest{Namespace: DemoNamespace,
-		FieldSelector: "involvedObject.kind=Workflow,involvedObject.name=demo-oom-backfill"})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("err = %v", err)
+	events := []core.Event{
+		{UID: "late", Namespace: "demo", ObjectKind: "Workflow", ObjectName: "run", Reason: "Failed", Type: "Warning", LastSeen: FixtureEpoch.Add(time.Second)},
+		{UID: "other", Namespace: "other", ObjectKind: "Pod", ObjectName: "pod", Reason: "Started", Type: "Normal", LastSeen: FixtureEpoch.Add(2 * time.Second)},
+		{UID: "early", Namespace: "demo", ObjectKind: "Workflow", ObjectName: "run", Reason: "Running", Type: "Normal", LastSeen: FixtureEpoch},
 	}
-	if len(evs) != 3 || evs[0].Reason != "WorkflowRunning" {
-		t.Fatalf("workflow events = %+v", evs)
+	cases := []struct {
+		name    string
+		request core.EventWatchRequest
+		want    []string
+		invalid bool
+	}{
+		{"all oldest first", core.EventWatchRequest{}, []string{"early", "late", "other"}, false},
+		{"namespace", core.EventWatchRequest{Namespace: "demo"}, []string{"early", "late"}, false},
+		{"missing namespace", core.EventWatchRequest{Namespace: "missing"}, nil, false},
+		{"workflow conjunction", core.EventWatchRequest{FieldSelector: "involvedObject.kind=Workflow,involvedObject.name=run"}, []string{"early", "late"}, false},
+		{"object namespace", core.EventWatchRequest{FieldSelector: "involvedObject.namespace=other"}, []string{"other"}, false},
+		{"reason", core.EventWatchRequest{FieldSelector: "reason=Failed"}, []string{"late"}, false},
+		{"type", core.EventWatchRequest{FieldSelector: "type=Normal"}, []string{"early", "other"}, false},
+		{"unsupported operator", core.EventWatchRequest{FieldSelector: "involvedObject.name!=x"}, nil, true},
+		{"unsupported field", core.EventWatchRequest{FieldSelector: "metadata.labels=x"}, nil, true},
 	}
-	for i := 1; i < len(evs); i++ {
-		if evs[i].LastSeen.Before(evs[i-1].LastSeen) {
-			t.Fatal("events not oldest first")
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := &FakeReader{Events: events}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			var got []string
+			err := f.WatchEvents(ctx, c.request, func(e core.Event) error { got = append(got, e.UID); return nil })
+			if c.invalid {
+				var watchErr *core.WatchError
+				if !errors.As(err, &watchErr) {
+					t.Fatalf("error = %v, want WatchError", err)
+				}
+			} else if !errors.Is(err, context.Canceled) {
+				t.Fatalf("error = %v, want canceled", err)
+			}
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("UIDs = %v, want %v", got, c.want)
+			}
+		})
+	}
+	t.Run("published events and cancellation", func(t *testing.T) {
+		ready := make(chan struct{})
+		f := &FakeReader{EventHook: func(core.EventWatchRequest) error { close(ready); return nil }}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		got := make(chan core.Event, 2)
+		done := make(chan error, 1)
+		go func() {
+			done <- f.WatchEvents(ctx, core.EventWatchRequest{Namespace: "demo", FieldSelector: "reason=Evicted"}, func(e core.Event) error { got <- e; return nil })
+		}()
+		select {
+		case <-ready:
+		case <-time.After(time.Second):
+			t.Fatal("event stream did not start")
 		}
-	}
-	if evs, _ := collect(t, f, core.EventWatchRequest{Namespace: "other"}); len(evs) != 0 {
-		t.Errorf("another namespace got %d events", len(evs))
-	}
-	if _, err := collect(t, f, core.EventWatchRequest{Namespace: DemoNamespace, FieldSelector: "involvedObject.name!=x"}); err == nil {
-		t.Error("an unsupported term was accepted")
-	}
-	if _, err := collect(t, f, core.EventWatchRequest{Namespace: DemoNamespace, FieldSelector: "metadata.labels=x"}); err == nil {
-		t.Error("an unsupported field was accepted")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	got := make(chan core.Event, 4)
-	done := make(chan error, 1)
-	go func() {
-		done <- f.WatchEvents(ctx, core.EventWatchRequest{Namespace: DemoNamespace, FieldSelector: "reason=Evicted"},
-			func(e core.Event) error { got <- e; return nil })
-	}()
-	for f.EventStartCount() < 5 {
-		time.Sleep(5 * time.Millisecond)
-	}
-	for {
-		f.mu.Lock()
-		n := len(f.eventSubs)
-		f.mu.Unlock()
-		if n == 1 {
-			break
+		f.PublishEvent(core.Event{UID: "ignored", Namespace: "demo", Reason: "Pulled"})
+		f.PublishEvent(core.Event{UID: "delivered", Namespace: "demo", Reason: "Evicted"})
+		select {
+		case e := <-got:
+			if e.UID != "delivered" {
+				t.Fatalf("UID = %q, want delivered", e.UID)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("published event did not arrive")
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	f.PublishEvent(core.Event{UID: "x", Namespace: DemoNamespace, Reason: "Pulled"})
-	f.PublishEvent(core.Event{UID: "y", Namespace: DemoNamespace, Reason: "Evicted"})
-	select {
-	case e := <-got:
-		if e.UID != "y" {
-			t.Fatalf("published %+v passed the filter", e)
+		cancel()
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) || f.EventCancelCount() != 1 {
+				t.Fatalf("error = %v, cancels = %d; want canceled and 1", err, f.EventCancelCount())
+			}
+		case <-time.After(time.Second):
+			t.Fatal("event stream did not cancel")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("the published event did not arrive")
-	}
-	cancel()
-	if err := <-done; !errors.Is(err, context.Canceled) || f.EventCancelCount() == 0 {
-		t.Fatalf("err = %v, cancels %d", err, f.EventCancelCount())
-	}
+	})
 }
