@@ -49,7 +49,8 @@ profiles:
     service: argo-workflows-server   # the Argo Server's Service...
     serviceNamespace: argo           # ...in this namespace
     remotePort: 2746                 # ...on this port
-    server: http://127.0.0.1:2746    # only the scheme and path are used; the forward picks the port
+    server: https://127.0.0.1:2746   # https if the server serves TLS (Argo's default), else http;
+                                     # only the scheme and path are used, the forward picks the port
     namespace: workflows             # where your workflows run
     tokenEnv: MICKO_TOKEN            # leave the variable empty in Argo's server auth mode
 ```
