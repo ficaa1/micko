@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// knownSkins stands in for the UI's skin list, which this package does not
-// import.
 var knownSkins = []string{"auto", "default", "nord", "dracula"}
 
 const yamlSkins = `
@@ -24,104 +22,80 @@ profiles:
     skin: dracula
 `
 
-// The skin resolves like every other setting: the flag, then the profile,
-// then the file's top level, then the default.
-func TestSkinPrecedenceFlagOverProfileOverFile(t *testing.T) {
+// The resolved skin follows flag, profile, file and default precedence, and must be known.
+func TestSkinPrecedence(t *testing.T) {
 	cases := []struct {
-		name, profile, flag, want string
+		name, data, profile, flag, want string
+		known                           []string
 	}{
-		{name: "top level applies to a profile without its own", profile: "dev", want: "nord"},
-		{name: "a profile's skin overrides the top level", profile: "prod", want: "dracula"},
-		{name: "the flag overrides a profile's skin", profile: "prod", flag: "default", want: "default"},
-		{name: "the flag overrides the top level", profile: "dev", flag: "dracula", want: "dracula"},
+		{"file", yamlSkins, "dev", "", "nord", knownSkins},
+		{"profile", yamlSkins, "prod", "", "dracula", knownSkins},
+		{"flag over profile", yamlSkins, "prod", "default", "default", knownSkins},
+		{"flag over file", yamlSkins, "dev", "dracula", "dracula", knownSkins},
+		{"default", yamlOneProfile, "", "", "default", knownSkins},
+		{"case insensitive", yamlOneProfile, "", "Nord", "Nord", knownSkins},
+		{"unspecified known names", yamlOneProfile, "", "anything", "anything", nil},
+		{"unknown flag", yamlSkins, "dev", "neon", "", knownSkins},
 	}
 	for _, c := range cases {
-		cfg, err := Load([]byte(yamlSkins), Options{Profile: c.profile, Skin: c.flag, Skins: knownSkins})
-		if err != nil {
-			t.Fatalf("%s: Load: %v", c.name, err)
-		}
-		if cfg.Skin != c.want {
-			t.Errorf("%s: skin = %q, want %q", c.name, cfg.Skin, c.want)
-		}
-	}
-}
-
-// A file that names no skin gets the default one, never an empty name.
-func TestSkinDefaultsWhenNothingNamesOne(t *testing.T) {
-	cfg, err := Load([]byte(yamlOneProfile), Options{Skins: knownSkins})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Skin != DefaultSkin {
-		t.Errorf("skin = %q, want %q", cfg.Skin, DefaultSkin)
-	}
-}
-
-// An unknown skin, at the top level or on any profile, is reported when the
-// file is read, with where it was found and every valid name.
-func TestUnknownSkinIsRejectedWithTheValidNames(t *testing.T) {
-	cases := map[string]string{
-		"top level": "skin: solarised\nprofiles:\n  dev:\n    server: https://a.test\n",
-		"profile":   "profiles:\n  dev:\n    server: https://a.test\n  prod:\n    server: https://b.test\n    skin: solarised\n",
-	}
-	for name, y := range cases {
-		err := ValidateSkins([]byte(y), knownSkins)
-		if err == nil {
-			t.Fatalf("%s: an unknown skin was accepted", name)
-		}
-		msg := err.Error()
-		if !strings.Contains(msg, `"solarised"`) {
-			t.Errorf("%s: error does not name the skin: %v", name, err)
-		}
-		if name == "profile" && !strings.Contains(msg, `profile "prod"`) {
-			t.Errorf("%s: error does not name the profile: %v", name, err)
-		}
-		for _, k := range knownSkins {
-			if !strings.Contains(msg, k) {
-				t.Errorf("%s: error does not list %q: %v", name, k, err)
+		t.Run(c.name, func(t *testing.T) {
+			got, err := Load([]byte(c.data), Options{Profile: c.profile, Skin: c.flag, Skins: c.known})
+			if c.want == "" {
+				if err == nil || !strings.Contains(err.Error(), `unknown skin "neon"`) {
+					t.Fatalf("Load error = %v, want unknown neon skin", err)
+				}
+				return
 			}
-		}
-	}
-	if err := ValidateSkins([]byte(yamlSkins), knownSkins); err != nil {
-		t.Errorf("valid skins rejected: %v", err)
-	}
-}
-
-// Load checks the skin it resolves, so a flag or a profile outside the known
-// set cannot reach the session.
-func TestLoadRejectsAnUnknownSkin(t *testing.T) {
-	if _, err := Load([]byte(yamlSkins), Options{Profile: "dev", Skin: "neon", Skins: knownSkins}); err == nil {
-		t.Fatal("Load accepted an unknown flag skin")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Skin != c.want {
+				t.Fatalf("skin = %q, want %q", got.Skin, c.want)
+			}
+		})
 	}
 }
 
-// Names match without case, the way a reader types them.
-func TestCheckSkinIgnoresCase(t *testing.T) {
-	if err := CheckSkin("skin", "Nord", knownSkins); err != nil {
-		t.Errorf("CheckSkin(Nord) = %v", err)
+// Startup reports unknown skins even on unselected profiles, while parse errors remain for the picker.
+func TestValidateSkins(t *testing.T) {
+	cases := []struct{ name, data, where string }{
+		{"unknown file skin", "skin: solarised\nprofiles:\n  dev:\n    server: https://a.test\n", "skin"},
+		{"unknown unselected profile", "profiles:\n  dev:\n    server: https://a.test\n  prod:\n    server: https://b.test\n    skin: solarised\n", `profile "prod"`},
+		{"known skins", yamlSkins, ""},
+		{"malformed file", "profiles: [not a map\n", ""},
 	}
-	if err := CheckSkin("skin", "anything", nil); err != nil {
-		t.Errorf("an empty known list must accept every name: %v", err)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := ValidateSkins([]byte(c.data), knownSkins)
+			if c.where == "" {
+				if err != nil {
+					t.Fatalf("ValidateSkins = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("unknown skin accepted")
+			}
+			for _, want := range append([]string{`"solarised"`, c.where}, knownSkins...) {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error = %v, want %q", err, want)
+				}
+			}
+		})
 	}
 }
 
-// A file that does not parse is the picker's to report; the skin check must
-// not turn it into a startup failure first.
-func TestValidateSkinsLeavesAParseErrorToThePicker(t *testing.T) {
-	if err := ValidateSkins([]byte("profiles: [not a map\n"), knownSkins); err != nil {
-		t.Errorf("ValidateSkins = %v, want nil for an unparsable file", err)
-	}
-	if got := FileSkin([]byte("profiles: [not a map\n")); got != "" {
-		t.Errorf("FileSkin of an unparsable file = %q", got)
-	}
-}
-
-// FileSkin is the top-level skin alone; a profile's skin is not it.
-func TestFileSkinReadsOnlyTheTopLevel(t *testing.T) {
-	if got := FileSkin([]byte(yamlSkins)); got != "nord" {
-		t.Errorf("FileSkin = %q, want nord", got)
-	}
-	if got := FileSkin([]byte("profiles:\n  a:\n    skin: dracula\n")); got != "" {
-		t.Errorf("FileSkin = %q, want empty", got)
+// The picker's skin comes only from the top level; absent and malformed files name none.
+func TestFileSkin(t *testing.T) {
+	for _, c := range []struct{ name, data, want string }{
+		{"top level", yamlSkins, "nord"},
+		{"profile only", "profiles:\n  a:\n    skin: dracula\n", ""},
+		{"malformed file", "profiles: [not a map\n", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := FileSkin([]byte(c.data)); got != c.want {
+				t.Fatalf("FileSkin = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
