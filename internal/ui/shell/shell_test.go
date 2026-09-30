@@ -37,11 +37,12 @@ func TestPaneHeading(t *testing.T) {
 	for _, c := range []struct {
 		name, title, right, wantRight string
 		width                         int
+		truncated                     bool
 	}{
-		{"collected count", "Workflows", "5 collected", "5 collected", 80},
-		{"stale warning", "Workflows", "list: STALE (last good 19 workflows): connection refused by the workflow server", "list: STALE", 80},
-		{"title takes scarce space", strings.Repeat("title", 10), "STALE connection refused", "", 60},
-		{"state without title", "", "5 collected", "5 collected", 60},
+		{"collected count", "Workflows", "5 collected", "5 collected", 80, false},
+		{"stale warning", "Workflows", "list: STALE (last good 19 workflows): connection refused by the workflow server", "list: STALE", 80, true},
+		{"title takes scarce space", strings.Repeat("title", 10), "STALE connection refused", "", 60, false},
+		{"state without title", "", "5 collected", "5 collected", 60, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := base()
@@ -59,8 +60,8 @@ func TestPaneHeading(t *testing.T) {
 			if c.wantRight == "" && strings.Contains(top, "STALE") {
 				t.Fatalf("heading = %q, want title to take the available space", top)
 			}
-			if c.name == "stale warning" && !strings.Contains(top, "…") {
-				t.Fatalf("heading = %q, want visible truncation", top)
+			if got := strings.Contains(top, "…"); got != c.truncated {
+				t.Fatalf("heading = %q, truncated = %v, want %v", top, got, c.truncated)
 			}
 		})
 	}

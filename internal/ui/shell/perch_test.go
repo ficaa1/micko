@@ -69,19 +69,18 @@ func TestMickoMakesWayForTheTitleAndCount(t *testing.T) {
 		{"steps off", "list: STALE (last good 19 workflows): dial tcp 127.0.0.1:50422: connect: connection refused", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			right := c.right
-			f.TitleRight = right
+			f.TitleRight = c.right
 			ls := lines(f.Render(plain()))
 			top := topRow(t, ls)
 			if top != topRow(t, short) {
-				t.Fatalf("count %q moved the border to row %d", right, top)
+				t.Fatalf("count %q moved the border to row %d", c.right, top)
 			}
 			if !strings.Contains(ls[top], "Workflows") {
 				t.Fatalf("title covered: %q", ls[top])
 			}
 			// The count is either whole or shortened with an ellipsis; either
 			// way its start is intact.
-			if !strings.Contains(ls[top], right[:12]) {
+			if !strings.Contains(ls[top], c.right[:12]) {
 				t.Fatalf("count covered: %q", ls[top])
 			}
 			if got := strings.Contains(ls[top], `\v/`); got != c.perched {
@@ -93,7 +92,7 @@ func TestMickoMakesWayForTheTitleAndCount(t *testing.T) {
 				}
 				// Perched: he sits wholly between the title and the count.
 				at := strings.Index(ls[top], `\v/`)
-				if at > strings.Index(ls[top], right[:12]) {
+				if at > strings.Index(ls[top], c.right[:12]) {
 					t.Fatalf("Mićko is past the count: %q", ls[top])
 				}
 			}
@@ -158,45 +157,38 @@ func TestMascotActivation(t *testing.T) {
 		name          string
 		w, h          int
 		enabled, fits bool
+		// Body rows and top border row with Mićko perched, and body rows on the floor.
+		perchBody, perchTop, floorBody int
 	}{
-		{"disabled", 80, 40, false, true},
-		{"height below minimum", 80, 39, true, false},
-		{"width below minimum", 79, 40, true, false},
-		{"wide short terminal", 120, 24, true, false},
-		{"minimum", 80, 40, true, true},
+		{"disabled", 80, 40, false, true, 36, 1, 36},
+		{"height below minimum", 80, 39, true, false, 35, 1, 35},
+		{"width below minimum", 79, 40, true, false, 36, 1, 36},
+		{"wide short terminal", 120, 24, true, false, 20, 1, 20},
+		{"minimum", 80, 40, true, true, 33, 4, 32},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := PerchFits(c.w, c.h); got != c.fits {
 				t.Fatalf("PerchFits(%d,%d) = %v, want %v", c.w, c.h, got, c.fits)
 			}
-			for _, floor := range []bool{false, true} {
+			for _, pose := range []struct {
+				floor     bool
+				marker    string
+				body, top int
+			}{
+				{false, "^v^v^v", c.perchBody, c.perchTop},
+				{true, "╭─╮", c.floorBody, 1},
+			} {
 				f := base()
-				f.Width, f.Height, f.Mascot, f.MascotFloor = c.w, c.h, c.enabled, floor
+				f.Width, f.Height, f.Mascot, f.MascotFloor = c.w, c.h, c.enabled, pose.floor
 				out := f.Render(plain())
-				active := c.enabled && c.fits
-				marker := "^v^v^v"
-				if floor {
-					marker = "╭─╮"
+				if got, want := strings.Contains(out, pose.marker), c.enabled && c.fits; got != want {
+					t.Fatalf("floor=%v: mascot visible = %v, want %v", pose.floor, got, want)
 				}
-				if got := strings.Contains(out, marker); got != active {
-					t.Fatalf("floor=%v: mascot visible = %v, want %v", floor, got, active)
+				if got := f.BodyHeight(); got != pose.body {
+					t.Fatalf("floor=%v: BodyHeight() = %d, want %d", pose.floor, got, pose.body)
 				}
-				want := c.h - 4
-				top := 1
-				if active {
-					want -= 3
-					if floor {
-						want--
-					}
-					if !floor {
-						top = 4
-					}
-				}
-				if got := f.BodyHeight(); got != want {
-					t.Fatalf("floor=%v: BodyHeight() = %d, want %d", floor, got, want)
-				}
-				if got := topRow(t, lines(out)); got != top {
-					t.Fatalf("floor=%v: top border row = %d, want %d", floor, got, top)
+				if got := topRow(t, lines(out)); got != pose.top {
+					t.Fatalf("floor=%v: top border row = %d, want %d", pose.floor, got, pose.top)
 				}
 			}
 		})
