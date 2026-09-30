@@ -12,19 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// Update implements the child Tea model. Key isolation rules:
-//   - In search mode, printable keys go to the input; j/k/arrows/enter keep
-//     their navigation meaning ONLY as input editing/submit; `q` types a
-//     letter (does NOT quit) and no other command key fires. Esc leaves
-//     search (cancel semantics).
-//   - Outside search, the component handles j/k/arrows (move), enter (open
-//     intent), l (logs intent), / (enter search), s (cycle sort), p-local
-//     phase cycling is NOT bound here (p is the root's profile key; the
-//     root calls CyclePhase when it routes it), w (wide columns), esc
-//     (BackMsg passthrough stays with the root).
-//
-// The component never issues commands that touch the network; intents are
-// returned as messages for the root.
+// Update handles navigation, local filters and intents for the selected workflow.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -76,33 +64,43 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "enter":
 		if intent := m.OpenIntent(); intent != nil {
-			return func() tea.Msg { return intent }
+			return func() tea.Msg {
+				return intent
+			}
 		}
 		return nil
 	case "l":
 		if intent := m.LogsIntent(); intent != nil {
-			return func() tea.Msg { return intent }
+			return func() tea.Msg {
+				return intent
+			}
 		}
 		return nil
 	case "T":
 		// Open the workflow straight on its timeline: the question "where
 		// did the time go" is often the reason to open it at all.
 		if intent := m.OpenSectionIntent(shared.SectionTimeline); intent != nil {
-			return func() tea.Msg { return intent }
+			return func() tea.Msg {
+				return intent
+			}
 		}
 		return nil
 	case "X":
 		// Open the workflow straight on its explanation: for a failed run,
 		// "why" is the first question.
 		if intent := m.OpenSectionIntent(shared.SectionExplain); intent != nil {
-			return func() tea.Msg { return intent }
+			return func() tea.Msg {
+				return intent
+			}
 		}
 		return nil
 	case "E":
 		// Open the workflow straight on its Kubernetes events: a pod that
 		// cannot be scheduled or pulled says why only there.
 		if intent := m.OpenSectionIntent(shared.SectionEvents); intent != nil {
-			return func() tea.Msg { return intent }
+			return func() tea.Msg {
+				return intent
+			}
 		}
 		return nil
 	case "/":
@@ -115,8 +113,6 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.CycleSort()
 		return nil
 	case "p":
-		// The phase bucket was reachable only through the API until now, so
-		// the Suspended bucket would have had no key at all.
 		m.CyclePhase()
 		return nil
 	case "space":
@@ -146,11 +142,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "r":
 		if intent := m.RefreshIntent(); intent != nil {
-			return func() tea.Msg { return intent }
+			return func() tea.Msg {
+				return intent
+			}
 		}
 		return nil
 	default:
-		// Everything else (q, n, p, ?, ...) belongs to the root; the child
+		// Everything else (q, n, ?, ...) belongs to the root; the child
 		// must not shadow it.
 		return nil
 	}
@@ -272,7 +270,9 @@ func (m *Model) moveTo(i int) {
 // isControlRune reports whether r is a control character (never inserted
 // into the search buffer; the sanitizer keeps \n/	 only for display, and
 // a single-line filter needs neither).
-func isControlRune(r rune) bool { return r < 0x20 || r == 0x7f }
+func isControlRune(r rune) bool {
+	return r < 0x20 || r == 0x7f
+}
 
 // rowPhaseText renders the phase cell: text always present (color is
 // supplementary).
@@ -297,7 +297,7 @@ func ageText(s core.Summary, now time.Time) string {
 	if d < 0 {
 		d = 0
 	}
-	return humanDuration(d)
+	return shared.ListDuration(d)
 }
 
 // durationText renders the DURATION cell; missing endpoints render "-".
@@ -313,7 +313,7 @@ func durationText(s core.Summary) string {
 	if d < 0 {
 		d = 0
 	}
-	return humanDuration(d)
+	return shared.ListDuration(d)
 }
 
 // progressCell renders the server's "done/total" count right-aligned in
@@ -325,13 +325,13 @@ func durationText(s core.Summary) string {
 func progressCell(p string, width int) string {
 	p = sanitizeOne(p)
 	if p == "" {
-		return padLeft("-", 5)
+		return shared.PadLeft("-", 5)
 	}
 	done, total, ok := parseProgress(p)
 	if !ok {
 		return truncateRight(p, width)
 	}
-	count := padLeft(p, 5)
+	count := shared.PadLeft(p, 5)
 	bar := width - ansi.StringWidth(count) - 1
 	if bar < 1 {
 		return truncateRight(p, width)
@@ -367,11 +367,7 @@ func (m *Model) clockText(t *time.Time) string {
 	if t == nil || t.IsZero() {
 		return "-"
 	}
-	loc := m.loc
-	if loc == nil {
-		loc = time.Local
-	}
-	return t.In(loc).Format("01-02 15:04")
+	return t.In(time.Local).Format("01-02 15:04")
 }
 
 // orDash stands in "-" for an empty cell, so an empty column reads as "none"
@@ -381,71 +377,6 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
-}
-
-// humanDuration renders a compact human duration (4m, 2h13m, 3d).
-func humanDuration(d time.Duration) string {
-	switch {
-	case d >= 24*time.Hour:
-		days := int(d / (24 * time.Hour))
-		hours := int(d%(24*time.Hour)) / int(time.Hour)
-		if hours > 0 {
-			return itoa(days) + "d" + itoa(hours) + "h"
-		}
-		return itoa(days) + "d"
-	case d >= time.Hour:
-		h := int(d / time.Hour)
-		mins := int(d%time.Hour) / int(time.Minute)
-		if mins > 0 {
-			return itoa(h) + "h" + itoa(mins) + "m"
-		}
-		return itoa(h) + "h"
-	case d >= time.Minute:
-		return itoa(int(d/time.Minute)) + "m"
-	default:
-		return itoa(int(d/time.Second)) + "s"
-	}
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
-}
-
-// padRight pads s to width cells (Unicode-aware: wide names must not
-// break alignment). Wide runes count as 2 cells via ansi.StringWidth.
-func padRight(s string, width int) string {
-	w := ansi.StringWidth(s)
-	if w >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-w)
-}
-
-// padLeft right-aligns s in width cells.
-func padLeft(s string, width int) string {
-	w := ansi.StringWidth(s)
-	if w >= width {
-		return s
-	}
-	return strings.Repeat(" ", width-w) + s
 }
 
 // truncateRight clips s to width cells, appending a literal ellipsis when
@@ -474,6 +405,3 @@ func truncateRight(s string, width int) string {
 	}
 	return b.String() + "…"
 }
-
-// ensure app import used for intents (compile hint if drift).
-var _ = shared.OpenWorkflowMsg{}

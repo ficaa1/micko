@@ -1,6 +1,7 @@
 package workflowlist
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,36 +11,6 @@ import (
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
-
-// View renders the full list pane. Layout:
-//
-//	header:  <title>  ns:<ns>  READ ONLY
-//	toolbar: Search: <q> (snapshot scope)  Phase: <bucket>  Sort: <key>  Updated/stale
-//	table:   NAME  PHASE  AGE  DURATION  (+ message column when wide)
-//	footer:  states + key hints
-//
-// All server-derived text passes shared.Sanitize before render.
-// Statuses are distinguishable by text, never by color alone.
-func (m *Model) View() string {
-	return m.ViewAt(time.Time{})
-}
-
-// ViewAt renders with an explicit clock (tests inject FixtureEpoch; the
-// root passes its injected clock time in production code paths).
-func (m *Model) ViewAt(now time.Time) string {
-	if m.width > 0 && m.width < minUsableWidth {
-		return m.resizeNotice()
-	}
-	// Standalone composition: the pane title, the body, a blank separator and
-	// the pane's own footer. Under the shell (BodyLines) the title rides the
-	// border and the footer is a shell band, so neither is repeated here.
-	lines := append([]string{m.headerView()}, m.frameLines(now, 3)...)
-	lines = append(lines, "", m.Hints()+"  ? help"+m.footerPosition())
-	if m.height > 0 {
-		lines = shared.ClampLines(lines, m.height)
-	}
-	return strings.Join(lines, "\n")
-}
 
 // PaneTitle is the shell border title. It names what the pane holds; the
 // namespace and the connection state belong to the shell's own bands.
@@ -54,7 +25,7 @@ func (m *Model) BodyLines(now time.Time) []string {
 	if m.width > 0 && m.width < minUsableWidth {
 		return strings.Split(strings.TrimRight(m.resizeNotice(), "\n"), "\n")
 	}
-	lines := m.frameLines(now, 0)
+	lines := m.frameLines(now)
 	if m.height > 0 {
 		lines = shared.ClampLines(lines, m.height)
 	}
@@ -63,13 +34,13 @@ func (m *Model) BodyLines(now time.Time) []string {
 
 // WindowStatus reports the visible row range for the shell footer, so a
 // windowed list is distinguishable from one that simply has few workflows.
-// It reflects the most recent BodyLines/ViewAt call, which is the render
+// It reflects the most recent BodyLines call, which is the render
 // pass that decided the window.
 func (m *Model) WindowStatus() string {
 	if m.winEnd-m.winStart <= 0 || m.winEnd-m.winStart >= len(m.rows) {
-		return itoa(len(m.rows)) + " shown"
+		return strconv.Itoa(len(m.rows)) + " shown"
 	}
-	return itoa(m.winStart+1) + "-" + itoa(m.winEnd) + "/" + itoa(len(m.rows))
+	return strconv.Itoa(m.winStart+1) + "-" + strconv.Itoa(m.winEnd) + "/" + strconv.Itoa(len(m.rows))
 }
 
 // Hints are the list key contract, mirrored by the `?` overlay.
@@ -77,19 +48,8 @@ func (m *Model) Hints() string {
 	return "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  a actions  n namespace  0 all ns  r refresh  w wide"
 }
 
-// footerPosition is the window indicator appended to the standalone footer.
-func (m *Model) footerPosition() string {
-	if m.winEnd-m.winStart <= 0 || m.winEnd-m.winStart >= len(m.rows) {
-		return ""
-	}
-	return "  " + itoa(m.winStart+1) + "-" + itoa(m.winEnd) + "/" + itoa(len(m.rows))
-}
-
-// frameLines assembles the pane body as discrete terminal lines so the height
-// budget can be enforced on whole lines. reserve is the number of lines the
-// caller will add below the body (the standalone footer and its separator);
-// the shell adds none.
-func (m *Model) frameLines(now time.Time, reserve int) []string {
+// frameLines assembles the toolbar, column heads and visible rows.
+func (m *Model) frameLines(now time.Time) []string {
 	lines := strings.Split(m.toolbarView(), "\n")
 
 	cols := m.columns()
@@ -108,9 +68,9 @@ func (m *Model) frameLines(now time.Time, reserve int) []string {
 			// selection then copies.
 			head.WriteString(title)
 		case c.key == colAge:
-			head.WriteString(padLeft(title, c.width))
+			head.WriteString(shared.PadLeft(title, c.width))
 		default:
-			head.WriteString(padRight(title, c.width))
+			head.WriteString(shared.PadRight(title, c.width))
 		}
 	}
 	lines = append(lines, m.theme.TableHeader.Render(head.String()))
@@ -120,7 +80,7 @@ func (m *Model) frameLines(now time.Time, reserve int) []string {
 		return append(lines, m.emptyStateView())
 	}
 
-	start, end := m.window(len(lines) + reserve)
+	start, end := m.window(len(lines))
 	m.winStart, m.winEnd = start, end
 	for i := start; i < end; i++ {
 		lines = append(lines, m.rowLine(m.rows[i], i == m.selIndex(), now))
@@ -211,28 +171,28 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 		}
 		switch c.key {
 		case colNamespace:
-			add(padRight(truncateRight(sanitizeOne(r.Ref.Namespace), c.width), c.width), none)
+			add(shared.PadRight(truncateRight(sanitizeOne(r.Ref.Namespace), c.width), c.width), none)
 		case colName:
-			add(padRight(truncateRight(sanitizeOne(r.Ref.Name), c.width), c.width), none)
+			add(shared.PadRight(truncateRight(sanitizeOne(r.Ref.Name), c.width), c.width), none)
 		case colPhase:
 			phase := shared.PhaseSymbol(shown) + " " + m.rowPhaseText(sanitizeOne(shown))
-			add(padRight(truncateRight(phase, c.width), c.width), m.theme.PhaseStyle(shown))
+			add(shared.PadRight(truncateRight(phase, c.width), c.width), m.theme.PhaseStyle(shown))
 		case colAge:
-			add(padLeft(ageText(r, now), c.width), m.theme.Muted)
+			add(shared.PadLeft(ageText(r, now), c.width), m.theme.Muted)
 		case colDuration:
-			add(padRight(durationText(r), c.width), m.theme.Muted)
+			add(shared.PadRight(durationText(r), c.width), m.theme.Muted)
 		case colProgress:
-			add(padRight(progressCell(r.Progress, c.width), c.width), m.theme.Muted)
+			add(shared.PadRight(progressCell(r.Progress, c.width), c.width), m.theme.Muted)
 		case colStarted:
-			add(padRight(m.clockText(r.StartedAt), c.width), m.theme.Muted)
+			add(shared.PadRight(m.clockText(r.StartedAt), c.width), m.theme.Muted)
 		case colFinished:
-			add(padRight(m.clockText(r.FinishedAt), c.width), m.theme.Muted)
+			add(shared.PadRight(m.clockText(r.FinishedAt), c.width), m.theme.Muted)
 		case colTemplate:
-			add(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, templateLabels...))), c.width), c.width), m.theme.Muted)
+			add(shared.PadRight(truncateRight(orDash(sanitizeOne(firstLabel(r, templateLabels...))), c.width), c.width), m.theme.Muted)
 		case colCron:
-			add(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, cronLabel))), c.width), c.width), m.theme.Muted)
+			add(shared.PadRight(truncateRight(orDash(sanitizeOne(firstLabel(r, cronLabel))), c.width), c.width), m.theme.Muted)
 		case colLabels:
-			add(padRight(truncateRight(orDash(sanitizeOne(otherLabels(r))), c.width), c.width), m.theme.Muted)
+			add(shared.PadRight(truncateRight(orDash(sanitizeOne(otherLabels(r))), c.width), c.width), m.theme.Muted)
 		}
 	}
 	switch {
@@ -259,19 +219,10 @@ const minUsableWidth = 60
 // resizeNotice renders the <60-col notice while preserving quit/help.
 func (m *Model) resizeNotice() string {
 	var b strings.Builder
-	b.WriteString("micko: terminal too small (" + itoa(m.width) + "x" + itoa(m.height) + ")\n")
+	b.WriteString("micko: terminal too small (" + strconv.Itoa(m.width) + "x" + strconv.Itoa(m.height) + ")\n")
 	b.WriteString("Resize to at least 60 columns to show the workflow list.\n")
 	b.WriteString("q quit  ? help  ctrl+c quit\n")
 	return b.String()
-}
-
-func (m *Model) headerView() string {
-	title := "micko"
-	if m.total > 0 || m.status != StatusLoading {
-		// namespace is owned by the root; the list title carries state only.
-		title = "WORKFLOWS"
-	}
-	return m.theme.Header.Render(title)
 }
 
 // toolbarView is the Search/Phase/Sort/state line. It must surface the
@@ -291,7 +242,7 @@ func (m *Model) toolbarView() string {
 	if n := m.suspendedCount(); n > 0 && m.phase != PhaseSuspended {
 		// The count is the whole point of the marker: an operator wants to
 		// know a gate is open without reading every row.
-		phaseCell += "  " + m.theme.Warning.Render(itoa(n)+" awaiting resume")
+		phaseCell += "  " + m.theme.Warning.Render(strconv.Itoa(n)+" awaiting resume")
 	}
 	parts = append(parts, phaseCell)
 	parts = append(parts, m.theme.Muted.Render("Sort:")+" "+sortLabel(m.sort))
@@ -308,7 +259,7 @@ func (m *Model) toolbarView() string {
 	case StatusLoading:
 		parts = append(parts, m.theme.Warning.Render("loading…"))
 	case StatusStale:
-		reason = m.wrapStatusReason("stale "+humanDuration(m.errAge)+" — "+m.errMsg, m.theme.Warning.Render)
+		reason = m.wrapStatusReason("stale "+shared.ListDuration(m.errAge)+" — "+m.errMsg, m.theme.Warning.Render)
 	case StatusForbidden:
 		reason = m.wrapStatusReason("forbidden: "+m.errMsg, m.theme.ErrorText.Render)
 	case StatusUnauthenticated:
@@ -363,7 +314,7 @@ func (m *Model) searchCell() string {
 		cell = label + " " + sanitizeOne(m.match.String())
 	}
 	if m.total > m.visible || m.query != "" || m.status == StatusIncomplete {
-		cell += " [within " + itoa(m.total) + " collected]"
+		cell += " [within " + strconv.Itoa(m.total) + " collected]"
 	}
 	return cell
 }
@@ -376,9 +327,9 @@ func (m *Model) markCell() string {
 	if n == 0 {
 		return ""
 	}
-	cell := markGlyph + " " + itoa(n) + " marked"
+	cell := markGlyph + " " + strconv.Itoa(n) + " marked"
 	if hidden := m.HiddenMarkCount(); hidden > 0 {
-		cell += " (" + itoa(hidden) + " hidden by filter)"
+		cell += " (" + strconv.Itoa(hidden) + " hidden by filter)"
 	}
 	return cell
 }
@@ -586,17 +537,6 @@ func (m *Model) columns() []column {
 	return append(base, optional...)
 }
 
-// columnWidth is the width of column k in the current layout, or 0 when the
-// layout leaves it out.
-func (m *Model) columnWidth(k colKey) int {
-	for _, c := range m.columns() {
-		if c.key == k {
-			return c.width
-		}
-	}
-	return 0
-}
-
 // nsWidth is the NAMESPACE column's width: zero outside the all-namespaces
 // view, otherwise the longest namespace in the snapshot, bounded so a long
 // namespace cannot take the NAME column's room. It is measured over the whole
@@ -656,6 +596,3 @@ func (m *Model) emptyStateView() string {
 		return m.theme.Dim.Render("no workflows in this namespace yet")
 	}
 }
-
-var _ = core.Summary{}
-var _ = shared.Sanitize

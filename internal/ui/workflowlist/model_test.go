@@ -1,463 +1,261 @@
 package workflowlist
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// tl builds a list model with plain (deterministic) theme.
-func tl(t *testing.T) Model {
+func newList(t *testing.T) Model {
 	t.Helper()
-	th := shared.NewTheme(true)
-	os.Unsetenv("NO_COLOR") // theme already forced plain; keep env clean for golden tests
-	return New(th)
+	m := New(shared.NewTheme(true))
+	m.SetSize(100, 20)
+	return m
 }
 
-// summariesFrom converts fixture workflows to summaries.
+func testTheme() shared.Theme {
+	return shared.NewTheme(true)
+}
+
 func summariesFrom(wfs []core.Workflow) []core.Summary {
-	out := make([]core.Summary, 0, len(wfs))
+	var out []core.Summary
 	for _, wf := range wfs {
 		out = append(out, wf.Summary)
 	}
 	return out
 }
 
-// key builds a KeyPressMsg for a printable character.
 func runeKey(r rune) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: r, Text: string(r)}
 }
 
-func TestSelectionAndOpenIntent(t *testing.T) {
-	m := tl(t)
-	wfs := summariesFrom(testkit.FixtureWorkflowList("ns", 6))
-	m.SetItems(wfs, testkit.FixtureEpoch)
+func spaceKey() tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+}
 
-	if !m.HasSelection() {
-		t.Fatal("no default selection after SetItems")
-	}
-	first := m.SelectedRef()
-	if first.Name == "" {
-		t.Fatal("empty selection ref")
-	}
+func escKey() tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: tea.KeyEscape}
+}
 
-	// Move down twice, open intent must carry the selected Ref.
-	m.Update(runeKey('j'))
-	m.Update(runeKey('j'))
-	second := m.SelectedRef()
-	if second.Name == first.Name {
-		t.Fatalf("selection did not move: %v", second)
-	}
-	msg := m.OpenIntent()
-	ow, ok := msg.(shared.OpenWorkflowMsg)
-	if !ok {
-		t.Fatalf("intent type = %T", msg)
-	}
-	if ow.Ref.UID != second.UID {
-		t.Fatalf("intent UID = %q, want %q", ow.Ref.UID, second.UID)
-	}
+func enterKey() tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: tea.KeyEnter}
+}
 
-	// Logs intent for the same row with visible default container.
-	lm, ok := m.LogsIntent().(shared.OpenLogsMsg)
-	if !ok {
-		t.Fatalf("logs intent type = %T", m.LogsIntent())
-	}
-	if lm.Ref.UID != second.UID || lm.Container != "main" {
-		t.Fatalf("logs intent = %+v", lm)
+func backspaceKey() tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: tea.KeyBackspace}
+}
+
+func typeText(m *Model, text string) {
+	for _, r := range text {
+		if r == ' ' {
+			m.Update(spaceKey())
+		} else {
+			m.Update(runeKey(r))
+		}
 	}
 }
 
-func TestSearchTextEntryKeyIsolation(t *testing.T) {
-	m := tl(t)
-	m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 3)), testkit.FixtureEpoch)
-	m.Update(runeKey('/'))
-	if !m.SearchOn {
-		t.Fatal("/ did not focus search")
-	}
-
-	// While in text entry: 'q' must TYPE a letter, never quit; 'j' must be
-	// typed too, never interpreted as a move. The filter narrows as
-	// the letters arrive, so the visible rows legitimately change; what must
-	// NOT happen is a navigation command.
-	m.Update(runeKey('j'))
-	if m.SearchValue() != "j" {
-		t.Fatalf("j was interpreted as a command, not typed: buffer = %q", m.SearchValue())
-	}
-	m.Update(runeKey('q'))
-	if m.SearchValue() != "jq" {
-		t.Fatalf("search value = %q, want \"jq\" ('j' and 'q' typed)", m.SearchValue())
-	}
-
-	// Enter applies the query and exits input mode; esc cancels.
-	m.SearchSetValue("fixture-wf-00")
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+func editQuery(m *Model, q string) {
 	if m.SearchOn {
-		t.Fatal("enter did not leave search mode")
+		m.Update(escKey())
 	}
-	if m.Query() != "fixture-wf-00" {
-		t.Fatalf("query = %q", m.Query())
-	}
-	if m.VisibleCount() != 3 {
-		t.Fatalf("visible = %d, want 3 (all names contain the substring)", m.VisibleCount())
-	}
-
-	// Esc inside the input cancels the typing and restores the filter that
-	// was applied when the input opened. Typing now filters live, so
-	// "cancel" has to mean "undo what I just typed", not "drop the filter I
-	// already had".
 	m.Update(runeKey('/'))
-	for _, r := range "zzz-no-match" {
-		m.Update(runeKey(r))
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
+	for range []rune(m.searchBuf) {
+		m.Update(backspaceKey())
 	}
-	if m.VisibleCount() != 0 {
-		t.Fatalf("live filter did not narrow while typing: visible = %d", m.VisibleCount())
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.Query() != "fixture-wf-00" {
-		t.Fatalf("esc must restore the previous filter, query = %q", m.Query())
-	}
-	if m.VisibleCount() != 3 {
-		t.Fatalf("visible after cancel = %d, want 3", m.VisibleCount())
-	}
-
-	// Esc again, now outside the input, drops the filter entirely.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.Query() != "" {
-		t.Fatalf("esc outside the input must clear the filter, query = %q", m.Query())
-	}
+	typeText(m, q)
 }
 
-func TestSearchScopeVisible(t *testing.T) {
-	m := tl(t)
-	// 12 fixtures but the (root) snapshot holds only 4: search must say
-	// it searched the collected snapshot, not the namespace.
-	m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 4)), testkit.FixtureEpoch)
-	m.SetQuery("fixture-wf")
-	v := m.ViewAt(testkit.FixtureEpoch)
-	if !strings.Contains(v, "within 4 collected") {
-		t.Fatalf("search scope not visible:\n%s", v)
-	}
-
-	// Incomplete snapshot must also show the incomplete marker.
-	m.SetStatus(StatusIncomplete, "snapshot cap reached", 0)
-	v = m.ViewAt(testkit.FixtureEpoch)
-	if !strings.Contains(v, "INCOMPLETE") {
-		t.Fatalf("incomplete marker missing:\n%s", v)
-	}
+func body(m *Model) string {
+	return strings.Join(m.BodyLines(testkit.FixtureEpoch), "\n")
 }
 
-func TestDeterministicSorts(t *testing.T) {
-	base := testkit.FixtureEpoch
-	mk := func(name, phase string, created time.Time, started *time.Time) core.Summary {
-		s := core.Summary{
-			Ref:       core.Ref{Namespace: "ns", Name: name, UID: "uid-" + name},
-			Phase:     phase,
-			CreatedAt: created,
-			StartedAt: started,
-		}
-		return s
+func rowNames(rows []core.Summary) []string {
+	var out []string
+	for _, s := range rows {
+		out = append(out, s.Ref.Name)
 	}
-	started1 := base.Add(-time.Hour)
-	started2 := base.Add(-2 * time.Hour)
-	items := []core.Summary{
-		mk("zebra", "Running", base.Add(-time.Minute), nil),
-		mk("apple", "WeirdPhase", base.Add(-3*time.Hour), nil), // unknown phase
-		mk("mango", "Failed", base.Add(-2*time.Hour), &started2),
-		mk("banana", "Running", base.Add(-5*time.Minute), &started1),
-		mk("noplace", "Running", time.Time{}, nil), // missing CreatedAt
-	}
-
-	// Phase sort: Failed first, Running next, unknown last. Inside a phase
-	// group the newest run comes first, and a row with no timestamp at all
-	// sorts after the timestamped ones.
-	Sort(items, SortPhaseName)
-	got := []string{}
-	for _, it := range items {
-		got = append(got, it.Ref.Name)
-	}
-	want := []string{"mango", "zebra", "banana", "noplace", "apple"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("phase sort = %v, want %v", got, want)
-	}
-
-	// Name sort.
-	Sort(items, SortName)
-	got = nil
-	for _, it := range items {
-		got = append(got, it.Ref.Name)
-	}
-	want = []string{"apple", "banana", "mango", "noplace", "zebra"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("name sort = %v, want %v", got, want)
-	}
-
-	// Time sort: newest first; missing CreatedAt strictly last (by name).
-	Sort(items, SortTime)
-	got = nil
-	for _, it := range items {
-		got = append(got, it.Ref.Name)
-	}
-	want = []string{"zebra", "banana", "mango", "apple", "noplace"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("time sort = %v, want %v", got, want)
-	}
-
-	// Stability: equal keys keep relative input order.
-	a := mk("same", "Running", base.Add(-time.Minute), nil)
-	b := mk("same2", "Running", base.Add(-time.Minute), nil)
-	items = []core.Summary{a, b}
-	Sort(items, SortPhaseName)
-	if items[0].Ref.Name != "same" || items[1].Ref.Name != "same2" {
-		t.Fatal("stable order not preserved for equal keys")
-	}
+	return out
 }
 
-func TestSelectionPreservedAcrossReorderAndDeletion(t *testing.T) {
-	m := tl(t)
-	wfs := summariesFrom(testkit.FixtureWorkflowList("ns", 5))
-	m.SetItems(wfs, testkit.FixtureEpoch)
-
-	// Select a mid-row workflow by moving; note its UID.
-	m.Update(runeKey('j'))
-	m.Update(runeKey('j'))
-	selected := m.SelectedRef()
-	if selected.Name == "" {
-		t.Fatal("no selection")
+func rowIDs(rows []core.Summary) []string {
+	var out []string
+	for _, s := range rows {
+		out = append(out, s.Ref.UID)
 	}
-
-	// Reorder the snapshot (reverse) — selection must stay on the same UID
-	// even though the row index changed (no row-index identity).
-	rev := make([]core.Summary, len(wfs))
-	for i := range wfs {
-		rev[i] = wfs[len(wfs)-1-i]
-	}
-	m.SetItems(rev, testkit.FixtureEpoch)
-	if got := m.SelectedRef(); got.UID != selected.UID {
-		t.Fatalf("reorder lost selection: %v != %v", got.UID, selected.UID)
-	}
-
-	// Deletion: remove the selected workflow; selection must drop (it must not
-	// silently jump to a row that was elsewhere).
-	next := make([]core.Summary, 0, len(rev))
-	for _, it := range rev {
-		if it.Ref.UID != selected.UID {
-			next = append(next, it)
-		}
-	}
-	m.SetItems(next, testkit.FixtureEpoch)
-	if m.SelectedRef().UID == selected.UID {
-		t.Fatal("deleted workflow still selected")
-	}
-	if !m.HasSelection() {
-		t.Fatal("selection should re-anchor to first row, not vanish")
-	}
-
-	// Same name, new UID = a different workflow: selecting the
-	// old UID must not reattach to the new one.
-	replacement := core.Summary{
-		Ref:       core.Ref{Namespace: "ns", Name: selected.Name, UID: "brand-new-uid"},
-		Phase:     "Running",
-		CreatedAt: testkit.FixtureEpoch,
-	}
-	m.SetItems([]core.Summary{replacement}, testkit.FixtureEpoch)
-	if m.SelectedRef().UID == selected.UID {
-		t.Fatal("selection crossed UID boundary")
-	}
+	return out
 }
 
-func TestStatusesDistinguishable(t *testing.T) {
-	m := tl(t)
-	wfs := summariesFrom(testkit.FixtureWorkflowList("ns", 4))
-	m.SetItems(wfs, testkit.FixtureEpoch)
-	base := m.ViewAt(testkit.FixtureEpoch)
+func summary(uid, phase string) core.Summary {
+	return core.Summary{Ref: core.Ref{Namespace: "ns", Name: uid, UID: uid}, Phase: phase}
+}
 
-	cases := []struct {
-		status Status
-		msg    string
-		marker string
+func TestListIntents(t *testing.T) {
+	ref := core.Ref{Namespace: "ns", Name: "target", UID: "target-uid"}
+	for _, c := range []struct {
+		key  tea.KeyPressMsg
+		want tea.Msg
 	}{
-		{StatusLoading, "", "loading…"},
-		{StatusStale, "connection refused", "stale"},
-		{StatusForbidden, "workflows.argoproj.io is forbidden", "forbidden"},
-		{StatusUnauthenticated, "token expired", "unauthenticated"},
-		{StatusIncomplete, "", "INCOMPLETE"},
-	}
-	for _, tc := range cases {
-		mm := m
-		mm.SetStatus(tc.status, tc.msg, 2*time.Minute)
-		v := mm.ViewAt(testkit.FixtureEpoch)
-		if !strings.Contains(v, tc.marker) {
-			t.Errorf("status %d: marker %q missing:\n%s", tc.status, tc.marker, v)
-		}
-		// Text must differ from the idle view for each state.
-		if tc.status != StatusIncomplete && v == base {
-			t.Errorf("status %d view identical to idle", tc.status)
-		}
-	}
-}
-
-func TestForbiddenErrorSanitized(t *testing.T) {
-	m := tl(t)
-	// Malicious message must be neutralized before display.
-	m.SetStatus(StatusForbidden, "denied \x1b]8;;http://evil\x1b\\link\x07back", 0)
-	m.SetItems(nil, testkit.FixtureEpoch)
-	v := m.ViewAt(testkit.FixtureEpoch)
-	if strings.ContainsRune(v, '\x1b') {
-		t.Fatalf("escape sequence leaked into view:\n%q", v)
-	}
-}
-
-func TestUnicodeNameRendering(t *testing.T) {
-	m := tl(t)
-	wide := core.Summary{
-		Ref:       core.Ref{Namespace: "ns", Name: "日本語ワークフロー-表达式", UID: "uid-wide"},
-		Phase:     "Running",
-		CreatedAt: testkit.FixtureEpoch.Add(-time.Minute),
-	}
-	ascii := core.Summary{
-		Ref:       core.Ref{Namespace: "ns", Name: "ascii-name", UID: "uid-ascii"},
-		Phase:     "Failed",
-		CreatedAt: testkit.FixtureEpoch.Add(-2 * time.Minute),
-	}
-	m.SetItems([]core.Summary{wide, ascii}, testkit.FixtureEpoch)
-	m.SetSize(80, 24)
-	v := m.ViewAt(testkit.FixtureEpoch)
-	if !strings.Contains(v, "日本語ワークフロー-表达式") {
-		t.Fatalf("wide name dropped:\n%s", v)
-	}
-	// Alignment: every row line should be a sane cell width (no panic,
-	// no negative padding crash) — exercise with narrow width too.
-	m.SetSize(60, 24)
-	_ = m.ViewAt(testkit.FixtureEpoch)
-}
-
-func TestResizeNoticeSmallTerminal(t *testing.T) {
-	m := tl(t)
-	m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 3)), testkit.FixtureEpoch)
-	m.SetSize(40, 10)
-	v := m.ViewAt(testkit.FixtureEpoch)
-	if !strings.Contains(v, "too small") {
-		t.Fatalf("resize notice missing:\n%s", v)
-	}
-	if !strings.Contains(v, "q quit") {
-		t.Fatal("quit hint must survive the tiny-terminal notice")
-	}
-}
-
-func goldenTestcases() map[string]func(*Model) {
-	return map[string]func(*Model){
-		"idle":       func(m *Model) {},
-		"loading":    func(m *Model) { m.SetStatus(StatusLoading, "", 0) },
-		"stale":      func(m *Model) { m.SetStatus(StatusStale, "connection refused", 2*time.Minute) },
-		"forbidden":  func(m *Model) { m.SetStatus(StatusForbidden, "workflows list forbidden", 0) },
-		"unauth":     func(m *Model) { m.SetStatus(StatusUnauthenticated, "token expired", 0) },
-		"incomplete": func(m *Model) { m.SetStatus(StatusIncomplete, "", 0) },
-		"filtered":   func(m *Model) { m.SetQuery("fixture-wf-0") },
-		"phase":      func(m *Model) { m.SetPhase(PhaseFailed) },
-		"empty":      func(m *Model) { m.SetItems(nil, testkit.FixtureEpoch) },
-	}
-}
-
-func TestGoldenSnapshots(t *testing.T) {
-	dir := filepath.Join("testdata")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for name, setup := range goldenTestcases() {
-		t.Run(name, func(t *testing.T) {
-			m := tl(t)
-			if name != "empty" {
-				m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 6)), testkit.FixtureEpoch)
+		{enterKey(), shared.OpenWorkflowMsg{Ref: ref}},
+		{runeKey('l'), shared.OpenLogsMsg{Ref: ref, Container: "main"}},
+		{runeKey('T'), shared.OpenWorkflowMsg{Ref: ref, Section: shared.SectionTimeline}},
+		{runeKey('X'), shared.OpenWorkflowMsg{Ref: ref, Section: shared.SectionExplain}},
+		{runeKey('E'), shared.OpenWorkflowMsg{Ref: ref, Section: shared.SectionEvents}},
+		{runeKey('r'), RefreshListMsg{}},
+	} {
+		t.Run(c.key.String(), func(t *testing.T) {
+			m := newList(t)
+			m.SetItems([]core.Summary{summary("a-decoy", ""), {Ref: ref}}, testkit.FixtureEpoch)
+			m.Update(runeKey('j'))
+			cmd := m.Update(c.key)
+			if cmd == nil || !reflect.DeepEqual(cmd(), c.want) {
+				t.Fatalf("intent = %v, want %#v", cmd, c.want)
 			}
-			setup(&m)
-			m.SetSize(80, 24)
-			got := m.ViewAt(testkit.FixtureEpoch)
-			golden(t, filepath.Join(dir, name+".golden"), got)
+			m.SetItems(nil, testkit.FixtureEpoch)
+			if c.key.String() != "r" && m.Update(c.key) != nil {
+				t.Fatal("empty selection emitted intent")
+			}
 		})
 	}
 }
 
-// golden compares (or writes, with UPDATE_GOLDEN=1) a golden file.
-func golden(t *testing.T, path, got string) {
+func TestSelectionAcrossSnapshots(t *testing.T) {
+	m := newList(t)
+	a, b, c := summary("a", "Running"), summary("b", "Running"), summary("c", "Running")
+	m.SetItems([]core.Summary{a, b, c}, testkit.FixtureEpoch)
+	m.Update(runeKey('j'))
+	b.Phase = "Succeeded"
+	m.SetItems([]core.Summary{c, b, a}, testkit.FixtureEpoch)
+	if got := rowIDs(m.Rows()); !reflect.DeepEqual(got, []string{"a", "c", "b"}) || m.SelectedRef().UID != "b" {
+		t.Fatalf("reordered rows %v selection %+v", got, m.SelectedRef())
+	}
+	m.SetItems([]core.Summary{c, a}, testkit.FixtureEpoch)
+	if m.SelectedRef().UID != "a" {
+		t.Fatalf("deletion fallback %+v", m.SelectedRef())
+	}
+	replacement := a
+	replacement.Ref.UID = "replacement"
+	replacement.Phase = "Succeeded"
+	m.SetItems([]core.Summary{replacement, c}, testkit.FixtureEpoch)
+	if m.SelectedRef().UID != "c" {
+		t.Fatalf("selection followed name to replacement: %+v", m.SelectedRef())
+	}
+	m.SetItems(nil, testkit.FixtureEpoch)
+	if m.SelectedRef() != (core.Ref{}) {
+		t.Fatal("empty snapshot retained selection")
+	}
+}
+
+func TestSearchEditing(t *testing.T) {
+	t.Run("command letters", func(t *testing.T) {
+		for _, r := range "wjqrpsT XE" {
+			if r == ' ' {
+				continue
+			}
+			m := newList(t)
+			m.SetItems([]core.Summary{summary("one", "Running")}, testkit.FixtureEpoch)
+			m.Update(runeKey('/'))
+			if m.Update(runeKey(r)) != nil || m.searchBuf != string(r) || m.wide || m.MarkCount() != 0 || m.phase != PhaseAll || m.sort != SortPhaseName {
+				t.Fatalf("%c dispatched during text entry: %+v", r, m)
+			}
+		}
+	})
+	t.Run("cursor and Unicode", func(t *testing.T) {
+		m := newList(t)
+		m.Update(runeKey('/'))
+		if !strings.Contains(body(&m), "[_]  (enter apply, esc cancel)") {
+			t.Fatal("input cursor missing")
+		}
+		typeText(&m, "abc")
+		m.Update(backspaceKey())
+		m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+		typeText(&m, "X")
+		if m.searchBuf != "aXb" {
+			t.Fatalf("mid insert %q", m.searchBuf)
+		}
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+		if m.searchBuf != "aXb" {
+			t.Fatal("control inserted")
+		}
+		m.Update(enterKey())
+		if m.SearchOn || m.Query() != "aXb" || m.searchBuf != "" {
+			t.Fatal("commit state")
+		}
+		m.Update(runeKey('/'))
+		if m.searchBuf != "aXb" {
+			t.Fatal("prefill missing")
+		}
+		typeText(&m, "日本")
+		m.Update(backspaceKey())
+		if m.searchBuf != "aXb日" {
+			t.Fatalf("Unicode backspace %q", m.searchBuf)
+		}
+		m.Update(tea.KeyPressMsg{Code: tea.KeyHome})
+		typeText(&m, "z")
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
+		typeText(&m, "y")
+		if m.searchBuf != "zaXb日y" {
+			t.Fatal("home/end editing")
+		}
+	})
+	t.Run("live commit cancel clear", func(t *testing.T) {
+		m := newList(t)
+		m.SetItems([]core.Summary{summary("apple", "Running"), summary("banana", "Running")}, testkit.FixtureEpoch)
+		editQuery(&m, "app")
+		if !reflect.DeepEqual(rowIDs(m.Rows()), []string{"apple"}) {
+			t.Fatal("typing did not filter live")
+		}
+		m.Update(enterKey())
+		editQuery(&m, "absent")
+		if len(m.Rows()) != 0 || m.SelectedRef().UID != "" {
+			t.Fatal("empty filter retained rows/selection")
+		}
+		m.Update(escKey())
+		if m.Query() != "app" || !reflect.DeepEqual(rowIDs(m.Rows()), []string{"apple"}) {
+			t.Fatal("cancel lost prior filter")
+		}
+		editQuery(&m, "absent")
+		m.Update(enterKey())
+		m.Update(escKey())
+		if m.Query() != "" || len(m.Rows()) != 2 || m.SearchOn {
+			t.Fatal("Escape did not restore rows")
+		}
+	})
+}
+
+func golden(t *testing.T, name, got string) {
 	t.Helper()
+	path := filepath.Join("testdata", name+".golden")
 	if os.Getenv("UPDATE_GOLDEN") == "1" {
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(got), 0644); err != nil {
 			t.Fatal(err)
 		}
 		return
 	}
 	want, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.Fatalf("golden missing (%s); run UPDATE_GOLDEN=1 once and review: %v", path, err)
-		}
 		t.Fatal(err)
 	}
 	if string(want) != got {
-		t.Fatalf("golden mismatch for %s:\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
+		t.Fatalf("golden %s mismatch:\nwant:\n%s\ngot:\n%s", name, want, got)
 	}
 }
 
-func TestSearchBufferEditing(t *testing.T) {
-	m := tl(t)
-	m.Update(runeKey('/'))
-	if !m.SearchOn {
-		t.Fatal("/ did not focus search")
-	}
-	// Empty-state rendering shows the cursor and the usage hint.
-	if v := m.ViewAt(testkit.FixtureEpoch); !strings.Contains(v, "[_]  (enter apply, esc cancel)") {
-		t.Fatalf("empty search line rendering missing:\n%s", v)
-	}
-	for _, r := range "abc" {
-		m.Update(runeKey(r))
-	}
-	if m.SearchValue() != "abc" {
-		t.Fatalf("buffer = %q, want abc", m.SearchValue())
-	}
-	// Backspace removes the last typed rune; cursor edits are honored.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	if m.SearchValue() != "ab" {
-		t.Fatalf("after backspace = %q, want ab", m.SearchValue())
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-	m.Update(runeKey('X'))
-	if m.SearchValue() != "aXb" {
-		t.Fatalf("mid-insert = %q, want aXb", m.SearchValue())
-	}
-	// Control keys are dropped, never inserted and never commands.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if m.SearchValue() != "aXb" {
-		t.Fatalf("tab leaked into buffer: %q", m.SearchValue())
-	}
-	// Enter applies (trimmed) and clears the entry buffer.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.Query() != "aXb" || m.SearchOn {
-		t.Fatalf("enter apply: query=%q on=%v", m.Query(), m.SearchOn)
-	}
-	if m.SearchValue() != "" {
-		t.Fatalf("buffer must clear after apply, got %q", m.SearchValue())
-	}
-	// Reopening the input prefills the applied query, so an existing filter
-	// can be edited instead of retyped.
-	m.Update(runeKey('/'))
-	if m.SearchValue() != "aXb" {
-		t.Fatalf("reopened buffer = %q, want the applied query aXb", m.SearchValue())
-	}
-	// Editing over a wide rune stays rune-correct (no byte slicing).
-	for _, r := range "日本" {
-		m.Update(runeKey(r))
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	if m.SearchValue() != "aXb日" {
-		t.Fatalf("wide-rune backspace = %q, want aXb日", m.SearchValue())
-	}
+func setTimeZone(t *testing.T, loc *time.Location) {
+	t.Helper()
+	previous := time.Local
+	time.Local = loc
+	t.Cleanup(func() {
+		time.Local = previous
+	})
 }

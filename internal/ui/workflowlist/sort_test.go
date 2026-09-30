@@ -1,73 +1,104 @@
 package workflowlist
 
 import (
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/ficaa1/micko/internal/core"
-	"github.com/ficaa1/micko/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// testTheme is the shared plain theme for tests in this package.
-func testTheme() shared.Theme { return shared.NewTheme(true) }
-
-func TestSortKeyCycle(t *testing.T) {
-	k := SortPhaseName
-	want := []SortKey{SortName, SortTime, SortPhaseName}
-	for i, w := range want {
-		k = k.Next()
-		if k != w {
-			t.Fatalf("step %d: got %v, want %v", i, k, w)
+func TestListSortOrders(t *testing.T) {
+	now := testkit.FixtureEpoch
+	start := now.Add(-time.Hour)
+	recentStart := now.Add(-time.Minute)
+	items := []core.Summary{summary("zebra", "Running"), summary("apple", "Mystery"), summary("mango", "Failed"), summary("banana", "Running"), summary("missing", "Running")}
+	items[0].CreatedAt = now.Add(-3 * time.Hour)
+	items[0].StartedAt = &recentStart
+	items[1].CreatedAt = now.Add(-3 * time.Hour)
+	items[2].CreatedAt = now.Add(-2 * time.Hour)
+	items[3].CreatedAt = now.Add(-2 * time.Hour)
+	items[3].StartedAt = &start
+	m := newList(t)
+	m.SetItems(items, now)
+	for _, c := range []struct {
+		key  string
+		want []string
+	}{
+		{"phase", []string{"mango", "zebra", "banana", "missing", "apple"}},
+		{"name", []string{"apple", "banana", "mango", "missing", "zebra"}},
+		{"time", []string{"banana", "mango", "apple", "zebra", "missing"}},
+		{"phase", []string{"mango", "zebra", "banana", "missing", "apple"}},
+	} {
+		if string(m.sort) != c.key || !slices.Equal(rowIDs(m.Rows()), c.want) || m.SelectedRef().UID != c.want[0] {
+			t.Fatalf("%s: rows %v selection %v", c.key, rowIDs(m.Rows()), m.SelectedRef())
 		}
+		m.Update(runeKey('j'))
+		m.Update(runeKey('s'))
 	}
+	t.Run("failure common rank", func(t *testing.T) {
+		for _, phases := range [][2]string{{"Error", "Failed"},
+			{"Failed", "Error"}} {
+			m := newList(t)
+			m.SetItems([]core.Summary{summary("z", phases[0]), summary("a", phases[1])}, now)
+			if got := rowIDs(m.Rows()); !slices.Equal(got, []string{"a", "z"}) {
+				t.Fatalf("%v: %v", phases, got)
+			}
+		}
+	})
+	t.Run("namespace tie", func(t *testing.T) {
+		m := newList(t)
+		m.SetItems(crossNamespaceItems()[:2], now)
+		for i := 0; i < 2; i++ {
+			if got := rowIDs(m.Rows()); !slices.Equal(got, []string{"uid-a", "uid-b"}) {
+				t.Fatalf("%s: %v", m.sort, got)
+			}
+			m.Update(runeKey('s'))
+		}
+	})
+	t.Run("missing timestamps and equal time keys", func(t *testing.T) {
+		m := newList(t)
+		a, b := summary("a-missing", "Running"), summary("b-missing", "Running")
+		x, y := summary("x", "Running"), summary("y", "Running")
+		x.Ref.Name = "same"
+		y.Ref.Name = "same"
+		x.CreatedAt = now
+		y.CreatedAt = now
+		m.SetItems([]core.Summary{b, y, a, x}, now)
+		m.Update(runeKey('s'))
+		m.Update(runeKey('s'))
+		if got := rowIDs(m.Rows()); !slices.Equal(got, []string{"y", "x", "a-missing", "b-missing"}) {
+			t.Fatalf("time ties preserve snapshot order: %v", got)
+		}
+		m.SetItems([]core.Summary{b, y, a, x}, now)
+		if got := rowIDs(m.Rows()); !slices.Equal(got, []string{"y", "x", "a-missing", "b-missing"}) {
+			t.Fatalf("snapshot time stable order: %v", got)
+		}
+	})
 }
 
-func TestSortUnknownPhasesLastDeterministic(t *testing.T) {
-	// Unknown phases must be displayable AND sort after the
-	// canonical buckets, deterministically by name.
-	items := []core.Summary{
-		{Ref: core.Ref{Name: "zeta"}, Phase: "MysteryPhase"},
-		{Ref: core.Ref{Name: "alpha"}, Phase: "MysteryPhase"},
-		{Ref: core.Ref{Name: "mid"}, Phase: "Running"},
-	}
-	Sort(items, SortPhaseName)
-	if items[0].Ref.Name != "mid" {
-		t.Fatalf("canonical phase not first: %v", items[0])
-	}
-	if items[1].Ref.Name != "alpha" || items[2].Ref.Name != "zeta" {
-		t.Fatalf("unknown phase group unordered: %v, %v", items[1], items[2])
-	}
-}
-
-func TestSortTreatsErrorLikeFailedBucket(t *testing.T) {
-	// "Error" is canonical upstream and themes as failure; phase rank
-	// groups it with Failed deterministically.
-	items := []core.Summary{
-		{Ref: core.Ref{Name: "err"}, Phase: "Error"},
-		{Ref: core.Ref{Name: "fail"}, Phase: "Failed"},
-	}
-	Sort(items, SortPhaseName)
-	if items[0].Ref.Name != "err" || items[1].Ref.Name != "fail" {
-		t.Fatalf("Error/Failed order: %v, %v", items[0], items[1])
-	}
-}
-
-func TestPhaseStyleFallbackText(t *testing.T) {
-	// Unknown phases stay displayable: the view text carries the phase
-	// even without color (color is never the only carrier).
-	m := New(testTheme())
-	if got := m.rowPhaseText("WeirdFuturePhase"); got != "WeirdFuturePhase" {
-		t.Fatalf("rowPhaseText = %q", got)
-	}
-	if got := m.rowPhaseText(""); got != "(no phase)" {
-		t.Fatalf("empty phase text = %q", got)
-	}
-}
-
-func TestPhaseStyleUsesTheme(t *testing.T) {
-	// The phase style is consulted so colors accompany text where the
-	// theme has them; the plain theme renders identical text.
-	m := New(testTheme())
-	if m.theme.PhaseStyle("Running").Value() != "" {
-		t.Fatal("plain theme should carry no color value")
+func TestPhaseFilters(t *testing.T) {
+	m := newList(t)
+	gate := summary("gate", "Running")
+	gate.Suspended = true
+	m.SetItems([]core.Summary{gate, summary("run", "Running"), summary("pending", "Pending"), summary("done", "Succeeded"), summary("fail", "Failed"), summary("error", "Error"), summary("future", "Mystery"), summary("missing", "")}, testkit.FixtureEpoch)
+	for _, c := range []struct {
+		phase PhaseFilter
+		want  []string
+	}{
+		{PhaseAll, []string{"gate", "error", "fail", "run", "pending", "done", "future", "missing"}},
+		{PhaseSuspended, []string{"gate"}},
+		{PhaseRunning, []string{"gate", "run"}},
+		{PhasePending, []string{"pending"}},
+		{PhaseSucceeded, []string{"done"}},
+		{PhaseFailed, []string{"fail"}},
+		{PhaseOther, []string{"future", "missing"}},
+		{PhaseAll, []string{"gate", "error", "fail", "run", "pending", "done", "future", "missing"}},
+	} {
+		if m.phase != c.phase || !slices.Equal(rowIDs(m.Rows()), c.want) {
+			t.Fatalf("%s: rows %v want %v", c.phase, rowIDs(m.Rows()), c.want)
+		}
+		m.Update(runeKey('p'))
 	}
 }

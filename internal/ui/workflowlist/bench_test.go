@@ -9,7 +9,9 @@ import (
 )
 
 // Benchmarks for 5,000 summaries staying keyboard-responsive: filter+sort
-// over the full snapshot and a full View render.
+
+// over the full snapshot and a pane body render.
+
 func benchItems(n int) []core.Summary {
 	return summariesFrom(testkit.FixtureWorkflowList("ns", n))
 }
@@ -30,6 +32,6 @@ func BenchmarkViewRender5k(b *testing.B) {
 	m.SetSize(120, 40)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = m.ViewAt(testkit.FixtureEpoch)
+		_ = m.BodyLines(testkit.FixtureEpoch)
 	}
 }

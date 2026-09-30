@@ -10,8 +10,6 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// demoSummaries is the demo namespace's list, as the demo serves it, with the
-// clock it was built against.
 func demoSummaries(t *testing.T) ([]core.Summary, time.Time) {
 	t.Helper()
 	now := testkit.FixtureEpoch
@@ -26,25 +24,21 @@ func demoSummaries(t *testing.T) ([]core.Summary, time.Time) {
 	return out, now
 }
 
-// matching returns the names q selects from items, in input order.
 func matching(t *testing.T, q string, items []core.Summary, now time.Time) []string {
 	t.Helper()
-	m, err := ParseQuery(q)
-	if err != nil {
-		t.Fatalf("ParseQuery(%q): %v", q, err)
+	m := newList(t)
+	m.SetItems(items, now)
+	editQuery(&m, q)
+	m.Update(enterKey())
+	if m.SearchOn {
+		t.Fatalf("query %q: %s", q, m.queryErr)
 	}
-	var out []string
-	for _, s := range items {
-		if m.Match(s, now) {
-			out = append(out, s.Ref.Name)
-		}
-	}
-	return out
+	got := rowNames(m.Rows())
+	slices.Sort(got)
+	return got
 }
 
-// Each operator parses to its canonical form. The canonical form is what
-// the toolbar shows, so it must also parse back to the same filter.
-func TestParseQueryCanonicalForms(t *testing.T) {
+func TestQueryCanonicalForms(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"", ""},
 		{"   ", ""},
@@ -81,25 +75,33 @@ func TestParseQueryCanonicalForms(t *testing.T) {
 		{"& a &", "a"},
 	}
 	for _, c := range cases {
-		m, err := ParseQuery(c.in)
-		if err != nil {
-			t.Errorf("ParseQuery(%q): %v", c.in, err)
-			continue
-		}
-		if got := m.String(); got != c.want {
-			t.Errorf("ParseQuery(%q).String() = %q, want %q", c.in, got, c.want)
-			continue
-		}
-		again, err := ParseQuery(m.String())
-		if err != nil || again.String() != c.want {
-			t.Errorf("canonical %q does not parse back: %q, %v", c.want, again.String(), err)
-		}
+		t.Run(c.in, func(t *testing.T) {
+			m := newList(t)
+			m.SetItems([]core.Summary{summary("etl-report", "Failed"), summary("other", "Running")}, testkit.FixtureEpoch)
+			editQuery(&m, c.in)
+			m.Update(enterKey())
+			if m.SearchOn {
+				t.Fatal(m.queryErr)
+			}
+			got := body(&m)
+			want := "Search: " + c.want
+			if c.want == "" {
+				want = "Search: (none)"
+			}
+			if !strings.Contains(got, want+" ") {
+				t.Fatalf("canonical %q missing:\n%s", want, got)
+			}
+			before := rowIDs(m.Rows())
+			editQuery(&m, c.want)
+			m.Update(enterKey())
+			if m.SearchOn || !slices.Equal(rowIDs(m.Rows()), before) || !strings.Contains(body(&m), want+" ") {
+				t.Fatal("canonical reentry failed")
+			}
+		})
 	}
 }
 
-// Every malformed term is an error that names what is wrong, never a
-// filter that silently matches nothing.
-func TestParseQueryErrors(t *testing.T) {
+func TestQueryErrors(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"phase=", "phase= needs a value"},
 		{"phase!=", "phase!= needs a value"},
@@ -137,105 +139,131 @@ func TestParseQueryErrors(t *testing.T) {
 		{"good phase=", "phase= needs a value"},
 	}
 	for _, c := range cases {
-		_, err := ParseQuery(c.in)
-		if err == nil {
-			t.Errorf("ParseQuery(%q) parsed; want an error containing %q", c.in, c.want)
-			continue
-		}
-		if !strings.Contains(err.Error(), c.want) {
-			t.Errorf("ParseQuery(%q) error = %q, want it to contain %q", c.in, err, c.want)
-		}
+		t.Run(c.in, func(t *testing.T) {
+			m := newList(t)
+			m.SetItems([]core.Summary{summary("good", "Running")}, testkit.FixtureEpoch)
+			editQuery(&m, c.in)
+			before := rowIDs(m.Rows())
+			query := m.Query()
+			m.Update(enterKey())
+			if !m.SearchOn || !strings.Contains(body(&m), c.want) || !slices.Equal(rowIDs(m.Rows()), before) || m.Query() != query {
+				t.Fatalf("bad query committed or lost diagnostic: %q\n%s", c.in, body(&m))
+			}
+		})
 	}
+	t.Run("preserve repair cancel", func(t *testing.T) {
+		m := newList(t)
+		m.SetItems([]core.Summary{summary("etl-hourly", "Failed"), summary("other", "Running")}, testkit.FixtureEpoch)
+		editQuery(&m, "etl")
+		m.Update(enterKey())
+		m.Update(runeKey('/'))
+		typeText(&m, " phase=failed")
+		typeText(&m, " /hourly(/")
+		if m.Query() != "etl phase=failed" || !slices.Equal(rowIDs(m.Rows()), []string{"etl-hourly"}) {
+			t.Fatal("invalid term replaced prior rows")
+		}
+		m.Update(enterKey())
+		if !m.SearchOn {
+			t.Fatal("invalid input closed")
+		}
+		m.Update(backspaceKey())
+		m.Update(backspaceKey())
+		typeText(&m, "/")
+		if m.Query() != "etl phase=failed /hourly/" || strings.Contains(body(&m), "✗ bad") {
+			t.Fatal("repair retained error")
+		}
+		m.Update(escKey())
+		if m.Query() != "etl" || m.queryErr != "" || m.SearchOn {
+			t.Fatal("cancel failed")
+		}
+	})
 }
 
-// Spaces AND terms, | ORs alternatives within one, and ! binds to the one
-// alternative it precedes.
-func TestParseQueryPrecedence(t *testing.T) {
-	names := func(ns ...string) []core.Summary {
-		var out []core.Summary
-		for _, n := range ns {
-			out = append(out, core.Summary{Ref: core.Ref{Name: n, UID: n}})
-		}
-		return out
-	}
-	items := names("ab", "a", "b", "c")
+func TestQueryMatches(t *testing.T) {
+	now := testkit.FixtureEpoch
+	start := now.Add(-time.Hour)
+	finish := now.Add(-50 * time.Minute)
+	recent := now.Add(-time.Minute)
+	items := []core.Summary{summary("ab", "Failed"), summary("a", "Running"), summary("b", "Running"), summary("c", "Error")}
+	items[0].StartedAt = &start
+	items[0].FinishedAt = &finish
+	items[0].CreatedAt = now.Add(-2 * time.Hour)
+	items[0].Labels = map[string]string{workflowTemplateLabel: "daily", "team": "data", "env": "prod"}
+	items[1].Suspended = true
+	items[1].StartedAt = &recent
+	items[1].Labels = map[string]string{clusterWorkflowTemplateLabel: "cluster"}
+	items[2].CreatedAt = start
+	items[2].Labels = map[string]string{cronLabel: "hourly"}
 	for _, c := range []struct {
 		q    string
 		want []string
 	}{
+		{"", []string{"a", "ab", "b", "c"}},
+		{"A", []string{"a", "ab"}},
 		{"a b", []string{"ab"}},
-		{"a|b", []string{"ab", "a", "b"}},
+		{"a|b", []string{"a", "ab", "b"}},
 		{"a|b c", nil},
 		{"!a", []string{"b", "c"}},
-		{"!a|b", []string{"ab", "b", "c"}}, // (not a) or b
-		{"!a !b", []string{"c"}},           // neither
+		{"!a|b", []string{"ab", "b", "c"}},
+		{"!a !b", []string{"c"}},
 		{"a|b !b", []string{"a"}},
-		{"/^a$|^c$/", []string{"a", "c"}}, // | inside a regex is the regex's
-		{"/^A/", []string{"ab", "a"}},     // case-insensitive
+		{"/^a$|^c$/", []string{"a", "c"}},
+		{"/^A/", []string{"a", "ab"}},
 		{"~ab", []string{"ab"}},
-		{"~ba", nil}, // order matters
+		{"~ba", nil},
+		{"phase=failed", []string{"ab"}},
+		{"phase=failed|phase=error", []string{"ab", "c"}},
+		{"phase=suspended", []string{"a"}},
+		{"phase=running", []string{"a", "b"}},
+		{"phase=running !phase=suspended", []string{"b"}},
+		{"phase!=failed phase!=error", []string{"a", "b"}},
+		{"age<2m", []string{"a"}},
+		{"age>30m", []string{"ab", "b"}},
+		{"age<1h", []string{"a"}},
+		{"age>1h", nil},
+		{"dur<2m", []string{"a"}},
+		{"dur>5m", []string{"ab"}},
+		{"dur<10m", []string{"a"}},
+		{"dur>10m", nil},
+		{"tmpl=DAILY", []string{"ab"}},
+		{"tmpl=cluster", []string{"a"}},
+		{"tmpl!=daily", []string{"a", "b", "c"}},
+		{"cron=HOURLY", []string{"b"}},
+		{"cron!=hourly", []string{"a", "ab", "c"}},
+		{"label:team=data", []string{"ab"}},
+		{"label:team=Data", nil},
+		{"label:env", []string{"ab"}},
+		{"label:!team", []string{"a", "b", "c"}},
 	} {
-		if got := matching(t, c.q, items, time.Time{}); !slices.Equal(got, c.want) {
-			t.Errorf("%q matched %v, want %v", c.q, got, c.want)
-		}
+		t.Run(c.q, func(t *testing.T) {
+			if got := matching(t, c.q, items, now); !slices.Equal(got, c.want) {
+				t.Fatalf("matches %v want %v", got, c.want)
+			}
+		})
 	}
 }
 
-// The matcher answers the questions an operator asks of the demo's twelve
-// workflows. The demo builds its ages from the clock it is given, so these
-// are exact.
-func TestMatcherAgainstTheDemo(t *testing.T) {
-	items, now := demoSummaries(t)
+func TestQueriesAcrossNamespaces(t *testing.T) {
 	for _, c := range []struct {
 		q    string
+		all  bool
 		want []string
 	}{
-		{"etl", []string{"demo-etl-hourly-1790000000", "demo-etl-hourly-1789996400", "demo-etl-hourly-1789992800"}},
-		{"ETL-HOURLY-179000", []string{"demo-etl-hourly-1790000000"}},
-		{"phase=failed", []string{"demo-nightly-report", "demo-oom-backfill", "demo-etl-hourly-1790000000"}},
-		{"phase=failed|phase=error", []string{"demo-nightly-report", "demo-oom-backfill", "demo-param-check", "demo-etl-hourly-1790000000"}},
-		{"phase=suspended", []string{"demo-release-gate"}},
-		// The gate's workflow is Running to the server, so it is running.
-		{"phase=running", []string{"demo-train-pipeline", "demo-data-pull", "demo-release-gate"}},
-		{"phase=running !phase=suspended", []string{"demo-train-pipeline", "demo-data-pull"}},
-		{"phase!=succeeded phase!=failed", []string{"demo-train-pipeline", "demo-data-pull", "demo-cleanup", "demo-release-gate", "demo-param-check"}},
-		{"age<15m", []string{"demo-train-pipeline", "demo-cleanup", "demo-release-gate"}},
-		{"age>5h", []string{"demo-param-check"}},
-		{"age>1d", nil},
-		// A running workflow's run time counts until now; the pending one
-		// has not started and has no run time at all.
-		{"dur>30m", []string{"demo-data-pull"}},
-		{"dur<5m", []string{"demo-hello-world", "demo-nightly-report", "demo-train-pipeline", "demo-param-check"}},
-		{"tmpl=nightly-report", []string{"demo-nightly-report"}},
-		{"tmpl=NIGHTLY-REPORT", []string{"demo-nightly-report"}},
-		{"cron=demo-etl-hourly phase=failed", []string{"demo-etl-hourly-1790000000"}},
-		{"label:team=platform", []string{"demo-release-gate", "demo-deploy-multi-layer"}},
-		{"label:team=Platform", nil}, // label values are exact
-		{"label:env", []string{"demo-release-gate", "demo-deploy-multi-layer"}},
-		{"label:!team", []string{"demo-hello-world", "demo-data-pull", "demo-cleanup", "demo-oom-backfill", "demo-param-check"}},
-		{"~ddp", []string{"demo-data-pull", "demo-deploy-multi-layer"}},
-		{"/-(pull|gate)$/", []string{"demo-data-pull", "demo-release-gate"}},
-		{"!etl !demo-d", []string{"demo-hello-world", "demo-nightly-report", "demo-train-pipeline", "demo-cleanup", "demo-release-gate", "demo-oom-backfill", "demo-param-check"}},
+		{"team-a/", true, []string{"uid-a"}},
+		{"etl", true, []string{"uid-a", "uid-b"}},
+		{"/^team-b\\//", true, []string{"uid-b"}},
+		{"/^etl$/", true, []string{"uid-a", "uid-b"}},
+		{"~tma", true, []string{"uid-a"}},
+		{"!team-a/", true, []string{"uid-b", "uid-m"}},
+		{"team-a", false, nil},
 	} {
-		if got := matching(t, c.q, items, now); !slices.Equal(got, c.want) {
-			t.Errorf("%q matched\n  %v\nwant\n  %v", c.q, got, c.want)
+		m := newList(t)
+		m.SetAllNamespaces(c.all)
+		m.SetItems(crossNamespaceItems(), testkit.FixtureEpoch)
+		editQuery(&m, c.q)
+		m.Update(enterKey())
+		if !slices.Equal(rowIDs(m.Rows()), c.want) {
+			t.Errorf("%q all=%v: %v want %v", c.q, c.all, rowIDs(m.Rows()), c.want)
 		}
-	}
-}
-
-// A workflow with nothing to measure matches neither side of a bound, so
-// "age<2h" and "age>2h" together never claim the same row.
-func TestTimePredicatesSkipMissingTimestamps(t *testing.T) {
-	now := testkit.FixtureEpoch
-	noTimes := core.Summary{Ref: core.Ref{Name: "x", UID: "x"}}
-	for _, q := range []string{"age<2h", "age>2h", "dur<2h", "dur>2h"} {
-		if got := matching(t, q, []core.Summary{noTimes}, now); got != nil {
-			t.Errorf("%q matched a workflow with no timestamps", q)
-		}
-	}
-	started := now.Add(-time.Hour)
-	running := core.Summary{Ref: core.Ref{Name: "r", UID: "r"}, StartedAt: &started}
-	if got := matching(t, "dur>30m", []core.Summary{running}, time.Time{}); got != nil {
-		t.Error("a running workflow's run time was measured without a clock")
 	}
 }

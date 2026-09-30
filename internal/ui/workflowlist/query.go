@@ -60,9 +60,6 @@ type predicate interface {
 	String() string
 }
 
-// Empty reports whether the matcher has no terms and so matches everything.
-func (q Matcher) Empty() bool { return len(q.terms) == 0 }
-
 // Match reports whether s passes every term.
 func (q Matcher) Match(s core.Summary, now time.Time) bool {
 	for _, term := range q.terms {

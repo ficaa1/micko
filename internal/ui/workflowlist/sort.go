@@ -9,6 +9,7 @@ package workflowlist
 import (
 	"cmp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ficaa1/micko/internal/core"
@@ -95,7 +96,7 @@ func Sort(items []core.Summary, key SortKey) []core.Summary {
 		a, b := items[i], items[j]
 		switch key {
 		case SortName:
-			if c := cmp.Compare(toLower(a.Ref.Name), toLower(b.Ref.Name)); c != 0 {
+			if c := cmp.Compare(strings.ToLower(a.Ref.Name), strings.ToLower(b.Ref.Name)); c != 0 {
 				return c < 0
 			}
 			// The same name in two namespaces is two workflows; the
@@ -133,7 +134,7 @@ func Sort(items []core.Summary, key SortKey) []core.Summary {
 			if c := newerFirst(a, b); c != 0 {
 				return c < 0
 			}
-			if c := cmp.Compare(toLower(a.Ref.Name), toLower(b.Ref.Name)); c != 0 {
+			if c := cmp.Compare(strings.ToLower(a.Ref.Name), strings.ToLower(b.Ref.Name)); c != 0 {
 				return c < 0
 			}
 			if a.Ref.Namespace != b.Ref.Namespace {
@@ -153,14 +154,4 @@ func ageKey(s core.Summary) time.Time {
 		return *s.StartedAt
 	}
 	return s.CreatedAt
-}
-
-func toLower(s string) string {
-	b := []byte(s)
-	for i := range b {
-		if 'A' <= b[i] && b[i] <= 'Z' {
-			b[i] += 'a' - 'A'
-		}
-	}
-	return string(b)
 }
