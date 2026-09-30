@@ -1,6 +1,7 @@
 package kindlist
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ const minRestWidth = 10
 func (m *Model[T]) BodyLines(now time.Time) []string {
 	if m.width > 0 && m.width < minUsableWidth {
 		return []string{
-			"micko: terminal too small (" + itoa(m.width) + "x" + itoa(m.height) + ")",
+			"micko: terminal too small (" + strconv.Itoa(m.width) + "x" + strconv.Itoa(m.height) + ")",
 			"Resize to at least 60 columns to show the " + m.spec.Noun + " list.",
 			"q quit  ? help  ctrl+c quit",
 		}
@@ -151,12 +152,12 @@ func (m *Model[T]) toolbarLines() []string {
 		search = "Search: " + m.query
 	}
 	if len(m.rows) < len(m.items) || m.query != "" {
-		search += " [within " + itoa(len(m.items)) + " collected]"
+		search += " [within " + strconv.Itoa(len(m.items)) + " collected]"
 	}
-	parts := []string{search, "Sort: " + m.SortLabel()}
+	parts := []string{search, "Sort: " + m.sortLabel()}
 	if m.info {
 		reveal := "values redacted (v reveals)"
-		if m.Revealed() {
+		if m.revealed() {
 			reveal = "values shown (v redacts)"
 		}
 		parts = append(parts, reveal)
@@ -177,7 +178,7 @@ func (m *Model[T]) toolbarLines() []string {
 	case StatusLoading:
 		parts = append(parts, m.theme.Warning.Render("loading…"))
 	case StatusStale:
-		msgs = append(msgs, message{"stale " + humanDuration(m.errAge) + " — " + m.errMsg, m.theme.Warning.Render})
+		msgs = append(msgs, message{"stale " + HumanDuration(m.errAge) + " — " + m.errMsg, m.theme.Warning.Render})
 	case StatusForbidden:
 		msgs = append(msgs, message{"forbidden: " + m.errMsg, m.theme.ErrorText.Render})
 	case StatusUnauthenticated:
@@ -387,7 +388,7 @@ func (m *Model[T]) infoFields(now time.Time) []Field {
 	if !ok || m.spec.Info == nil {
 		return []Field{{Value: "nothing selected"}}
 	}
-	return m.spec.Info(sel, m.Revealed(), now)
+	return m.spec.Info(sel, m.revealed(), now)
 }
 
 // panelLines lays the fields out in width cells and at most height lines:
@@ -470,8 +471,9 @@ func maxInt(a, b int) int {
 	return b
 }
 
-// humanDuration renders a compact duration: 45s, 4m, 2h13m, 3d4h.
-func humanDuration(d time.Duration) string {
+// HumanDuration renders a compact duration: 45s, 4m, 2h13m, 3d4h. Every
+// kind's relative-time column uses it, so they all read the same.
+func HumanDuration(d time.Duration) string {
 	if d < 0 {
 		d = -d
 	}
@@ -479,22 +481,18 @@ func humanDuration(d time.Duration) string {
 	case d >= 24*time.Hour:
 		days := int(d / (24 * time.Hour))
 		if h := int(d%(24*time.Hour)) / int(time.Hour); h > 0 {
-			return itoa(days) + "d" + itoa(h) + "h"
+			return strconv.Itoa(days) + "d" + strconv.Itoa(h) + "h"
 		}
-		return itoa(days) + "d"
+		return strconv.Itoa(days) + "d"
 	case d >= time.Hour:
 		h := int(d / time.Hour)
 		if mins := int(d%time.Hour) / int(time.Minute); mins > 0 {
-			return itoa(h) + "h" + itoa(mins) + "m"
+			return strconv.Itoa(h) + "h" + strconv.Itoa(mins) + "m"
 		}
-		return itoa(h) + "h"
+		return strconv.Itoa(h) + "h"
 	case d >= time.Minute:
-		return itoa(int(d/time.Minute)) + "m"
+		return strconv.Itoa(int(d/time.Minute)) + "m"
 	default:
-		return itoa(int(d/time.Second)) + "s"
+		return strconv.Itoa(int(d/time.Second)) + "s"
 	}
 }
-
-// HumanDuration is the compact duration the kinds' cells use, so every
-// column of relative times reads the same.
-func HumanDuration(d time.Duration) string { return humanDuration(d) }

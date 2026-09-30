@@ -1,6 +1,8 @@
 package kindlist
 
 import (
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +40,7 @@ func thingSpec(namespaced bool) Spec[thing] {
 			case "name":
 				return t.name
 			case "size":
-				return itoa(t.size)
+				return strconv.Itoa(t.size)
 			}
 			return "note for " + t.name
 		},
@@ -62,41 +64,58 @@ func thingSpec(namespaced bool) Spec[thing] {
 	}
 }
 
+// things sort bravo, charlie, alpha by size and alpha, bravo, charlie by name.
 func things() []thing {
 	return []thing{
-		{"a", "small", 1, "s1"},
-		{"a", "large", 30, "s2"},
-		{"b", "medium", 10, "s3"},
+		{"a", "alpha", 1, "s-alpha"},
+		{"a", "bravo", 30, "s-bravo"},
+		{"b", "charlie", 10, "s-charlie"},
 	}
 }
 
-func newThings(t *testing.T) *Model[thing] {
-	t.Helper()
-	m := New(thingSpec(true), shared.NewTheme(true))
-	m.SetSize(100, 20)
-	m.SetItems(things(), epoch)
+// newList is spec's list at w×h holding items, collected and idle.
+func newList(spec Spec[thing], w, h int, items []thing) *Model[thing] {
+	m := New(spec, shared.NewTheme(true))
+	m.SetSize(w, h)
+	m.SetItems(items, epoch)
 	m.SetStatus(StatusIdle, "", 0)
 	return m
 }
 
-func key(m *Model[thing], k string) tea.Cmd {
-	var msg tea.KeyPressMsg
-	switch k {
-	case "enter":
-		msg = tea.KeyPressMsg{Code: tea.KeyEnter}
-	case "esc":
-		msg = tea.KeyPressMsg{Code: tea.KeyEscape}
-	case "backspace":
-		msg = tea.KeyPressMsg{Code: tea.KeyBackspace}
-	default:
-		r := []rune(k)[0]
-		msg = tea.KeyPressMsg{Code: r, Text: k}
+func newThings() *Model[thing] { return newList(thingSpec(true), 100, 20, things()) }
+
+var namedKeys = map[string]tea.KeyPressMsg{
+	"enter":     {Code: tea.KeyEnter},
+	"esc":       {Code: tea.KeyEscape},
+	"backspace": {Code: tea.KeyBackspace},
+	"pgdown":    {Code: tea.KeyPgDown},
+	"pgup":      {Code: tea.KeyPgUp},
+	"home":      {Code: tea.KeyHome},
+	"end":       {Code: tea.KeyEnd},
+	"ctrl+u":    {Code: 'u', Mod: tea.ModCtrl},
+}
+
+// keys sends each space-separated key, drawing the pane before each as the
+// shell does, and returns the last command.
+func keys(m *Model[thing], seq string) tea.Cmd {
+	var cmd tea.Cmd
+	for _, k := range strings.Fields(seq) {
+		msg, ok := namedKeys[k]
+		if !ok {
+			msg = tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
+		}
+		m.BodyLines(epoch)
+		cmd = m.Update(msg)
 	}
-	return m.Update(msg)
+	return cmd
 }
 
 func body(m *Model[thing]) string {
 	return ansi.Strip(strings.Join(m.BodyLines(epoch), "\n"))
+}
+
+func toolbar(m *Model[thing]) string {
+	return strings.SplitN(body(m), "\n", 2)[0]
 }
 
 func selected(m *Model[thing]) string {
@@ -104,212 +123,289 @@ func selected(m *Model[thing]) string {
 	return name
 }
 
-// The first sort is the default, s cycles, and the cursor follows its
-// object across a refresh that reorders the rows.
-func TestSortCycleAndSelectionByIdentity(t *testing.T) {
-	m := newThings(t)
-	if got := selected(m); got != "large" {
-		t.Fatalf("default sort put %q first, want large", got)
+// shown is the NAME column of the rendered rows, top to bottom.
+func shown(m *Model[thing]) []string {
+	col := -1
+	var out []string
+	for _, l := range strings.Split(body(m), "\n") {
+		f := strings.Fields(l)
+		if col < 0 {
+			col = slices.Index(f, "NAME")
+			continue
+		}
+		if strings.Contains(l, "note for ") {
+			out = append(out, f[col])
+		}
 	}
-	key(m, "j")
-	if got := selected(m); got != "medium" {
-		t.Fatalf("j moved to %q", got)
+	return out
+}
+
+// The first sort is the default and s cycles through the rest and wraps,
+// putting the cursor back on the first row.
+func TestSortCycle(t *testing.T) {
+	cases := []struct {
+		keys     string
+		wantRows []string
+		wantSort string
+		wantSel  string
+	}{
+		{"", []string{"bravo", "charlie", "alpha"}, "Sort: biggest", "bravo"},
+		{"j s", []string{"alpha", "bravo", "charlie"}, "Sort: name", "alpha"},
+		{"s s", []string{"bravo", "charlie", "alpha"}, "Sort: biggest", "bravo"},
 	}
-	// A refresh with medium grown to the top keeps the cursor on medium.
-	items := things()
-	items[2].size = 99
-	m.SetItems(items, epoch)
-	if got := selected(m); got != "medium" {
-		t.Fatalf("after reorder the cursor is on %q, want medium", got)
-	}
-	key(m, "s")
-	if m.SortLabel() != "name" || selected(m) != "large" {
-		t.Fatalf("s: sort %q, cursor %q; want name order with the cursor at the top", m.SortLabel(), selected(m))
-	}
-	key(m, "s")
-	if m.SortLabel() != "biggest" {
-		t.Fatalf("s did not wrap: %q", m.SortLabel())
+	for _, c := range cases {
+		t.Run(c.keys, func(t *testing.T) {
+			m := newThings()
+			keys(m, c.keys)
+			if got := shown(m); !slices.Equal(got, c.wantRows) {
+				t.Errorf("rows = %v, want %v", got, c.wantRows)
+			}
+			if !strings.Contains(toolbar(m), c.wantSort) {
+				t.Errorf("toolbar = %q, want %q", toolbar(m), c.wantSort)
+			}
+			if got := selected(m); got != c.wantSel {
+				t.Errorf("cursor on %q, want %q", got, c.wantSel)
+			}
+		})
 	}
 }
 
-// Movement covers j/k, G, gg and the bounds.
+// The cursor moves with j/k, the page keys, G/end, gg/home, and stops at
+// either end.
 func TestMovement(t *testing.T) {
-	m := newThings(t)
-	key(m, "G")
-	if selected(m) != "small" {
-		t.Fatalf("G -> %q", selected(m))
+	cases := []struct {
+		keys string
+		want string
+	}{
+		{"j", "charlie"},
+		{"j j j", "alpha"},
+		{"k", "bravo"},
+		{"G", "alpha"},
+		{"end", "alpha"},
+		{"G g g", "bravo"},
+		{"G home", "bravo"},
+		{"pgdown", "alpha"},
+		{"G pgup", "bravo"},
 	}
-	key(m, "j")
-	if selected(m) != "small" {
-		t.Fatalf("j past the end -> %q", selected(m))
+	for _, c := range cases {
+		t.Run(c.keys, func(t *testing.T) {
+			m := newThings()
+			keys(m, c.keys)
+			if got := selected(m); got != c.want {
+				t.Errorf("cursor on %q, want %q", got, c.want)
+			}
+		})
 	}
-	key(m, "g")
-	key(m, "g")
-	if selected(m) != "large" {
-		t.Fatalf("gg -> %q", selected(m))
+}
+
+// The cursor follows its object across a refresh that reorders the rows, and
+// a kind with ID tells two rows of one name apart.
+func TestSelectionFollowsIdentity(t *testing.T) {
+	m := newThings()
+	keys(m, "j")
+	items := things()
+	items[2].size = 0
+	m.SetItems(items, epoch)
+	if got := shown(m); !slices.Equal(got, []string{"bravo", "alpha", "charlie"}) {
+		t.Fatalf("rows after the refresh = %v", got)
 	}
-	key(m, "k")
-	if selected(m) != "large" {
-		t.Fatalf("k past the top -> %q", selected(m))
+	if got := selected(m); got != "charlie" {
+		t.Errorf("after the reorder the cursor is on %q, want charlie", got)
+	}
+
+	spec := thingSpec(true)
+	spec.ID = func(t thing) string { return t.secret }
+	m = newList(spec, 100, 20, []thing{{"a", "same", 2, "id-2"}, {"a", "same", 1, "id-1"}})
+	keys(m, "j")
+	m.SetItems([]thing{{"a", "same", 1, "id-1"}, {"a", "same", 2, "id-2"}}, epoch)
+	if sel, _ := m.Selected(); sel.secret != "id-1" {
+		t.Errorf("after the refresh the cursor is on %q, want id-1", sel.secret)
 	}
 }
 
 // / filters as the reader types, enter keeps the filter, esc on the list
-// clears it, and esc inside the input restores the previous one.
+// clears it, and esc inside the input restores the one there was.
 func TestFilter(t *testing.T) {
-	m := newThings(t)
-	key(m, "/")
-	if !m.Searching() {
-		t.Fatal("/ did not open the input")
+	cases := []struct {
+		name        string
+		keys        string
+		wantRows    []string
+		wantToolbar string
+	}{
+		{"typing", "/ c h", []string{"charlie"}, "Search: ch[_]  (enter keep, esc cancel) [within 3 collected]"},
+		{"kept", "/ c h enter", []string{"charlie"}, "Search: ch [within 3 collected]"},
+		{"cleared on the list", "/ c h enter esc", []string{"bravo", "charlie", "alpha"}, "Search: (none)"},
+		{"restored in the input", "/ c h enter / backspace esc", []string{"charlie"}, "Search: ch [within 3 collected]"},
+		{"input cleared", "/ c h ctrl+u", []string{"bravo", "charlie", "alpha"}, "Search: [_]"},
+		{"q is a letter", "/ q", nil, "Search: q[_]"},
 	}
-	for _, r := range "med" {
-		key(m, string(r))
-	}
-	if n := len(m.Rows()); n != 1 || selected(m) != "medium" {
-		t.Fatalf("filter med: %d rows, cursor %q", n, selected(m))
-	}
-	key(m, "enter")
-	if m.Searching() || m.Query() != "med" {
-		t.Fatalf("enter: searching=%v query=%q", m.Searching(), m.Query())
-	}
-	if !strings.Contains(body(m), "[within 3 collected]") {
-		t.Fatalf("a filtered list does not say it is a subset:\n%s", body(m))
-	}
-	key(m, "/")
-	key(m, "backspace")
-	key(m, "esc")
-	if m.Query() != "med" {
-		t.Fatalf("esc in the input lost the previous filter: %q", m.Query())
-	}
-	key(m, "esc")
-	if m.Query() != "" || len(m.Rows()) != 3 {
-		t.Fatalf("esc on the list left filter %q", m.Query())
-	}
-	// q typed into the input is a letter.
-	key(m, "/")
-	key(m, "q")
-	if m.SearchValue() != "q" {
-		t.Fatalf("input holds %q", m.SearchValue())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newThings()
+			keys(m, c.keys)
+			if got := shown(m); !slices.Equal(got, c.wantRows) {
+				t.Errorf("rows = %v, want %v", got, c.wantRows)
+			}
+			if !strings.HasPrefix(toolbar(m), c.wantToolbar) {
+				t.Errorf("toolbar = %q, want it to start %q", toolbar(m), c.wantToolbar)
+			}
+		})
 	}
 }
 
-// Across namespaces the filter matches namespace/name and the table gains
-// a NAMESPACE column; a cluster-scoped kind never shows one.
+// Across namespaces a namespaced kind gains a NAMESPACE column and filters on
+// namespace/name; a cluster-scoped kind shows neither nor the namespace keys.
 func TestAllNamespaces(t *testing.T) {
-	m := newThings(t)
-	m.SetAllNamespaces(true)
-	if !strings.Contains(body(m), "NAMESPACE") {
-		t.Fatal("no NAMESPACE column across namespaces")
+	cases := []struct {
+		name       string
+		namespaced bool
+		wantColumn bool
+		wantRows   []string
+		wantHint   bool
+	}{
+		{"namespaced", true, true, []string{"charlie"}, true},
+		{"cluster-scoped", false, false, nil, false},
 	}
-	m.SetStatus(StatusIdle, "", 0)
-	key(m, "/")
-	for _, r := range "b/" {
-		key(m, string(r))
-	}
-	if n := len(m.Rows()); n != 1 {
-		t.Fatalf("b/ matched %d rows", n)
-	}
-
-	c := New(thingSpec(false), shared.NewTheme(true))
-	c.SetSize(100, 20)
-	c.SetItems(things(), epoch)
-	c.SetAllNamespaces(true)
-	if strings.Contains(body(c), "NAMESPACE") {
-		t.Fatal("a cluster-scoped kind drew a NAMESPACE column")
-	}
-	if strings.Contains(c.Hints(), "0 all ns") || strings.Contains(c.Hints(), "n namespace") {
-		t.Fatalf("cluster-scoped hints offer the namespace keys: %s", c.Hints())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newList(thingSpec(c.namespaced), 100, 20, things())
+			m.SetAllNamespaces(true)
+			if got := strings.Contains(body(m), "NAMESPACE"); got != c.wantColumn {
+				t.Errorf("NAMESPACE column shown: %v, want %v", got, c.wantColumn)
+			}
+			if got := strings.Contains(m.Hints(), "n namespace  0 all ns"); got != c.wantHint {
+				t.Errorf("hints = %q, want the namespace keys: %v", m.Hints(), c.wantHint)
+			}
+			keys(m, "/ b /")
+			if got := shown(m); !slices.Equal(got, c.wantRows) {
+				t.Errorf("b/ matched %v, want %v", got, c.wantRows)
+			}
+		})
 	}
 }
 
-// enter emits the drill intent for the selected row; r the refresh intent.
+// enter emits the kind's intent for the selected row and the hints name it;
+// r asks for a refresh.
 func TestIntents(t *testing.T) {
-	m := newThings(t)
-	cmd := key(m, "enter")
-	if cmd == nil {
-		t.Fatal("enter emitted nothing")
+	open := thingSpec(true)
+	open.Drill, open.Open = nil, func(t thing) tea.Msg { return "open " + t.name }
+	inert := thingSpec(true)
+	inert.Drill = nil
+	cases := []struct {
+		name      string
+		spec      Spec[thing]
+		items     []thing
+		want      tea.Msg
+		wantHints string
+	}{
+		{"drill", thingSpec(true), things(), DrillMsg{Namespace: "a", Selector: "owner=bravo", Title: "thing bravo"}, "enter workflows  i info"},
+		{"open", open, things(), "open bravo", "enter open  i info"},
+		{"neither", inert, things(), nil, "i info"},
+		{"empty list", thingSpec(true), nil, nil, "enter workflows  i info"},
 	}
-	d, ok := cmd().(DrillMsg)
-	if !ok || d.Selector != "owner=large" || d.Namespace != "a" || d.Title != "thing large" {
-		t.Fatalf("drill = %#v", d)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newList(c.spec, 100, 20, c.items)
+			var got tea.Msg
+			if cmd := keys(m, "enter"); cmd != nil {
+				got = cmd()
+			}
+			if got != c.want {
+				t.Errorf("enter = %#v, want %#v", got, c.want)
+			}
+			if !strings.HasPrefix(m.Hints(), c.wantHints) {
+				t.Errorf("hints = %q, want them to start %q", m.Hints(), c.wantHints)
+			}
+		})
 	}
-	if _, ok := key(m, "r")().(RefreshMsg); !ok {
-		t.Fatal("r did not ask for a refresh")
-	}
-	empty := New(thingSpec(true), shared.NewTheme(true))
-	if cmd := key(empty, "enter"); cmd != nil {
-		t.Fatal("enter on an empty list emitted an intent")
+	if _, ok := keys(newThings(), "r")().(RefreshMsg); !ok {
+		t.Error("r did not ask for a refresh")
 	}
 }
 
 // i opens the panel below the table under 140 cells and beside it from 140;
 // esc closes the panel before it clears a filter.
-func TestInfoPanelPlacement(t *testing.T) {
-	m := newThings(t)
-	key(m, "i")
-	if !m.InfoOpen() {
-		t.Fatal("i did not open the panel")
+func TestInfoPanel(t *testing.T) {
+	cases := []struct {
+		width     int
+		wantBelow bool
+	}{
+		{100, true},
+		{150, false},
 	}
-	lines := strings.Split(body(m), "\n")
-	below := false
-	for _, l := range lines {
-		if strings.HasPrefix(l, "Name") && strings.Contains(l, "large") {
-			below = true
-		}
-	}
-	if !below {
-		t.Fatalf("at 100 cells the panel is not below the table:\n%s", body(m))
-	}
-
-	m.SetSize(150, 20)
-	side := false
-	for _, l := range strings.Split(body(m), "\n") {
-		if strings.Contains(l, "│ Name") && strings.Contains(l, "SIZE") {
-			side = true
-		}
-	}
-	if !side {
-		t.Fatalf("at 150 cells the panel is not beside the table:\n%s", body(m))
-	}
-	for _, l := range strings.Split(body(m), "\n") {
-		if w := ansi.StringWidth(l); w > 150 {
-			t.Fatalf("line of %d cells in a 150-cell pane: %q", w, l)
-		}
+	for _, c := range cases {
+		t.Run(strconv.Itoa(c.width), func(t *testing.T) {
+			m := newList(thingSpec(true), c.width, 20, things())
+			keys(m, "i")
+			below, beside := false, false
+			for _, l := range strings.Split(body(m), "\n") {
+				below = below || strings.HasPrefix(l, "Name") && strings.Contains(l, "bravo")
+				beside = beside || strings.Contains(l, "│ Name") && strings.Contains(l, "SIZE")
+				if w := ansi.StringWidth(l); w > c.width {
+					t.Errorf("line of %d cells: %q", w, l)
+				}
+			}
+			if below != c.wantBelow || beside == c.wantBelow {
+				t.Errorf("panel below %v beside %v, want below: %v\n%s", below, beside, c.wantBelow, body(m))
+			}
+		})
 	}
 
-	m.SetQuery("large")
-	key(m, "esc")
-	if m.InfoOpen() || m.Query() != "large" {
-		t.Fatalf("esc: panel open=%v query=%q; want the panel closed first", m.InfoOpen(), m.Query())
+	m := newThings()
+	keys(m, "/ c h enter i esc")
+	if strings.Contains(body(m), "Secret") || !strings.HasPrefix(toolbar(m), "Search: ch") {
+		t.Fatalf("esc did not close the panel alone:\n%s", body(m))
+	}
+	keys(m, "esc")
+	if !strings.HasPrefix(toolbar(m), "Search: (none)") {
+		t.Fatalf("the second esc kept the filter: %q", toolbar(m))
 	}
 }
 
-// With redaction on, v reveals the selected row's values in the panel and the
-// manifest, and only that row's: moving the cursor redacts again.
-func TestRevealBelongsToOneRow(t *testing.T) {
-	m := newThings(t)
+// v flips the selected row's values against the profile's redaction, in the
+// panel, the toolbar, the hints and the manifest, and only for that row.
+func TestReveal(t *testing.T) {
+	cases := []struct {
+		name     string
+		redact   bool
+		keys     string
+		wantShow bool
+	}{
+		{"redacted", true, "i", false},
+		{"revealed with v", true, "i v", true},
+		{"the next row stays redacted", true, "i v j", false},
+		{"returning does not re-reveal", true, "i v j k", false},
+		{"shown by default", false, "i", true},
+		{"hidden with v", false, "i v", false},
+		{"the next row stays shown", false, "i v j", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newThings()
+			m.SetRedact(c.redact)
+			keys(m, c.keys)
+			sel, _ := m.Selected()
+			wantToolbar, wantHint := "values redacted (v reveals)", "v reveal"
+			if c.wantShow {
+				wantToolbar, wantHint = "values shown (v redacts)", "v redact"
+			}
+			if got := strings.Contains(body(m), sel.secret); got != c.wantShow {
+				t.Errorf("panel shows %s: %v, want %v\n%s", sel.secret, got, c.wantShow, body(m))
+			}
+			if got := strings.Contains(strings.Join(m.RawLines(), "\n"), sel.secret); got != c.wantShow {
+				t.Errorf("manifest shows %s: %v, want %v", sel.secret, got, c.wantShow)
+			}
+			if !strings.Contains(toolbar(m), wantToolbar) || !strings.Contains(m.Hints(), wantHint) {
+				t.Errorf("toolbar %q, hints %q; want %q and %q", toolbar(m), m.Hints(), wantToolbar, wantHint)
+			}
+		})
+	}
+
+	m := newThings()
+	keys(m, "i v")
 	m.SetRedact(true)
-	key(m, "i")
-	if strings.Contains(body(m), "s2") {
-		t.Fatal("a value shown before v")
-	}
-	if raw := strings.Join(m.RawLines(), "\n"); strings.Contains(raw, "s2") {
-		t.Fatalf("the manifest shows a value before v:\n%s", raw)
-	}
-	key(m, "v")
-	if !strings.Contains(body(m), "s2") || !strings.Contains(body(m), "values shown") {
-		t.Fatalf("v did not reveal:\n%s", body(m))
-	}
-	if raw := strings.Join(m.RawLines(), "\n"); !strings.Contains(raw, "s2") {
-		t.Fatalf("v did not reveal the manifest:\n%s", raw)
-	}
-	key(m, "j")
-	if m.Revealed() || strings.Contains(body(m), "s3") {
-		t.Fatal("moving to another row kept values revealed")
-	}
-	key(m, "k")
-	if m.Revealed() {
-		t.Fatal("returning to the row re-revealed it without v")
+	if strings.Contains(body(m), "s-bravo") {
+		t.Error("a profile that redacts inherited the previous profile's flip")
 	}
 }
 
@@ -320,15 +416,12 @@ func TestTallPanel(t *testing.T) {
 	spec.Info = func(t thing, _ bool, _ time.Time) []Field {
 		var f []Field
 		for i := 0; i < 20; i++ {
-			f = append(f, Field{Label: "F" + itoa(i), Value: "v" + itoa(i)})
+			f = append(f, Field{Label: "F" + strconv.Itoa(i), Value: "v" + strconv.Itoa(i)})
 		}
 		return f
 	}
-	m := New(spec, shared.NewTheme(true))
-	m.SetSize(120, 30)
-	m.SetItems(things(), epoch)
-	m.SetStatus(StatusIdle, "", 0)
-	key(m, "i")
+	m := newList(spec, 120, 30, things())
+	keys(m, "i")
 	out := body(m)
 	if !strings.Contains(out, "F0") || !strings.Contains(out, "F19") {
 		t.Fatalf("two columns did not hold every field:\n%s", out)
@@ -343,60 +436,77 @@ func TestTallPanel(t *testing.T) {
 	}
 }
 
-// Every state reads as itself on an empty table.
+// Every state reads as itself on an empty table, with the failure's reason.
 func TestEmptyStates(t *testing.T) {
+	note := thingSpec(true)
+	note.EmptyNote = "(which can also mean the server keeps none of them at all)"
 	cases := []struct {
+		name   string
+		spec   Spec[thing]
+		items  []thing
 		status Status
 		msg    string
-		want   string
+		setup  func(*Model[thing])
+		want   []string
 	}{
-		{StatusLoading, "", "loading things…"},
-		{StatusForbidden, "cannot list", "no things visible: list forbidden"},
-		{StatusUnauthenticated, "bad token", "not authenticated"},
-		{StatusUnsupported, "no such list", "no things on this server"},
-		{StatusStale, "boom", "the list failed"},
-		{StatusIdle, "", "no things in this namespace"},
+		{"loading", thingSpec(true), nil, StatusLoading, "", nil, []string{"loading things…"}},
+		{"forbidden", thingSpec(true), nil, StatusForbidden, "cannot list", nil, []string{"no things visible: list forbidden", "cannot list"}},
+		{"unauthenticated", thingSpec(true), nil, StatusUnauthenticated, "bad token", nil, []string{"not authenticated", "bad token"}},
+		{"unsupported", thingSpec(true), nil, StatusUnsupported, "no such list", nil, []string{"no things on this server", "no such list"}},
+		{"failed", thingSpec(true), nil, StatusStale, "boom", nil, []string{"no things visible: the list failed", "stale 1m — boom"}},
+		{"empty namespace", thingSpec(true), nil, StatusIdle, "", nil, []string{"no things in this namespace"}},
+		{"empty cluster", thingSpec(false), nil, StatusIdle, "", nil, []string{"no things on this cluster"}},
+		{"every namespace", thingSpec(true), nil, StatusIdle, "", func(m *Model[thing]) { m.SetAllNamespaces(true) },
+			[]string{"no things in any namespace this token can read"}},
+		{"nothing matches", thingSpec(true), things(), StatusIdle, "", func(m *Model[thing]) { keys(m, "/ z z z enter") },
+			[]string{"no things match the current filter"}},
+		{"note wrapped, not clipped", note, nil, StatusIdle, "", func(m *Model[thing]) { m.SetSize(60, 20) },
+			[]string{"no things in this namespace", "keeps none of them at all)"}},
 	}
 	for _, c := range cases {
-		m := New(thingSpec(true), shared.NewTheme(true))
-		m.SetSize(100, 20)
-		m.SetItems(nil, epoch)
-		m.SetStatus(c.status, c.msg, time.Minute)
-		out := body(m)
-		if !strings.Contains(out, c.want) {
-			t.Errorf("status %d: want %q in\n%s", c.status, c.want, out)
-		}
-		if c.msg != "" && !strings.Contains(out, c.msg) {
-			t.Errorf("status %d: the reason %q is not shown:\n%s", c.status, c.msg, out)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			m := newList(c.spec, 100, 20, c.items)
+			m.SetStatus(c.status, c.msg, time.Minute)
+			if c.setup != nil {
+				c.setup(m)
+			}
+			out := body(m)
+			for _, want := range c.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("want %q in\n%s", want, out)
+				}
+			}
+		})
 	}
-	m := newThings(t)
-	m.SetQuery("zzz")
-	if !strings.Contains(body(m), "no things match the current filter") {
-		t.Fatal("filtered-empty state missing")
+}
+
+// The toolbar note stays until Reset, which also drops the rows for a new
+// scope and shows it loading.
+func TestNoteAndReset(t *testing.T) {
+	m := newThings()
+	m.SetNote("newest 3 only")
+	if !strings.Contains(toolbar(m), "newest 3 only") {
+		t.Fatalf("note not shown: %q", toolbar(m))
 	}
-	m.SetQuery("")
-	m.SetAllNamespaces(true)
-	m.SetItems(nil, epoch)
-	if !strings.Contains(body(m), "in any namespace this token can read") {
-		t.Fatal("all-namespaces empty state missing")
+	m.Reset()
+	out := body(m)
+	if strings.Contains(out, "newest 3 only") || len(shown(m)) != 0 || !strings.Contains(out, "loading things…") {
+		t.Fatalf("after reset:\n%s", out)
 	}
 }
 
 // Server text is sanitized before it reaches the screen.
 func TestCellsAreSanitized(t *testing.T) {
-	m := New(thingSpec(true), shared.NewTheme(true))
-	m.SetSize(100, 10)
-	m.SetItems([]thing{{"a", "evil\x1b[31mred", 1, ""}}, epoch)
+	m := newList(thingSpec(true), 100, 10, []thing{{"a", "evil\x1b[31mred", 1, ""}})
 	if strings.Contains(strings.Join(m.BodyLines(epoch), ""), "\x1b[31m") {
 		t.Fatal("an escape sequence from a name reached the screen")
 	}
 }
 
-// The table keeps to the pane: the open last column takes the rest, or is
-// dropped when the rest is too narrow; below 60 cells the pane asks for room.
+// The table keeps to the pane at every width; below 60 cells the pane asks
+// for room.
 func TestWidths(t *testing.T) {
-	m := newThings(t)
+	m := newThings()
 	for _, w := range []int{60, 76, 100, 136} {
 		m.SetSize(w, 20)
 		for _, l := range m.BodyLines(epoch) {
@@ -415,37 +525,27 @@ func TestWidths(t *testing.T) {
 func TestWindow(t *testing.T) {
 	var many []thing
 	for i := 0; i < 30; i++ {
-		many = append(many, thing{"a", "t" + itoa(100+i), i, ""})
+		many = append(many, thing{"a", "t" + strconv.Itoa(100+i), i, ""})
 	}
-	m := New(thingSpec(true), shared.NewTheme(true))
-	m.SetSize(100, 8)
-	m.SetItems(many, epoch)
-	m.SetStatus(StatusIdle, "", 0)
-	m.BodyLines(epoch)
-	if got := m.WindowStatus(); got != "1-6/30" {
-		t.Fatalf("window = %q", got)
+	cases := []struct {
+		keys string
+		want string
+	}{
+		{"", "1-6/30"},
+		{"G", "25-30/30"},
+		{"pgdown pgdown", "6-11/30"},
 	}
-	key(m, "G")
-	m.BodyLines(epoch)
-	if got := m.WindowStatus(); got != "25-30/30" {
-		t.Fatalf("window after G = %q", got)
+	for _, c := range cases {
+		t.Run(c.keys, func(t *testing.T) {
+			m := newList(thingSpec(true), 100, 8, many)
+			keys(m, c.keys)
+			m.BodyLines(epoch)
+			if got := m.WindowStatus(); got != c.want {
+				t.Errorf("window = %q, want %q", got, c.want)
+			}
+		})
 	}
-}
-
-// Values are shown by default. v hides them on the selected row only, and
-// moving the cursor shows them again.
-func TestValuesShownByDefault(t *testing.T) {
-	m := newThings(t)
-	key(m, "i")
-	if !m.Revealed() || !strings.Contains(body(m), "s2") {
-		t.Fatalf("values hidden by default:\n%s", body(m))
-	}
-	key(m, "v")
-	if m.Revealed() || strings.Contains(body(m), "s2") {
-		t.Fatalf("v did not hide the row's values:\n%s", body(m))
-	}
-	key(m, "j")
-	if !m.Revealed() {
-		t.Fatal("the next row must show its values")
+	if got := newThings().WindowStatus(); got != "3 shown" {
+		t.Errorf("window of a list that fits = %q, want 3 shown", got)
 	}
 }
