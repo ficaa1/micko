@@ -1,6 +1,7 @@
 package namespaces
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -29,17 +30,19 @@ var namedKeys = map[string]tea.KeyPressMsg{
 	"ctrl+p":    {Code: 'p', Mod: tea.ModCtrl},
 }
 
-// keys sends each space-separated key and returns the last command.
-func keys(m *Model, seq string) tea.Cmd {
-	var cmd tea.Cmd
+// keys sends each space-separated key and returns every message they emitted.
+func keys(m *Model, seq string) []tea.Msg {
+	var msgs []tea.Msg
 	for _, k := range strings.Fields(seq) {
-		msg, ok := namedKeys[k]
+		key, ok := namedKeys[k]
 		if !ok {
-			msg = tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
+			key = tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
 		}
-		cmd = m.Update(msg)
+		if cmd := m.Update(key); cmd != nil {
+			msgs = append(msgs, cmd())
+		}
 	}
-	return cmd
+	return msgs
 }
 
 func body(m *Model) string { return ansi.Strip(strings.Join(m.BodyLines(), "\n")) }
@@ -90,16 +93,12 @@ func TestPicker(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			m := newPicker(c.current, c.names...)
-			var got string
-			if cmd := keys(m, c.keys); cmd != nil {
-				msg, ok := cmd().(SwitchMsg)
-				if !ok {
-					t.Fatalf("command = %#v, want a switch", cmd())
-				}
-				got = msg.Namespace
+			var want []tea.Msg
+			if c.wantSwitch != "" {
+				want = []tea.Msg{SwitchMsg{Namespace: c.wantSwitch}}
 			}
-			if got != c.wantSwitch {
-				t.Errorf("switch = %q, want %q", got, c.wantSwitch)
+			if got := keys(m, c.keys); !reflect.DeepEqual(got, want) {
+				t.Errorf("messages = %#v, want %#v", got, want)
 			}
 			if m.IsOpen() != c.wantOpen {
 				t.Errorf("open = %v, want %v", m.IsOpen(), c.wantOpen)
