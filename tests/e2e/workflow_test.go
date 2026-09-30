@@ -1,9 +1,3 @@
-// Package e2e hosts the REAL-cluster tier (see
-// docs/development.md): tests that require an explicitly provisioned
-// disposable Argo Workflows v4.1.2 environment (kind cluster or an
-// owner-authorized endpoint). Gate + fixtures live in gate.go; this file
-// implements the workflow journey against whatever endpoint the gate
-// allowlisted.
 //go:build e2e
 
 package e2e
@@ -28,8 +22,8 @@ type e2eWorkflowSpec struct {
 	Namespace string
 }
 
-// runE2EWorkflowJourney is the shared real-cluster journey used by the test below.
-// It is deliberately sequential: submit → wait phase → list → detail →
+// runE2EWorkflowJourney is the real-cluster journey. It is deliberately
+// sequential: submit → wait phase → list → detail →
 // version check → delete → verify deletion, with the timeout discipline
 // from docs/development.md (poll, never busy-loop forever).
 func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec) {
@@ -96,8 +90,11 @@ func runE2EWorkflowJourney(t *testing.T, client *e2eClient, spec e2eWorkflowSpec
 		t.Errorf("unexpected server version %q: compatibility note required, not a crash", ver)
 	}
 
-	// 6. Delete + verify gone (cleanup contract).
-	if err := client.deleteWorkflow(ctx, spec.Namespace, name); err != nil {
+	// 6. Delete through the action the delete screen sends, then verify it
+	// is gone.
+	if _, err := client.reader.Execute(ctx, core.ActionRequest{
+		Ref: wf.Summary.Ref, Action: core.ActionDelete, Confirmation: core.Confirmation{Confirmed: true, Final: true},
+	}); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	if err := client.waitForDeletion(ctx, spec.Namespace, name, time.Minute); err != nil {

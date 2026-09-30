@@ -122,13 +122,12 @@ shell; in PowerShell set `$env:NAME` before running the command.
 | Suite | Scope and prerequisites |
 | --- | --- |
 | Default `go test ./...` | Package tests, production-adapter HTTP fixtures and connected-path regressions |
-| `tests/connected` | Fake kubectl plus a synthetic server; tests using the fake executable skip without `/opt/homebrew/bin/fish` |
-| `tests/integration` | Tagged fixture-server/root-model tests and real-binary PTY tests; the wire harness uses its own test client |
+| `tests/connected` | The managed port-forward and the production client against a POSIX sh fake kubectl and a synthetic server |
+| `tests/integration` | Tagged root-model journeys over the production client against a fixture server, and real-binary PTY tests |
 | `tests/e2e` | Tagged tests with an explicit gate for the real-cluster submit/list/detail/delete journey |
 
 PTY helpers are provided for Linux and macOS; terminal availability can cause
 skips. Inspect test output before claiming that a suite exercised every path.
-The integration wire client does not replace the production adapter's own tests.
 
 ## Real-cluster tests
 
@@ -150,18 +149,15 @@ MICKO_E2E=1 MICKO_E2E_CONFIG=/absolute/path/to/e2e-config.yaml \
 
 The real journey requires the build tag, environment opt-in and valid allowlist
 with explicit mutation enablement. A closed gate skips the journey with a reason;
-it is not evidence of a live pass. Gate and client unit tests can still run.
+it is not evidence of a live pass. The gate's own tests still run.
 
-The journey uses a separate HTTP Reader defined in `tests/e2e/client.go` and
-checks server version. Despite its name,
-`productionReader` does not use `internal/argo.Client` and does not implement
-log streaming. Cleanup deletes by name without checking ownership labels or UID.
-The current fixture uses `generateName`, but the journey waits for and deletes
-the fixed name `argo-tui-e2e-hello` without reading the created name from the
-submit response. This can fail the journey and leave its workflow behind.
-Resolve that mismatch before enabling live runs. Use an isolated, disposable
-namespace with no existing workflows; fixtures under `tests/e2e/testdata`
-are synthetic.
+The journey lists, reads and deletes through the production client,
+`internal/argo.Client`; the harness submits the fixture and polls its phase with
+its own requests, because the product cannot submit workflows. The fixture uses
+`generateName`, and every step addresses the name the server assigned. The
+cleanup delete, which runs even when a step fails, goes by that name without
+checking ownership labels or UID. Use an isolated, disposable namespace with no
+existing workflows; fixtures under `tests/e2e/testdata` are synthetic.
 
 CI runs format, vet, unit, integration, race and build checks. E2E runs only on
 manual workflow dispatch with `E2E_ALLOWLIST_B64` configured. Installing kind
