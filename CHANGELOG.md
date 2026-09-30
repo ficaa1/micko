@@ -9,6 +9,9 @@
   shows `READ ONLY` in the header, as a session without `--allow-actions`
   did before. `--allow-actions` is still accepted and does nothing. The
   demo still writes nothing.
+- `--version` and the header show the commit that `make build` or the
+  release build injected. The injected value was ignored, so a build from a
+  tree with uncommitted changes said `unknown`.
 
 ## 0.7.1
 

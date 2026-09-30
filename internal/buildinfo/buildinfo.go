@@ -10,8 +10,15 @@ const Version = "0.7.2"
 // Commit is the short revision this binary was built from. The Makefile and
 // the release workflow inject it. A build that injects nothing — `go install`,
 // or a plain `go build` — falls back to the revision Go itself recorded, so
-// the binary can still say which commit it is.
-var Commit = vcsRevision()
+// the binary can still say which commit it is. It must stay uninitialised:
+// -X silently ignores a variable whose initialiser is a function call.
+var Commit string
+
+func init() {
+	if Commit == "" {
+		Commit = vcsRevision()
+	}
+}
 
 // UserAgent is the User-Agent sent to the Argo server. The commit is left
 // out to keep the header low-cardinality in server logs.
