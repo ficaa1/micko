@@ -62,12 +62,12 @@ func Spec() kindlist.Spec[core.Workflow] {
 // columns are the workflow list's: NAME, PHASE, AGE, DURATION and, from 80
 // cells, MESSAGE in the rest of the row.
 func columns(w int) []kindlist.Column {
-	name, phase, age, dur := 30, 12, 8, 9
+	name, phase, age, dur := 30, 12, 8, 10
 	if w >= 100 {
 		name = 44
 	}
 	if w < 80 {
-		name, phase, age, dur = 20, 11, 6, 8
+		name, phase, age, dur = 20, 11, 6, 10
 		if extra := w - (name + phase + age + dur + 3*2); extra > 0 {
 			name += extra
 		}

@@ -64,6 +64,8 @@ func lines(m *kindlist.Model[core.Workflow]) []string {
 // message, with a dash for a time the record lacks.
 func TestRows(t *testing.T) {
 	failed := run("etl-1", "u1", "Failed", 26*time.Hour, 5*time.Minute, "child 'check' failed")
+	unfinished := run("etl-2", "u2", "Running", time.Hour, 0, "")
+	unfinished.Summary.FinishedAt = nil
 	undated := run("etl-3", "u3", "", 0, 0, "")
 	undated.Summary.StartedAt, undated.Summary.FinishedAt, undated.Summary.CreatedAt = nil, nil, time.Time{}
 	cases := []struct {
@@ -72,6 +74,7 @@ func TestRows(t *testing.T) {
 		want string
 	}{
 		{"finished", failed, "etl-1 ✗ Failed 1d2h 5m child 'check' failed"},
+		{"unfinished", unfinished, "etl-2 ● Running 1h unfinished"},
 		{"no timestamps", undated, "etl-3 • (no phase) - -"},
 	}
 	for _, c := range cases {
