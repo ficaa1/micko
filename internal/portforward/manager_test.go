@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 )
 
+// fakeProcess stands in for kubectl: a test writes its output and ends it.
 type fakeProcess struct {
 	outR, errR *io.PipeReader
 	outW, errW *io.PipeWriter
@@ -30,144 +32,212 @@ func (p *fakeProcess) Kill() error {
 	p.once.Do(func() { close(p.killed); p.outR.Close(); p.errR.Close(); p.wait <- errors.New("killed") })
 	return nil
 }
-func (p *fakeProcess) ready() {
-	_, _ = p.outW.Write([]byte("Forwarding from 127.0.0.1:1234 -> 8080\n"))
-}
-func TestManagerReadinessAndCleanup(t *testing.T) {
-	p := newFake()
-	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "1234"}, func(context.Context, string, ...string) Process { return p })
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	m.Start(ctx)
-	awaitState(t, m.Events(), StateStarting)
-	p.ready()
-	awaitState(t, m.Events(), StateReady)
-	cancel()
-	awaitState(t, m.Events(), StateStopped)
-	select {
-	case <-p.killed:
-	case <-time.After(time.Second):
-		t.Fatal("owned process was not killed")
-	}
-}
-func TestManagerDoesNotReportReadyBeforeOwnedEndpoint(t *testing.T) {
-	p := newFake()
-	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "0"}, func(context.Context, string, ...string) Process { return p })
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	m.Start(ctx)
-	awaitState(t, m.Events(), StateStarting)
-	readyCtx, readyCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer readyCancel()
-	if err := m.Ready(readyCtx); err == nil {
-		t.Fatal("ready before endpoint")
-	}
-	if got := m.Endpoint(); got != "" {
-		t.Fatalf("endpoint before ready: %q", got)
-	}
-	p.ready()
-	awaitState(t, m.Events(), StateReady)
-	if got := m.Endpoint(); got != "http://127.0.0.1:1234" {
-		t.Fatalf("endpoint=%q", got)
-	}
+
+func (p *fakeProcess) stdout(line string) { _, _ = p.outW.Write([]byte(line + "\n")) }
+func (p *fakeProcess) stderr(line string) { _, _ = p.errW.Write([]byte(line + "\n")) }
+
+// forward is a started manager whose attempts run procs in order.
+type forward struct {
+	m     *Manager
+	mu    sync.Mutex
+	calls [][]string
 }
 
-func TestManagerUsesExplicitTargetAndRecovers(t *testing.T) {
-	var got []string
-	var gotMu sync.Mutex
-	n := 0
-	p1 := newFake()
-	p2 := newFake()
-	m, err := NewWithCommand(Target{"prod ctx", "team-a", "argo", "443", "15443"}, func(_ context.Context, name string, args ...string) Process {
-		gotMu.Lock()
-		got = append([]string{name}, args...)
-		n++
-		call := n
-		gotMu.Unlock()
-		if call == 1 {
-			return p1
-		}
-		return p2
+func startForward(t *testing.T, target Target, procs ...*fakeProcess) *forward {
+	t.Helper()
+	f := &forward{}
+	m, err := newWithCommand(target, func(_ context.Context, name string, args ...string) Process {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.calls = append(f.calls, append([]string{name}, args...))
+		return procs[min(len(f.calls), len(procs))-1]
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	m.Start(ctx)
-	awaitState(t, m.Events(), StateStarting)
-	p1.ready()
-	awaitState(t, m.Events(), StateReady)
-	p1.wait <- errors.New("connection lost")
-	awaitState(t, m.Events(), StateLost)
-	awaitState(t, m.Events(), StateStarting)
-	cancel()
-	awaitState(t, m.Events(), StateStopped)
-	gotMu.Lock()
-	args := append([]string(nil), got...)
-	gotMu.Unlock()
-	if args[0] != "kubectl" || args[1] != "--context" || args[2] != "prod ctx" || args[3] != "--namespace" || args[4] != "team-a" {
-		t.Fatalf("unexpected command %v", args)
-	}
+	f.m = m
+	m.Start(context.Background())
+	t.Cleanup(m.Close)
+	return f
 }
-func TestTargetRejectsNewline(t *testing.T) {
-	if _, err := NewWithCommand(Target{"ctx", "ns\n", "svc", "1", "2"}, func(context.Context, string, ...string) Process { return nil }); err == nil {
-		t.Fatal("expected validation error")
-	}
-}
-func awaitState(t *testing.T, ch <-chan Event, want State) {
+
+// await fails unless the next lifecycle event is want.
+func (f *forward) await(t *testing.T, want State) {
 	t.Helper()
 	select {
-	case e := <-ch:
+	case e := <-f.m.Events():
 		if e.State != want {
-			t.Fatalf("state=%s want=%s (%s)", e.State, want, e.Message)
+			t.Fatalf("state = %s (%s), want %s", e.State, e.Message, want)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timed out waiting for %s", want)
 	}
 }
 
-// TestManagerKeepsServingAfterConnectionErrorLine pins that an error line from
-// a forward that is still listening is a warning, not a failure. kubectl
-// prints one for every single connection it drops, and a consumer that reads
-// it as a lost transport blocks while the forward still carries requests.
-func TestManagerKeepsServingAfterConnectionErrorLine(t *testing.T) {
-	p := newFake()
-	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "0"}, func(context.Context, string, ...string) Process { return p })
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
+// readyWithin is what Ready returns when waited on for at most d.
+func (f *forward) readyWithin(d time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), d)
 	defer cancel()
-	m.Start(ctx)
-	awaitState(t, m.Events(), StateStarting)
-	p.ready()
-	awaitState(t, m.Events(), StateReady)
-	_, _ = p.errW.Write([]byte("E0918 12:00:00.000000 1 portforward.go:409] an error occurred forwarding 51234 -> 2746\n"))
-	awaitState(t, m.Events(), StateWarning)
-	if got := m.Endpoint(); got != "http://127.0.0.1:1234" {
-		t.Fatalf("endpoint after a dropped connection = %q, want the owned one", got)
+	return f.m.Ready(ctx)
+}
+
+// The forward runs kubectl against the configured target and is ready, with
+// an endpoint, only once kubectl announces the loopback port it bound.
+func TestReadinessComesFromTheAnnouncedPort(t *testing.T) {
+	cases := []struct {
+		name         string
+		localPort    string
+		announce     string
+		wantCommand  []string
+		wantEndpoint string
+	}{
+		{"ephemeral port on IPv4", "", "Forwarding from 127.0.0.1:51234 -> 443",
+			[]string{"kubectl", "--context", "prod ctx", "--namespace", "team-a", "port-forward", "service/argo", "0:443"},
+			"http://127.0.0.1:51234"},
+		{"fixed port on IPv6", "15443", "Forwarding from [::1]:15443 -> 443",
+			[]string{"kubectl", "--context", "prod ctx", "--namespace", "team-a", "port-forward", "service/argo", "15443:443"},
+			"http://[::1]:15443"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := newFake()
+			f := startForward(t, Target{"prod ctx", "team-a", "argo", "443", c.localPort}, p)
+			f.await(t, StateStarting)
+			if err := f.readyWithin(20 * time.Millisecond); err == nil {
+				t.Fatal("ready before kubectl announced a port")
+			}
+			if got := f.m.Endpoint(); got != "" {
+				t.Fatalf("endpoint before the announcement = %q", got)
+			}
+			p.stdout(c.announce)
+			f.await(t, StateReady)
+			if err := f.readyWithin(time.Second); err != nil {
+				t.Fatalf("Ready after the announcement: %v", err)
+			}
+			if got := f.m.Endpoint(); got != c.wantEndpoint {
+				t.Errorf("endpoint = %q, want %q", got, c.wantEndpoint)
+			}
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if !reflect.DeepEqual(f.calls, [][]string{c.wantCommand}) {
+				t.Errorf("commands = %q, want %q", f.calls, c.wantCommand)
+			}
+		})
 	}
 }
 
-// TestManagerReportsErrorLineBeforeReadinessAsFailure pins the other half:
-// until a port is bound, an error line is the attempt failing.
-func TestManagerReportsErrorLineBeforeReadinessAsFailure(t *testing.T) {
-	p := newFake()
-	m, err := NewWithCommand(Target{"ctx", "ns", "api", "8080", "2746"}, func(context.Context, string, ...string) Process { return p })
-	if err != nil {
-		t.Fatal(err)
+// An error line fails an attempt that has not bound a port yet; once the
+// forward serves, the same kind of line is one dropped connection and the
+// endpoint stays.
+func TestErrorLines(t *testing.T) {
+	cases := []struct {
+		name         string
+		ready        bool
+		line         string
+		want         State
+		wantEndpoint string
+	}{
+		{"before readiness", false, "Unable to listen on port 2746: address already in use", StateFailed, ""},
+		{"after readiness", true, "E0918 12:00:00.000000 1 portforward.go:409] an error occurred forwarding 51234 -> 2746",
+			StateWarning, "http://127.0.0.1:51234"},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	m.Start(ctx)
-	awaitState(t, m.Events(), StateStarting)
-	_, _ = p.errW.Write([]byte("Unable to listen on port 2746: address already in use\n"))
-	awaitState(t, m.Events(), StateFailed)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := newFake()
+			f := startForward(t, Target{"ctx", "ns", "api", "2746", ""}, p)
+			f.await(t, StateStarting)
+			if c.ready {
+				p.stdout("Forwarding from 127.0.0.1:51234 -> 2746")
+				f.await(t, StateReady)
+			}
+			p.stderr(c.line)
+			f.await(t, c.want)
+			if got := f.m.Endpoint(); got != c.wantEndpoint {
+				t.Errorf("endpoint = %q, want %q", got, c.wantEndpoint)
+			}
+		})
+	}
+}
+
+// A forward whose process exits drops its endpoint at once, starts a new
+// attempt and is ready on the port the new process announces, and a caller
+// already waiting for readiness sees that recovery.
+func TestAForwardRecovers(t *testing.T) {
+	cases := []struct {
+		name      string
+		bound     bool
+		wantAfter State
+	}{
+		{"lost after readiness", true, StateLost},
+		{"failed before readiness", false, StateFailed},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			first, second := newFake(), newFake()
+			f := startForward(t, Target{"ctx", "ns", "api", "8080", ""}, first, second)
+			f.await(t, StateStarting)
+			waited := make(chan error, 1)
+			go func() { waited <- f.readyWithin(5 * time.Second) }()
+			if c.bound {
+				first.stdout("Forwarding from 127.0.0.1:1111 -> 8080")
+				f.await(t, StateReady)
+			}
+
+			first.wait <- errors.New("connection lost")
+			f.await(t, c.wantAfter)
+			if got := f.m.Endpoint(); got != "" {
+				t.Fatalf("endpoint after the process exited = %q, want none", got)
+			}
+			f.await(t, StateStarting)
+			second.stdout("Forwarding from 127.0.0.1:2222 -> 8080")
+			f.await(t, StateReady)
+			if err := <-waited; err != nil {
+				t.Fatalf("Ready across the attempts: %v", err)
+			}
+			if got := f.m.Endpoint(); got != "http://127.0.0.1:2222" {
+				t.Errorf("endpoint after recovery = %q, want the new port", got)
+			}
+		})
+	}
+}
+
+// Close kills the owned process and releases anyone waiting for readiness.
+func TestCloseKillsTheProcess(t *testing.T) {
+	p := newFake()
+	f := startForward(t, Target{"ctx", "ns", "api", "8080", ""}, p)
+	f.await(t, StateStarting)
+	f.m.Close()
+	select {
+	case <-p.killed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the owned process was not killed")
+	}
+	if err := f.readyWithin(time.Second); err == nil || err == context.DeadlineExceeded {
+		t.Errorf("Ready after Close = %v, want the forward reported stopped", err)
+	}
+}
+
+// A target needs every field but the local port, and no field may carry a
+// line break or NUL into kubectl's arguments.
+func TestTargetValidation(t *testing.T) {
+	cases := []struct {
+		name   string
+		target Target
+		ok     bool
+	}{
+		{"complete", Target{"ctx", "ns", "svc", "443", "8443"}, true},
+		{"no local port", Target{"ctx", "ns", "svc", "443", ""}, true},
+		{"newline in namespace", Target{"ctx", "ns\n", "svc", "443", ""}, false},
+		{"NUL in context", Target{"c\x00tx", "ns", "svc", "443", ""}, false},
+		{"no service", Target{"ctx", "ns", "", "443", ""}, false},
+		{"no remote port", Target{"ctx", "ns", "svc", "", ""}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := New(c.target)
+			if (err == nil) != c.ok {
+				t.Errorf("New(%+v) error = %v, want accepted: %v", c.target, err, c.ok)
+			}
+		})
+	}
 }
