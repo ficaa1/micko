@@ -173,7 +173,7 @@ func (f *FakeReader) collect(q core.Query) []core.Summary {
 		if !ok {
 			continue
 		}
-		if !MatchLabels(q.LabelSelector, wf.Summary.Labels) {
+		if !matchLabels(q.LabelSelector, wf.Summary.Labels) {
 			continue
 		}
 		items = append(items, wf.Summary)

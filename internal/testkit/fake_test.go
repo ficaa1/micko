@@ -4,85 +4,96 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ficaa1/micko/internal/core"
 )
 
-func TestFakeReaderListFilterAndOrder(t *testing.T) {
+// List filters and orders workflows before applying opaque continuation pages.
+func TestFakeReaderList(t *testing.T) {
+	workflows := []core.Workflow{
+		SyntheticWorkflow("ns-a", "zeta", "Running", FixtureEpoch),
+		SyntheticWorkflow("ns-a", "alpha", "Succeeded", FixtureEpoch),
+		SyntheticWorkflow("ns-b", "other", "Failed", FixtureEpoch),
+	}
 	f := &FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	w1 := SyntheticWorkflow("ns-a", "zeta", "Running", FixtureEpoch)
-	w2 := SyntheticWorkflow("ns-a", "alpha", "Succeeded", FixtureEpoch)
-	w3 := SyntheticWorkflow("ns-b", "other", "Failed", FixtureEpoch)
-	for _, w := range []core.Workflow{w1, w2, w3} {
-		f.Workflows[w.Summary.Ref] = w
+	for _, wf := range workflows {
+		f.Workflows[wf.Summary.Ref] = wf
 	}
-	page, err := f.List(context.Background(), core.Query{Namespace: "ns-a"})
-	if err != nil {
-		t.Fatalf("List: %v", err)
+	cases := []struct {
+		name  string
+		query core.Query
+		want  []string
+	}{
+		{"all namespaces sorted", core.Query{}, []string{"alpha", "zeta", "other"}},
+		{"namespace", core.Query{Namespace: "ns-a"}, []string{"alpha", "zeta"}},
+		{"missing namespace", core.Query{Namespace: "missing"}, nil},
+		{"first page", core.Query{Namespace: "ns-a", Limit: 1}, []string{"alpha"}},
+		{"uneven final page", core.Query{Limit: 2}, []string{"alpha", "zeta"}},
+		{"invalid continuation restarts", core.Query{Namespace: "ns-a", Limit: 1, Continue: "garbage"}, []string{"alpha"}},
 	}
-	if len(page.Items) != 2 {
-		t.Fatalf("items = %d, want 2 (ns filter)", len(page.Items))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			page, err := f.List(context.Background(), c.query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, item := range page.Items {
+				got = append(got, item.Ref.Name)
+			}
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("names = %v, want %v", got, c.want)
+			}
+			if c.query.Limit > 0 {
+				if page.Continue == "" {
+					t.Fatal("first page has no continuation")
+				}
+				query := c.query
+				query.Continue = page.Continue
+				next, err := f.List(context.Background(), query)
+				want := "zeta"
+				if c.name == "uneven final page" {
+					want = "other"
+				}
+				if err != nil || len(next.Items) != 1 || next.Items[0].Ref.Name != want || next.Continue != "" {
+					t.Fatalf("second page = %+v, %v; want %s and no continuation", next, err, want)
+				}
+			} else if page.Continue != "" {
+				t.Fatalf("continuation = %q, want empty", page.Continue)
+			}
+		})
 	}
-	if page.Items[0].Ref.Name != "alpha" || page.Items[1].Ref.Name != "zeta" {
-		t.Errorf("order = %q,%q, want alpha,zeta", page.Items[0].Ref.Name, page.Items[1].Ref.Name)
-	}
-	if page.Continue != "" {
-		t.Errorf("unexpected continuation %q", page.Continue)
-	}
+	t.Run("demo owner and forced pagination", func(t *testing.T) {
+		demo := DemoReader(NewFakeClock(FixtureEpoch))
+		page, err := demo.List(context.Background(), core.Query{Namespace: DemoNamespace})
+		if err != nil || page.Continue == "" {
+			t.Fatalf("demo page = %+v, %v; want continuation", page, err)
+		}
+		demo.PageLimit = 0
+		owned, err := demo.List(context.Background(), core.Query{Namespace: DemoNamespace, LabelSelector: "workflows.argoproj.io/cron-workflow=demo-etl-hourly"})
+		if err != nil || len(owned.Items) != 3 {
+			t.Fatalf("owned runs = %d, %v; want 3", len(owned.Items), err)
+		}
+	})
 }
 
-func TestFakeReaderPaginationOpaqueContinue(t *testing.T) {
-	f := &FakeReader{Workflows: map[core.Ref]core.Workflow{}}
-	want := []core.Workflow{
-		SyntheticWorkflow("ns", "wf-1", "Running", FixtureEpoch),
-		SyntheticWorkflow("ns", "wf-2", "Failed", FixtureEpoch),
-		SyntheticWorkflow("ns", "wf-3", "Succeeded", FixtureEpoch),
-	}
-	for _, w := range want {
-		f.Workflows[w.Summary.Ref] = w
-	}
-	p1, err := f.List(context.Background(), core.Query{Namespace: "ns", Limit: 2})
-	if err != nil {
-		t.Fatalf("page1: %v", err)
-	}
-	if len(p1.Items) != 2 || p1.Continue == "" {
-		t.Fatalf("page1 = %d items, continue %q", len(p1.Items), p1.Continue)
-	}
-	p2, err := f.List(context.Background(), core.Query{Namespace: "ns", Limit: 2, Continue: p1.Continue})
-	if err != nil {
-		t.Fatalf("page2: %v", err)
-	}
-	if len(p2.Items) != 1 || p2.Items[0].Ref.Name != "wf-3" {
-		t.Fatalf("page2 items = %+v", p2.Items)
-	}
-	if p2.Continue != "" {
-		t.Errorf("page2 must terminate the collection, got continue %q", p2.Continue)
-	}
-	// The token is opaque to callers: passing garbage must not panic; the
-	// fake starts from the beginning in that case.
-	pBad, err := f.List(context.Background(), core.Query{Namespace: "ns", Limit: 2, Continue: "garbage"})
-	if err != nil {
-		t.Fatalf("page-garbage: %v", err)
-	}
-	if len(pBad.Items) != 2 {
-		t.Errorf("garbage continue: items = %d, want 2 (restart from head)", len(pBad.Items))
-	}
-}
-
+// Reader failures and cancellation remain distinguishable to callers.
 func TestFakeReaderInjectableErrorsAndDelays(t *testing.T) {
 	t.Run("list error", func(t *testing.T) {
 		f := &FakeReader{ListErr: core.ErrForbiddenf("list denied in ns")}
 		_, err := f.List(context.Background(), core.Query{Namespace: "ns"})
-		if !isKind(err, core.ErrForbidden) {
+		if ae := core.AsAPIError(err); ae == nil || ae.Kind != core.ErrForbidden {
 			t.Fatalf("err = %v, want forbidden", err)
 		}
 	})
 	t.Run("get error", func(t *testing.T) {
 		f := &FakeReader{GetErr: core.ErrNotFoundf("gone")}
 		_, err := f.Get(context.Background(), core.Ref{Namespace: "ns", Name: "wf"})
-		if !isKind(err, core.ErrNotFound) {
+		if ae := core.AsAPIError(err); ae == nil || ae.Kind != core.ErrNotFound {
 			t.Fatalf("err = %v, want not_found", err)
 		}
 	})
@@ -97,16 +108,17 @@ func TestFakeReaderInjectableErrorsAndDelays(t *testing.T) {
 	t.Run("get unknown workflow is not_found", func(t *testing.T) {
 		f := &FakeReader{Workflows: map[core.Ref]core.Workflow{}}
 		_, err := f.Get(context.Background(), core.Ref{Namespace: "ns", Name: "nope"})
-		if !isKind(err, core.ErrNotFound) {
+		if ae := core.AsAPIError(err); ae == nil || ae.Kind != core.ErrNotFound {
 			t.Fatalf("err = %v, want not_found", err)
 		}
 	})
 }
 
+// Log streams preserve records, stop on callback errors, and honor cancellation.
 func TestFakeReaderStreamLogs(t *testing.T) {
 	t.Run("clean finite EOF returns nil", func(t *testing.T) {
 		f := &FakeReader{StreamSequence: []core.LogRecord{
-			{Content: "line-1"}, {Content: "line-2"},
+			{Content: "line-1"}, {Content: "line-2"}, {Content: "line-3"},
 		}}
 		var got []core.LogRecord
 		err := f.StreamLogs(context.Background(), core.LogRequest{Container: "main"}, func(r core.LogRecord) error {
@@ -116,7 +128,7 @@ func TestFakeReaderStreamLogs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StreamLogs = %v, want nil (clean EOF)", err)
 		}
-		if len(got) != 2 || got[0].Content != "line-1" || got[1].Container != "main" {
+		if len(got) != 3 || got[0].Content != "line-1" || got[1].Content != "line-2" || got[2].Content != "line-3" || got[1].Container != "main" {
 			t.Fatalf("records = %+v", got)
 		}
 	})
@@ -144,10 +156,8 @@ func TestFakeReaderStreamLogs(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan error, 1)
 		go func() {
-			done <- f.StreamLogs(ctx, core.LogRequest{}, func(core.LogRecord) error { return nil })
+			done <- f.StreamLogs(ctx, core.LogRequest{}, func(core.LogRecord) error { cancel(); return nil })
 		}()
-		time.Sleep(10 * time.Millisecond)
-		cancel()
 		select {
 		case err := <-done:
 			if !errors.Is(err, context.Canceled) {
@@ -177,19 +187,10 @@ func TestFakeReaderStreamLogs(t *testing.T) {
 			t.Fatal("stamping changed the stored record")
 		}
 	})
-	t.Run("serial callback ordering", func(t *testing.T) {
-		f := &FakeReader{StreamSequence: []core.LogRecord{{Content: "1"}, {Content: "2"}, {Content: "3"}}}
-		var order []string
-		_ = f.StreamLogs(context.Background(), core.LogRequest{}, func(r core.LogRecord) error {
-			order = append(order, r.Content)
-			return nil
-		})
-		if len(order) != 3 || order[0] != "1" || order[2] != "3" {
-			t.Fatalf("order = %v", order)
-		}
-	})
+
 }
 
+// The demo clock advances only by the requested duration.
 func TestFakeClockAdvance(t *testing.T) {
 	c := NewFakeClock(FixtureEpoch)
 	if !c.Now().Equal(FixtureEpoch) {
@@ -201,37 +202,15 @@ func TestFakeClockAdvance(t *testing.T) {
 	}
 }
 
-func TestDemoDataIsSyntheticAndPaginates(t *testing.T) {
-	f := DemoReader(NewFakeClock(FixtureEpoch))
-	for ref := range f.Workflows {
-		if ref.Namespace != DemoNamespace && ref.Namespace != DemoMLNamespace {
-			t.Fatalf("demo namespace drift: %v", ref)
-		}
-		if len(ref.Name) < 5 || ref.Name[:5] != "demo-" {
-			t.Fatalf("demo workflow name %q lacks demo- prefix", ref.Name)
-		}
-	}
-	p1, err := f.List(context.Background(), core.Query{Namespace: "demo", Limit: 3})
-	if err != nil {
-		t.Fatalf("demo list: %v", err)
-	}
-	if p1.Continue == "" {
-		t.Fatal("demo dataset should paginate with default limit")
-	}
-}
-
-func isKind(err error, kind core.ErrorKind) bool {
-	ae := core.AsAPIError(err)
-	return ae != nil && ae.Kind == kind
-}
-
-// The demo node maps follow the controller's shapes, and every pod that ran
-// has its own log. Views are checked against the demo, so a demo that drifts
-// from those shapes would hide the cases they have to handle.
+// Demo workflows have synthetic identities, valid graphs, and logs for pods that ran.
 func TestDemoCarriesTheShapesTheViewsHandle(t *testing.T) {
 	f := DemoReader(NewFakeClock(FixtureEpoch))
 	var suspended, stepGroups, retried, hooked, skipped, joins, noNodes int
 	for _, wf := range f.Workflows {
+		ref := wf.Summary.Ref
+		if (ref.Namespace != DemoNamespace && ref.Namespace != DemoMLNamespace) || !strings.HasPrefix(ref.Name, "demo-") {
+			t.Fatalf("demo identity = %+v; want demo namespace and name", ref)
+		}
 		if wf.Summary.Suspended {
 			suspended++
 		}
