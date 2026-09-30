@@ -1,29 +1,26 @@
-package diagnose_test
+package diagnose
 
 import (
+	"sort"
 	"time"
 
 	"github.com/ficaa1/micko/internal/core"
-	"github.com/ficaa1/micko/internal/diagnose"
 	"github.com/ficaa1/micko/internal/testkit"
-	"github.com/ficaa1/micko/internal/ui/detail"
 )
 
-// wfBuilder builds a synthetic DAG workflow named "wf" in the controller's
-// shapes: a DAG root whose children are the tasks that wait for nothing,
-// each task listing the tasks that wait for it as its children, retry
-// attempts under their Retry node, and the exit handler as a tree of its
-// own named "wf.onExit".
+// wfBuilder supplies a node map and a branch tree for the rules.
 type wfBuilder struct {
 	wf         core.Workflow
 	start, now time.Time
+	after      map[string][]string
+	roles      map[string]string
 }
 
 // newWF starts a workflow in phase, begun an hour before the fixture epoch.
 // A finished workflow ended ten minutes in; the clock reads the epoch.
 func newWF(phase string) *wfBuilder {
 	start := testkit.FixtureEpoch.Add(-time.Hour)
-	b := &wfBuilder{start: start, now: testkit.FixtureEpoch}
+	b := &wfBuilder{start: start, now: testkit.FixtureEpoch, after: map[string][]string{}, roles: map[string]string{}}
 	b.wf = core.Workflow{
 		Summary: core.Summary{
 			Ref:   core.Ref{Namespace: "ns", Name: "wf", UID: "uid-wf"},
@@ -77,16 +74,9 @@ func inputs(kv ...string) opt {
 	}
 }
 
-// after makes the node wait for the named tasks: each lists it as a child,
-// the way a DAG task lists its dependents.
+// after gives a task the dependencies supplied to the rules.
 func after(deps ...string) opt {
-	return func(n *core.Node, b *wfBuilder) {
-		for _, d := range deps {
-			p := b.wf.Nodes[d]
-			p.Children = append(p.Children, n.ID)
-			b.wf.Nodes[d] = p
-		}
-	}
+	return func(n *core.Node, b *wfBuilder) { b.after[n.ID] = deps }
 }
 
 // add creates a node with the given options.
@@ -100,22 +90,12 @@ func (b *wfBuilder) add(name, phase string, opts ...opt) core.Node {
 	return n
 }
 
-// task adds a DAG task. One that waits for nothing hangs off the root.
+// task adds a task to the workflow's branch in pipeline order.
 func (b *wfBuilder) task(name, phase string, opts ...opt) {
 	n := b.add(name, phase, opts...)
-	waits := false
-	for _, other := range b.wf.Nodes {
-		for _, c := range other.Children {
-			if c == n.ID && other.ID != "wf" {
-				waits = true
-			}
-		}
-	}
-	if !waits {
-		root := b.wf.Nodes["wf"]
-		root.Children = append(root.Children, n.ID)
-		b.wf.Nodes["wf"] = root
-	}
+	root := b.wf.Nodes["wf"]
+	root.Children = append(root.Children, n.ID)
+	b.wf.Nodes["wf"] = root
 }
 
 // attemptSpec is one attempt of a Retry node.
@@ -143,6 +123,7 @@ func (b *wfBuilder) exitHandler(phase string, opts ...opt) {
 	n := b.add("wf-onexit", phase, opts...)
 	n.Name, n.DisplayName, n.BoundaryID, n.Hooked, n.TemplateName = "wf.onExit", "onExit", "", true, "notify"
 	b.wf.Nodes[n.ID] = n
+	b.roles[n.ID] = "exit handler"
 }
 
 // hook adds a lifecycle hook's pod.
@@ -150,7 +131,39 @@ func (b *wfBuilder) hook(name, phase string, opts ...opt) {
 	n := b.add(name, phase, opts...)
 	n.Name, n.BoundaryID, n.Hooked = "wf.hooks."+name, "", true
 	b.wf.Nodes[n.ID] = n
+	b.roles[n.ID] = "hook"
 }
 
-// input is the rules' input for the workflow at the builder's clock.
-func (b *wfBuilder) input() diagnose.Input { return detail.ExplainInput(b.wf, b.now) }
+// input supplies the tree, dependencies, roles and times independently of the view.
+func (b *wfBuilder) input() Input {
+	var branch func(string) Branch
+	branch = func(id string) Branch {
+		n := b.wf.Nodes[id]
+		out := Branch{ID: id, After: b.after[id], Role: b.roles[id]}
+		if n.StartedAt != nil {
+			out.Ran, out.Start, out.End = true, *n.StartedAt, b.now
+			if n.FinishedAt != nil {
+				out.End = *n.FinishedAt
+			}
+		}
+		for _, child := range n.Children {
+			out.Children = append(out.Children, branch(child))
+		}
+		return out
+	}
+	in := Input{Workflow: b.wf, Start: b.start, Now: b.now, Tree: []Branch{branch("wf")}}
+	if _, ok := b.wf.Nodes["wf-onexit"]; ok {
+		in.Tree = append(in.Tree, branch("wf-onexit"))
+	}
+	var hooks []string
+	for id, role := range b.roles {
+		if role == "hook" {
+			hooks = append(hooks, id)
+		}
+	}
+	sort.Strings(hooks)
+	for _, id := range hooks {
+		in.Tree = append(in.Tree, branch(id))
+	}
+	return in
+}
