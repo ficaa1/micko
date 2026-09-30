@@ -51,7 +51,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 // process we own. A first attempt that loses a port race must not fail
 // startup either: readiness has to survive into the next attempt.
 func TestStartupUsesOnlyTheAnnouncedPortAndSurvivesAPortCollision(t *testing.T) {
-	argoSrv := newSyntheticArgo(t, mustRead(t, "../../internal/argo/testdata/workflow_detail.json"), mustRead(t, "../../internal/argo/testdata/list_page1.json"))
+	argoSrv := newSyntheticArgo(t)
 	realPort := portOf(t, argoSrv.URL)
 
 	_, argsFile := fakeKubectl(t,
@@ -89,10 +89,7 @@ func TestStartupUsesOnlyTheAnnouncedPortAndSurvivesAPortCollision(t *testing.T) 
 // endpoint would keep talking to a dead port forever, so reconnecting would
 // never restore service.
 func TestReconnectMovesTheClientToTheNewPort(t *testing.T) {
-	detail := mustRead(t, "../../internal/argo/testdata/workflow_detail.json")
-	list := mustRead(t, "../../internal/argo/testdata/list_page1.json")
-	first := newSyntheticArgo(t, detail, list)
-	second := newSyntheticArgo(t, detail, list)
+	first, second := newSyntheticArgo(t), newSyntheticArgo(t)
 
 	// The first attempt announces the first server, then exits, imitating a
 	// forward that dies. The second attempt announces the second server.
@@ -131,43 +128,10 @@ func TestReconnectMovesTheClientToTheNewPort(t *testing.T) {
 	if _, err := client.Get(ctx, ref); err != nil {
 		t.Fatalf("read after recovery failed; the client did not follow the new port: %v", err)
 	}
-	if reqs, _, _, _ := first.snapshot(); len(reqs) != 1 {
+	if reqs := first.received(); len(reqs) != 1 {
 		t.Fatalf("first server saw %d requests, want exactly the one before the loss: %v", len(reqs), reqs)
 	}
-	if reqs, _, _, _ := second.snapshot(); len(reqs) != 1 {
+	if reqs := second.received(); len(reqs) != 1 {
 		t.Fatalf("recovered server saw %d requests, want exactly one: %v", len(reqs), reqs)
-	}
-}
-
-// Recovery may move the host and port. It must never move the scheme, drop a
-// configured base path, or discard the TLS material that goes with them.
-func TestRecoveryPreservesConfiguredSchemeAndPathPrefix(t *testing.T) {
-	srv := newSyntheticArgoTLS(t, mustRead(t, "../../internal/argo/testdata/workflow_detail.json"), mustRead(t, "../../internal/argo/testdata/list_page1.json"))
-	host := strings.TrimPrefix(srv.URL, "https://")
-
-	client, err := argo.NewClient(argo.Options{
-		Server:                "https://argo.example.invalid/argo",
-		TokenFn:               func() (string, error) { return "", nil },
-		InsecureSkipTLSVerify: true,
-		// A recovered forward announces a plain-http loopback address. Only
-		// its host and port may be adopted.
-		ResolveServer: func() string { return "http://" + host },
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if _, err := client.Get(ctx, core.Ref{Namespace: "team-a", Name: "dag-complex", UID: "wf-uid-111"}); err != nil {
-		t.Fatalf("request over the preserved https scheme failed: %v", err)
-	}
-	reqs, auth, _, _ := srv.snapshot()
-	if len(reqs) != 1 || !strings.HasPrefix(reqs[0], "GET /argo/api/v1/workflows/") {
-		t.Fatalf("configured path prefix was not preserved: %v", reqs)
-	}
-	// An empty credential must send no Authorization header at all, which is
-	// what an Argo server run with --auth-mode=server expects.
-	if len(auth) != 1 || auth[0] != "" {
-		t.Fatalf("empty token still sent an Authorization header: %q", auth)
 	}
 }

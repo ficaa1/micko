@@ -2,7 +2,8 @@
 
 package e2e
 
-// The E2E harness uses its own HTTP reader and submit/delete helpers.
+// The journey reads and deletes through the production client; the harness
+// submits the workflows and polls their state with its own requests.
 
 import (
 	"bytes"
@@ -16,124 +17,37 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/argo"
+	"github.com/ficaa1/micko/internal/buildinfo"
 	"gopkg.in/yaml.v3"
 )
 
-// e2eClient carries the harness reader, endpoint and credentials.
+// e2eClient carries the production client and what the harness needs to
+// submit and delete the synthetic workflows the product cannot create.
 type e2eClient struct {
-	reader core.Reader
+	reader *argo.Client
 	base   string
 	token  string
 	http   *http.Client
 }
 
-// newE2EClient builds the harness reader from the validated allowlist.
+// newE2EClient builds the production Argo client for the allowlisted
+// endpoint, and the harness's own requests beside it.
 func newE2EClient(t *testing.T, cfg e2eConfig) *e2eClient {
 	t.Helper()
-	reader, err := buildProductionReader(cfg)
+	reader, err := argo.NewClient(argo.Options{
+		Server:    cfg.Server,
+		TokenFn:   func() (string, error) { return cfg.Token, nil },
+		UserAgent: buildinfo.UserAgent(),
+	})
 	if err != nil {
-		t.Fatalf("build production reader: %v", err)
+		t.Fatalf("argo client: %v", err)
 	}
 	return &e2eClient{
 		reader: reader,
 		base:   strings.TrimSuffix(cfg.Server, "/"),
 		token:  cfg.Token,
 		http:   &http.Client{Timeout: 30 * time.Second},
-	}
-}
-
-func buildProductionReader(cfg e2eConfig) (core.Reader, error) {
-	if err := validateE2EConfig(cfg, false); err != nil {
-		return nil, fmt.Errorf("production reader config: %w", err)
-	}
-	return &productionReader{base: strings.TrimSuffix(cfg.Server, "/"), token: cfg.Token,
-		http: &http.Client{Timeout: 30 * time.Second}}, nil
-}
-
-// productionReader is the real HTTP adapter used by the opt-in journey. It
-// intentionally shares no fake-server code: configured endpoints either
-// answer the Argo API or return an actionable error.
-type productionReader struct {
-	base, token string
-	http        *http.Client
-}
-
-func (r *productionReader) List(ctx context.Context, q core.Query) (core.Page, error) {
-	path := r.base + "/api/v1/workflows/" + q.Namespace
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return core.Page{}, err
-	}
-	r.auth(req)
-	resp, err := r.http.Do(req)
-	if err != nil {
-		return core.Page{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return core.Page{}, fmt.Errorf("list: HTTP %d", resp.StatusCode)
-	}
-	var v struct {
-		Items []struct {
-			Metadata struct {
-				Name, Namespace, UID, ResourceVersion string
-				CreationTimestamp                     time.Time `json:"creationTimestamp"`
-				Labels                                map[string]string
-			} `json:"metadata"`
-			Status struct{ Phase, Message string } `json:"status"`
-		} `json:"items"`
-		Metadata struct {
-			ResourceVersion string `json:"resourceVersion"`
-		} `json:"metadata"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
-		return core.Page{}, fmt.Errorf("list response: %w", err)
-	}
-	p := core.Page{ResourceVersion: v.Metadata.ResourceVersion}
-	for _, item := range v.Items {
-		m := item.Metadata
-		p.Items = append(p.Items, core.Summary{Ref: core.Ref{Namespace: m.Namespace, Name: m.Name, UID: m.UID}, ResourceVersion: m.ResourceVersion, Phase: item.Status.Phase, Message: item.Status.Message, CreatedAt: m.CreationTimestamp, Labels: m.Labels})
-	}
-	return p, nil
-}
-
-func (r *productionReader) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.base+"/api/v1/workflows/"+ref.Namespace+"/"+ref.Name, nil)
-	if err != nil {
-		return core.Workflow{}, err
-	}
-	r.auth(req)
-	resp, err := r.http.Do(req)
-	if err != nil {
-		return core.Workflow{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return core.Workflow{}, fmt.Errorf("get: HTTP %d", resp.StatusCode)
-	}
-	var v struct {
-		Metadata struct {
-			Name, Namespace, UID, ResourceVersion string
-			CreationTimestamp                     time.Time `json:"creationTimestamp"`
-			Labels                                map[string]string
-		} `json:"metadata"`
-		Status struct{ Phase, Message string } `json:"status"`
-		Spec   json.RawMessage                 `json:"spec"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
-		return core.Workflow{}, fmt.Errorf("get response: %w", err)
-	}
-	m := v.Metadata
-	return core.Workflow{Summary: core.Summary{Ref: core.Ref{Namespace: m.Namespace, Name: m.Name, UID: m.UID}, ResourceVersion: m.ResourceVersion, Phase: v.Status.Phase, Message: v.Status.Message, CreatedAt: m.CreationTimestamp, Labels: m.Labels}, NodesAvailable: false, NodesUnavailableReason: "production E2E reader does not synthesize nodes", Resource: v.Spec}, nil
-}
-
-func (r *productionReader) StreamLogs(context.Context, core.LogRequest, func(core.LogRecord) error) error {
-	return fmt.Errorf("production log streaming is not implemented by this E2E adapter")
-}
-func (r *productionReader) auth(req *http.Request) {
-	if r.token != "" {
-		req.Header.Set("Authorization", "Bearer "+r.token)
 	}
 }
 

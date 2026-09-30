@@ -303,8 +303,8 @@ func TestErrorsMapByStatus(t *testing.T) {
 	}
 }
 
-// Requests go to the endpoint the resolver names, and nowhere when it names
-// none.
+// Requests go to the host and port the resolver names, keeping the configured
+// scheme and path, and nowhere when it names none.
 func TestRequestsGoToTheResolvedEndpoint(t *testing.T) {
 	list := func(c *Client) error {
 		_, err := c.List(context.Background(), core.Query{Namespace: "ns"})
@@ -351,6 +351,28 @@ func TestRequestsGoToTheResolvedEndpoint(t *testing.T) {
 			}
 		})
 	}
+
+	// A forward announces a plain-http loopback address; only its host and
+	// port are adopted, never its scheme or its missing path.
+	t.Run("only the host and port move", func(t *testing.T) {
+		var path string
+		moved := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			path = r.URL.Path
+			_, _ = io.WriteString(w, `{"metadata":{"name":"wf","namespace":"ns","uid":"u"},"status":{}}`)
+		}))
+		t.Cleanup(moved.Close)
+		cl := newClientWith(t, Options{
+			Server:                "https://argo.example.invalid/argo",
+			InsecureSkipTLSVerify: true,
+			ResolveServer:         func() string { return "http://" + strings.TrimPrefix(moved.URL, "https://") },
+		})
+		if _, err := cl.Get(context.Background(), core.Ref{Namespace: "ns", Name: "wf", UID: "u"}); err != nil {
+			t.Fatalf("request over the configured https scheme failed: %v", err)
+		}
+		if path != "/argo/api/v1/workflows/ns/wf" {
+			t.Errorf("path = %q, want it under the configured /argo prefix", path)
+		}
+	})
 }
 
 // A credential source that fails refuses the request as unauthenticated,
