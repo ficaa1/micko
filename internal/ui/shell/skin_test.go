@@ -14,10 +14,11 @@ import (
 func skinned(t *testing.T, name string) shared.Theme {
 	t.Helper()
 	t.Setenv("NO_COLOR", "")
-	th, err := shared.SkinTheme(name, false)
-	if err != nil {
-		t.Fatal(err)
+	skin, ok := shared.LookupSkin(name)
+	if !ok {
+		t.Fatalf("unknown skin %q", name)
 	}
+	th := skin.Theme(false)
 	return th
 }
 

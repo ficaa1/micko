@@ -6,90 +6,44 @@ import (
 	"unicode/utf8"
 )
 
-func TestSanitizePreservesSafeChars(t *testing.T) {
-	in := "line one\nline two\tcol3"
-	if got := Sanitize(in); got != in {
-		t.Errorf("Sanitize(%q) = %q, want unchanged", in, got)
+// Sanitize preserves readable text while removing terminal control sequences.
+func TestSanitize(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"safe newlines and tabs", "line one\nline two\tcol3", "line one\nline two\tcol3"},
+		{"C0", "a\x00b\x07c\x08d\x0be\x0cf", "abcdef"},
+		{"carriage return", "OK\rFAKE", "OKFAKE"},
+		{"CSI erase", "\x1b[2K", ""},
+		{"CSI foreground", "a\x1b[31mred", "ared"},
+		{"CSI compound", "\x1b[1;31mX", "X"},
+		{"CSI private mode", "a\x1b[?25hb", "ab"},
+		{"CSI palette", "a\x1b[38;5;9mZ", "aZ"},
+		{"CSI final", "keep\x1b[200Xme", "keepme"},
+		{"OSC clipboard", "a\x1b]52;c;base64payload\x07b", "ab"},
+		{"OSC title ST", "x\x1b]0;evil title\x1b\\y", "xy"},
+		{"OSC hyperlink", "\x1b]8;;http://evil\x1b\\link\x1b]8;;\x1b\\", "link"},
+		{"unfinished OSC", "a\x1b]52;c;payload", "a"},
+		{"C1", "a\u0085b\u009b31m", "ab31m"},
+		{"dangling escape", "dangling\x1b", "dangling"},
+		{"charset", "charset\x1b(Bok", "charsetok"},
+		{"DCS", "dcs\x1bPpayload\x1b\\end", "dcsend"},
+		{"APC", "apc\x1b_payload\x1b\\e", "apce"},
+		{"clipboard attack", "\x1b]52;c;Q01EQVRB\x07", ""},
+		{"title attack", "\x1b]0;pwned\x07", ""},
+		{"alternate screen", "\x1b[?1049h\x1b[?25l", ""},
+		{"RGB color", "run \x1b[38;2;255;0;0mred\x1b[0m text", "run red text"},
+		{"file hyperlink", "\x1b]8;;file:///etc/passwd\x1b\\x\x1b]8;;\x1b\\", "x"},
 	}
-}
-
-func TestSanitizeRemovesC0(t *testing.T) {
-	in := "a\x00b\x07c\x08d\x0be\x0cf"
-	want := "abcdef"
-	if got := Sanitize(in); got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-func TestSanitizeRemovesCarriageReturnRewrite(t *testing.T) {
-	// Classic terminal spoofing: "OK\x1b[2K\rERASED" — CR must not survive.
-	in := "OK\rFAKE"
-	want := "OKFAKE"
-	if got := Sanitize(in); got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-func TestSanitizeRemovesCSI(t *testing.T) {
-	cases := map[string]string{
-		"\x1b[2K":         "",
-		"a\x1b[31mred":    "ared",
-		"\x1b[1;31mX":     "X",
-		"a\x1b[?25hb":     "ab",
-		"a\x1b[38;5;9mZ":  "aZ",
-		"keep\x1b[200Xme": "keepme",
-	}
-	for in, want := range cases {
-		if got := Sanitize(in); got != want {
-			t.Errorf("Sanitize(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestSanitizeRemovesOSC(t *testing.T) {
-	cases := map[string]string{
-		// OSC 52 clipboard exfiltration
-		"a\x1b]52;c;base64payload\x07b": "ab",
-		// OSC 0 title change with ST terminator
-		"x\x1b]0;evil title\x1b\\y": "xy",
-		// OSC 8 hyperlink
-		"\x1b]8;;http://evil\x1b\\link\x1b]8;;\x1b\\": "link",
-		// unterminated OSC swallows to end (safe direction)
-		"a\x1b]52;c;payload": "a",
-	}
-	for in, want := range cases {
-		if got := Sanitize(in); got != want {
-			t.Errorf("Sanitize(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestSanitizeRemovesC1(t *testing.T) {
-	// C1 as Unicode code points (UTF-8 encoded 0x85 NEL, 0x9B CSI-intro)
-	in := "a\u0085b\u009b31m"
-	want := "ab31m"
-	if got := Sanitize(in); got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-func TestSanitizeRemovesDanglingAndStringSequences(t *testing.T) {
-	cases := map[string]string{
-		"dangling\x1b":             "dangling",
-		"charset\x1b(Bok":          "charsetok",
-		"dcs\x1bPpayload\x1b\\end": "dcsend",
-		"apc\x1b_payload\x1b\\e":   "apce",
-	}
-	for in, want := range cases {
-		if got := Sanitize(in); got != want {
-			t.Errorf("Sanitize(%q) = %q, want %q", in, got, want)
-		}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := Sanitize(c.in); got != c.want {
+				t.Errorf("Sanitize(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
 	}
 }
 
 func TestSanitizeFuzzNoControlOutput(t *testing.T) {
-	// Deterministic pseudo-fuzz: shake inputs through a simple LCG so the
-	// test is reproducible (no flaky random seeds in CI).
+	// A fixed seed makes generated control-sequence combinations reproducible.
 	seed := uint32(0x9e3779b9)
 	next := func() byte {
 		seed = seed*1664525 + 1013904223
@@ -116,37 +70,18 @@ func TestSanitizeFuzzNoControlOutput(t *testing.T) {
 			if r < 0x20 || (r >= 0x7f && r <= 0x9f) {
 				t.Fatalf("iter %d: control rune %U survived sanitize of %q -> %q", iter, r, in, got)
 			}
-			if r == 0x1b {
-				t.Fatalf("iter %d: raw ESC survived: %q", iter, got)
-			}
-		}
-	}
-}
-
-func TestSanitizeKnownAttackStrings(t *testing.T) {
-	// Record named attacks as a regression table.
-	attacks := []string{
-		"\x1b]52;c;Q01EQVRB\x07",                          // OSC 52 clipboard write
-		"\x1b]0;pwned\x07",                                // title rewrite
-		"\x1b[?1049h\x1b[?25l",                            // alt-screen/cursor games
-		"run \x1b[38;2;255;0;0mred\x1b[0m text",           // SGR
-		"\x1b]8;;file:///etc/passwd\x1b\\x\x1b]8;;\x1b\\", // OSC 8 file link
-	}
-	for _, a := range attacks {
-		got := Sanitize(a)
-		if strings.ContainsAny(got, "\x1b\x07\r") {
-			t.Errorf("attack %q -> %q still contains ESC/BEL/CR", a, got)
 		}
 	}
 }
 
 func TestRedactTokens(t *testing.T) {
 	cases := map[string]string{
-		"Bearer abc123def456ghi789jkl012":                  "Bearer [REDACTED]",
-		"authorization: Bearer   tok-with-dashes_and.dots": "authorization: Bearer [REDACTED]",
-		"BEARER MixedCaseToken123456789012345":             "BEARER [REDACTED]",
-		"no secret here":                                   "no secret here",
-		"short bearer x":                                   "short bearer [REDACTED]", // conservative: token-shaped run after marker is masked
+		"Bearer abc123def456ghi789jkl012":                    "Bearer [REDACTED]",
+		"authorization: Bearer   tok-with-dashes_and.dots":   "authorization: Bearer [REDACTED]",
+		"BEARER MixedCaseToken123456789012345":               "BEARER [REDACTED]",
+		"no secret here":                                     "no secret here",
+		"token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 remains": "[REDACTED] remains",
+		"short bearer x":                                     "short bearer [REDACTED]", // conservative: token-shaped run after marker is masked
 	}
 	for in, want := range cases {
 		got := RedactTokens(in)
@@ -154,23 +89,14 @@ func TestRedactTokens(t *testing.T) {
 			t.Errorf("RedactTokens(%q) = %q, want %q", in, got, want)
 		}
 	}
-	// long base64url-ish blob
-	in := "token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 remains"
-	got := RedactTokens(in)
-	if strings.Contains(got, "eyJhbGciOiJIUzI1NiIsInR5") {
-		t.Errorf("long token not redacted: %q", got)
-	}
+
 }
 
+// Error redaction and terminal sanitization both survive their composition.
 func TestRedactThenSanitizeComposition(t *testing.T) {
-	// Error surfaces apply redaction; views apply sanitization; both must
-	// compose without corrupting normal text.
-	in := "Authorization: Bearer deadbeefcafe123456789012 failed"
-	out := Sanitize(RedactTokens(in))
-	if strings.Contains(out, "deadbeefcafe123456789012") {
-		t.Fatalf("token survived: %q", out)
-	}
-	if !strings.Contains(out, "failed") {
-		t.Errorf("normal text damaged: %q", out)
+	in := "Authorization: Bearer deadbeefcafe123456789012 \x1b[31mfailed\x1b[0m"
+	want := "Authorization: Bearer [REDACTED] failed"
+	if got := Sanitize(RedactTokens(in)); got != want {
+		t.Errorf("Sanitize(RedactTokens(%q)) = %q, want %q", in, got, want)
 	}
 }

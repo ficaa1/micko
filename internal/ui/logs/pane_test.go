@@ -63,10 +63,11 @@ func TestNoticeOnlyWhileEmpty(t *testing.T) {
 // restyled.
 func TestAnnotationsAreMutedAndLogLinesAreNot(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	th, err := shared.SkinTheme("solarized-dark", false)
-	if err != nil {
-		t.Fatal(err)
+	skin, ok := shared.LookupSkin("solarized-dark")
+	if !ok {
+		t.Fatalf("unknown skin %q", "solarized-dark")
 	}
+	th := skin.Theme(false)
 	m := testModel(t)
 	m.ApplyRecords(recs(3))
 	want := strings.Join(m.BodyLines(), "\n")

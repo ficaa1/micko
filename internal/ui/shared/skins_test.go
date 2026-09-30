@@ -20,8 +20,7 @@ func hasForeground(s lipgloss.Style) bool {
 	return isColor(s.GetForeground())
 }
 
-// styles returns every lipgloss.Style token of a theme by field name, so a
-// token added to Theme is covered by these tests without editing them.
+// styles returns each style token by field name.
 func styles(t Theme) map[string]lipgloss.Style {
 	out := map[string]lipgloss.Style{}
 	v := reflect.ValueOf(t)
@@ -33,9 +32,7 @@ func styles(t Theme) map[string]lipgloss.Style {
 	return out
 }
 
-// SkinNames is the list a reader is shown when a name is wrong, and the list
-// the command palette completes from. It must hold every skin exactly once,
-// with the two special names first.
+// Skin names preserve configuration compatibility and list each accepted name once.
 func TestSkinNamesListsEveryBuiltInSkin(t *testing.T) {
 	names := SkinNames()
 	if len(names) < 2 || names[0] != SkinAuto || names[1] != SkinDefault {
@@ -84,27 +81,22 @@ func TestUnknownSkinErrorListsTheValidNames(t *testing.T) {
 			t.Errorf("error does not list %q: %v", n, err)
 		}
 	}
-	if _, err := SkinTheme("solarised", false); err == nil {
-		t.Error("SkinTheme accepted an unknown name")
-	}
 	if err := CheckSkin("nord"); err != nil {
 		t.Errorf("CheckSkin(nord) = %v", err)
 	}
 }
 
-// Every truecolor skin sets a colour on every token that is meant to carry
-// one. A token left at the zero style would draw in the terminal's colours
-// inside an otherwise themed screen, which is the defect a new token most
-// easily brings in.
+// Truecolor skins give every token a foreground and painted blocks a background.
 func TestEveryTruecolorSkinDefinesEveryToken(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	// Tokens drawn as a block of colour, whose background is the point.
 	backed := map[string]bool{"Selected": true, "Band": true, "BadgeReadOnly": true, "BadgeActions": true}
 	for _, name := range truecolorSkins {
-		th, err := SkinTheme(name, false)
-		if err != nil {
-			t.Fatal(err)
+		skin, ok := LookupSkin(name)
+		if !ok {
+			t.Fatalf("unknown skin %q", name)
 		}
+		th := skin.Theme(false)
 		if th.Skin != name {
 			t.Errorf("%s: theme reports skin %q", name, th.Skin)
 		}
@@ -122,15 +114,14 @@ func TestEveryTruecolorSkinDefinesEveryToken(t *testing.T) {
 	}
 }
 
-// The default skin names ANSI palette slots, so the terminal's own scheme
-// decides the hues. Every token still has to style something; only Text and
-// Band are meant to be the terminal's own foreground and background.
+// The default skin styles semantic tokens with ANSI slots and preserves terminal defaults.
 func TestDefaultSkinStylesEveryTokenButTheTerminalDefaults(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	th, err := SkinTheme(SkinDefault, false)
-	if err != nil {
-		t.Fatal(err)
+	skin, ok := LookupSkin(SkinDefault)
+	if !ok {
+		t.Fatalf("unknown skin %q", SkinDefault)
 	}
+	th := skin.Theme(false)
 	for field, s := range styles(th) {
 		if field == "Text" || field == "Band" {
 			continue
@@ -148,36 +139,39 @@ func TestDefaultSkinStylesEveryTokenButTheTerminalDefaults(t *testing.T) {
 	}
 }
 
-// NO_COLOR outranks the skin: every skin, asked for by name, draws plain.
-func TestNoColorKeepsEverySkinPlain(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	for _, name := range SkinNames() {
-		th, err := SkinTheme(name, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for field, s := range styles(th) {
-			if got := s.Render("x"); got != "x" {
-				t.Errorf("%s under NO_COLOR: %s rendered %q", name, field, got)
+// Environment and explicit no-color settings leave every token plain.
+func TestPlainThemes(t *testing.T) {
+	for _, mode := range []struct {
+		name, env string
+		flag      bool
+	}{{"environment", "1", false}, {"argument", "", true}} {
+		t.Run(mode.name, func(t *testing.T) {
+			t.Setenv("NO_COLOR", mode.env)
+			themes := map[string]Theme{"NewTheme": NewTheme(mode.flag)}
+			for _, name := range SkinNames() {
+				skin, ok := LookupSkin(name)
+				if !ok {
+					t.Fatalf("unknown skin %q", name)
+				}
+				themes[name] = skin.Theme(mode.flag)
 			}
-		}
+			for name, th := range themes {
+				for _, phase := range []string{"Running", "Succeeded", "Failed", "Error", "Pending", "Suspended", "Unknown"} {
+					if got := th.PhaseStyle(phase).Render("x"); got != "x" {
+						t.Errorf("%s PhaseStyle(%q) = %q, want plain x", name, phase, got)
+					}
+				}
+				for field, style := range styles(th) {
+					if got := style.Render("x"); got != "x" {
+						t.Errorf("%s %s = %q, want plain x", name, field, got)
+					}
+				}
+			}
+		})
 	}
 }
 
-// The noColor argument has the same effect as the environment variable.
-func TestNoColorArgumentKeepsASkinPlain(t *testing.T) {
-	t.Setenv("NO_COLOR", "")
-	th, err := SkinTheme("dracula", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := th.Selected.Render("x"); got != "x" {
-		t.Fatalf("noColor theme styled the selection: %q", got)
-	}
-}
-
-// auto resolves to a skin drawn for the background the terminal reported,
-// and until then draws as the default skin, which suits either.
+// Auto selects the appropriate background variant and uses default styling before resolution.
 func TestAutoPicksAVariantForEachBackground(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	dark, _ := LookupSkin(AutoSkin(true))
@@ -185,10 +179,11 @@ func TestAutoPicksAVariantForEachBackground(t *testing.T) {
 	if !dark.Dark || light.Dark {
 		t.Fatalf("auto variants: dark=%+v light=%+v", dark, light)
 	}
-	before, err := SkinTheme(SkinAuto, false)
-	if err != nil {
-		t.Fatal(err)
+	skin, ok := LookupSkin(SkinAuto)
+	if !ok {
+		t.Fatalf("unknown skin %q", SkinAuto)
 	}
+	before := skin.Theme(false)
 	def := NewTheme(false)
 	if before.Selected.Render("x") != def.Selected.Render("x") || before.Title.Render("x") != def.Title.Render("x") {
 		t.Error("auto before the terminal answers does not draw as the default skin")
@@ -198,11 +193,14 @@ func TestAutoPicksAVariantForEachBackground(t *testing.T) {
 	}
 }
 
-// A selection drawn as a block is padded across the row, so the highlight is
-// a bar; a plain selection gains no trailing spaces for a mouse to copy.
+// Block selections fill the row while plain selections stay unpadded.
 func TestSelectRowPadsOnlyABlockSelection(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	block, _ := SkinTheme("nord", false)
+	skin, ok := LookupSkin("nord")
+	if !ok {
+		t.Fatal("nord skin missing")
+	}
+	block := skin.Theme(false)
 	if got := lipgloss.Width(block.SelectRow("row", 10)); got != 10 {
 		t.Errorf("block selection is %d cells, want 10", got)
 	}

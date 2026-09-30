@@ -14,10 +14,11 @@ import (
 // and the bracketed keys are drawn as keys.
 func TestThemedActionPaneKeepsItsWords(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	th, err := shared.SkinTheme("tokyo-night", false)
-	if err != nil {
-		t.Fatal(err)
+	skin, ok := shared.LookupSkin("tokyo-night")
+	if !ok {
+		t.Fatalf("unknown skin %q", "tokyo-night")
 	}
+	th := skin.Theme(false)
 	ref := core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}
 	opts := Options{AllowActions: true, Server: "https://argo.test", Profile: "dev", Phase: "Failed"}
 	plain, themed := NewWithOptions(ref, opts), NewWithOptions(ref, opts)
@@ -48,7 +49,11 @@ func TestThemedActionPaneKeepsItsWords(t *testing.T) {
 // including a row with no key and one with an unclosed bracket.
 func TestKeysStylesOnlyTheBrackets(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	th, _ := shared.SkinTheme("nord", false)
+	skin, ok := shared.LookupSkin("nord")
+	if !ok {
+		t.Fatal("nord skin missing")
+	}
+	th := skin.Theme(false)
 	got := keys(th, "[y] Yes  [n] No")
 	want := th.HintKey.Render("[y]") + " Yes  " + th.HintKey.Render("[n]") + " No"
 	if got != want {

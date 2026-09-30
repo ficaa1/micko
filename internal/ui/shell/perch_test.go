@@ -134,10 +134,11 @@ func TestMickoThemeOnlyStyles(t *testing.T) {
 	want := lines(f.Render(plain()))
 	top := topRow(t, want)
 	for _, name := range []string{"default", "nord", "catppuccin-latte"} {
-		th, err := shared.SkinTheme(name, false)
-		if err != nil {
-			t.Fatal(err)
+		skin, ok := shared.LookupSkin(name)
+		if !ok {
+			t.Fatalf("unknown skin %q", name)
 		}
+		th := skin.Theme(false)
 		got := lines(ansi.Strip(f.Render(th)))
 		for row := 1; row < top; row++ {
 			if got[row] != want[row] {
