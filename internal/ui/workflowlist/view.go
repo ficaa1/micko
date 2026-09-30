@@ -12,19 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// Update implements the child Tea model. Key isolation rules:
-//   - In search mode, printable keys go to the input; j/k/arrows/enter keep
-//     their navigation meaning ONLY as input editing/submit; `q` types a
-//     letter (does NOT quit) and no other command key fires. Esc leaves
-//     search (cancel semantics).
-//   - Outside search, the component handles j/k/arrows (move), enter (open
-//     intent), l (logs intent), / (enter search), s (cycle sort), p-local
-//     phase cycling is NOT bound here (p is the root's profile key; the
-//     root calls CyclePhase when it routes it), w (wide columns), esc
-//     (BackMsg passthrough stays with the root).
-//
-// The component never issues commands that touch the network; intents are
-// returned as messages for the root.
+// Update handles navigation, local filters and intents for the selected workflow.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -115,8 +103,6 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.CycleSort()
 		return nil
 	case "p":
-		// The phase bucket was reachable only through the API until now, so
-		// the Suspended bucket would have had no key at all.
 		m.CyclePhase()
 		return nil
 	case "space":
@@ -150,7 +136,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	default:
-		// Everything else (q, n, p, ?, ...) belongs to the root; the child
+		// Everything else (q, n, ?, ...) belongs to the root; the child
 		// must not shadow it.
 		return nil
 	}
@@ -367,11 +353,7 @@ func (m *Model) clockText(t *time.Time) string {
 	if t == nil || t.IsZero() {
 		return "-"
 	}
-	loc := m.loc
-	if loc == nil {
-		loc = time.Local
-	}
-	return t.In(loc).Format("01-02 15:04")
+	return t.In(time.Local).Format("01-02 15:04")
 }
 
 // orDash stands in "-" for an empty cell, so an empty column reads as "none"
@@ -381,71 +363,6 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
-}
-
-// humanDuration renders a compact human duration (4m, 2h13m, 3d).
-func humanDuration(d time.Duration) string {
-	switch {
-	case d >= 24*time.Hour:
-		days := int(d / (24 * time.Hour))
-		hours := int(d%(24*time.Hour)) / int(time.Hour)
-		if hours > 0 {
-			return itoa(days) + "d" + itoa(hours) + "h"
-		}
-		return itoa(days) + "d"
-	case d >= time.Hour:
-		h := int(d / time.Hour)
-		mins := int(d%time.Hour) / int(time.Minute)
-		if mins > 0 {
-			return itoa(h) + "h" + itoa(mins) + "m"
-		}
-		return itoa(h) + "h"
-	case d >= time.Minute:
-		return itoa(int(d/time.Minute)) + "m"
-	default:
-		return itoa(int(d/time.Second)) + "s"
-	}
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
-}
-
-// padRight pads s to width cells (Unicode-aware: wide names must not
-// break alignment). Wide runes count as 2 cells via ansi.StringWidth.
-func padRight(s string, width int) string {
-	w := ansi.StringWidth(s)
-	if w >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-w)
-}
-
-// padLeft right-aligns s in width cells.
-func padLeft(s string, width int) string {
-	w := ansi.StringWidth(s)
-	if w >= width {
-		return s
-	}
-	return strings.Repeat(" ", width-w) + s
 }
 
 // truncateRight clips s to width cells, appending a literal ellipsis when
@@ -475,5 +392,44 @@ func truncateRight(s string, width int) string {
 	return b.String() + "…"
 }
 
-// ensure app import used for intents (compile hint if drift).
-var _ = shared.OpenWorkflowMsg{}
+// padRight pads text to width terminal cells.
+func padRight(s string, width int) string {
+	n := ansi.StringWidth(s)
+	if n >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-n)
+}
+
+// padLeft right-aligns text in width terminal cells.
+func padLeft(s string, width int) string {
+	n := ansi.StringWidth(s)
+	if n >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-n) + s
+}
+
+// humanDuration renders compact list durations without seconds above a minute.
+func humanDuration(d time.Duration) string {
+	switch {
+	case d >= 24*time.Hour:
+		days := int(d / (24 * time.Hour))
+		hours := int(d%(24*time.Hour)) / int(time.Hour)
+		if hours > 0 {
+			return strconv.Itoa(days) + "d" + strconv.Itoa(hours) + "h"
+		}
+		return strconv.Itoa(days) + "d"
+	case d >= time.Hour:
+		h := int(d / time.Hour)
+		mins := int(d%time.Hour) / int(time.Minute)
+		if mins > 0 {
+			return strconv.Itoa(h) + "h" + strconv.Itoa(mins) + "m"
+		}
+		return strconv.Itoa(h) + "h"
+	case d >= time.Minute:
+		return strconv.Itoa(int(d/time.Minute)) + "m"
+	default:
+		return strconv.Itoa(int(d/time.Second)) + "s"
+	}
+}

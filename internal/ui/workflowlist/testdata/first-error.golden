@@ -1,8 +1,8 @@
 micko   server: fixture   ns: ns                                                           READ ONLY
 ┌─ Workflows ──────────────────────────────────────────────────────────────────────────────────────┐
-│ Search: (none)  / to filter by name [within 6 collected]  Phase: Failed  Sort: phase, newest fi… │
+│ Search: (none)  / to filter by name  Phase: All  Sort: phase, newest first  stale 2m — connecti… │
 │   NAME                          PHASE              AGE  DURATION   MESSAGE                       │
-│   fixture-wf-0003               ✗ Failed            3m  -          synthetic failure message     │
+│ no workflows visible: connection refused                                                         │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -11,4 +11,4 @@ micko   server: fixture   ns: ns                                                
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
-list   enter open  l logs  T timeline  X explain  E events  / search  s sort  p ph… ? help   1 shown
+list   enter open  l logs  T timeline  X explain  E events  / search  s sort  p ph… ? help   0 shown

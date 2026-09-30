@@ -87,5 +87,3 @@ func nameMatches(name, query string) bool {
 	}
 	return strings.Contains(strings.ToLower(name), strings.ToLower(query))
 }
-
-var _ = core.Ref{}

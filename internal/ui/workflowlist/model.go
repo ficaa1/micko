@@ -1,20 +1,4 @@
-// Package workflowlist is the list component: a keyboard-driven list of
-// workflow summaries over injected core values.
-//
-// Contract rules pinned here:
-//   - It is a child Tea model (New/Update/View/SetSize) accepting core
-//     values, never HTTP clients, and never starts goroutines.
-//   - Selection identity is UID (plus namespace+name), never a row index:
-//     reordering or deletion keeps the selection on the
-//     same workflow.
-//   - Open intent is emitted as app.OpenWorkflowMsg / app.OpenLogsMsg; the
-//     root alone converts intents to network effects.
-//   - Search is local over the injected snapshot and the view says so: no claim
-//     of searching un-fetched workflows.
-//   - Untrusted text is sanitized with the shared sanitizer before render;
-//     styling is applied separately from content.
-//   - All state transitions (loading/stale/incomplete/forbidden/empty) are
-//     distinguishable in the view.
+// Package workflowlist is the keyboard-driven workflow pane over injected snapshots.
 package workflowlist
 
 import (
@@ -67,11 +51,7 @@ type Model struct {
 	// filter answers for the snapshot on screen.
 	now time.Time
 	// wide adds the metadata columns (the w key).
-	wide bool
-	// loc is the zone the STARTED and FINISHED columns are shown in; nil
-	// means the local zone. Tests pin it so goldens do not depend on the
-	// machine's zone.
-	loc    *time.Location
+	wide   bool
 	status Status
 	errMsg string        // sanitized error/stale-reason text when StatusStale/...
 	errAge time.Duration // stale age when StatusStale (root supplies)
@@ -167,9 +147,6 @@ func (m *Model) ToggleMark() {
 	m.marks[uid] = true
 }
 
-// IsMarked reports whether the workflow with this UID is marked.
-func (m *Model) IsMarked(uid string) bool { return m.marks[uid] }
-
 // Marked returns the marked workflows in the current sort order, hidden
 // ones included. The order is the order a bulk action runs in, so it
 // follows what the reader sees rather than the order they marked in.
@@ -254,11 +231,6 @@ func (m *Model) Selected() core.Summary {
 	return core.Summary{}
 }
 
-// HasSelection reports whether the selection still points at a visible row.
-func (m *Model) HasSelection() bool {
-	return m.SelectedRef().UID != ""
-}
-
 // SetStatus updates the list-level status with sanitized message text and
 // (for stale) the age of the last good data.
 func (m *Model) SetStatus(s Status, msg string, staleAge time.Duration) {
@@ -274,14 +246,7 @@ func (m *Model) SetAllNamespaces(on bool) {
 	m.applyView()
 }
 
-// AllNamespaces reports whether the list shows the NAMESPACE column.
-func (m *Model) AllNamespaces() bool { return m.allNS }
-
-// SetPhase rotates/sets the phase filter.
-func (m *Model) SetPhase(p PhaseFilter) { m.phase = p; m.applyView() }
-
-// CyclePhase advances the phase filter bucket (p key handling stays with
-// the root; the component exposes the intent).
+// CyclePhase advances the phase bucket and selects its first row.
 func (m *Model) CyclePhase() {
 	m.phase = m.phase.Next()
 	m.selUID = ""
@@ -319,25 +284,8 @@ func (m *Model) SetQuery(q string) error {
 // Query returns the applied filter text.
 func (m *Model) Query() string { return m.query }
 
-// QueryError is why the filter being typed does not parse, or "".
-func (m *Model) QueryError() string { return m.queryErr }
-
 // ToggleWide switches the metadata columns on or off.
 func (m *Model) ToggleWide() { m.wide = !m.wide }
-
-// Wide reports whether the metadata columns are on.
-func (m *Model) Wide() bool { return m.wide }
-
-// SortKey returns the active sort.
-func (m *Model) SortKey() SortKey { return m.sort }
-
-// PhaseFilter returns the active phase bucket.
-func (m *Model) PhaseFilter() PhaseFilter { return m.phase }
-
-// VisibleCount / TotalCount expose honest scope numbers (view shows
-// "visible/total" and marks the search as snapshot-scoped).
-func (m *Model) VisibleCount() int { return m.visible }
-func (m *Model) TotalCount() int   { return m.total }
 
 // applyView recomputes the display rows from items: filter by phase bucket
 // and the parsed query, then sort. Selection survives by UID (never
@@ -457,23 +405,10 @@ func (m *Model) LogsIntent() tea.Msg {
 	return shared.OpenLogsMsg{Ref: sel.Ref, Container: "main"}
 }
 
-// RefreshIntent is the manual refresh request (r). The frozen app contract
-// has no RefreshListMsg; the root already polls and coalesces, so
-// the component emits a lightweight local signal the root can interpret.
+// RefreshListMsg asks the root to refresh the list.
 type RefreshListMsg struct{}
 
 func (m *Model) RefreshIntent() tea.Msg { return RefreshListMsg{} }
-
-// SearchValue returns the in-progress search text while the input has
-// focus (testing/inspection only; the applied query is Query()).
-func (m *Model) SearchValue() string { return m.searchBuf }
-
-// SearchSetValue replaces the buffer contents and parks the cursor at the
-// end (used by tests and by commit/apply paths).
-func (m *Model) SearchSetValue(s string) {
-	m.searchBuf = s
-	m.searchCur = len([]rune(s))
-}
 
 // searchInsert inserts a rune at the cursor (text-entry editing).
 func (m *Model) searchInsert(r rune) {

@@ -113,9 +113,6 @@ func TestAllNamespacesToggle(t *testing.T) {
 	if n := len(m.listState.items); n != len(f.Workflows) {
 		t.Fatalf("all namespaces collected %d workflows, want every one of %d", n, len(f.Workflows))
 	}
-	if !m.listView.AllNamespaces() {
-		t.Fatal("the list was not told it spans namespaces")
-	}
 	v := screen(m)
 	if !strings.Contains(v, "ns: all") || !strings.Contains(v, "NAMESPACE") || !strings.Contains(v, "in 2 namespaces") {
 		t.Fatalf("all-namespaces frame is missing its markers:\n%s", v)
@@ -259,7 +256,7 @@ func TestProfileSwitchLeavesAllNamespaces(t *testing.T) {
 		t.Fatal("precondition: all namespaces on")
 	}
 	runLine(m, "ctx dev")
-	if m.deps.allNamespaces || m.listView.AllNamespaces() {
+	if m.deps.allNamespaces || strings.Contains(screen(m), "NAMESPACE") {
 		t.Fatal("the all-namespaces view survived a profile switch")
 	}
 }

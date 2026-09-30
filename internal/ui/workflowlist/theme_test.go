@@ -14,18 +14,18 @@ import (
 func themedList(t *testing.T) (*Model, shared.Theme) {
 	t.Helper()
 	t.Setenv("NO_COLOR", "")
-	th, err := shared.SkinTheme("gruvbox-dark", false)
-	if err != nil {
-		t.Fatal(err)
+	skin, ok := shared.LookupSkin("gruvbox-dark")
+	if !ok {
+		t.Fatal("gruvbox-dark skin missing")
 	}
+	th := skin.Theme(false)
 	m := New(th)
 	m.SetSize(100, 20)
 	m.SetItems(summariesFrom(testkit.FixtureWorkflowList("ns", 6)), testkit.FixtureEpoch)
 	return &m, th
 }
 
-// A themed list reads exactly like the plain one: the theme adds colour and
-// never a character, so the phase glyph and word are always there.
+// Themes add colour without changing the pane text.
 func TestThemedListIsThePlainListStyled(t *testing.T) {
 	m, _ := themedList(t)
 	got := m.BodyLines(testkit.FixtureEpoch)
@@ -42,9 +42,7 @@ func TestThemedListIsThePlainListStyled(t *testing.T) {
 	}
 }
 
-// Only the phase cell carries the phase colour, so the name reads in the
-// ordinary text colour on every row; the selected row is one bar across the
-// pane instead.
+// Phase cells are coloured and selection fills the pane width.
 func TestRowsColourThePhaseCellAndSelectAcrossThePane(t *testing.T) {
 	m, th := themedList(t)
 	lines := m.BodyLines(testkit.FixtureEpoch)
