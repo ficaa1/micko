@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- `micko --version` names the commit a release or `make build` was built
+  from. The linker could not set it, so the version line fell back to Go's
+  own stamp and read `unknown` for a tree with uncommitted changes.
+- The archive's DURATION column is wide enough for `unfinished`, which it
+  used to cut to `unfinish…`.
+
 ## 0.7.2
 
 - Workflow actions are on by default. Resume, suspend, retry, resubmit,
