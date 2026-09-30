@@ -31,6 +31,7 @@ func TestEmit(t *testing.T) {
 		{"state naming a token", call{StageConnect, "token", 0, false, 0, ""}, nil},
 		{"category naming a secret", call{StageConnect, "connected", 0, false, 0, "secret"}, nil},
 		{"free text state", call{StageConnect, "Bearer abc", 0, false, 0, ""}, nil},
+		{"capitalised state", call{StageConnect, "Connected", 0, false, 0, ""}, nil},
 		{"negative retry", call{StageConnect, "connected", -1, false, 0, ""}, nil},
 		{"negative status", call{StageConnect, "connected", 0, false, -1, ""}, nil},
 	}
