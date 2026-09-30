@@ -1,5 +1,13 @@
 # micko
 
+```text
+    .---.                _        _
+   ( o o )    _ __ ___  (_)  ___ | | __  ___
+  ((  V  ))  | '_ ` _ \ | | / __|| |/ / / _ \
+   (     )   | | | | | || || (__ |   < | (_) |
+  ~~"~~~"~~  |_| |_| |_||_| \___||_|\_\ \___/
+```
+
 A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/workflows/).
 
 ![micko: the workflow list, a failed run's timeline and explanation, the filter and the cron list](docs/demo.gif)
@@ -27,13 +35,7 @@ from [the releases page](https://github.com/ficaa1/micko/releases).
 
 ## Quick start
 
-Try it without a cluster:
-
-```sh
-micko --demo
-```
-
-To connect, write `~/.config/micko/config.yaml`:
+Write `~/.config/micko/config.yaml`:
 
 ```yaml
 profiles:
@@ -48,6 +50,9 @@ profiles:
 ```
 
 Then run `micko`, pick the profile, and press `?` for help.
+
+No cluster at hand? `micko --demo` runs on synthetic data, with no
+credentials and no writes.
 
 ## Documentation
 
