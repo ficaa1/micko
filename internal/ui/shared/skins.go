@@ -218,16 +218,6 @@ func (s Skin) Theme(noColor bool) Theme {
 	return s.p.theme(s.Name)
 }
 
-// SkinTheme builds the theme for a skin by name. An unknown name is an
-// error that lists the valid ones.
-func SkinTheme(name string, noColor bool) (Theme, error) {
-	s, ok := LookupSkin(name)
-	if !ok {
-		return Theme{}, CheckSkin(name)
-	}
-	return s.Theme(noColor), nil
-}
-
 // theme maps a palette onto every token.
 func (p palette) theme(name string) Theme {
 	fg := func(hex string) lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)) }

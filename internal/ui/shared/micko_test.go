@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -8,9 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Every mask names a part only under a character, and Mićko's own drawings
-// mask every character they have: a stray mask cell would colour a blank, and an unmasked
-// one would draw in the terminal's colours inside Mićko.
+// Masks cover drawing characters with valid parts and leave blank cells unpainted.
 func TestMickoMasksMatchTheirDrawings(t *testing.T) {
 	for name, a := range map[string]Art{"perch": MickoPerch, "perch-left": MickoPerchLeft, "perch-right": MickoPerchRight, "floor": MickoFloor, "wordmark": MickoWordmark} {
 		if len(a.Lines) != len(a.Mask) {
@@ -37,9 +36,7 @@ func TestMickoMasksMatchTheirDrawings(t *testing.T) {
 	}
 }
 
-// Every perched pose is drawn at the resting pose's column, so each of its
-// rows must be the resting pose's width or his head would drift from his
-// body, and his feet must stay put or he would shuffle along the border.
+// Perched beats keep their row widths, feet and positive hold durations.
 func TestMickoPerchPosesShareAShape(t *testing.T) {
 	w := MickoPerch.Width()
 	last := len(MickoPerch.Lines) - 1
@@ -91,30 +88,25 @@ func TestMickoPerchRoutine(t *testing.T) {
 // A themed row is the plain row coloured, with no character added or lost.
 func TestMickoRenderRowOnlyStyles(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	th, err := SkinTheme("gruvbox-dark", false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	th := skinTheme(t, "gruvbox-dark", false)
 	for _, a := range []Art{MickoPerch, MickoPerchLeft, MickoPerchRight, MickoFloor, MickoWordmark} {
 		for row, l := range a.Lines {
 			got := a.RenderRow(th, row, th.Title)
 			if ansi.Strip(got) != l {
 				t.Errorf("row %d: %q, want %q", row, ansi.Strip(got), l)
 			}
-			if a.RenderRow(plainTheme(), row, plainTheme().Title) != l {
+			if a.RenderRow(NewTheme(true), row, NewTheme(true).Title) != l {
 				t.Errorf("row %d: plain render is not the line", row)
 			}
 		}
 	}
 }
 
-// The wordmark signs the help overlay only with Mićko turned on, and only
-// when the whole of it fits below the keys: never on the 80x40 body the keys
-// are written for, never cut.
+// The enabled wordmark appears only when the entire drawing fits below the keys.
 func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
 	var h HelpOverlay
 	h.Toggle()
-	room := len(helpLines()) + 1 + len(MickoWordmark.Lines)
+	room := 38
 	if strings.Contains(h.View(100, room), "_ __ ___") {
 		t.Error("wordmark drawn with Mićko off")
 	}
@@ -139,9 +131,17 @@ func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
 	}
 }
 
-// Every floor pose is drawn at one column, so its rows share a width, and
-// the mirror stays in the same cells.
+// Floor beats keep their shared geometry, resting direction and mirror position.
 func TestMickoFloorPosesShareAShape(t *testing.T) {
+	for _, c := range []struct {
+		row  int
+		want string
+	}{{2, " <( o  )    "}, {4, " `-^-^-'===="}} {
+		if got := MickoFloor.Lines[c.row][:12]; got != c.want {
+			t.Errorf("resting floor row %d = %q, want %q", c.row, got, c.want)
+		}
+	}
+
 	w := MickoFloor.Width()
 	for i, b := range MickoFloorBeats {
 		if len(b.Pose.Lines) != len(MickoFloor.Lines) || len(b.Pose.Mask) != len(MickoFloor.Lines) {
@@ -161,19 +161,7 @@ func TestMickoFloorPosesShareAShape(t *testing.T) {
 	}
 }
 
-// Left-facing poses are the right-facing ones seen in a mirror.
-func TestMirroredTurnsHimRound(t *testing.T) {
-	if got := mirrored("    (  o )> "); got != " <( o  )    " {
-		t.Errorf("mirrored = %q", got)
-	}
-	if got := mirrored("====`-^-^-' "); got != " `-^-^-'====" {
-		t.Errorf("mirrored = %q", got)
-	}
-}
-
-// On the floor he hops to his mirror and back: in the air he is a row off
-// the floor with his feet tucked, he kisses the mirror only once he is at
-// it, and each hop redraws him a handful of times, not for seconds.
+// Floor hops lift and tuck the bird, kiss only at the mirror, and return to rest quickly.
 func TestMickoHopsToHisMirror(t *testing.T) {
 	var lifted, tucked, kissedAway bool
 	var quick time.Duration
@@ -212,7 +200,7 @@ func TestMickoHopsToHisMirror(t *testing.T) {
 		t.Errorf("hops spend %v in quick frames, want some and under 2s", quick)
 	}
 	first, last := MickoFloorBeats[0].Pose, MickoFloorBeats[len(MickoFloorBeats)-1].Pose
-	if !sameArt(first, MickoFloor) || !sameArt(last, MickoFloor) {
+	if !reflect.DeepEqual(first, MickoFloor) || !reflect.DeepEqual(last, MickoFloor) {
 		t.Error("the routine does not start and end where he watches you")
 	}
 }

@@ -15,10 +15,11 @@ import (
 // like the plain one.
 func TestThemedPickerHighlightsTheCursorRow(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	th, err := shared.SkinTheme("rose-pine", false)
-	if err != nil {
-		t.Fatal(err)
+	skin, ok := shared.LookupSkin("rose-pine")
+	if !ok {
+		t.Fatalf("unknown skin %q", "rose-pine")
 	}
+	th := skin.Theme(false)
 	m := testModel(Item{Name: "dev"}, Item{Name: "prod"})
 	m.SetSize(50, 20)
 	m.Open("dev", "dev")
