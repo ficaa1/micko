@@ -20,6 +20,16 @@ func hasForeground(s lipgloss.Style) bool {
 	return isColor(s.GetForeground())
 }
 
+// skinTheme returns the theme of a built-in skin.
+func skinTheme(t *testing.T, name string, noColor bool) Theme {
+	t.Helper()
+	skin, ok := LookupSkin(name)
+	if !ok {
+		t.Fatalf("unknown skin %q", name)
+	}
+	return skin.Theme(noColor)
+}
+
 // styles returns each style token by field name.
 func styles(t Theme) map[string]lipgloss.Style {
 	out := map[string]lipgloss.Style{}
@@ -92,11 +102,7 @@ func TestEveryTruecolorSkinDefinesEveryToken(t *testing.T) {
 	// Tokens drawn as a block of colour, whose background is the point.
 	backed := map[string]bool{"Selected": true, "Band": true, "BadgeReadOnly": true, "BadgeActions": true}
 	for _, name := range truecolorSkins {
-		skin, ok := LookupSkin(name)
-		if !ok {
-			t.Fatalf("unknown skin %q", name)
-		}
-		th := skin.Theme(false)
+		th := skinTheme(t, name, false)
 		if th.Skin != name {
 			t.Errorf("%s: theme reports skin %q", name, th.Skin)
 		}
@@ -117,11 +123,7 @@ func TestEveryTruecolorSkinDefinesEveryToken(t *testing.T) {
 // The default skin styles semantic tokens with ANSI slots and preserves terminal defaults.
 func TestDefaultSkinStylesEveryTokenButTheTerminalDefaults(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	skin, ok := LookupSkin(SkinDefault)
-	if !ok {
-		t.Fatalf("unknown skin %q", SkinDefault)
-	}
-	th := skin.Theme(false)
+	th := skinTheme(t, SkinDefault, false)
 	for field, s := range styles(th) {
 		if field == "Text" || field == "Band" {
 			continue
@@ -149,11 +151,7 @@ func TestPlainThemes(t *testing.T) {
 			t.Setenv("NO_COLOR", mode.env)
 			themes := map[string]Theme{"NewTheme": NewTheme(mode.flag)}
 			for _, name := range SkinNames() {
-				skin, ok := LookupSkin(name)
-				if !ok {
-					t.Fatalf("unknown skin %q", name)
-				}
-				themes[name] = skin.Theme(mode.flag)
+				themes[name] = skinTheme(t, name, mode.flag)
 			}
 			for name, th := range themes {
 				for _, phase := range []string{"Running", "Succeeded", "Failed", "Error", "Pending", "Suspended", "Unknown"} {
@@ -179,11 +177,7 @@ func TestAutoPicksAVariantForEachBackground(t *testing.T) {
 	if !dark.Dark || light.Dark {
 		t.Fatalf("auto variants: dark=%+v light=%+v", dark, light)
 	}
-	skin, ok := LookupSkin(SkinAuto)
-	if !ok {
-		t.Fatalf("unknown skin %q", SkinAuto)
-	}
-	before := skin.Theme(false)
+	before := skinTheme(t, SkinAuto, false)
 	def := NewTheme(false)
 	if before.Selected.Render("x") != def.Selected.Render("x") || before.Title.Render("x") != def.Title.Render("x") {
 		t.Error("auto before the terminal answers does not draw as the default skin")
@@ -196,11 +190,7 @@ func TestAutoPicksAVariantForEachBackground(t *testing.T) {
 // Block selections fill the row while plain selections stay unpadded.
 func TestSelectRowPadsOnlyABlockSelection(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	skin, ok := LookupSkin("nord")
-	if !ok {
-		t.Fatal("nord skin missing")
-	}
-	block := skin.Theme(false)
+	block := skinTheme(t, "nord", false)
 	if got := lipgloss.Width(block.SelectRow("row", 10)); got != 10 {
 		t.Errorf("block selection is %d cells, want 10", got)
 	}

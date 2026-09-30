@@ -9,17 +9,25 @@ import (
 
 // Overlay operations show or hide the rendered help.
 func TestHelpOverlayLifecycle(t *testing.T) {
-	var h HelpOverlay
+	toggle, show, hide := (*HelpOverlay).Toggle, (*HelpOverlay).Open, (*HelpOverlay).Close
 	for _, c := range []struct {
 		name string
-		op   func()
+		ops  []func(*HelpOverlay)
 		open bool
 	}{
-		{"initial", func() {}, false}, {"toggle open", h.Toggle, true}, {"toggle closed", h.Toggle, false},
-		{"palette open", h.Open, true}, {"open remains open", h.Open, true}, {"close", h.Close, false}, {"close remains closed", h.Close, false},
+		{"initial", nil, false},
+		{"toggle opens", []func(*HelpOverlay){toggle}, true},
+		{"toggle closes", []func(*HelpOverlay){toggle, toggle}, false},
+		{"palette opens", []func(*HelpOverlay){show}, true},
+		{"open stays open", []func(*HelpOverlay){show, show}, true},
+		{"close", []func(*HelpOverlay){show, hide}, false},
+		{"close when closed", []func(*HelpOverlay){hide}, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			c.op()
+			var h HelpOverlay
+			for _, op := range c.ops {
+				op(&h)
+			}
 			if got := h.IsOpen(); got != c.open {
 				t.Errorf("IsOpen = %v, want %v", got, c.open)
 			}
@@ -37,7 +45,7 @@ func TestHelpOverlayDocumentsKeys(t *testing.T) {
 	h.Open()
 	view := h.View(76, 32)
 	for _, want := range []string{
-		"j", "k", "enter", "l", "/", "s", "r", "?", "esc", "q", "ctrl+c", "tab",
+		"j / k", "enter open", "l logs", "/ filter", "s sort", "r refresh", "? help", "esc back", "q quit", "ctrl+c quit", "tab / shift+tab",
 		"& only matching lines", "w wrap long lines", "L source labels", "ctrl+t server timestamps",
 		"w wide columns", "a|b", "!word", "/regex/", "~fuzzy", "phase=failed", "age<2h", "dur>10m", "label:k=v", "label:!k", "tmpl=x", "cron=x",
 	} {
@@ -82,11 +90,7 @@ func TestHelpOverlayThemeOnlyStyles(t *testing.T) {
 	var plain, themed HelpOverlay
 	plain.Toggle()
 	themed.Toggle()
-	skin, ok := LookupSkin("nord")
-	if !ok {
-		t.Fatalf("unknown skin %q", "nord")
-	}
-	th := skin.Theme(false)
+	th := skinTheme(t, "nord", false)
 	themed.SetTheme(th)
 	for _, w := range []int{0, 40, 100} {
 		want := plain.View(w, 30)

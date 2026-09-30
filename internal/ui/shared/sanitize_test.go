@@ -42,6 +42,7 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
+// No generated mix of control bytes and escape sequences leaves a control rune.
 func TestSanitizeFuzzNoControlOutput(t *testing.T) {
 	// A fixed seed makes generated control-sequence combinations reproducible.
 	seed := uint32(0x9e3779b9)
@@ -74,6 +75,7 @@ func TestSanitizeFuzzNoControlOutput(t *testing.T) {
 	}
 }
 
+// Bearer tokens and long token-shaped values are masked; other text is kept.
 func TestRedactTokens(t *testing.T) {
 	cases := map[string]string{
 		"Bearer abc123def456ghi789jkl012":                    "Bearer [REDACTED]",
@@ -89,7 +91,6 @@ func TestRedactTokens(t *testing.T) {
 			t.Errorf("RedactTokens(%q) = %q, want %q", in, got, want)
 		}
 	}
-
 }
 
 // Error redaction and terminal sanitization both survive their composition.

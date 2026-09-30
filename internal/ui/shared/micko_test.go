@@ -88,11 +88,7 @@ func TestMickoPerchRoutine(t *testing.T) {
 // A themed row is the plain row coloured, with no character added or lost.
 func TestMickoRenderRowOnlyStyles(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	skin, ok := LookupSkin("gruvbox-dark")
-	if !ok {
-		t.Fatalf("unknown skin %q", "gruvbox-dark")
-	}
-	th := skin.Theme(false)
+	th := skinTheme(t, "gruvbox-dark", false)
 	for _, a := range []Art{MickoPerch, MickoPerchLeft, MickoPerchRight, MickoFloor, MickoWordmark} {
 		for row, l := range a.Lines {
 			got := a.RenderRow(th, row, th.Title)

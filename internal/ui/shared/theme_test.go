@@ -1,8 +1,9 @@
 package shared
 
 import (
-	"github.com/charmbracelet/x/ansi"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Phase glyphs keep their meaning and one-cell alignment without color.
