@@ -64,43 +64,33 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "enter":
 		if intent := m.OpenIntent(); intent != nil {
-			return func() tea.Msg {
-				return intent
-			}
+			return func() tea.Msg { return intent }
 		}
 		return nil
 	case "l":
 		if intent := m.LogsIntent(); intent != nil {
-			return func() tea.Msg {
-				return intent
-			}
+			return func() tea.Msg { return intent }
 		}
 		return nil
 	case "T":
 		// Open the workflow straight on its timeline: the question "where
 		// did the time go" is often the reason to open it at all.
 		if intent := m.OpenSectionIntent(shared.SectionTimeline); intent != nil {
-			return func() tea.Msg {
-				return intent
-			}
+			return func() tea.Msg { return intent }
 		}
 		return nil
 	case "X":
 		// Open the workflow straight on its explanation: for a failed run,
 		// "why" is the first question.
 		if intent := m.OpenSectionIntent(shared.SectionExplain); intent != nil {
-			return func() tea.Msg {
-				return intent
-			}
+			return func() tea.Msg { return intent }
 		}
 		return nil
 	case "E":
 		// Open the workflow straight on its Kubernetes events: a pod that
 		// cannot be scheduled or pulled says why only there.
 		if intent := m.OpenSectionIntent(shared.SectionEvents); intent != nil {
-			return func() tea.Msg {
-				return intent
-			}
+			return func() tea.Msg { return intent }
 		}
 		return nil
 	case "/":
@@ -142,9 +132,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "r":
 		if intent := m.RefreshIntent(); intent != nil {
-			return func() tea.Msg {
-				return intent
-			}
+			return func() tea.Msg { return intent }
 		}
 		return nil
 	default:
@@ -270,9 +258,7 @@ func (m *Model) moveTo(i int) {
 // isControlRune reports whether r is a control character (never inserted
 // into the search buffer; the sanitizer keeps \n/	 only for display, and
 // a single-line filter needs neither).
-func isControlRune(r rune) bool {
-	return r < 0x20 || r == 0x7f
-}
+func isControlRune(r rune) bool { return r < 0x20 || r == 0x7f }
 
 // rowPhaseText renders the phase cell: text always present (color is
 // supplementary).
@@ -297,7 +283,7 @@ func ageText(s core.Summary, now time.Time) string {
 	if d < 0 {
 		d = 0
 	}
-	return shared.ListDuration(d)
+	return humanDuration(d)
 }
 
 // durationText renders the DURATION cell; missing endpoints render "-".
@@ -313,7 +299,7 @@ func durationText(s core.Summary) string {
 	if d < 0 {
 		d = 0
 	}
-	return shared.ListDuration(d)
+	return humanDuration(d)
 }
 
 // progressCell renders the server's "done/total" count right-aligned in
@@ -325,13 +311,13 @@ func durationText(s core.Summary) string {
 func progressCell(p string, width int) string {
 	p = sanitizeOne(p)
 	if p == "" {
-		return shared.PadLeft("-", 5)
+		return padLeft("-", 5)
 	}
 	done, total, ok := parseProgress(p)
 	if !ok {
 		return truncateRight(p, width)
 	}
-	count := shared.PadLeft(p, 5)
+	count := padLeft(p, 5)
 	bar := width - ansi.StringWidth(count) - 1
 	if bar < 1 {
 		return truncateRight(p, width)
@@ -404,4 +390,46 @@ func truncateRight(s string, width int) string {
 		w += rw
 	}
 	return b.String() + "…"
+}
+
+// padRight pads text to width terminal cells.
+func padRight(s string, width int) string {
+	n := ansi.StringWidth(s)
+	if n >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-n)
+}
+
+// padLeft right-aligns text in width terminal cells.
+func padLeft(s string, width int) string {
+	n := ansi.StringWidth(s)
+	if n >= width {
+		return s
+	}
+	return strings.Repeat(" ", width-n) + s
+}
+
+// humanDuration renders compact list durations without seconds above a minute.
+func humanDuration(d time.Duration) string {
+	switch {
+	case d >= 24*time.Hour:
+		days := int(d / (24 * time.Hour))
+		hours := int(d%(24*time.Hour)) / int(time.Hour)
+		if hours > 0 {
+			return strconv.Itoa(days) + "d" + strconv.Itoa(hours) + "h"
+		}
+		return strconv.Itoa(days) + "d"
+	case d >= time.Hour:
+		h := int(d / time.Hour)
+		mins := int(d%time.Hour) / int(time.Minute)
+		if mins > 0 {
+			return strconv.Itoa(h) + "h" + strconv.Itoa(mins) + "m"
+		}
+		return strconv.Itoa(h) + "h"
+	case d >= time.Minute:
+		return strconv.Itoa(int(d/time.Minute)) + "m"
+	default:
+		return strconv.Itoa(int(d/time.Second)) + "s"
+	}
 }

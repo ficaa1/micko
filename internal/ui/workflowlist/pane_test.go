@@ -39,6 +39,7 @@ func shellFrame(m *Model, w, h int) shell.Frame {
 	return f
 }
 
+// The pane keeps selection visible and reports its actual row window across sizes and navigation keys.
 func TestPaneGeometry(t *testing.T) {
 	items := make([]core.Summary, 40)
 	for i := range items {
@@ -82,7 +83,7 @@ func TestPaneGeometry(t *testing.T) {
 			m.BodyLines(testkit.FixtureEpoch)
 			m.SetSize(100, 12)
 			if !strings.Contains(body(&m), "row-00") || m.WindowStatus() != "1-10/40" {
-				t.Fatal("resize retained stale window")
+				t.Fatalf("resized body=%q status=%q, want row-00 visible and 1-10/40", body(&m), m.WindowStatus())
 			}
 		})
 	}
@@ -116,6 +117,7 @@ func TestPaneGeometry(t *testing.T) {
 	}
 }
 
+// Shell frames show the list states, filtering, wide metadata and marks without duplicate pane chrome.
 func TestPaneGoldenSnapshots(t *testing.T) {
 	setTimeZone(t, time.UTC)
 	for _, c := range []struct {
@@ -124,19 +126,20 @@ func TestPaneGoldenSnapshots(t *testing.T) {
 		msg        string
 		empty, all bool
 		query      string
-		phase      int
+		phase      PhaseFilter
+		width      int
 	}{
-		{name: "idle"},
-		{name: "loading", status: StatusLoading, empty: true},
-		{name: "stale", status: StatusStale, msg: "connection refused"},
-		{name: "forbidden", status: StatusForbidden, msg: "workflows list forbidden", empty: true},
-		{name: "unauth", status: StatusUnauthenticated, msg: "token expired", empty: true},
-		{name: "incomplete", status: StatusIncomplete},
-		{name: "filtered", query: "fixture-wf-0"},
-		{name: "phase", phase: 5},
-		{name: "empty", empty: true},
-		{name: "allns-empty", empty: true, all: true},
-		{name: "first-error", status: StatusStale, msg: "connection refused", empty: true},
+		{name: "idle", width: 100},
+		{name: "loading", status: StatusLoading, empty: true, width: 100},
+		{name: "stale", status: StatusStale, msg: "connection refused", width: 100},
+		{name: "forbidden", status: StatusForbidden, msg: "workflows list forbidden", empty: true, width: 100},
+		{name: "unauth", status: StatusUnauthenticated, msg: "token expired", empty: true, width: 100},
+		{name: "incomplete", status: StatusIncomplete, width: 160},
+		{name: "filtered", query: "fixture-wf-0", width: 100},
+		{name: "phase", phase: PhaseFailed, width: 100},
+		{name: "empty", empty: true, width: 100},
+		{name: "allns-empty", empty: true, all: true, width: 100},
+		{name: "first-error", status: StatusStale, msg: "connection refused", empty: true, width: 100},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			m := newList(t)
@@ -149,14 +152,20 @@ func TestPaneGoldenSnapshots(t *testing.T) {
 				editQuery(&m, c.query)
 				m.Update(enterKey())
 			}
-			for i := 0; i < c.phase; i++ {
+			phase := c.phase
+			if phase == "" {
+				phase = PhaseAll
+			}
+			for range phaseCycle {
+				if m.phase == phase {
+					break
+				}
 				m.Update(runeKey('p'))
 			}
-			width := 100
-			if c.name == "incomplete" {
-				width = 160
+			if m.phase != phase {
+				t.Fatalf("phase bucket = %q, want %q", m.phase, phase)
 			}
-			f := shellFrame(&m, width, 14)
+			f := shellFrame(&m, c.width, 14)
 			golden(t, c.name, f.Render(m.theme))
 		})
 	}
@@ -181,6 +190,7 @@ func TestPaneGoldenSnapshots(t *testing.T) {
 	golden(t, "marks-query", f.Render(m.theme))
 }
 
+// Panes below the usable width show resize guidance and reachable quit and help keys.
 func TestResizeNotice(t *testing.T) {
 	for _, w := range []int{1, 40, 59} {
 		m := newList(t)
@@ -192,13 +202,18 @@ func TestResizeNotice(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The list advertises its full keyboard contract without repeating the shell help hint.
+func TestHints(t *testing.T) {
 	m := newList(t)
 	want := "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  a actions  n namespace  0 all ns  r refresh  w wide"
 	if m.Hints() != want {
-		t.Fatalf("hints %q", m.Hints())
+		t.Fatalf("hints = %q, want %q", m.Hints(), want)
 	}
 }
 
+// Normal, wide and namespace layouts fit the pane and drop optional columns as space shrinks.
 func TestColumnsAtEachWidth(t *testing.T) {
 	t.Run("wide toggle", func(t *testing.T) {
 		m := newList(t)
@@ -250,7 +265,7 @@ func TestColumnsAtEachWidth(t *testing.T) {
 			}
 		}
 		if !strings.Contains(c.head, "MESSAGE") && strings.Contains(lines[2], "mmmm") {
-			t.Fatal("omitted message still rendered")
+			t.Fatalf("header=%q row=%q, want no message cell", lines[1], lines[2])
 		}
 	}
 	for _, w := range []int{60, 76, 100, 136} {
@@ -260,7 +275,7 @@ func TestColumnsAtEachWidth(t *testing.T) {
 		m.SetItems(crossNamespaceItems(), testkit.FixtureEpoch)
 		lines := m.BodyLines(testkit.FixtureEpoch)
 		if len(lines) != 5 || strings.Fields(lines[1])[0] != "NAMESPACE" {
-			t.Fatal("namespace column absent")
+			t.Fatalf("namespace body = %v, want a NAMESPACE header and three rows", lines)
 		}
 		for _, l := range lines[1:] {
 			if ansi.StringWidth(l) > w {
@@ -280,23 +295,27 @@ func TestColumnsAtEachWidth(t *testing.T) {
 	row.Ref.Namespace = strings.Repeat("n", 40)
 	m.SetItems([]core.Summary{row}, testkit.FixtureEpoch)
 	if !strings.HasPrefix(m.BodyLines(testkit.FixtureEpoch)[2], "  "+strings.Repeat("n", 15)+"…  wf") {
-		t.Fatal("namespace not bounded")
+		t.Fatalf("namespace row = %q, want 15 n cells followed by an ellipsis and wf", m.BodyLines(testkit.FixtureEpoch)[2])
 	}
 }
 
+// Wider panes display a longer message prefix while retaining an ellipsis for clipped text.
 func TestMessageGrowth(t *testing.T) {
-	for _, c := range []struct{ w, visible int }{{100, 17},
+	for _, c := range []struct{ w, visible int }{
+		{100, 17},
 		{140, 43},
-		{200, 103}} {
+		{200, 103},
+	} {
 		m := newList(t)
 		m.SetSize(c.w, 20)
 		r := summary("row", "Failed")
 		r.Message = strings.Repeat("m", 400)
 		m.SetItems([]core.Summary{r}, testkit.FixtureEpoch)
-		line := m.BodyLines(testkit.FixtureEpoch)[2]
-		got := strings.TrimSpace(line[strings.Index(line, "mmmm"):])
-		if got != strings.Repeat("m", c.visible-1)+"…" {
-			t.Fatalf("width %d visible %q", c.w, got)
+		lines := m.BodyLines(testkit.FixtureEpoch)
+		got := renderedColumn(t, lines[1], lines[2], "MESSAGE")
+		want := strings.Repeat("m", c.visible-1) + "…"
+		if got != want {
+			t.Fatalf("width %d message = %q, want %q", c.w, got, want)
 		}
 	}
 }

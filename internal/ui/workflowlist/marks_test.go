@@ -21,36 +21,44 @@ func markedModel(t *testing.T) (Model, []core.Summary) {
 	return m, items
 }
 
+// Marks stay on workflow UIDs through sorting and refreshes and disappear when their workflow leaves.
 func TestMarksAcrossSnapshots(t *testing.T) {
 	t.Run("toggle in place", func(t *testing.T) {
 		m := newList(t)
 		m.SetItems([]core.Summary{summary("a", "Running")}, testkit.FixtureEpoch)
 		m.Update(spaceKey())
 		if !slices.Equal(rowIDs(m.Marked()), []string{"a"}) || m.SelectedRef().UID != "a" {
-			t.Fatal("toggle changed identity")
+			t.Fatalf("marked=%v selection=%q, want [a] and a", rowIDs(m.Marked()), m.SelectedRef().UID)
 		}
 		m.Update(spaceKey())
 		if m.MarkCount() != 0 {
-			t.Fatal("unmark failed")
+			t.Fatalf("marks after second Space = %v, want none", rowIDs(m.Marked()))
 		}
 		m.SetItems(nil, testkit.FixtureEpoch)
 		m.Update(spaceKey())
 		if m.MarkCount() != 0 {
-			t.Fatal("empty list marked")
+			t.Fatalf("empty list marks = %v, want none", rowIDs(m.Marked()))
 		}
 	})
 	m, items := markedModel(t)
-	for _, want := range [][]string{{"b", "a"},
-		{"a", "b"},
-		{"a", "b"},
-		{"b", "a"}} {
-		if got := rowIDs(m.Marked()); !slices.Equal(got, want) {
-			t.Fatalf("sort %s marks %v want %v", m.sort, got, want)
-		}
-		m.Update(runeKey('s'))
+
+	cases := []struct {
+		sort SortKey
+		want []string
+	}{
+		{SortPhaseName, []string{"b", "a"}},
+		{SortName, []string{"a", "b"}},
+		{SortTime, []string{"a", "b"}},
+		{SortPhaseName, []string{"b", "a"}},
 	}
-	m.Update(runeKey('s'))
-	m.Update(runeKey('s'))
+	for i, c := range cases {
+		if got := rowIDs(m.Marked()); m.sort != c.sort || !slices.Equal(got, c.want) {
+			t.Fatalf("sort %q marks %v, want sort %q marks %v", m.sort, got, c.sort, c.want)
+		}
+		if i < len(cases)-1 {
+			m.Update(runeKey('s'))
+		}
+	}
 	items[1].Phase = "Succeeded"
 	m.SetItems([]core.Summary{items[2], items[1], items[0]}, testkit.FixtureEpoch)
 	if got := rowIDs(m.Marked()); !slices.Equal(got, []string{"a", "b"}) {
@@ -64,10 +72,11 @@ func TestMarksAcrossSnapshots(t *testing.T) {
 	replacement.Ref.UID = "replacement"
 	m.SetItems([]core.Summary{replacement}, testkit.FixtureEpoch)
 	if m.MarkCount() != 0 {
-		t.Fatal("mark transferred by name")
+		t.Fatalf("replacement snapshot marks = %v, want none", rowIDs(m.Marked()))
 	}
 }
 
+// Marked rows carry a glyph and hidden marks remain counted and available to bulk actions.
 func TestMarkVisibility(t *testing.T) {
 	m, _ := markedModel(t)
 	lines := m.BodyLines(testkit.FixtureEpoch)
@@ -82,20 +91,21 @@ func TestMarkVisibility(t *testing.T) {
 	editQuery(&m, "a")
 	m.Update(enterKey())
 	if m.MarkCount() != 2 || m.HiddenMarkCount() != 1 || !slices.Equal(rowIDs(m.Marked()), []string{"b", "a"}) || !strings.Contains(body(&m), "2 marked (1 hidden by filter)") {
-		t.Fatal("hidden target omitted")
+		t.Fatalf("filtered marks=%v count=%d hidden=%d body=%q, want [b a], count 2 and hidden 1", rowIDs(m.Marked()), m.MarkCount(), m.HiddenMarkCount(), body(&m))
 	}
 	m.Update(runeKey('/'))
 	typeText(&m, " /bad(/")
 	if m.HiddenMarkCount() != 1 {
-		t.Fatal("invalid query changed hidden marks")
+		t.Fatalf("hidden marks after invalid query = %d, want 1", m.HiddenMarkCount())
 	}
 	m.Update(escKey())
 	m.SetQuery("")
 	if m.HiddenMarkCount() != 0 || !slices.Equal(rowIDs(m.Marked()), []string{"b", "a"}) {
-		t.Fatal("filter dropped marks")
+		t.Fatalf("cleared query marks=%v hidden=%d, want [b a] and 0 hidden", rowIDs(m.Marked()), m.HiddenMarkCount())
 	}
 }
 
+// Escape clears marks before the applied filter and is inert after both are cleared.
 func TestEscapeClearsMarksBeforeFilter(t *testing.T) {
 	m, _ := markedModel(t)
 	m.SetQuery("a")
@@ -103,14 +113,16 @@ func TestEscapeClearsMarksBeforeFilter(t *testing.T) {
 	for _, c := range []struct {
 		marks int
 		q     string
-	}{{0, "a"},
+	}{
+		{0, "a"},
 		{0, ""},
-		{0, ""}} {
+		{0, ""},
+	} {
 		if cmd := m.Update(escKey()); cmd != nil {
-			t.Fatal("Escape emitted command")
+			t.Fatalf("Escape command = %v, want nil", cmd)
 		}
 		if m.MarkCount() != c.marks || m.Query() != c.q || m.SelectedRef() != sel {
-			t.Fatalf("marks %d query %q selection %+v", m.MarkCount(), m.Query(), m.SelectedRef())
+			t.Fatalf("Escape marks=%d query=%q selection=%+v, want marks=%d query=%q selection=%+v", m.MarkCount(), m.Query(), m.SelectedRef(), c.marks, c.q, sel)
 		}
 	}
 }

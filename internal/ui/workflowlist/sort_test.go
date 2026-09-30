@@ -9,6 +9,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
+// Sort cycling gives deterministic phase, name and creation-time orders with UID selection reset to the top.
 func TestListSortOrders(t *testing.T) {
 	now := testkit.FixtureEpoch
 	start := now.Add(-time.Hour)
@@ -38,8 +39,10 @@ func TestListSortOrders(t *testing.T) {
 		m.Update(runeKey('s'))
 	}
 	t.Run("failure common rank", func(t *testing.T) {
-		for _, phases := range [][2]string{{"Error", "Failed"},
-			{"Failed", "Error"}} {
+		for _, phases := range [][2]string{
+			{"Error", "Failed"},
+			{"Failed", "Error"},
+		} {
 			m := newList(t)
 			m.SetItems([]core.Summary{summary("z", phases[0]), summary("a", phases[1])}, now)
 			if got := rowIDs(m.Rows()); !slices.Equal(got, []string{"a", "z"}) {
@@ -78,6 +81,7 @@ func TestListSortOrders(t *testing.T) {
 	})
 }
 
+// Phase cycling includes suspended workflows in Running and keeps unknown phases in Other.
 func TestPhaseFilters(t *testing.T) {
 	m := newList(t)
 	gate := summary("gate", "Running")

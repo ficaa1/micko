@@ -12,6 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
+// Age and duration cells prefer start time, show missing data honestly and clamp negative elapsed time.
 func TestCellTimes(t *testing.T) {
 	now := testkit.FixtureEpoch
 	start := now.Add(-4 * time.Minute)
@@ -71,8 +72,10 @@ func TestCellTimes(t *testing.T) {
 	}
 }
 
+// Progress cells show exact counts and incomplete bars, leaving malformed counts readable.
 func TestProgressRendering(t *testing.T) {
-	for _, c := range []struct{ in, want string }{{"", "-"},
+	for _, c := range []struct{ in, want string }{
+		{"", "-"},
 		{"0/4", "0/4 ░░░░░░"},
 		{"3/7", "3/7 ██░░░░"},
 		{"6/7", "6/7 █████░"},
@@ -81,7 +84,8 @@ func TestProgressRendering(t *testing.T) {
 		{"120/1500", "120/1500 ░░░"},
 		{"9/3", "9/3"},
 		{"lots", "lots"},
-		{"123456/1234567", "123456/1234…"}} {
+		{"123456/1234567", "123456/1234…"},
+	} {
 		t.Run(c.in, func(t *testing.T) {
 			m := newList(t)
 			m.SetSize(80, 20)
@@ -89,8 +93,9 @@ func TestProgressRendering(t *testing.T) {
 			r := summary("row", "Running")
 			r.Progress = c.in
 			m.SetItems([]core.Summary{r}, testkit.FixtureEpoch)
-			line := m.BodyLines(testkit.FixtureEpoch)[2]
-			got := strings.TrimSpace(line[68:])
+			lines := m.BodyLines(testkit.FixtureEpoch)
+			line := lines[2]
+			got := renderedColumn(t, lines[1], line, "PROGRESS")
 			if got != c.want {
 				t.Fatalf("progress %q want %q row %q", got, c.want, line)
 			}
@@ -98,6 +103,7 @@ func TestProgressRendering(t *testing.T) {
 	}
 }
 
+// Wide cells show local timestamps and preferred origins while omitting labels already shown elsewhere.
 func TestWideMetadata(t *testing.T) {
 	m := newList(t)
 	m.SetSize(220, 20)
@@ -126,10 +132,11 @@ func TestWideMetadata(t *testing.T) {
 	r.Labels = map[string]string{workflowTemplateLabel: "local", clusterWorkflowTemplateLabel: "cluster"}
 	m.SetItems([]core.Summary{r}, testkit.FixtureEpoch)
 	if !strings.Contains(body(&m), "local") || strings.Contains(body(&m), "cluster") {
-		t.Fatal("template priority")
+		t.Fatalf("template body = %q, want local and no cluster origin", body(&m))
 	}
 }
 
+// Server text remains readable without passing terminal controls through plain or styled rows.
 func TestBodySanitizesServerText(t *testing.T) {
 	for _, colored := range []bool{false, true} {
 		t.Run(map[bool]string{false: "plain", true: "color"}[colored], func(t *testing.T) {
@@ -167,6 +174,7 @@ func TestBodySanitizesServerText(t *testing.T) {
 	}
 }
 
+// Wide names stay intact or clip by terminal cells without shifting the phase column.
 func TestUnicodeAlignment(t *testing.T) {
 	m := newList(t)
 	r := summary("日本語ワークフロー-表达式", "Running")
@@ -176,9 +184,11 @@ func TestUnicodeAlignment(t *testing.T) {
 		w           int
 		name        string
 		phaseOffset int
-	}{{100, r.Ref.Name, 50},
+	}{
+		{100, r.Ref.Name, 50},
 		{80, r.Ref.Name, 34},
-		{60, "日本語ワークフロー-…", 26}} {
+		{60, "日本語ワークフロー-…", 26},
+	} {
 		m.SetSize(c.w, 20)
 		lines := m.BodyLines(testkit.FixtureEpoch)
 		if len(lines) != 4 || !strings.Contains(strings.Join(lines, "\n"), c.name) {
@@ -193,6 +203,7 @@ func TestUnicodeAlignment(t *testing.T) {
 	}
 }
 
+// A malformed query uses the error style in the focused search line.
 func TestQueryErrorStyle(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	m := New(shared.NewTheme(false))
@@ -205,6 +216,7 @@ func TestQueryErrorStyle(t *testing.T) {
 	}
 }
 
+// Every phase carries a symbol and word, including suspended, unknown and missing phases.
 func TestPhaseDisplay(t *testing.T) {
 	for _, c := range []struct {
 		phase     string
@@ -228,4 +240,21 @@ func TestPhaseDisplay(t *testing.T) {
 			t.Fatalf("phase %q suspended=%v: %s", c.phase, c.suspended, body(&m))
 		}
 	}
+}
+
+// renderedColumn reads a row's cell using the rendered column headings.
+func renderedColumn(t *testing.T, header, row, column string) string {
+	t.Helper()
+	start := strings.Index(header, column)
+	if start < 0 {
+		t.Fatalf("column %q absent from header %q", column, header)
+	}
+	left := ansi.StringWidth(header[:start])
+	right := ansi.StringWidth(row)
+	rest := header[start+len(column):]
+	if next := strings.Fields(rest); len(next) > 0 {
+		offset := start + len(column) + strings.Index(rest, next[0])
+		right = ansi.StringWidth(header[:offset])
+	}
+	return strings.TrimSpace(ansi.Cut(row, left, right))
 }

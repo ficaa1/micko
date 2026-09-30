@@ -8,10 +8,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// Benchmarks for 5,000 summaries staying keyboard-responsive: filter+sort
-
-// over the full snapshot and a pane body render.
-
+// benchItems builds n summaries for the list benchmarks.
 func benchItems(n int) []core.Summary {
 	return summariesFrom(testkit.FixtureWorkflowList("ns", n))
 }

@@ -100,6 +100,7 @@ func summary(uid, phase string) core.Summary {
 	return core.Summary{Ref: core.Ref{Namespace: "ns", Name: uid, UID: uid}, Phase: phase}
 }
 
+// Selection keys emit the selected workflow reference and section, and empty lists emit no selection intent.
 func TestListIntents(t *testing.T) {
 	ref := core.Ref{Namespace: "ns", Name: "target", UID: "target-uid"}
 	for _, c := range []struct {
@@ -118,17 +119,24 @@ func TestListIntents(t *testing.T) {
 			m.SetItems([]core.Summary{summary("a-decoy", ""), {Ref: ref}}, testkit.FixtureEpoch)
 			m.Update(runeKey('j'))
 			cmd := m.Update(c.key)
-			if cmd == nil || !reflect.DeepEqual(cmd(), c.want) {
-				t.Fatalf("intent = %v, want %#v", cmd, c.want)
+			var got tea.Msg
+			if cmd != nil {
+				got = cmd()
+			}
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("key %q intent = %#v, want %#v", c.key.String(), got, c.want)
 			}
 			m.SetItems(nil, testkit.FixtureEpoch)
-			if c.key.String() != "r" && m.Update(c.key) != nil {
-				t.Fatal("empty selection emitted intent")
+			if c.key.String() != "r" {
+				if cmd := m.Update(c.key); cmd != nil {
+					t.Fatalf("empty selection key %q emitted %#v, want no intent", c.key.String(), cmd())
+				}
 			}
 		})
 	}
 }
 
+// Selection stays on its workflow UID across reordering and falls back when that UID disappears.
 func TestSelectionAcrossSnapshots(t *testing.T) {
 	m := newList(t)
 	a, b, c := summary("a", "Running"), summary("b", "Running"), summary("c", "Running")
@@ -152,10 +160,11 @@ func TestSelectionAcrossSnapshots(t *testing.T) {
 	}
 	m.SetItems(nil, testkit.FixtureEpoch)
 	if m.SelectedRef() != (core.Ref{}) {
-		t.Fatal("empty snapshot retained selection")
+		t.Fatalf("empty snapshot selection = %+v, want a zero reference", m.SelectedRef())
 	}
 }
 
+// Focused search edits Unicode text, filters live, and isolates command keys through commit and cancellation.
 func TestSearchEditing(t *testing.T) {
 	t.Run("command letters", func(t *testing.T) {
 		for _, r := range "wjqrpsT XE" {
@@ -174,38 +183,38 @@ func TestSearchEditing(t *testing.T) {
 		m := newList(t)
 		m.Update(runeKey('/'))
 		if !strings.Contains(body(&m), "[_]  (enter apply, esc cancel)") {
-			t.Fatal("input cursor missing")
+			t.Fatalf("empty input body = %q, want cursor and apply/cancel hint", body(&m))
 		}
 		typeText(&m, "abc")
 		m.Update(backspaceKey())
 		m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 		typeText(&m, "X")
 		if m.searchBuf != "aXb" {
-			t.Fatalf("mid insert %q", m.searchBuf)
+			t.Fatalf("buffer after cursor insertion = %q, want aXb", m.searchBuf)
 		}
 		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		if m.searchBuf != "aXb" {
-			t.Fatal("control inserted")
+			t.Fatalf("buffer after Tab = %q, want aXb", m.searchBuf)
 		}
 		m.Update(enterKey())
 		if m.SearchOn || m.Query() != "aXb" || m.searchBuf != "" {
-			t.Fatal("commit state")
+			t.Fatalf("commit query=%q focused=%t buffer=%q, want aXb, false and empty", m.Query(), m.SearchOn, m.searchBuf)
 		}
 		m.Update(runeKey('/'))
 		if m.searchBuf != "aXb" {
-			t.Fatal("prefill missing")
+			t.Fatalf("reopened buffer = %q, want aXb", m.searchBuf)
 		}
 		typeText(&m, "日本")
 		m.Update(backspaceKey())
 		if m.searchBuf != "aXb日" {
-			t.Fatalf("Unicode backspace %q", m.searchBuf)
+			t.Fatalf("buffer after Unicode backspace = %q, want aXb日", m.searchBuf)
 		}
 		m.Update(tea.KeyPressMsg{Code: tea.KeyHome})
 		typeText(&m, "z")
 		m.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
 		typeText(&m, "y")
 		if m.searchBuf != "zaXb日y" {
-			t.Fatal("home/end editing")
+			t.Fatalf("buffer after Home/End edits = %q, want zaXb日y", m.searchBuf)
 		}
 	})
 	t.Run("live commit cancel clear", func(t *testing.T) {
@@ -213,22 +222,22 @@ func TestSearchEditing(t *testing.T) {
 		m.SetItems([]core.Summary{summary("apple", "Running"), summary("banana", "Running")}, testkit.FixtureEpoch)
 		editQuery(&m, "app")
 		if !reflect.DeepEqual(rowIDs(m.Rows()), []string{"apple"}) {
-			t.Fatal("typing did not filter live")
+			t.Fatalf("live query rows = %v, want [apple]", rowIDs(m.Rows()))
 		}
 		m.Update(enterKey())
 		editQuery(&m, "absent")
 		if len(m.Rows()) != 0 || m.SelectedRef().UID != "" {
-			t.Fatal("empty filter retained rows/selection")
+			t.Fatalf("absent query rows=%v selection=%+v, want no rows or selection", rowIDs(m.Rows()), m.SelectedRef())
 		}
 		m.Update(escKey())
 		if m.Query() != "app" || !reflect.DeepEqual(rowIDs(m.Rows()), []string{"apple"}) {
-			t.Fatal("cancel lost prior filter")
+			t.Fatalf("cancel query=%q rows=%v, want app and [apple]", m.Query(), rowIDs(m.Rows()))
 		}
 		editQuery(&m, "absent")
 		m.Update(enterKey())
 		m.Update(escKey())
 		if m.Query() != "" || len(m.Rows()) != 2 || m.SearchOn {
-			t.Fatal("Escape did not restore rows")
+			t.Fatalf("Escape query=%q rows=%v focused=%t, want empty query, [apple banana] and no focus", m.Query(), rowIDs(m.Rows()), m.SearchOn)
 		}
 	})
 }

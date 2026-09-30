@@ -68,9 +68,9 @@ func (m *Model) frameLines(now time.Time) []string {
 			// selection then copies.
 			head.WriteString(title)
 		case c.key == colAge:
-			head.WriteString(shared.PadLeft(title, c.width))
+			head.WriteString(padLeft(title, c.width))
 		default:
-			head.WriteString(shared.PadRight(title, c.width))
+			head.WriteString(padRight(title, c.width))
 		}
 	}
 	lines = append(lines, m.theme.TableHeader.Render(head.String()))
@@ -171,28 +171,28 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 		}
 		switch c.key {
 		case colNamespace:
-			add(shared.PadRight(truncateRight(sanitizeOne(r.Ref.Namespace), c.width), c.width), none)
+			add(padRight(truncateRight(sanitizeOne(r.Ref.Namespace), c.width), c.width), none)
 		case colName:
-			add(shared.PadRight(truncateRight(sanitizeOne(r.Ref.Name), c.width), c.width), none)
+			add(padRight(truncateRight(sanitizeOne(r.Ref.Name), c.width), c.width), none)
 		case colPhase:
 			phase := shared.PhaseSymbol(shown) + " " + m.rowPhaseText(sanitizeOne(shown))
-			add(shared.PadRight(truncateRight(phase, c.width), c.width), m.theme.PhaseStyle(shown))
+			add(padRight(truncateRight(phase, c.width), c.width), m.theme.PhaseStyle(shown))
 		case colAge:
-			add(shared.PadLeft(ageText(r, now), c.width), m.theme.Muted)
+			add(padLeft(ageText(r, now), c.width), m.theme.Muted)
 		case colDuration:
-			add(shared.PadRight(durationText(r), c.width), m.theme.Muted)
+			add(padRight(durationText(r), c.width), m.theme.Muted)
 		case colProgress:
-			add(shared.PadRight(progressCell(r.Progress, c.width), c.width), m.theme.Muted)
+			add(padRight(progressCell(r.Progress, c.width), c.width), m.theme.Muted)
 		case colStarted:
-			add(shared.PadRight(m.clockText(r.StartedAt), c.width), m.theme.Muted)
+			add(padRight(m.clockText(r.StartedAt), c.width), m.theme.Muted)
 		case colFinished:
-			add(shared.PadRight(m.clockText(r.FinishedAt), c.width), m.theme.Muted)
+			add(padRight(m.clockText(r.FinishedAt), c.width), m.theme.Muted)
 		case colTemplate:
-			add(shared.PadRight(truncateRight(orDash(sanitizeOne(firstLabel(r, templateLabels...))), c.width), c.width), m.theme.Muted)
+			add(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, templateLabels...))), c.width), c.width), m.theme.Muted)
 		case colCron:
-			add(shared.PadRight(truncateRight(orDash(sanitizeOne(firstLabel(r, cronLabel))), c.width), c.width), m.theme.Muted)
+			add(padRight(truncateRight(orDash(sanitizeOne(firstLabel(r, cronLabel))), c.width), c.width), m.theme.Muted)
 		case colLabels:
-			add(shared.PadRight(truncateRight(orDash(sanitizeOne(otherLabels(r))), c.width), c.width), m.theme.Muted)
+			add(padRight(truncateRight(orDash(sanitizeOne(otherLabels(r))), c.width), c.width), m.theme.Muted)
 		}
 	}
 	switch {
@@ -259,7 +259,7 @@ func (m *Model) toolbarView() string {
 	case StatusLoading:
 		parts = append(parts, m.theme.Warning.Render("loading…"))
 	case StatusStale:
-		reason = m.wrapStatusReason("stale "+shared.ListDuration(m.errAge)+" — "+m.errMsg, m.theme.Warning.Render)
+		reason = m.wrapStatusReason("stale "+humanDuration(m.errAge)+" — "+m.errMsg, m.theme.Warning.Render)
 	case StatusForbidden:
 		reason = m.wrapStatusReason("forbidden: "+m.errMsg, m.theme.ErrorText.Render)
 	case StatusUnauthenticated:

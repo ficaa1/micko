@@ -38,6 +38,7 @@ func matching(t *testing.T, q string, items []core.Summary, now time.Time) []str
 	return got
 }
 
+// Committed queries show a canonical form that can be re-entered without changing the matches.
 func TestQueryCanonicalForms(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"", ""},
@@ -81,7 +82,7 @@ func TestQueryCanonicalForms(t *testing.T) {
 			editQuery(&m, c.in)
 			m.Update(enterKey())
 			if m.SearchOn {
-				t.Fatal(m.queryErr)
+				t.Fatalf("query %q rejected: %s; want a valid committed query", c.in, m.queryErr)
 			}
 			got := body(&m)
 			want := "Search: " + c.want
@@ -95,12 +96,13 @@ func TestQueryCanonicalForms(t *testing.T) {
 			editQuery(&m, c.want)
 			m.Update(enterKey())
 			if m.SearchOn || !slices.Equal(rowIDs(m.Rows()), before) || !strings.Contains(body(&m), want+" ") {
-				t.Fatal("canonical reentry failed")
+				t.Fatalf("canonical reentry focused=%t rows=%v body=%q, want committed rows %v and %q", m.SearchOn, rowIDs(m.Rows()), body(&m), before, want)
 			}
 		})
 	}
 }
 
+// Malformed queries keep the last valid rows and input focus until repaired or cancelled.
 func TestQueryErrors(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"phase=", "phase= needs a value"},
@@ -160,25 +162,26 @@ func TestQueryErrors(t *testing.T) {
 		typeText(&m, " phase=failed")
 		typeText(&m, " /hourly(/")
 		if m.Query() != "etl phase=failed" || !slices.Equal(rowIDs(m.Rows()), []string{"etl-hourly"}) {
-			t.Fatal("invalid term replaced prior rows")
+			t.Fatalf("invalid term query=%q rows=%v, want etl phase=failed and [etl-hourly]", m.Query(), rowIDs(m.Rows()))
 		}
 		m.Update(enterKey())
 		if !m.SearchOn {
-			t.Fatal("invalid input closed")
+			t.Fatalf("invalid Enter focused=%t query=%q error=%q, want focused input retaining its parse error", m.SearchOn, m.Query(), m.queryErr)
 		}
 		m.Update(backspaceKey())
 		m.Update(backspaceKey())
 		typeText(&m, "/")
 		if m.Query() != "etl phase=failed /hourly/" || strings.Contains(body(&m), "✗ bad") {
-			t.Fatal("repair retained error")
+			t.Fatalf("repaired query=%q error=%q body=%q, want etl phase=failed /hourly/ without an error", m.Query(), m.queryErr, body(&m))
 		}
 		m.Update(escKey())
 		if m.Query() != "etl" || m.queryErr != "" || m.SearchOn {
-			t.Fatal("cancel failed")
+			t.Fatalf("cancel query=%q error=%q focused=%t, want etl, no error and no focus", m.Query(), m.queryErr, m.SearchOn)
 		}
 	})
 }
 
+// Query operators select exact workflow sets with strict time bounds and case-sensitive label values.
 func TestQueryMatches(t *testing.T) {
 	now := testkit.FixtureEpoch
 	start := now.Add(-time.Hour)
@@ -243,6 +246,7 @@ func TestQueryMatches(t *testing.T) {
 	}
 }
 
+// Namespace queries match qualified names across namespaces while anchored patterns still match bare names.
 func TestQueriesAcrossNamespaces(t *testing.T) {
 	for _, c := range []struct {
 		q    string
