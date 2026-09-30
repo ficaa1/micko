@@ -23,7 +23,7 @@ instead, in its bottom corner, watching you and now and then hopping over to
 kiss himself in his mirror. He is off by default: he costs the pane three rows
 perched, four on the floor.
 
-![micko browsing the demo dataset](docs/demo.gif)
+![micko browsing the demo dataset, with Mićko perched on the pane and then on its floor](docs/demo.gif)
 
 ## Build and try it
 
@@ -53,7 +53,7 @@ Until then, download a binary from
 in, verify it and put it on your PATH:
 
 ```sh
-VERSION=0.6.0   # the release you want
+VERSION=0.7.1   # the release you want
 gh release download "v$VERSION" --repo ficaa1/micko \
   --pattern '*_darwin_arm64.tar.gz' --pattern checksums.txt
 shasum -a 256 -c checksums.txt --ignore-missing   # sha256sum -c on Linux
@@ -207,7 +207,7 @@ sessions and the demo write nothing. To turn the journal off, set
 | View | Keys |
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
-| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` filter, `s` sort, `p` phase, `n` namespace, `0` all namespaces, `space` mark, `a` actions, `w` wide columns, `esc` clear marks then filter |
+| Workflow list | `enter` open, `T` open on its timeline, `X` open on its explanation, `E` open on its events, `l` workflow logs, `/` filter, `s` sort, `p` phase, `r` refresh, `n` namespace, `0` all namespaces, `space` mark, `a` actions, `w` wide columns, `esc` clear marks then filter |
 | Cron workflows (`:cron`) | `enter` the row's workflows, `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
 | Templates (`:tmpl`, `:cwftmpl`) | the same keys; `n` and `0` do not apply to cluster templates |
 | Archived workflows (`:aw`) | `enter` open the run, `i` info panel, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` record |
@@ -218,7 +218,7 @@ sessions and the demo write nothing. To turn the journal off, set
 | Explain | `y` copy the report, `l` the failing pod's full log, `v` hides or reveals parameter values |
 | Events | `s` warnings first or newest first, `/` filter, `y` copy the table, `r` refresh and restart the stream |
 | Resource | `v` hides or reveals parameter/output values (also in the node info panel) |
-| Logs | `t` follow tail, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `&` only matching lines, `w` wrap, `L` source labels, `ctrl+t` server timestamps, `\|` pipe |
+| Logs | `t` follow tail, `G` newest line, `space` pause scrolling, `c` container, `/` search, `n`/`N` matches, `&` only matching lines, `w` wrap, `L` source labels, `ctrl+t` server timestamps, `\|` pipe |
 | Display | `f` borderless full screen, `y` copy, `o` open workflow in Argo UI |
 | Command palette | `:` open, `tab` complete, `up`/`down` choose, `enter` run, `ctrl+p`/`ctrl+n` history, `esc` close |
 | General | `P` switch profile, `?` help, `esc` back/cancel, `q` quit outside text entry, `ctrl+c` quit globally |
@@ -248,7 +248,8 @@ not parse leaves the previous filter applied and shows its error in the
 toolbar, and `enter` will not apply it; `esc` cancels the edit. Once applied,
 the toolbar shows the filter as it was read, such as `phase=Failed & age<2h`.
 Like the rest of the list, the filter runs on the collected snapshot, not on
-the server.
+the server. Suspended workflows sort first by default and their waiting nodes
+are marked `AWAITING RESUME`.
 
 `w` toggles wide columns: PROGRESS (the server's done/total count of pods, with
 a bar), STARTED and FINISHED in local time, TEMPLATE, CRON and LABELS (the
@@ -277,10 +278,11 @@ the lines already on screen stay, and a marker shows where the new stream
 begins. `t` (follow) and `T` (the timeline elsewhere) were taken, so the
 timestamp toggle is `t` with control.
 
-Suspended workflows sort first by default and their waiting nodes are marked
-`AWAITING RESUME`. Node logs require a known pod name: the adapter uses the
-workflow's pod naming annotation and leaves the shortcut unavailable when
-it cannot resolve one safely.
+Node logs require a known pod name: the adapter uses the workflow's pod
+naming annotation and leaves the shortcut unavailable when it cannot resolve
+one safely.
+
+### Command palette
 
 `:` opens the command palette on every route. Type a command and the palette
 lists the matches with their aliases and a one-line description, best first;
@@ -305,6 +307,8 @@ After `ns` and `profile` a space starts completing the argument from the
 namespaces and profiles the session knows. `ctrl+p` and `ctrl+n` step through
 the commands run earlier in the session.
 
+### Namespaces and profiles
+
 `0` on the workflow list, or `:all`, lists every namespace the token may read.
 The header shows the namespace as `all`, the list gains a NAMESPACE column,
 and the `/` filter matches `namespace/name`, so `team-a/` narrows it to one
@@ -312,6 +316,22 @@ namespace. Detail, logs and actions use each row's own namespace. The token
 needs permission to list workflows cluster-wide; without it, and on a server
 started for one managed namespace, the pane says so, and `0` returns to the
 namespace you came from.
+
+The profile picker (`P`, and the start screen) lists the profiles in your
+config file with their server and namespace. Type to narrow the list; only a
+configured profile can be chosen, because a name that is in no file names no
+server to connect to.
+
+The namespace picker offers configured `namespaces` and discovered namespaces;
+you can also type a name. Discovery uses Argo's managed namespace or visible
+workflows, so empty namespaces may need to be configured or typed.
+
+### Opening, copying and piping
+
+Set `webURL` to the browser address of your Argo UI to use `o`. Clipboard
+copy uses OSC52 and depends on terminal support. Log piping sends retained
+lines to a command you enter, using `/bin/sh`; `pipeCommand` sets the initial
+command (default `lnav`). Install that program separately.
 
 ### Node view
 
@@ -495,20 +515,6 @@ A server with no archive configured answers the list with an empty page, the
 same answer as an empty archive, so the empty list says that too. Opening a run
 on such a server, or listing on a server without the archive route, shows
 "the workflow archive is not enabled on this server".
-
-The profile picker (`P`, and the start screen) lists the profiles in your
-config file with their server and namespace. Type to narrow the list; only a
-configured profile can be chosen, because a name that is in no file names no
-server to connect to.
-
-The namespace picker offers configured `namespaces` and discovered namespaces;
-you can also type a name. Discovery uses Argo's managed namespace or visible
-workflows, so empty namespaces may need to be configured or typed.
-
-Set `webURL` to the browser address of your Argo UI to use `o`. Clipboard
-copy uses OSC52 and depends on terminal support. Log piping sends retained
-lines to a command you enter, using `/bin/sh`; `pipeCommand` sets the initial
-command (default `lnav`). Install that program separately.
 
 ## Skins
 
