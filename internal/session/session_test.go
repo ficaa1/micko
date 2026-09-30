@@ -4,123 +4,161 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ficaa1/micko/internal/ui/profiles"
 )
 
-// A missing config file is not a failure. The picker opens on the path that
-// does not exist yet, so the reader is told where to write one.
-func TestAMissingConfigFileStillNamesThePath(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	c, err := NewConnector(Options{ConfigPath: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	list := c.ProfileList()
-	if list.ConfigPath != path {
-		t.Errorf("ConfigPath = %q, want %q", list.ConfigPath, path)
-	}
-	if len(list.Items) != 0 {
-		t.Errorf("Items = %+v, want none", list.Items)
-	}
-	if c.HasProfiles() {
-		t.Error("HasProfiles() is true with no file")
-	}
-}
+var testSkins = []string{"auto", "default", "nord", "dracula"}
 
-// An unreadable file must say so. An empty picker would otherwise look like a
-// file the reader never wrote.
-func TestABrokenConfigFileIsReportedNotHidden(t *testing.T) {
+// writeConfig returns the path of a config file holding body, or of a file
+// that does not exist when body is empty.
+func writeConfig(t *testing.T, body string) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("profiles: [this is not a map\n"), 0o600); err != nil {
-		t.Fatal(err)
+	if body == "" {
+		return path
 	}
-	c, err := NewConnector(Options{ConfigPath: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.ProfileList().Err == "" {
-		t.Error("a config file that does not parse was reported as an empty one")
-	}
-}
-
-// The profiles the picker offers come from the file, with the server and
-// namespace that tell two clusters apart.
-func TestTheConnectorListsTheConfiguredProfiles(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	body := "currentProfile: prod\nprofiles:\n" +
-		"  dev:\n    server: https://dev.example.com\n    namespace: workflows\n    tokenEnv: T\n" +
-		"  prod:\n    server: https://prod.example.com\n    namespace: argo\n    tokenEnv: T\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := NewConnector(Options{ConfigPath: path})
-	if err != nil {
-		t.Fatal(err)
+	return path
+}
+
+// The picker lists the file's profiles and names the file, and a file that
+// does not parse is reported rather than shown as an empty one.
+func TestProfileList(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		wantItems   []profiles.Item
+		wantCurrent string
+		wantErr     bool
+	}{
+		{"missing file", "", nil, "", false},
+		{"broken file", "profiles: [this is not a map\n", nil, "", true},
+		{"two profiles", "currentProfile: prod\nprofiles:\n" +
+			"  dev:\n    server: https://dev.example.com\n    namespace: workflows\n    tokenEnv: T\n" +
+			"  prod:\n    server: https://prod.example.com\n    namespace: argo\n    tokenEnv: T\n",
+			[]profiles.Item{
+				{Name: "dev", Server: "https://dev.example.com", Namespace: "workflows"},
+				{Name: "prod", Server: "https://prod.example.com", Namespace: "argo"},
+			}, "prod", false},
 	}
-	list := c.ProfileList()
-	if list.Current != "prod" {
-		t.Errorf("Current = %q, want prod", list.Current)
-	}
-	if len(list.Items) != 2 || list.Items[0].Name != "dev" {
-		t.Fatalf("Items = %+v, want dev then prod", list.Items)
-	}
-	if list.Items[0].Server != "https://dev.example.com" {
-		t.Errorf("dev server = %q", list.Items[0].Server)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := writeConfig(t, c.body)
+			conn, err := NewConnector(Options{ConfigPath: path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			list := conn.ProfileList()
+			if list.ConfigPath != path {
+				t.Errorf("ConfigPath = %q, want %q", list.ConfigPath, path)
+			}
+			if !reflect.DeepEqual(list.Items, c.wantItems) {
+				t.Errorf("Items = %+v, want %+v", list.Items, c.wantItems)
+			}
+			if list.Current != c.wantCurrent {
+				t.Errorf("Current = %q, want %q", list.Current, c.wantCurrent)
+			}
+			if (list.Err != "") != c.wantErr {
+				t.Errorf("Err = %q, want an error: %v", list.Err, c.wantErr)
+			}
+			if conn.HasProfiles() != (len(c.wantItems) > 0) {
+				t.Errorf("HasProfiles() = %v with %d profiles", conn.HasProfiles(), len(c.wantItems))
+			}
+		})
 	}
 }
 
-// Connecting to a profile the file does not name fails by name. Nothing is
-// started, so the picker can report it and stay open.
-func TestConnectRejectsAProfileThatIsNotConfigured(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("profiles:\n  dev:\n    server: https://dev.example.com\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	c, err := NewConnector(Options{ConfigPath: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = c.Connect(context.Background(), "missing")
+// A misspelled skin anywhere in the file stops the program at startup, even
+// on a profile nobody has chosen yet.
+func TestAnUnknownSkinIsAStartupError(t *testing.T) {
+	path := writeConfig(t, "profiles:\n  dev:\n    server: https://a.test\n  prod:\n    server: https://b.test\n    skin: neon\n")
+	_, err := NewConnector(Options{ConfigPath: path, Skins: testSkins})
 	if err == nil {
-		t.Fatal("Connect accepted a profile that is not in the file")
+		t.Fatal("a config file with an unknown skin was accepted")
 	}
-	if !strings.Contains(err.Error(), "missing") {
-		t.Errorf("error = %v, want it to name the profile", err)
-	}
-}
-
-// A profile with no port-forward target connects without starting one, and the
-// connection then has no transport lifecycle to report.
-func TestAProfileWithNoForwardConnectsDirectly(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	body := "profiles:\n  dev:\n    server: https://argo.example.com\n    namespace: argo\n    tokenEnv: MICKO_TEST_TOKEN\n"
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	c, err := NewConnector(Options{ConfigPath: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	conn, err := c.Connect(context.Background(), "dev")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if conn.Profile != "dev" || conn.Namespace != "argo" {
-		t.Errorf("connection = %+v, want the profile's own values", conn)
-	}
-	if conn.States != nil {
-		t.Error("a connection with no port-forward reported a transport lifecycle")
-	}
-	if conn.Close != nil {
-		t.Error("a connection with no port-forward has nothing to close")
+	if !strings.Contains(err.Error(), "neon") || !strings.Contains(err.Error(), "nord") {
+		t.Errorf("error = %v, want the bad name and the valid ones", err)
 	}
 }
 
-// Close releases whatever connection the connector last handed out, so an exit
-// path the model did not take still stops the forward.
+// Before a profile is chosen the flag wins, then the file's top level, then
+// the default.
+func TestStartingSkin(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		flag string
+		want string
+	}{
+		{"file", "skin: nord\nprofiles:\n  dev:\n    server: https://a.test\n", "", "nord"},
+		{"flag over file", "skin: nord\nprofiles:\n  dev:\n    server: https://a.test\n", "dracula", "dracula"},
+		{"no file", "", "", "default"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			conn, err := NewConnector(Options{ConfigPath: writeConfig(t, c.body), Skin: c.flag, Skins: testSkins})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := conn.Skin(); got != c.want {
+				t.Errorf("Skin() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// A profile with no port-forward connects directly with its own namespace
+// and skin, and a profile the file does not name fails by name.
+func TestConnect(t *testing.T) {
+	path := writeConfig(t, "skin: nord\nprofiles:\n"+
+		"  dev:\n    server: https://argo.example.com\n    namespace: argo\n    tokenEnv: T\n"+
+		"  prod:\n    server: https://argo.example.com\n    namespace: prod\n    tokenEnv: T\n    skin: dracula\n")
+	cases := []struct {
+		profile       string
+		wantNamespace string
+		wantSkin      string
+		wantErr       string
+	}{
+		{"dev", "argo", "nord", ""},
+		{"prod", "prod", "dracula", ""},
+		{"missing", "", "", `"missing"`},
+	}
+	for _, c := range cases {
+		t.Run(c.profile, func(t *testing.T) {
+			connector, err := NewConnector(Options{ConfigPath: path, Skins: testSkins})
+			if err != nil {
+				t.Fatal(err)
+			}
+			conn, err := connector.Connect(context.Background(), c.profile)
+			if c.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+					t.Fatalf("Connect error = %v, want one naming %s", err, c.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if conn.Profile != c.profile || conn.Namespace != c.wantNamespace || conn.Skin != c.wantSkin {
+				t.Errorf("connection = profile %q namespace %q skin %q, want %q %q %q",
+					conn.Profile, conn.Namespace, conn.Skin, c.profile, c.wantNamespace, c.wantSkin)
+			}
+			if conn.States != nil || conn.Close != nil {
+				t.Error("a connection with no port-forward reported a transport lifecycle")
+			}
+		})
+	}
+}
+
+// The entrypoint always defers Close, so it is safe with nothing connected.
 func TestCloseIsSafeWithNoConnection(t *testing.T) {
-	c, err := NewConnector(Options{ConfigPath: filepath.Join(t.TempDir(), "config.yaml")})
+	c, err := NewConnector(Options{ConfigPath: writeConfig(t, "")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,42 +167,23 @@ func TestCloseIsSafeWithNoConnection(t *testing.T) {
 }
 
 // The forward moves the transport to a loopback port the program owns. It
-// must not silently downgrade a configured https endpoint to plain http, and
-// it must not drop a configured base path: both would send a bearer token
-// somewhere the profile never named.
+// must keep the configured scheme and base path, so a bearer token never goes
+// somewhere the profile did not name.
 func TestForwardEndpointKeepsTheSchemeAndPath(t *testing.T) {
 	cases := []struct {
 		name                        string
 		configured, announced, want string
 	}{
-		{
-			name:       "https survives the move to loopback",
-			configured: "https://argo.example.com",
-			announced:  "http://127.0.0.1:51234",
-			want:       "https://127.0.0.1:51234",
-		},
-		{
-			name:       "a base path is kept",
-			configured: "https://argo.example.com/argo/",
-			announced:  "http://127.0.0.1:51234",
-			want:       "https://127.0.0.1:51234/argo",
-		},
-		{
-			name:       "no announced port means no endpoint",
-			configured: "https://argo.example.com",
-			announced:  "",
-			want:       "",
-		},
-		{
-			name:       "an unparsable announcement is refused",
-			configured: "https://argo.example.com",
-			announced:  "not a url",
-			want:       "",
-		},
+		{"https survives the move to loopback", "https://argo.example.com", "http://127.0.0.1:51234", "https://127.0.0.1:51234"},
+		{"a base path is kept", "https://argo.example.com/argo/", "http://127.0.0.1:51234", "https://127.0.0.1:51234/argo"},
+		{"no announced port means no endpoint", "https://argo.example.com", "", ""},
+		{"an unparsable announcement is refused", "https://argo.example.com", "not a url", ""},
 	}
 	for _, c := range cases {
-		if got := forwardEndpoint(c.configured, c.announced); got != c.want {
-			t.Errorf("%s: forwardEndpoint(%q, %q) = %q, want %q", c.name, c.configured, c.announced, got, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if got := forwardEndpoint(c.configured, c.announced); got != c.want {
+				t.Errorf("forwardEndpoint(%q, %q) = %q, want %q", c.configured, c.announced, got, c.want)
+			}
+		})
 	}
 }

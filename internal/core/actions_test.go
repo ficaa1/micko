@@ -54,58 +54,96 @@ func TestActionAvailabilityByPhase(t *testing.T) {
 	}
 }
 
-// Delete needs its final confirmation; a first yes alone must not pass.
-func TestDeleteRequiresTheFinalConfirmation(t *testing.T) {
-	ref := Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	req := ActionRequest{Ref: ref, Action: ActionDelete, Confirmation: Confirmation{Confirmed: true}}
-	if err := req.Validate(ref); !errors.Is(err, ErrDeleteNotFinal) {
-		t.Fatalf("delete without the final step: err = %v", err)
+// A request passes only for the selected workflow with the confirmation its
+// action needs, and the transport's gate agrees whenever the identity matches.
+func TestActionRequestValidation(t *testing.T) {
+	selected := Ref{Namespace: "ns", Name: "wf", UID: "uid"}
+	replaced := Ref{Namespace: "ns", Name: "wf", UID: "new"}
+	cases := []struct {
+		name    string
+		action  Action
+		confirm Confirmation
+		actual  *Ref
+		wantErr string
+		is      error
+	}{
+		{"resume confirmed", ActionResume, Confirmation{Confirmed: true}, nil, "", nil},
+		{"resume cancelled", ActionResume, Confirmation{}, nil, "action not confirmed", ErrActionNotConfirmed},
+		{"replaced workflow", ActionResume, Confirmation{Confirmed: true}, &replaced,
+			`workflow UID mismatch: expected "uid", got "new"`, nil},
+		{"unknown action", Action("explode"), Confirmation{Confirmed: true, Final: true}, nil, `unsupported action "explode"`, nil},
+		{"terminate with the typed name", ActionTerminate, Confirmation{Confirmed: true, TypedName: "wf"}, nil, "", nil},
+		{"terminate with another name", ActionTerminate, Confirmation{Confirmed: true, TypedName: "other"}, nil,
+			"confirmation name does not match workflow name", ErrConfirmationNameMismatch},
+		{"bulk terminate with the count", ActionTerminate, Confirmation{Confirmed: true, BulkSize: 3, TypedCount: "3"}, nil, "", nil},
+		{"bulk terminate with another count", ActionTerminate, Confirmation{Confirmed: true, BulkSize: 3, TypedCount: "2"}, nil,
+			"confirmation name does not match workflow name", ErrConfirmationNameMismatch},
+		{"bulk terminate with no count", ActionTerminate, Confirmation{Confirmed: true, BulkSize: 3}, nil,
+			"confirmation name does not match workflow name", ErrConfirmationNameMismatch},
+		{"single terminate with a count", ActionTerminate, Confirmation{Confirmed: true, BulkSize: 1, TypedCount: "1"}, nil,
+			"confirmation name does not match workflow name", ErrConfirmationNameMismatch},
+		{"delete after the first step", ActionDelete, Confirmation{Confirmed: true}, nil,
+			"delete needs its final confirmation", ErrDeleteNotFinal},
+		{"delete after the final step", ActionDelete, Confirmation{Confirmed: true, Final: true}, nil, "", nil},
 	}
-	req.Confirmation.Final = true
-	if err := req.Validate(ref); err != nil {
-		t.Fatalf("delete with the final step: err = %v", err)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req := ActionRequest{Ref: selected, Action: c.action, Confirmation: c.confirm}
+			actual := selected
+			if c.actual != nil {
+				actual = *c.actual
+			}
+			err := req.Validate(actual)
+			if got := errText(err); got != c.wantErr {
+				t.Fatalf("Validate = %q, want %q", got, c.wantErr)
+			}
+			if c.is != nil && !errors.Is(err, c.is) {
+				t.Errorf("Validate = %v, want it to match %v", err, c.is)
+			}
+			if c.actual == nil {
+				if got := errText(req.CheckConfirmation()); got != c.wantErr {
+					t.Errorf("CheckConfirmation = %q, want %q", got, c.wantErr)
+				}
+			}
+		})
 	}
 }
 
-// A bulk terminate is confirmed by typing the number of targets. The count
-// must match the size the confirmation showed, and a single-target request
-// cannot use the count at all.
-func TestBulkTerminateIsConfirmedByTheTypedCount(t *testing.T) {
-	ref := Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	ok := ActionRequest{Ref: ref, Action: ActionTerminate, Confirmation: Confirmation{Confirmed: true, BulkSize: 3, TypedCount: "3"}}
-	if err := ok.Validate(ref); err != nil {
-		t.Fatalf("matching count: %v", err)
+// errText returns err's message, or "" for nil.
+func errText(err error) string {
+	if err == nil {
+		return ""
 	}
-	for _, c := range []Confirmation{
-		{Confirmed: true, BulkSize: 3, TypedCount: "2"},
-		{Confirmed: true, BulkSize: 1, TypedCount: "1"},
-		{Confirmed: true, BulkSize: 3},
-	} {
-		req := ActionRequest{Ref: ref, Action: ActionTerminate, Confirmation: c}
-		if err := req.Validate(ref); !errors.Is(err, ErrConfirmationNameMismatch) {
-			t.Errorf("confirmation %+v: err = %v, want a mismatch", c, err)
-		}
-	}
+	return err.Error()
 }
 
-func TestSuspendBodyMatchesTheSchemaAndDeleteHasNone(t *testing.T) {
-	ref := Ref{Namespace: "ns", Name: "wf", UID: "secret-uid"}
-	body, err := json.Marshal(ActionRequest{Ref: ref, Action: ActionSuspend}.WireBody())
-	if err != nil || string(body) != `{"name":"wf","namespace":"ns"}` {
-		t.Fatalf("suspend body = %s, err = %v", body, err)
+// Each action's body carries only the fields Argo's schema defines for it,
+// never the UID, and delete sends none.
+func TestActionWireBodies(t *testing.T) {
+	cases := []struct {
+		action Action
+		want   string
+	}{
+		{ActionResume, `{"name":"wf","namespace":"ns","nodeFieldSelector":"phase=Failed"}`},
+		{ActionSuspend, `{"name":"wf","namespace":"ns"}`},
+		{ActionRetry, `{"name":"wf","namespace":"ns","nodeFieldSelector":"phase=Failed","parameters":["x=y"],"restartSuccessful":true}`},
+		{ActionResubmit, `{"memoized":true,"name":"wf","namespace":"ns","parameters":["x=y"]}`},
+		{ActionStop, `{"message":"operator stop","name":"wf","namespace":"ns","nodeFieldSelector":"phase=Failed"}`},
+		{ActionTerminate, `{"name":"wf","namespace":"ns"}`},
+		{ActionDelete, `null`},
 	}
-	if b := (ActionRequest{Ref: ref, Action: ActionDelete}).WireBody(); b != nil {
-		t.Fatalf("delete body = %#v, want none", b)
-	}
-}
-
-func TestUnknownActionIsRejected(t *testing.T) {
-	ref := Ref{Namespace: "ns", Name: "wf", UID: "uid"}
-	req := ActionRequest{Ref: ref, Action: "explode", Confirmation: Confirmation{Confirmed: true, Final: true}}
-	if err := req.Validate(ref); err == nil {
-		t.Fatal("an unknown action validated")
-	}
-	if err := req.CheckConfirmation(); err == nil {
-		t.Fatal("an unknown action passed the confirmation check")
+	for _, c := range cases {
+		t.Run(string(c.action), func(t *testing.T) {
+			req := ActionRequest{
+				Ref:    Ref{Namespace: "ns", Name: "wf", UID: "secret-uid"},
+				Action: c.action, NodeFieldSelector: "phase=Failed", RestartSuccessful: true, Memoized: true,
+				Parameters: []string{"x=y"}, Message: "operator stop",
+				Confirmation: Confirmation{Confirmed: true, TypedName: "wf", Final: true},
+			}
+			body, err := json.Marshal(req.WireBody())
+			if err != nil || string(body) != c.want {
+				t.Fatalf("body = %s, err = %v; want %s", body, err, c.want)
+			}
+		})
 	}
 }

@@ -24,11 +24,6 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// mainVersion and mainCommit expose the build identity to the smoke test
-// without exporting a mutable API surface.
-var mainVersion = buildinfo.Version
-var mainCommit = buildinfo.Commit
-
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -47,8 +42,8 @@ func run(args []string) int {
 	refresh := fs.Duration("refresh-interval", 0, "poll interval")
 	insecure := fs.Bool("insecure-skip-tls-verify", false, "disable TLS verification (unsafe)")
 	readOnly := fs.Bool("read-only", false, "turn off workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete)")
-	// Actions used to be opt-in with --allow-actions. They are on by default
-	// now, and the flag is still accepted so scripts that pass it keep working.
+	// --allow-actions has no effect; it is accepted so scripts that pass it
+	// keep working.
 	_ = fs.Bool("allow-actions", false, "no effect: actions are on unless --read-only")
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
@@ -60,7 +55,7 @@ func run(args []string) int {
 		return 2
 	}
 	if *versionFlag {
-		fmt.Printf("micko %s (%s)\n", mainVersion, mainCommit)
+		fmt.Printf("micko %s (%s)\n", buildinfo.Version, buildinfo.Commit)
 		return 0
 	}
 	if fs.NArg() > 0 {
@@ -143,7 +138,7 @@ func run(args []string) int {
 			root.Adopt(conn)
 		}
 	}
-	root.SetVersion(mainVersion + " @ " + mainCommit)
+	root.SetVersion(buildinfo.Version + " @ " + buildinfo.Commit)
 
 	if _, err := tea.NewProgram(root).Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "micko: %v\n", err)
