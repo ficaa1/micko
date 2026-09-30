@@ -24,16 +24,16 @@ func TestFakeReaderList(t *testing.T) {
 		f.Workflows[wf.Summary.Ref] = wf
 	}
 	cases := []struct {
-		name  string
-		query core.Query
-		want  []string
+		name       string
+		query      core.Query
+		want, next []string
 	}{
-		{"all namespaces sorted", core.Query{}, []string{"alpha", "zeta", "other"}},
-		{"namespace", core.Query{Namespace: "ns-a"}, []string{"alpha", "zeta"}},
-		{"missing namespace", core.Query{Namespace: "missing"}, nil},
-		{"first page", core.Query{Namespace: "ns-a", Limit: 1}, []string{"alpha"}},
-		{"uneven final page", core.Query{Limit: 2}, []string{"alpha", "zeta"}},
-		{"invalid continuation restarts", core.Query{Namespace: "ns-a", Limit: 1, Continue: "garbage"}, []string{"alpha"}},
+		{"all namespaces sorted", core.Query{}, []string{"alpha", "zeta", "other"}, nil},
+		{"namespace", core.Query{Namespace: "ns-a"}, []string{"alpha", "zeta"}, nil},
+		{"missing namespace", core.Query{Namespace: "missing"}, nil, nil},
+		{"first page", core.Query{Namespace: "ns-a", Limit: 1}, []string{"alpha"}, []string{"zeta"}},
+		{"uneven final page", core.Query{Limit: 2}, []string{"alpha", "zeta"}, []string{"other"}},
+		{"invalid continuation restarts", core.Query{Namespace: "ns-a", Limit: 1, Continue: "garbage"}, []string{"alpha"}, []string{"zeta"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -41,44 +41,50 @@ func TestFakeReaderList(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var got []string
-			for _, item := range page.Items {
-				got = append(got, item.Ref.Name)
-			}
-			if !reflect.DeepEqual(got, c.want) {
+			if got := names(page); !reflect.DeepEqual(got, c.want) {
 				t.Fatalf("names = %v, want %v", got, c.want)
 			}
-			if c.query.Limit > 0 {
-				if page.Continue == "" {
-					t.Fatal("first page has no continuation")
-				}
-				query := c.query
-				query.Continue = page.Continue
-				next, err := f.List(context.Background(), query)
-				want := "zeta"
-				if c.name == "uneven final page" {
-					want = "other"
-				}
-				if err != nil || len(next.Items) != 1 || next.Items[0].Ref.Name != want || next.Continue != "" {
-					t.Fatalf("second page = %+v, %v; want %s and no continuation", next, err, want)
-				}
-			} else if page.Continue != "" {
-				t.Fatalf("continuation = %q, want empty", page.Continue)
+			if (page.Continue != "") != (c.next != nil) {
+				t.Fatalf("continuation = %q, want one only when a next page is expected", page.Continue)
+			}
+			if c.next == nil {
+				return
+			}
+			query := c.query
+			query.Continue = page.Continue
+			next, err := f.List(context.Background(), query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := names(next); !reflect.DeepEqual(got, c.next) || next.Continue != "" {
+				t.Fatalf("second page = %v, continuation %q; want %v and none", got, next.Continue, c.next)
 			}
 		})
 	}
-	t.Run("demo owner and forced pagination", func(t *testing.T) {
+	t.Run("demo pages by default", func(t *testing.T) {
 		demo := DemoReader(NewFakeClock(FixtureEpoch))
 		page, err := demo.List(context.Background(), core.Query{Namespace: DemoNamespace})
 		if err != nil || page.Continue == "" {
-			t.Fatalf("demo page = %+v, %v; want continuation", page, err)
+			t.Fatalf("demo page = %v, %v; want a continuation", names(page), err)
 		}
+	})
+	t.Run("demo cron owner label", func(t *testing.T) {
+		demo := DemoReader(NewFakeClock(FixtureEpoch))
 		demo.PageLimit = 0
 		owned, err := demo.List(context.Background(), core.Query{Namespace: DemoNamespace, LabelSelector: "workflows.argoproj.io/cron-workflow=demo-etl-hourly"})
 		if err != nil || len(owned.Items) != 3 {
-			t.Fatalf("owned runs = %d, %v; want 3", len(owned.Items), err)
+			t.Fatalf("owned runs = %v, %v; want 3", names(owned), err)
 		}
 	})
+}
+
+// names returns the workflow names on a page, in order.
+func names(page core.Page) []string {
+	var out []string
+	for _, item := range page.Items {
+		out = append(out, item.Ref.Name)
+	}
+	return out
 }
 
 // Reader failures and cancellation remain distinguishable to callers.
@@ -187,7 +193,6 @@ func TestFakeReaderStreamLogs(t *testing.T) {
 			t.Fatal("stamping changed the stored record")
 		}
 	})
-
 }
 
 // The demo clock advances only by the requested duration.
