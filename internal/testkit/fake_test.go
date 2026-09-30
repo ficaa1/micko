@@ -90,7 +90,7 @@ func names(page core.Page) []string {
 // Reader failures and cancellation remain distinguishable to callers.
 func TestFakeReaderInjectableErrorsAndDelays(t *testing.T) {
 	t.Run("list error", func(t *testing.T) {
-		f := &FakeReader{ListErr: core.ErrForbiddenf("list denied in ns")}
+		f := &FakeReader{ListErr: core.NewAPIError(core.ErrForbidden, 403, "list denied in ns")}
 		_, err := f.List(context.Background(), core.Query{Namespace: "ns"})
 		if ae := core.AsAPIError(err); ae == nil || ae.Kind != core.ErrForbidden {
 			t.Fatalf("err = %v, want forbidden", err)

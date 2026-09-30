@@ -221,7 +221,7 @@ func TestCronStaleReplyDiscarded(t *testing.T) {
 // A refusal, a 404 and a reader without a cron lister each say so on the pane.
 func TestCronErrors(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	f.CronErr = core.ErrForbiddenf(`cronworkflows.argoproj.io is forbidden: cannot list resource "cronworkflows"`)
+	f.CronErr = core.NewAPIError(core.ErrForbidden, 403, `cronworkflows.argoproj.io is forbidden: cannot list resource "cronworkflows"`)
 	m := newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cron")

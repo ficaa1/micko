@@ -1,12 +1,15 @@
 package core
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
 )
 
-func TestKindOfFrozenTable(t *testing.T) {
+// Every HTTP status maps to the kind the UI chooses its state by.
+func TestKindOf(t *testing.T) {
 	cases := []struct {
 		status int
 		want   ErrorKind
@@ -32,36 +35,28 @@ func TestKindOfFrozenTable(t *testing.T) {
 	}
 }
 
-func TestAPIErrorMessageSanitized(t *testing.T) {
-	// The message surface must never contain credential material; these
-	// constructors carry what the caller gives them, so the test pins the
-	// discipline: callers pass resource/endpoint descriptions, and Error()
-	// must not append wrapped causes (which could smuggle secrets in).
-	e := WrapAPIError(ErrUnauthenticated, 401, "get /api/v1/workflows/ns1/w1: unauthorized", nil)
-	got := e.Error()
-	for _, bad := range []string{"MICKO_TOKEN", "secret-value"} {
-		if contains(got, bad) {
-			t.Fatalf("APIError.Error() contains %q: %q", bad, got)
-		}
+// An API error prints its kind, message and status, never its wrapped cause.
+func TestAPIErrorText(t *testing.T) {
+	cases := []struct {
+		name string
+		err  *APIError
+		want string
+	}{
+		{"with a status", NewAPIError(ErrNotFound, 404, "get ns/wf"), "not_found: get ns/wf (HTTP 404)"},
+		{"in-band", NewAPIError(ErrProtocol, 0, "malformed chunk"), "protocol: malformed chunk"},
+		{"with a cause", WrapAPIError(ErrUnauthenticated, 401, "get /api/v1/workflows/ns1/w1: unauthorized",
+			errors.New("Bearer secret-value")), "unauthenticated: get /api/v1/workflows/ns1/w1: unauthorized (HTTP 401)"},
 	}
-	if got != "unauthenticated: get /api/v1/workflows/ns1/w1: unauthorized (HTTP 401)" {
-		t.Fatalf("unexpected format: %q", got)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.err.Error(); got != c.want {
+				t.Errorf("Error() = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 
-func contains(s, sub string) bool {
-	return len(sub) == 0 || (len(s) >= len(sub) && indexOf(s, sub) >= 0)
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
+// Retry-After reads either form, clamps to zero and ignores what it cannot parse.
 func TestParseRetryAfter(t *testing.T) {
 	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 	cases := []struct {
@@ -72,11 +67,9 @@ func TestParseRetryAfter(t *testing.T) {
 		{"garbage", nil},
 		{"5", durPtr(5 * time.Second)},
 		{"0", durPtr(0)},
-		{"-3", durPtr(0)}, // clamped
+		{"-3", durPtr(0)},
 		{"30", durPtr(30 * time.Second)},
-		// HTTP-date form: 10s in the future
 		{now.Add(10 * time.Second).Format(http.TimeFormat), durPtr(10 * time.Second)},
-		// HTTP-date in the past clamps to zero
 		{now.Add(-10 * time.Second).Format(http.TimeFormat), durPtr(0)},
 	}
 	for _, c := range cases {
@@ -94,21 +87,13 @@ func TestParseRetryAfter(t *testing.T) {
 
 func durPtr(d time.Duration) *time.Duration { return &d }
 
+// AsAPIError finds an API error anywhere in a chain and nothing in a plain one.
 func TestAsAPIError(t *testing.T) {
 	inner := ErrNotFoundf("workflow ns1/name gone")
-	wrapped := errWrap{inner}
-	if got := AsAPIError(wrapped); got != inner {
-		t.Errorf("AsAPIError through wrap = %v, want %v", got, inner)
+	if got := AsAPIError(fmt.Errorf("reading: %w", inner)); got != inner {
+		t.Errorf("AsAPIError through a wrap = %v, want %v", got, inner)
 	}
-	if got := AsAPIError(errPlain{"boom"}); got != nil {
+	if got := AsAPIError(errors.New("boom")); got != nil {
 		t.Errorf("AsAPIError(plain) = %v, want nil", got)
 	}
 }
-
-type errWrap struct{ error }
-
-func (w errWrap) Unwrap() error { return w.error }
-
-type errPlain struct{ msg string }
-
-func (e errPlain) Error() string { return e.msg }

@@ -140,10 +140,6 @@ func ErrUnauthenticatedf(format string, args ...any) *APIError {
 	return NewAPIError(ErrUnauthenticated, http.StatusUnauthorized, fmt.Sprintf(format, args...))
 }
 
-func ErrForbiddenf(format string, args ...any) *APIError {
-	return NewAPIError(ErrForbidden, http.StatusForbidden, fmt.Sprintf(format, args...))
-}
-
 func ErrNotFoundf(format string, args ...any) *APIError {
 	return NewAPIError(ErrNotFound, http.StatusNotFound, fmt.Sprintf(format, args...))
 }

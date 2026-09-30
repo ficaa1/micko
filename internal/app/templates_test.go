@@ -153,7 +153,7 @@ func TestTemplateManifestAndLinks(t *testing.T) {
 // Each template kind reports its own refusal.
 func TestTemplateErrors(t *testing.T) {
 	f := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	f.ClusterTemplateErr = core.ErrForbiddenf(`clusterworkflowtemplates.argoproj.io is forbidden: cannot list resource "clusterworkflowtemplates" at the cluster scope`)
+	f.ClusterTemplateErr = core.NewAPIError(core.ErrForbidden, 403, `clusterworkflowtemplates.argoproj.io is forbidden: cannot list resource "clusterworkflowtemplates" at the cluster scope`)
 	m := newRoot(f, "demo", time.Millisecond)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	runLine(m, "cwftmpl")
