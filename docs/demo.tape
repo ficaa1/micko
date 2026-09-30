@@ -3,11 +3,17 @@
 #     make build && vhs docs/demo.tape
 #
 # It records the demo dataset, so it needs no cluster and produces the same
-# frames on every machine. Keep it short: the file is committed, and a reader
-# who wants more presses a key themselves.
+# frames on every machine. It follows the README: the list, one failed run's
+# timeline and explanation, the filter, the palette, and Mićko last.
 #
-# Mićko is on, so the terminal must stay at least 80x40: at FontSize 15 a row
-# is about 20.6 pixels, and Height 880 gives 41 rows.
+# Mićko needs a terminal of at least 80x40: at FontSize 15 a row is about
+# 20.6 pixels, and Height 880 gives 41 rows.
+#
+# His routines play in real time and take about 40 seconds a pass, so the
+# waits between his moves are hidden. The Hide/Show pairs below are timed
+# against MickoPerchBeats and MickoFloorBeats in internal/ui/shared: he looks
+# around about 32 seconds after he perches and turns to his mirror about 32
+# seconds after he sits on the floor.
 
 Output docs/demo.gif
 
@@ -17,7 +23,7 @@ Set Width 1100
 Set Height 880
 Set Padding 18
 Set TypingSpeed 55ms
-Set Framerate 12
+Set Framerate 15
 Set PlaybackSpeed 1.0
 
 # The build is not part of the recording.
@@ -26,35 +32,50 @@ Type "PS1='$ '" Enter
 Type "clear" Enter
 Show
 
-Type "./dist/micko --demo --mascot" Sleep 400ms Enter
-Sleep 3s
+Type "./dist/micko --demo" Sleep 400ms Enter
+Sleep 2.5s
 
-# Move down the list; the phase column carries a symbol, a word and a colour.
-Down Sleep 500ms
+# Every run at a glance: phase as a glyph, a word and a colour.
 Down Sleep 500ms
 Down Sleep 900ms
 
-# Open a workflow, then walk its sections.
-Enter Sleep 2s
-Type "j" Sleep 400ms
-Type "j" Sleep 900ms
-Tab Sleep 1.8s
-Tab Sleep 1.8s
+# Open the failed run straight on its timeline, then ask why it failed.
+Type "T" Sleep 3s
+Type "X" Sleep 3.5s
 Escape Sleep 900ms
 
-# Filter the list by phase.
-Type "p" Sleep 1.2s
-Type "p" Sleep 1.2s
+# The filter is a small query language.
+Type "/" Sleep 400ms
+Type "phase=failed age<3h" Sleep 1s
+Enter Sleep 2s
 Escape Sleep 800ms
 
-# The key map is one keystroke away on every screen.
-Type "?" Sleep 2.5s
-Escape Sleep 600ms
+# The palette switches what the pane lists.
+Type ":" Sleep 400ms
+Type "cron" Sleep 600ms Enter
+Sleep 1.5s
+Type "i" Sleep 2.5s
+Type ":" Sleep 400ms
+Type "wf" Sleep 500ms Enter
+Sleep 1s
 
-# The palette moves Mićko from his perch to the floor, beside his mirror.
-Type ":" Sleep 500ms
-Type "mascot" Sleep 700ms Enter
-Sleep 4s
+# Mićko perches on the pane, then, after a cut, looks left and right.
+Type ":" Sleep 400ms
+Type "mascot" Sleep 600ms Enter
+Sleep 3s
+Hide
+Sleep 28.5s
+Show
+Sleep 8s
+
+# A second :mascot sits him on the floor; after a cut he hops to his mirror.
+Type ":" Sleep 400ms
+Type "mascot" Sleep 600ms Enter
+Sleep 2.5s
+Hide
+Sleep 28.5s
+Show
+Sleep 12.5s
 
 Type "q"
-Sleep 1.5s
+Sleep 1s
