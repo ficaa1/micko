@@ -5,13 +5,16 @@
 # It records the demo dataset, so it needs no cluster and produces the same
 # frames on every machine. Keep it short: the file is committed, and a reader
 # who wants more presses a key themselves.
+#
+# Mićko is on, so the terminal must stay at least 80x40: at FontSize 15 a row
+# is about 20.6 pixels, and Height 880 gives 41 rows.
 
 Output docs/demo.gif
 
 Set Shell bash
 Set FontSize 15
 Set Width 1100
-Set Height 460
+Set Height 880
 Set Padding 18
 Set TypingSpeed 55ms
 Set Framerate 12
@@ -23,8 +26,8 @@ Type "PS1='$ '" Enter
 Type "clear" Enter
 Show
 
-Type "./dist/micko --demo" Sleep 400ms Enter
-Sleep 2.5s
+Type "./dist/micko --demo --mascot" Sleep 400ms Enter
+Sleep 3s
 
 # Move down the list; the phase column carries a symbol, a word and a colour.
 Down Sleep 500ms
@@ -47,6 +50,11 @@ Escape Sleep 800ms
 # The key map is one keystroke away on every screen.
 Type "?" Sleep 2.5s
 Escape Sleep 600ms
+
+# The palette moves Mićko from his perch to the floor, beside his mirror.
+Type ":" Sleep 500ms
+Type "mascot" Sleep 700ms Enter
+Sleep 4s
 
 Type "q"
 Sleep 1.5s
