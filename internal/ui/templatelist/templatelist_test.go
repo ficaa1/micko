@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/core"
@@ -30,114 +31,185 @@ func release() core.WorkflowTemplate {
 	}
 }
 
-func text(fs []kindlist.Field) string {
-	var b strings.Builder
-	for _, f := range fs {
-		b.WriteString(f.Label + " | " + f.Value + "\n")
-	}
-	return b.String()
+// pane is the app's list of spec at w×h holding items.
+func pane(spec kindlist.Spec[core.WorkflowTemplate], w, h int, items ...core.WorkflowTemplate) *kindlist.Model[core.WorkflowTemplate] {
+	m := kindlist.New(spec, shared.NewTheme(true))
+	m.SetSize(w, h)
+	m.SetItems(items, now)
+	m.SetStatus(kindlist.StatusIdle, "", 0)
+	return m
 }
 
-// The cells: entrypoint (or the template it runs), the template and
-// parameter counts, the age and the description.
-func TestCells(t *testing.T) {
-	r := release()
-	checks := map[string]string{
-		"name": "release", "entrypoint": "main", "templates": "3", "parameters": "4",
-		"age": "90d", "description": "Build, test and ship",
+// press sends each key in turn, drawing the pane first as the shell does.
+func press(m *kindlist.Model[core.WorkflowTemplate], keys ...string) tea.Cmd {
+	var cmd tea.Cmd
+	for _, k := range keys {
+		m.BodyLines(now)
+		msg := tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
+		if k == "enter" {
+			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
+		}
+		cmd = m.Update(msg)
 	}
-	for col, want := range checks {
-		if got := cell(r, col, now); got != want {
-			t.Errorf("%s = %q, want %q", col, got, want)
+	return cmd
+}
+
+// lines is the pane's body with styling removed and runs of spaces collapsed.
+func lines(m *kindlist.Model[core.WorkflowTemplate]) []string {
+	var out []string
+	for _, l := range m.BodyLines(now) {
+		out = append(out, strings.Join(strings.Fields(ansi.Strip(l)), " "))
+	}
+	return out
+}
+
+// A row shows the entrypoint, or the template it runs, the template and
+// parameter counts, the age and the description.
+func TestRows(t *testing.T) {
+	thin := core.WorkflowTemplate{Namespace: "ci", Name: "thin", WorkflowTemplateRef: "cluster/base"}
+	got := strings.Join(lines(pane(Spec(), 136, 10, release(), thin)), "\n")
+	for _, want := range []string{
+		"release main 3 4 90d Build, test and ship",
+		"thin → cluster/base 0 0 -",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no row %q in\n%s", want, got)
 		}
 	}
-	ref := core.WorkflowTemplate{Name: "thin", WorkflowTemplateRef: "cluster/base"}
-	if got := cell(ref, "entrypoint", now); got != "→ cluster/base" {
-		t.Errorf("entrypoint of a referring template = %q", got)
+}
+
+// Every layout fits its width: a narrow pane drops the entrypoint and a wide
+// one adds the description.
+func TestLayout(t *testing.T) {
+	cases := []struct {
+		width int
+		head  string
+	}{
+		{60, "NAME TEMPLATES PARAMETERS AGE"},
+		{76, "NAME ENTRYPOINT TEMPLATES PARAMETERS AGE"},
+		{100, "NAME ENTRYPOINT TEMPLATES PARAMETERS AGE DESCRIPTION"},
+		{136, "NAME ENTRYPOINT TEMPLATES PARAMETERS AGE DESCRIPTION"},
 	}
-	if got := cell(ref, "age", now); got != "-" {
-		t.Errorf("age with no timestamp = %q", got)
+	for _, c := range cases {
+		m := pane(Spec(), c.width, 10, release())
+		if got := lines(m)[1]; got != c.head {
+			t.Errorf("width %d: head %q, want %q", c.width, got, c.head)
+		}
+		for _, l := range m.BodyLines(now) {
+			if n := ansi.StringWidth(l); n > c.width {
+				t.Errorf("width %d: line of %d cells: %q", c.width, n, ansi.Strip(l))
+			}
+		}
+	}
+}
+
+// Name order ignores case and is the default; s sorts newest first.
+func TestSort(t *testing.T) {
+	older, newer, upper := release(), release(), release()
+	newer.Name, newer.CreatedAt = "zulu-newer", now.Add(-time.Hour)
+	upper.Name, upper.CreatedAt = "Yankee", now.Add(-48*time.Hour)
+	cases := []struct {
+		keys []string
+		want []string
+	}{
+		{nil, []string{"release", "Yankee", "zulu-newer"}},
+		{[]string{"s"}, []string{"zulu-newer", "Yankee", "release"}},
+	}
+	for _, c := range cases {
+		m := pane(Spec(), 100, 10, older, newer, upper)
+		press(m, c.keys...)
+		var got []string
+		for _, l := range lines(m)[2:] {
+			if f := strings.Fields(l); len(f) > 0 {
+				got = append(got, f[0])
+			}
+		}
+		if strings.Join(got, ",") != strings.Join(c.want, ",") {
+			t.Errorf("keys %v: order %v, want %v", c.keys, got, c.want)
+		}
 	}
 }
 
 // The panel lists the entrypoint, every argument with its value redacted
-// until reveal, its default, its allowed values and its description, each
-// template with its type, the service account and the labels.
+// until v, each template with its type, the service account, the labels and
+// where enter leads; a bare cluster template says what it lacks.
 func TestInfoPanel(t *testing.T) {
-	r := release()
-	got := text(Spec().Info(r, false, now))
-	for _, want := range []string{
-		"Description | Build, test and ship", "Entrypoint | main",
-		"Arguments | target = [REDACTED] · one of: linux/amd64, linux/arm64",
-		"git-sha = (no value: supplied at submission) — the commit",
-		"retries = (the default) · default [REDACTED]",
-		"token = (from supplied at run time)",
-		"Templates | main · steps · entrypoint", "build · container", "approve · suspend",
-		"Service acct | releaser", "Labels | app=shop", "team=platform",
-		"Runs | enter lists the workflows labelled workflows.argoproj.io/workflow-template=release",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("panel lacks %q:\n%s", want, got)
-		}
+	cases := []struct {
+		name    string
+		spec    kindlist.Spec[core.WorkflowTemplate]
+		item    core.WorkflowTemplate
+		keys    []string
+		want    []string
+		without []string
+	}{
+		{"redacted", Spec(), release(), []string{"i"}, []string{
+			"Description Build, test and ship", "Entrypoint main",
+			"Arguments target = [REDACTED] · one of: linux/amd64, linux/arm64",
+			"git-sha = (no value: supplied at submission) — the commit",
+			"retries = (the default) · default [REDACTED]",
+			"token = (from supplied at run time)",
+			"Templates main · steps · entrypoint", "build · container", "approve · suspend",
+			"Service acct releaser", "Labels app=shop", "team=platform",
+			"Created 2026-06-10 12:00 UTC (90d ago)",
+			"Runs enter lists the workflows labelled workflows.argoproj.io/workflow-template=release",
+		}, []string{"linux/amd64 ·", "default 3"}},
+		{"revealed", Spec(), release(), []string{"i", "v"},
+			[]string{"target = linux/amd64 · one of", "retries = (the default) · default 3"}, []string{"[REDACTED]"}},
+		{"bare cluster template", ClusterSpec(), core.WorkflowTemplate{Name: "whalesay"}, []string{"i"}, []string{
+			"Entrypoint not set: chosen at submission", "Arguments none", "Templates none",
+			"Service acct not set: the namespace's default, or the one given at submission", "Labels none",
+			"workflows.argoproj.io/cluster-workflow-template=whalesay",
+		}, []string{"Created"}},
 	}
-	if strings.Contains(got, "target = linux/amd64") || strings.Contains(got, "default 3") {
-		t.Fatal("a value shown before reveal")
-	}
-	revealed := text(Spec().Info(r, true, now))
-	if !strings.Contains(revealed, "target = linux/amd64") || !strings.Contains(revealed, "default 3") {
-		t.Fatalf("reveal did not show the values:\n%s", revealed)
-	}
-	cluster := text(ClusterSpec().Info(core.WorkflowTemplate{Name: "whalesay"}, false, now))
-	for _, want := range []string{"Entrypoint | not set", "Arguments | none", "Templates | none", "Service acct | not set", "cluster-workflow-template=whalesay"} {
-		if !strings.Contains(cluster, want) {
-			t.Errorf("cluster panel lacks %q:\n%s", want, cluster)
-		}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := pane(c.spec, 100, 60, c.item)
+			m.SetRedact(true)
+			press(m, c.keys...)
+			got := strings.Join(lines(m), "\n")
+			for _, want := range c.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("panel lacks %q:\n%s", want, got)
+				}
+			}
+			for _, bad := range c.without {
+				if strings.Contains(got, bad) {
+					t.Errorf("panel shows %q:\n%s", bad, got)
+				}
+			}
+		})
 	}
 }
 
 // A namespaced template drills into its own namespace by the controller's
-// template label; a cluster template into the session's scope by the
-// cluster label.
+// template label; a cluster template into the session's scope by the cluster
+// label, and has no namespace keys.
 func TestDrill(t *testing.T) {
-	d := Spec().Drill(release())
-	if d.Namespace != "ci" || d.Selector != "workflows.argoproj.io/workflow-template=release" || d.Title != "template release" {
-		t.Fatalf("drill = %+v", d)
+	cases := []struct {
+		name      string
+		spec      kindlist.Spec[core.WorkflowTemplate]
+		item      core.WorkflowTemplate
+		wantTitle string
+		want      kindlist.DrillMsg
+		wantNS    bool
+	}{
+		{"namespaced", Spec(), release(), "Workflow templates",
+			kindlist.DrillMsg{Namespace: "ci", Selector: "workflows.argoproj.io/workflow-template=release", Title: "template release"}, true},
+		{"cluster", ClusterSpec(), core.WorkflowTemplate{Name: "whalesay"}, "Cluster workflow templates",
+			kindlist.DrillMsg{Selector: "workflows.argoproj.io/cluster-workflow-template=whalesay", Title: "cluster template whalesay"}, false},
 	}
-	c := ClusterSpec().Drill(core.WorkflowTemplate{Name: "whalesay"})
-	if c.Namespace != "" || c.Selector != "workflows.argoproj.io/cluster-workflow-template=whalesay" || c.Title != "cluster template whalesay" {
-		t.Fatalf("cluster drill = %+v", c)
-	}
-	if !Spec().Namespaced || ClusterSpec().Namespaced {
-		t.Fatal("scopes are swapped")
-	}
-}
-
-// Every layout fits its width; name first by default, newest with s.
-func TestLayoutAndSort(t *testing.T) {
-	older := release()
-	newer := release()
-	newer.Name, newer.CreatedAt = "alpha-newer", now.Add(-time.Hour)
-	m := kindlist.New(Spec(), shared.NewTheme(true))
-	m.SetItems([]core.WorkflowTemplate{older, newer}, now)
-	if rows := m.Rows(); rows[0].Name != "alpha-newer" {
-		t.Fatalf("default order = %v", rows)
-	}
-	for _, w := range []int{60, 76, 100, 136} {
-		m.SetSize(w, 10)
-		lines := m.BodyLines(now)
-		for _, l := range lines {
-			if n := ansi.StringWidth(ansi.Strip(l)); n > w {
-				t.Fatalf("width %d: %d cells: %q", w, n, l)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := pane(c.spec, 100, 10, c.item)
+			if got := press(m, "enter")(); got != c.want {
+				t.Errorf("enter = %#v, want %#v", got, c.want)
 			}
-		}
-		head := ansi.Strip(lines[1])
-		for _, col := range []string{"NAME", "TEMPLATES", "PARAMETERS", "AGE"} {
-			if !strings.Contains(head, col) {
-				t.Errorf("width %d lacks %s: %q", w, col, head)
+			if m.PaneTitle() != c.wantTitle {
+				t.Errorf("title = %q, want %q", m.PaneTitle(), c.wantTitle)
 			}
-		}
-		if w >= 100 && !strings.Contains(head, "DESCRIPTION") {
-			t.Errorf("width %d lacks DESCRIPTION: %q", w, head)
-		}
+			if got := strings.Contains(m.Hints(), "0 all ns"); got != c.wantNS {
+				t.Errorf("hints = %q, want the namespace keys: %v", m.Hints(), c.wantNS)
+			}
+		})
 	}
 }

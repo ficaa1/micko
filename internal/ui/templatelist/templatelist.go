@@ -7,6 +7,7 @@ package templatelist
 import (
 	"cmp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -124,9 +125,9 @@ func cell(t core.WorkflowTemplate, col string, now time.Time) string {
 		}
 		return t.Entrypoint
 	case "templates":
-		return itoa(len(t.Templates))
+		return strconv.Itoa(len(t.Templates))
 	case "parameters":
-		return itoa(len(t.Arguments))
+		return strconv.Itoa(len(t.Arguments))
 	case "age":
 		if t.CreatedAt.IsZero() {
 			return "-"
@@ -195,18 +196,4 @@ func info(t core.WorkflowTemplate, reveal bool, now time.Time, owner string) []k
 	}
 	add("Runs", "enter lists the workflows labelled "+owner+"="+t.Name)
 	return f
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
 }
