@@ -35,9 +35,9 @@ profiles:
 // Server URLs reject unsafe transports and credential forms without exposing their values.
 func TestLoadServerURLs(t *testing.T) {
 	cases := []struct {
-		name   string
-		server string
-		want   string // substring of expected error; empty = valid
+		name    string
+		server  string
+		wantErr string // substring of expected error; empty = valid
 	}{
 		{"userinfo rejected", "https://user:hunter2@argo.example.test/argo", "userinfo"},
 		{"ftp scheme rejected", "ftp://argo.example.test", "scheme"},
@@ -54,14 +54,14 @@ func TestLoadServerURLs(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			y := "currentProfile: dev\nprofiles:\n  dev:\n    server: \"" + c.server + "\"\n    namespace: workflows\n    tokenEnv: MICKO_TOKEN\n"
 			_, err := Load([]byte(y), Options{})
-			if c.want == "" {
+			if c.wantErr == "" {
 				if err != nil {
-					t.Errorf("%s: Load(%q) err = %v, want valid", c.name, c.server, err)
+					t.Errorf("Load(%q) err = %v, want valid", c.server, err)
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), c.want) {
-				t.Errorf("%s: Load(%q) err = %v, want substring %q", c.name, c.server, err, c.want)
+			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+				t.Errorf("Load(%q) err = %v, want substring %q", c.server, err, c.wantErr)
 			}
 			if err != nil && (strings.Contains(err.Error(), "hunter2") || strings.Contains(err.Error(), "abc123")) {
 				t.Fatalf("error exposes credentials: %v", err)
@@ -84,7 +84,7 @@ profiles:
 		name     string
 		fileInt  string
 		optInt   time.Duration
-		want     string
+		wantErr  string
 		duration time.Duration
 	}{
 		{"unparseable file value", "refreshInterval: soon\n", 0, "refreshInterval", 0},
@@ -99,17 +99,17 @@ profiles:
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cfg, err := Load([]byte(base+c.fileInt), Options{RefreshInterval: c.optInt})
-			if c.want == "" {
+			if c.wantErr == "" {
 				if err != nil {
-					t.Errorf("%s: err = %v, want valid", c.name, err)
+					t.Errorf("err = %v, want valid", err)
 				}
 				if cfg.RefreshInterval != c.duration {
-					t.Errorf("%s: refreshInterval = %v, want %v", c.name, cfg.RefreshInterval, c.duration)
+					t.Errorf("refreshInterval = %v, want %v", cfg.RefreshInterval, c.duration)
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), c.want) {
-				t.Errorf("%s: err = %v, want substring %q", c.name, err, c.want)
+			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+				t.Errorf("err = %v, want substring %q", err, c.wantErr)
 			}
 		})
 	}
@@ -131,7 +131,7 @@ func TestJournalEnabled(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := JournalEnabled([]byte(tc.data)); got != tc.want {
-				t.Errorf("%s: JournalEnabled = %v, want %v", tc.name, got, tc.want)
+				t.Errorf("JournalEnabled = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -159,7 +159,7 @@ func TestFileMascot(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := FileMascot([]byte(tc.data)); got != tc.want {
-				t.Errorf("%s: FileMascot = %v, want %v", tc.name, got, tc.want)
+				t.Errorf("FileMascot = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -195,10 +195,10 @@ func TestRedactValuesLayers(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			cfg, err := Load([]byte(c.yaml), Options{RedactValues: c.flag})
 			if err != nil {
-				t.Fatalf("%s: Load: %v", c.name, err)
+				t.Fatalf("Load: %v", err)
 			}
 			if cfg.RedactValues != c.want {
-				t.Errorf("%s: RedactValues = %v, want %v", c.name, cfg.RedactValues, c.want)
+				t.Errorf("RedactValues = %v, want %v", cfg.RedactValues, c.want)
 			}
 		})
 	}
@@ -323,6 +323,7 @@ func TestListProfiles(t *testing.T) {
 	cases := []struct {
 		name, data, current string
 		want                []ProfileSummary
+		rejected            string // a listed profile Load refuses
 	}{
 		{"sorted profiles", `currentProfile: prod
 profiles:
@@ -332,7 +333,7 @@ profiles:
   dev:
     server: https://dev.example.com
     namespace: workflows
-`, "prod", []ProfileSummary{{"dev", "https://dev.example.com", "workflows"}, {"prod", "https://prod.example.com", "argo"}}},
+`, "prod", []ProfileSummary{{"dev", "https://dev.example.com", "workflows"}, {"prod", "https://prod.example.com", "argo"}}, ""},
 		{"invalid connection remains visible", `profiles:
   broken:
     namespace: argo
@@ -340,8 +341,8 @@ profiles:
     server: https://argo.example.com
     namespace: argo
     tokenEnv: ARGO_TOKEN
-`, "", []ProfileSummary{{"broken", "", "argo"}, {"good", "https://argo.example.com", "argo"}}},
-		{"absent file", "", "", nil},
+`, "", []ProfileSummary{{"broken", "", "argo"}, {"good", "https://argo.example.com", "argo"}}, "broken"},
+		{"absent file", "", "", nil, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -352,9 +353,9 @@ profiles:
 			if !reflect.DeepEqual(got, c.want) || current != c.current {
 				t.Fatalf("ListProfiles = %+v, %q; want %+v, %q", got, current, c.want, c.current)
 			}
-			if c.name == "invalid connection remains visible" {
-				if _, err := Load([]byte(c.data), Options{Profile: "broken"}); err == nil {
-					t.Fatal("Load accepted a profile missing its server")
+			if c.rejected != "" {
+				if _, err := Load([]byte(c.data), Options{Profile: c.rejected}); err == nil {
+					t.Fatalf("Load accepted profile %q, want an error", c.rejected)
 				}
 			}
 		})
