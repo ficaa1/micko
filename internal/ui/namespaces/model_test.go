@@ -1,120 +1,159 @@
 package namespaces
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
 func newPicker(current string, names ...string) *Model {
 	m := New(shared.NewTheme(true))
+	m.SetSize(40, 20)
 	m.Open(current)
 	m.SetNames(names, "test", nil)
 	return m
 }
 
-func press(m *Model, s string) tea.Cmd {
-	switch s {
-	case "enter":
-		return m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	case "esc":
-		return m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	case "down":
-		return m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	case "backspace":
-		return m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	}
-	return m.Update(tea.KeyPressMsg{Code: rune(s[0]), Text: s})
+var namedKeys = map[string]tea.KeyPressMsg{
+	"enter":     {Code: tea.KeyEnter},
+	"esc":       {Code: tea.KeyEscape},
+	"up":        {Code: tea.KeyUp},
+	"down":      {Code: tea.KeyDown},
+	"backspace": {Code: tea.KeyBackspace},
+	"ctrl+n":    {Code: 'n', Mod: tea.ModCtrl},
+	"ctrl+p":    {Code: 'p', Mod: tea.ModCtrl},
 }
 
-// The cursor starts on the namespace in use, so the reader can see where they
-// are before they move.
-func TestPickerStartsOnTheCurrentNamespace(t *testing.T) {
-	m := newPicker("beta", "alpha", "beta", "gamma")
-	if got := m.Selected(); got != "beta" {
-		t.Fatalf("selected = %q, want the current namespace", got)
+// keys sends each space-separated key and returns the last command.
+func keys(m *Model, seq string) tea.Cmd {
+	var cmd tea.Cmd
+	for _, k := range strings.Fields(seq) {
+		msg, ok := namedKeys[k]
+		if !ok {
+			msg = tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
+		}
+		cmd = m.Update(msg)
+	}
+	return cmd
+}
+
+func body(m *Model) string { return ansi.Strip(strings.Join(m.BodyLines(), "\n")) }
+
+// rows are the dialog's namespace rows as drawn, the current one starred.
+func rows(m *Model) []string {
+	var out []string
+	for _, l := range strings.Split(body(m), "\n") {
+		if l = strings.TrimRight(l, " "); strings.HasPrefix(l, "  ") || strings.HasPrefix(l, "* ") {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// The cursor starts on the namespace in use, typing narrows the list, the
+// arrows move and wrap, enter switches to the row or to the typed text, and
+// enter on the current namespace or esc only closes.
+func TestPicker(t *testing.T) {
+	cases := []struct {
+		name       string
+		current    string
+		names      []string
+		keys       string
+		wantRows   []string
+		wantCursor string
+		wantSwitch string
+		wantOpen   bool
+	}{
+		{"starts on the current namespace", "beta", []string{"alpha", "beta", "gamma"}, "",
+			[]string{"  alpha", "* beta", "  gamma"}, "beta", "", true},
+		{"the current namespace is always offered", "zeta", []string{"alpha"}, "",
+			[]string{"  alpha", "* zeta"}, "zeta", "", true},
+		{"typing narrows", "alpha", []string{"batch-cd-prd", "batch-cd-tst", "reports-prd"}, "t s t",
+			[]string{"  batch-cd-tst"}, "batch-cd-tst", "", true},
+		{"typing ignores case", "alpha", []string{"batch-cd-prd", "Batch-CD-tst"}, "c d - t",
+			[]string{"  Batch-CD-tst"}, "Batch-CD-tst", "", true},
+		{"backspace widens", "alpha", []string{"batch-cd-prd", "batch-cd-tst", "reports-prd"}, "t s t backspace backspace backspace",
+			[]string{"* alpha", "  batch-cd-prd", "  batch-cd-tst", "  reports-prd"}, "", "", true},
+		{"down wraps", "gamma", []string{"alpha", "beta", "gamma"}, "down", nil, "alpha", "", true},
+		{"up wraps", "alpha", []string{"alpha", "beta", "gamma"}, "up", nil, "gamma", "", true},
+		{"ctrl+n and ctrl+p", "alpha", []string{"alpha", "beta", "gamma"}, "ctrl+n ctrl+n ctrl+p", nil, "beta", "", true},
+		{"enter switches to the row", "alpha", []string{"alpha", "beta"}, "down enter", nil, "", "beta", false},
+		{"enter switches to a typed namespace", "alpha", []string{"alpha", "beta"}, "b r a n d - n e w enter", nil, "", "brand-new", false},
+		{"enter on the current namespace only closes", "alpha", []string{"alpha", "beta"}, "enter", nil, "", "", false},
+		{"esc cancels", "alpha", []string{"alpha", "beta"}, "down esc", nil, "", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newPicker(c.current, c.names...)
+			var got string
+			if cmd := keys(m, c.keys); cmd != nil {
+				msg, ok := cmd().(SwitchMsg)
+				if !ok {
+					t.Fatalf("command = %#v, want a switch", cmd())
+				}
+				got = msg.Namespace
+			}
+			if got != c.wantSwitch {
+				t.Errorf("switch = %q, want %q", got, c.wantSwitch)
+			}
+			if m.IsOpen() != c.wantOpen {
+				t.Errorf("open = %v, want %v", m.IsOpen(), c.wantOpen)
+			}
+			if c.wantRows != nil && !slices.Equal(rows(m), c.wantRows) {
+				t.Errorf("rows = %q, want %q", rows(m), c.wantRows)
+			}
+			if c.wantCursor != "" && m.Selected() != c.wantCursor {
+				t.Errorf("cursor on %q, want %q", m.Selected(), c.wantCursor)
+			}
+		})
 	}
 }
 
-// Typing narrows the list without a separate search mode to enter and leave.
-func TestTypingNarrowsTheList(t *testing.T) {
-	m := newPicker("alpha", "batch-cd-prd", "batch-cd-tst", "reports-prd")
-	for _, r := range "tst" {
-		press(m, string(r))
+// Every state of the list says what it is: a denied request must not look
+// like a cluster with no namespaces, and the typed entry stays usable.
+func TestStates(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(*Model)
+		want  []string
+		not   []string
+	}{
+		{"loading again", func(m *Model) { m.SetNames([]string{"beta"}, "from the cluster", nil); m.SetLoading() },
+			[]string{"asking the server…"}, []string{"from the cluster"}},
+		{"listed", func(m *Model) { m.SetNames([]string{"beta"}, "from the cluster", nil) }, []string{"  beta", "from the cluster"}, nil},
+		{"refused", func(m *Model) {
+			m.SetError("namespaces are forbidden for this token")
+			m.SetNames(nil, "", []string{"beta"})
+		}, []string{"the server would not list namespaces: namespaces are forbidden for this token", "type the namespace and press enter", "  beta"}, nil},
+		{"nothing listed", func(m *Model) { m.Open(""); m.SetNames(nil, "", nil) },
+			[]string{"no namespace names available — type one and press enter"}, nil},
+		{"no match", func(m *Model) { m.SetNames([]string{"beta"}, "", nil); keys(m, "z z") },
+			[]string{"filter: zz_", "no match — enter uses zz as typed"}, []string{"beta"}},
+		{"reopened", func(m *Model) { m.SetNames([]string{"beta"}, "", nil); keys(m, "z z esc"); m.Open("alpha") },
+			[]string{"filter: _", "  beta"}, nil},
 	}
-	if len(m.rows) != 1 || m.rows[0] != "batch-cd-tst" {
-		t.Fatalf("filter did not narrow: %v", m.rows)
-	}
-	press(m, "backspace")
-	press(m, "backspace")
-	press(m, "backspace")
-	if len(m.rows) != 4 { // three plus the current namespace, which is merged in
-		t.Fatalf("backspace did not widen the list again: %v", m.rows)
-	}
-}
-
-// A namespace with no workflows cannot be derived from a list of workflows.
-// Enter must still switch to it, or that namespace is unreachable.
-func TestTypedNamespaceWithNoMatchStillSwitches(t *testing.T) {
-	m := newPicker("alpha", "alpha", "beta")
-	for _, r := range "brand-new" {
-		press(m, string(r))
-	}
-	if len(m.rows) != 0 {
-		t.Fatalf("expected no match, got %v", m.rows)
-	}
-	cmd := press(m, "enter")
-	if cmd == nil {
-		t.Fatal("enter on a typed namespace emitted nothing")
-	}
-	msg, ok := cmd().(SwitchMsg)
-	if !ok || msg.Namespace != "brand-new" {
-		t.Fatalf("switch message = %#v, want brand-new", cmd())
-	}
-	if m.IsOpen() {
-		t.Fatal("the dialog stayed open after switching")
-	}
-}
-
-// Choosing the namespace already in use is not a switch: it would cancel every
-// request and reload the same list.
-func TestChoosingTheCurrentNamespaceOnlyCloses(t *testing.T) {
-	m := newPicker("alpha", "alpha", "beta")
-	if cmd := press(m, "enter"); cmd != nil {
-		t.Fatalf("re-selecting the current namespace emitted %#v", cmd())
-	}
-	if m.IsOpen() {
-		t.Fatal("the dialog stayed open")
-	}
-}
-
-// Esc leaves everything alone.
-func TestEscCancels(t *testing.T) {
-	m := newPicker("alpha", "alpha", "beta")
-	press(m, "down")
-	if cmd := press(m, "esc"); cmd != nil {
-		t.Fatal("esc emitted a switch")
-	}
-	if m.IsOpen() {
-		t.Fatal("esc did not close the dialog")
-	}
-}
-
-// A denied request must not look like a cluster with no namespaces, and the
-// typed entry has to stay usable.
-func TestFailedFetchSaysSoAndKeepsTypedEntry(t *testing.T) {
-	m := New(shared.NewTheme(true))
-	m.Open("alpha")
-	m.SetError("namespaces are forbidden for this token")
-	m.SetNames(nil, "", []string{"beta"})
-	body := strings.Join(m.BodyLines(), "\n")
-	if !strings.Contains(body, "would not list namespaces") {
-		t.Fatalf("failure not explained:\n%s", body)
-	}
-	if !strings.Contains(body, "beta") {
-		t.Fatalf("configured namespace not offered:\n%s", body)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := New(shared.NewTheme(true))
+			m.SetSize(80, 20)
+			m.Open("alpha")
+			c.setup(m)
+			got := body(m)
+			for _, want := range c.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("dialog lacks %q:\n%s", want, got)
+				}
+			}
+			for _, bad := range c.not {
+				if strings.Contains(got, bad) {
+					t.Errorf("dialog shows %q:\n%s", bad, got)
+				}
+			}
+		})
 	}
 }

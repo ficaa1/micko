@@ -21,7 +21,7 @@ func TestThemedPickerHighlightsTheCursorRow(t *testing.T) {
 	th := skin.Theme(false)
 	m := newPicker("beta", "alpha", "beta", "gamma")
 	m.SetSize(40, 20)
-	press(m, "down")
+	keys(m, "down")
 	want := m.BodyLines()
 	m.SetTheme(th)
 	got := m.BodyLines()
