@@ -109,9 +109,6 @@ func (m *Model) SetSize(w, h int) { m.width, m.height = w, h }
 // SetTheme replaces the style set the dialog is drawn in.
 func (m *Model) SetTheme(t shared.Theme) { m.theme = t }
 
-// Names returns the current candidate list (tests and the root).
-func (m *Model) Names() []string { return append([]string(nil), m.names...) }
-
 // Selected returns the namespace the picker would switch to right now: the
 // row under the cursor, or the typed text when it matches no row.
 func (m *Model) Selected() string {

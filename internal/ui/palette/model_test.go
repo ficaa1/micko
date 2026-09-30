@@ -1,6 +1,7 @@
 package palette
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,9 +19,10 @@ var testCommands = []Command{
 	{Name: "quit", Aliases: []string{"q"}, Desc: "leave"},
 }
 
-func newTestPalette() *Model {
+// newPalette is an open palette over cmds, with namespace and profile values.
+func newPalette(cmds []Command) *Model {
 	m := New(shared.NewTheme(true))
-	m.SetCommands(testCommands)
+	m.SetCommands(cmds)
 	m.SetArgSource(func(name string) []string {
 		switch name {
 		case "ns":
@@ -34,279 +36,285 @@ func newTestPalette() *Model {
 	return m
 }
 
+var namedKeys = map[string]tea.KeyPressMsg{
+	"enter":     {Code: tea.KeyEnter},
+	"esc":       {Code: tea.KeyEscape},
+	"tab":       {Code: tea.KeyTab},
+	"up":        {Code: tea.KeyUp},
+	"down":      {Code: tea.KeyDown},
+	"backspace": {Code: tea.KeyBackspace},
+	"space":     {Code: tea.KeySpace, Text: " "},
+	"ctrl+p":    {Code: 'p', Mod: tea.ModCtrl},
+	"ctrl+n":    {Code: 'n', Mod: tea.ModCtrl},
+	"ctrl+u":    {Code: 'u', Mod: tea.ModCtrl},
+}
+
+// press sends each key; a word that names no key is typed letter by letter.
+// It returns the message of the last key that emitted one.
 func press(m *Model, keys ...string) tea.Msg {
 	var last tea.Msg
+	send := func(k tea.KeyPressMsg) {
+		if cmd := m.Update(k); cmd != nil {
+			last = cmd()
+		}
+	}
 	for _, k := range keys {
-		var msg tea.KeyPressMsg
-		switch k {
-		case "enter":
-			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
-		case "esc":
-			msg = tea.KeyPressMsg{Code: tea.KeyEscape}
-		case "tab":
-			msg = tea.KeyPressMsg{Code: tea.KeyTab}
-		case "up":
-			msg = tea.KeyPressMsg{Code: tea.KeyUp}
-		case "down":
-			msg = tea.KeyPressMsg{Code: tea.KeyDown}
-		case "backspace":
-			msg = tea.KeyPressMsg{Code: tea.KeyBackspace}
-		case "ctrl+p":
-			msg = tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl}
-		case "ctrl+n":
-			msg = tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl}
-		case "ctrl+u":
-			msg = tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
-		case " ":
-			msg = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
-		default:
-			for _, r := range k {
-				if cmd := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)}); cmd != nil {
-					last = cmd()
-				}
-			}
+		if msg, ok := namedKeys[k]; ok {
+			send(msg)
 			continue
 		}
-		if cmd := m.Update(msg); cmd != nil {
-			last = cmd()
+		for _, r := range k {
+			send(tea.KeyPressMsg{Code: r, Text: string(r)})
 		}
 	}
 	return last
 }
 
-// Printable keys are text while the palette is open: q and ? are letters of
-// a command, and nothing is emitted until enter.
-func TestPaletteTypesCommandLetters(t *testing.T) {
-	m := newTestPalette()
-	if msg := press(m, "q?"); msg != nil {
-		t.Fatalf("typing emitted %T", msg)
-	}
-	if m.Value() != "q?" || !m.IsOpen() {
-		t.Fatalf("value = %q open = %v, want q? typed into an open palette", m.Value(), m.IsOpen())
-	}
-	press(m, " ")
-	if m.Value() != "q? " {
-		t.Fatalf("space was not typed: %q", m.Value())
-	}
-	press(m, "backspace", "backspace")
-	if m.Value() != "q" {
-		t.Fatalf("backspace left %q", m.Value())
-	}
-	press(m, "ctrl+u")
-	if m.Value() != "" {
-		t.Fatalf("ctrl+u left %q", m.Value())
-	}
-}
+// input is the palette's input line as drawn.
+func input(m *Model) string { return ansi.Strip(m.BodyLines(80, MaxRows)[0]) }
 
-func TestPaletteEscClosesWithoutRunning(t *testing.T) {
-	m := newTestPalette()
-	press(m, "wf")
-	if msg := press(m, "esc"); msg != nil {
-		t.Fatalf("esc emitted %T", msg)
-	}
-	if m.IsOpen() {
-		t.Fatal("esc left the palette open")
-	}
-}
-
-// Enter runs a command named by its name or any alias, and always reports the
-// canonical name with the trimmed argument.
-func TestPaletteEnterRunsByNameOrAlias(t *testing.T) {
-	for line, want := range map[string]RunMsg{
-		"wf":            {Name: "workflows"},
-		"WORKFLOWS":     {Name: "workflows"},
-		"ctx prod":      {Name: "profile", Arg: "prod"},
-		"ns   demo-ml ": {Name: "ns", Arg: "demo-ml"},
-		"q":             {Name: "quit"},
-	} {
-		m := newTestPalette()
-		m.SetValue(line)
-		got, ok := press(m, "enter").(RunMsg)
-		if !ok || got != want {
-			t.Errorf("%q ran %+v, want %+v", line, got, want)
-		}
-		if m.IsOpen() {
-			t.Errorf("%q: the palette stayed open after running", line)
+// listed are the labels of the suggestion rows, top to bottom.
+func listed(m *Model) []string {
+	lines := m.BodyLines(200, MaxRows)
+	var out []string
+	for _, l := range lines[1 : len(lines)-1] {
+		if f := strings.Fields(strings.TrimPrefix(ansi.Strip(l), "›")); len(f) > 0 && !strings.HasPrefix(l, "  no ") {
+			out = append(out, f[0])
 		}
 	}
+	return out
 }
 
-// Enter never guesses: a partial word, even one with a single suggestion, is
-// reported as unknown rather than run as its best match.
-func TestPaletteEnterNeverGuesses(t *testing.T) {
-	m := newTestPalette()
-	press(m, "work")
-	if len(m.Suggestions()) == 0 {
-		t.Fatal("precondition: work should suggest workflows")
+// Printable keys are typed while the palette is open, q and ? included, and
+// nothing is emitted until enter; backspace and ctrl+u edit the line.
+func TestTyping(t *testing.T) {
+	cases := []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"q?"}, ": q?_"},
+		{[]string{"q?", "space"}, ": q? _"},
+		{[]string{"q?", "space", "backspace", "backspace"}, ": q_"},
+		{[]string{"q?", "ctrl+u"}, ": _"},
 	}
-	msg, ok := press(m, "enter").(UnknownMsg)
-	if !ok || msg.Input != "work" {
-		t.Fatalf("enter on a partial word = %#v, want UnknownMsg{work}", msg)
-	}
-	if len(m.History()) != 0 {
-		t.Fatal("an unknown command was stored in the history")
-	}
-}
-
-// An empty line only closes.
-func TestPaletteEnterOnNothingCloses(t *testing.T) {
-	m := newTestPalette()
-	if msg := press(m, "enter"); msg != nil {
-		t.Fatalf("enter on nothing emitted %T", msg)
-	}
-	if m.IsOpen() {
-		t.Fatal("enter on nothing left the palette open")
-	}
-}
-
-// Tab completes the highlighted command. A command with an argument gets a
-// trailing space, which starts the argument stage, so one more tab completes
-// the value.
-func TestPaletteTabCompletesCommandThenArgument(t *testing.T) {
-	m := newTestPalette()
-	press(m, "n", "tab")
-	if m.Value() != "ns " {
-		t.Fatalf("tab on n = %q, want %q", m.Value(), "ns ")
-	}
-	press(m, "ml")
-	s := m.Suggestions()
-	if len(s) == 0 || s[0].Label != "demo-ml" {
-		t.Fatalf("argument suggestions for ml = %+v, want demo-ml first", s)
-	}
-	press(m, "tab")
-	if m.Value() != "ns demo-ml" {
-		t.Fatalf("tab on the argument = %q", m.Value())
-	}
-	if got, _ := press(m, "enter").(RunMsg); got != (RunMsg{Name: "ns", Arg: "demo-ml"}) {
-		t.Fatalf("enter after completion ran %+v", got)
+	for _, c := range cases {
+		t.Run(strings.Join(c.keys, " "), func(t *testing.T) {
+			m := newPalette(testCommands)
+			if msg := press(m, c.keys...); msg != nil {
+				t.Errorf("typing emitted %#v", msg)
+			}
+			if got := input(m); got != c.want {
+				t.Errorf("input = %q, want %q", got, c.want)
+			}
+			if !m.IsOpen() {
+				t.Error("typing closed the palette")
+			}
+		})
 	}
 }
 
-// Up and down move the highlight, wrapping, and tab takes the highlighted row.
-func TestPaletteArrowsChooseTheSuggestion(t *testing.T) {
-	m := newTestPalette()
-	press(m, "ns ")
-	press(m, "down")
-	if m.Selected() != 1 {
-		t.Fatalf("down selected %d", m.Selected())
+// Enter runs a command named by its name or any alias with the trimmed
+// argument, never guesses from a partial word, and closes; esc and an empty
+// line close without running anything.
+func TestEnter(t *testing.T) {
+	cases := []struct {
+		name string
+		keys []string
+		want tea.Msg
+	}{
+		{"alias", []string{"wf", "enter"}, RunMsg{Name: "workflows"}},
+		{"name in capitals", []string{"WORKFLOWS", "enter"}, RunMsg{Name: "workflows"}},
+		{"alias with an argument", []string{"ctx", "space", "prod", "enter"}, RunMsg{Name: "profile", Arg: "prod"}},
+		{"argument trimmed", []string{"ns", "space", "space", "space", "demo-ml", "space", "enter"}, RunMsg{Name: "ns", Arg: "demo-ml"}},
+		{"short alias", []string{"q", "enter"}, RunMsg{Name: "quit"}},
+		{"partial word", []string{"work", "enter"}, UnknownMsg{Input: "work"}},
+		{"empty line", []string{"enter"}, nil},
+		{"esc", []string{"wf", "esc"}, nil},
 	}
-	press(m, "up", "up")
-	if m.Selected() != 2 {
-		t.Fatalf("up from the top should wrap to the last row, got %d", m.Selected())
-	}
-	press(m, "tab")
-	if m.Value() != "ns demo-ml" {
-		t.Fatalf("tab took %q, want the highlighted demo-ml", m.Value())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newPalette(testCommands)
+			if got := press(m, c.keys...); got != c.want {
+				t.Errorf("emitted %#v, want %#v", got, c.want)
+			}
+			if m.IsOpen() {
+				t.Error("the palette stayed open")
+			}
+		})
 	}
 }
 
-// A typed alias is kept on completion: the reader chose that vocabulary.
-func TestPaletteTabKeepsTheTypedAlias(t *testing.T) {
-	m := newTestPalette()
-	press(m, "ct", "tab")
-	if m.Value() != "ctx " {
-		t.Fatalf("tab on ct = %q, want ctx and the argument stage", m.Value())
+// Tab completes the highlighted row, keeping a typed alias; a command with
+// an argument gets a trailing space, so the next tab completes the value. The
+// arrows move the highlight and wrap.
+func TestTabCompletion(t *testing.T) {
+	cases := []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"n", "tab"}, ": ns _"},
+		{[]string{"n", "tab", "ml", "tab"}, ": ns demo-ml_"},
+		{[]string{"ct", "tab"}, ": ctx _"},
+		{[]string{"ct", "tab", "tab"}, ": ctx dev_"},
+		{[]string{"ns", "space", "down", "tab"}, ": ns demo_"},
+		{[]string{"ns", "space", "up", "tab"}, ": ns demo-ml_"},
+		{[]string{"ns", "space", "down", "down", "down", "tab"}, ": ns argo_"},
+		{[]string{"all", "space", "tab"}, ": all _"},
 	}
-	press(m, "tab")
-	if m.Value() != "ctx dev" {
-		t.Fatalf("argument tab = %q", m.Value())
+	for _, c := range cases {
+		t.Run(strings.Join(c.keys, " "), func(t *testing.T) {
+			m := newPalette(testCommands)
+			press(m, c.keys...)
+			if got := input(m); got != c.want {
+				t.Errorf("input = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 
-// ctrl+p walks back through the commands that ran, newest first, and ctrl+n
-// walks forward, ending on the line the reader was typing.
-func TestPaletteHistory(t *testing.T) {
-	m := newTestPalette()
-	for _, line := range []string{"wf", "ns demo", "ns demo", "all"} {
+// ctrl+p walks back through the commands that ran, newest first, with a
+// repeat stored once and an unknown command not at all; ctrl+n walks forward
+// to the line the reader was typing.
+func TestHistory(t *testing.T) {
+	m := newPalette(testCommands)
+	for _, line := range [][]string{{"wf"}, {"ns", "space", "demo"}, {"ns", "space", "demo"}, {"all"}, {"work"}} {
 		m.Open()
-		m.SetValue(line)
-		press(m, "enter")
-	}
-	if got := strings.Join(m.History(), "|"); got != "wf|ns demo|all" {
-		t.Fatalf("history = %q, want repeats collapsed", got)
+		press(m, append(line, "enter")...)
 	}
 	m.Open()
 	press(m, "pro")
-	press(m, "ctrl+p")
-	if m.Value() != "all" {
-		t.Fatalf("first ctrl+p = %q", m.Value())
+	steps := []struct {
+		key  string
+		want string
+	}{
+		{"ctrl+p", ": all_"},
+		{"ctrl+p", ": ns demo_"},
+		{"ctrl+p", ": wf_"},
+		{"ctrl+p", ": wf_"},
+		{"ctrl+n", ": ns demo_"},
+		{"ctrl+n", ": all_"},
+		{"ctrl+n", ": pro_"},
 	}
-	press(m, "ctrl+p", "ctrl+p", "ctrl+p")
-	if m.Value() != "wf" {
-		t.Fatalf("ctrl+p past the oldest = %q, want it to stay on wf", m.Value())
-	}
-	press(m, "ctrl+n")
-	if m.Value() != "ns demo" {
-		t.Fatalf("ctrl+n = %q", m.Value())
-	}
-	press(m, "ctrl+n", "ctrl+n")
-	if m.Value() != "pro" {
-		t.Fatalf("ctrl+n past the newest = %q, want the draft back", m.Value())
-	}
-}
-
-// Suggestions say why they are empty, so an empty list never looks broken.
-func TestPaletteEmptyStatesExplainThemselves(t *testing.T) {
-	for line, want := range map[string]string{
-		"zzz":      "no command matches",
-		"zzz ":     "no command named",
-		"all x":    "all takes no argument",
-		"ns nope!": "no known namespace matches",
-	} {
-		m := newTestPalette()
-		m.SetValue(line)
-		body := strings.Join(m.BodyLines(80, MaxRows), "\n")
-		if !strings.Contains(body, want) {
-			t.Errorf("%q renders %q, want %q", line, body, want)
+	for i, s := range steps {
+		press(m, s.key)
+		if got := input(m); got != s.want {
+			t.Fatalf("step %d, %s: input = %q, want %q", i, s.key, got, s.want)
 		}
 	}
 }
 
-// The highlighted row carries a marker, so it is visible with no color.
-func TestPaletteRenderMarksTheHighlightWithoutColor(t *testing.T) {
-	m := newTestPalette()
+// The list ranks an exact match, then a prefix, then a later word's start,
+// then a substring, then a subsequence in order; ties go to the shorter term,
+// then the registry order; case is ignored and an empty line lists the
+// registry as it is.
+func TestRanking(t *testing.T) {
+	cmds := func(names ...string) []Command {
+		var out []Command
+		for _, n := range names {
+			out = append(out, Command{Name: n})
+		}
+		return out
+	}
+	cases := []struct {
+		name  string
+		cmds  []Command
+		typed string
+		want  []string
+	}{
+		{"tiers", cmds("xwxoxrxk", "rework", "cron-work", "workflows", "work", "help", "krow"), "work",
+			[]string{"work", "workflows", "cron-work", "rework", "xwxoxrxk"}},
+		{"ties", cmds("profile-long", "profile", "proxy", "prune"), "pr",
+			[]string{"proxy", "prune", "profile", "profile-long"}},
+		{"case", cmds("zeta", "alpha"), "ALP", []string{"alpha"}},
+		{"empty line", cmds("zeta", "alpha"), "", []string{"zeta", "alpha"}},
+		{"alias", []Command{{Name: "cwf-archive"}, {Name: "workflows", Aliases: []string{"wf"}}}, "wf",
+			[]string{"workflows", "cwf-archive"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newPalette(c.cmds)
+			press(m, c.typed)
+			if got := listed(m); !slices.Equal(got, c.want) {
+				t.Errorf("listed %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// An empty list says why, so it never looks broken.
+func TestEmptyStates(t *testing.T) {
+	cases := []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"zzz"}, "no command matches “zzz” — esc closes"},
+		{[]string{"zzz", "space"}, "no command named “zzz”"},
+		{[]string{"all", "space", "x"}, "all takes no argument"},
+		{[]string{"ns", "space", "nope!"}, "no known namespace matches “nope!”"},
+	}
+	for _, c := range cases {
+		t.Run(strings.Join(c.keys, " "), func(t *testing.T) {
+			m := newPalette(testCommands)
+			press(m, c.keys...)
+			if got := ansi.Strip(m.BodyLines(80, MaxRows)[1]); got != "  "+c.want {
+				t.Errorf("list = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// The highlighted row carries a marker, so it is visible with no color; rows
+// show usage, aliases and description, fit the width, and a rule ends the
+// palette.
+func TestRender(t *testing.T) {
+	m := newPalette(testCommands)
 	lines := m.BodyLines(60, MaxRows)
-	if !strings.HasPrefix(lines[0], ": _") {
-		t.Fatalf("input line = %q", lines[0])
+	want := []string{
+		": _",
+		"› workflows          wf   the workflow list",
+		"  ns [namespace]          switch namespace",
+		"  all                     toggle all namespaces",
+		"  profile [profile]  ctx  switch profile",
+		"  quit               q    leave",
+		strings.Repeat("─", 60),
 	}
-	if !strings.HasPrefix(lines[1], "› workflows") || !strings.Contains(lines[1], "wf") ||
-		!strings.Contains(lines[1], "the workflow list") {
-		t.Fatalf("first row = %q, want the marked workflows row with alias and description", lines[1])
-	}
-	if !strings.Contains(strings.Join(lines, "\n"), "ns [namespace]") {
-		t.Fatal("a command with an argument must show its usage")
-	}
-	for _, l := range lines {
+	for i, l := range lines {
+		if i < len(want) && ansi.Strip(l) != want[i] {
+			t.Errorf("line %d = %q, want %q", i, ansi.Strip(l), want[i])
+		}
 		if w := ansi.StringWidth(l); w > 60 {
-			t.Fatalf("line %q is %d cells wide, want at most 60", l, w)
+			t.Errorf("line %d is %d cells wide, want at most 60", i, w)
 		}
 	}
-	if last := lines[len(lines)-1]; !strings.HasPrefix(last, "─") {
-		t.Fatalf("last line = %q, want the rule that separates the pane", last)
+	if len(lines) != len(want) {
+		t.Errorf("%d lines, want %d", len(lines), len(want))
 	}
 }
 
 // The row window follows the highlight past the rows shown.
-func TestPaletteWindowFollowsTheHighlight(t *testing.T) {
-	m := newTestPalette()
+func TestWindowFollowsTheHighlight(t *testing.T) {
+	m := newPalette(testCommands)
 	press(m, "down", "down", "down")
 	lines := m.BodyLines(80, 2)
 	if len(lines) != 4 {
 		t.Fatalf("lines = %d, want input, two rows, rule", len(lines))
 	}
-	if !strings.HasPrefix(lines[2], "› profile") {
+	if got := ansi.Strip(lines[2]); !strings.HasPrefix(got, "› profile") {
 		t.Fatalf("window = %q, want the highlighted profile row shown", lines[1:3])
 	}
 }
 
-// Typed text reaches the screen sanitized.
-func TestPaletteSanitizesTheEchoedLine(t *testing.T) {
-	m := newTestPalette()
+// Control characters are never typed, so they reach neither the echoed line
+// nor the command enter reports.
+func TestControlTextIsNotTyped(t *testing.T) {
+	m := newPalette(testCommands)
+	press(m, "ok")
 	m.Update(tea.KeyPressMsg{Code: 'x', Text: "\x1b[31m"})
-	m.SetValue(m.Value() + "ok\x1b]0;t\x07")
-	for _, l := range m.BodyLines(80, MaxRows) {
-		if strings.ContainsRune(l, 0x1b) {
-			t.Fatalf("escape reached the render: %q", l)
-		}
+	m.Update(tea.KeyPressMsg{Code: 'y', Text: "\x1b]0;t\x07"})
+	if got := input(m); got != ": ok_" {
+		t.Errorf("input = %q, want only the printable text", got)
+	}
+	if got := press(m, "enter"); got != (UnknownMsg{Input: "ok"}) {
+		t.Errorf("enter = %#v, want the typed text alone", got)
 	}
 }
