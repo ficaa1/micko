@@ -49,10 +49,10 @@ profiles:
     service: argo-workflows-server   # the Argo Server's Service...
     serviceNamespace: argo           # ...in this namespace
     remotePort: 2746                 # ...on this port
-    server: https://127.0.0.1:2746   # https if the server serves TLS (Argo's default), else http;
-                                     # only the scheme and path are used, the forward picks the port
+    server: https://127.0.0.1:2746   # https or http, matching the Argo Server;
+                                     # micko swaps in the forwarded host and port
     namespace: workflows             # where your workflows run
-    tokenEnv: MICKO_TOKEN            # leave the variable empty in Argo's server auth mode
+    tokenEnv: MICKO_TOKEN            # the environment variable holding your Argo token
 ```
 
 **Straight to a reachable Argo Server**, with a bearer token:
@@ -71,8 +71,11 @@ export ARGO_TOKEN=$(argo auth token | sed 's/^Bearer //')  # micko adds "Bearer 
 micko --profile prod
 ```
 
-Either way the token is read on every request and never logged or shown.
-Plain `http` is only allowed to loopback addresses.
+`tokenEnv` names an environment variable; `tokenFile` names a file. micko
+reads the token from it on every request and never logs or shows it. If your
+Argo Server runs with `--auth-mode=server` it needs no token: keep the
+`tokenEnv` line and leave the variable unset. Plain `http` is only allowed to
+loopback addresses.
 
 No cluster at hand? `micko --demo` runs on synthetic data, with no
 credentials and no writes.
