@@ -35,21 +35,43 @@ from [the releases page](https://github.com/ficaa1/micko/releases).
 
 ## Quick start
 
-Write `~/.config/micko/config.yaml`:
+micko reads profiles, one per cluster, from `~/.config/micko/config.yaml`.
+Run `micko`, pick a profile, and press `?` for help.
+
+**Through `kubectl port-forward`**, when the Argo Server is not exposed.
+micko starts the forward itself on a free local port, using your kubeconfig,
+and closes it on exit:
 
 ```yaml
 profiles:
   dev:
-    kubeContext: my-cluster          # micko port-forwards for you
-    service: argo-workflows-server
-    serviceNamespace: argo
-    remotePort: 2746
-    server: http://127.0.0.1:2746
-    namespace: workflows
-    tokenEnv: MICKO_TOKEN            # leave unset for Argo's server auth mode
+    kubeContext: my-cluster          # the kubeconfig context to use
+    service: argo-workflows-server   # the Argo Server's Service...
+    serviceNamespace: argo           # ...in this namespace
+    remotePort: 2746                 # ...on this port
+    server: http://127.0.0.1:2746    # only the scheme and path are used; the forward picks the port
+    namespace: workflows             # where your workflows run
+    tokenEnv: MICKO_TOKEN            # leave the variable empty in Argo's server auth mode
 ```
 
-Then run `micko`, pick the profile, and press `?` for help.
+**Straight to a reachable Argo Server**, with a bearer token:
+
+```yaml
+profiles:
+  prod:
+    server: https://argo.example.com # the Argo Server's address
+    namespace: workflows
+    tokenEnv: ARGO_TOKEN             # or tokenFile: /absolute/path/to/token
+    # caFile: /absolute/path/to/ca.pem   for a private CA
+```
+
+```sh
+export ARGO_TOKEN=$(argo auth token | sed 's/^Bearer //')  # micko adds "Bearer "
+micko --profile prod
+```
+
+Either way the token is read on every request and never logged or shown.
+Plain `http` is only allowed to loopback addresses.
 
 No cluster at hand? `micko --demo` runs on synthetic data, with no
 credentials and no writes.
