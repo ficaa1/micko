@@ -6,6 +6,7 @@ package cronlist
 import (
 	"cmp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,8 +55,8 @@ func Spec() kindlist.Spec[core.CronWorkflow] {
 	}
 }
 
-// Plan is what the schedule says about the runs to come.
-type Plan struct {
+// plan is what the schedule says about the runs to come.
+type plan struct {
 	// Next are the coming run times, soonest first, at most upcomingCount.
 	Next []time.Time
 	// Err is why no time can be given: a schedule or zone that does not
@@ -69,18 +70,18 @@ type Plan struct {
 	Zone *time.Location
 }
 
-// PlanOf evaluates cw's schedules at now.
+// planOf evaluates cw's schedules at now.
 //
 // Any schedule that does not parse makes the whole plan unknown. The
 // controller schedules a cron workflow's expressions together and reports a
 // bad one as a SpecError on the object, so listing the times of the others
 // would present a schedule that is not running as if it were.
-func PlanOf(cw core.CronWorkflow, now time.Time) Plan {
+func planOf(cw core.CronWorkflow, now time.Time) plan {
 	loc, err := cronexpr.LoadZone(cw.Timezone)
 	if err != nil {
-		return Plan{Err: err.Error()}
+		return plan{Err: err.Error()}
 	}
-	p := Plan{Zone: loc}
+	p := plan{Zone: loc}
 	if len(cw.Schedules) == 0 {
 		p.Err = "the object has no schedule"
 		return p
@@ -209,7 +210,7 @@ func cell(cw core.CronWorkflow, col string, now time.Time) string {
 	case "suspended":
 		return stateCell(cw)
 	case "active":
-		return itoa(len(cw.Active))
+		return strconv.Itoa(len(cw.Active))
 	case "last":
 		if cw.LastScheduledTime == nil {
 			return "never"
@@ -244,7 +245,7 @@ func nextCell(cw core.CronWorkflow, now time.Time) string {
 	if halted(cw) {
 		return "-"
 	}
-	p := PlanOf(cw, now)
+	p := planOf(cw, now)
 	switch {
 	case p.Err != "":
 		return "?"
@@ -298,7 +299,7 @@ func rank(cw core.CronWorkflow, now time.Time) (int, time.Time) {
 	if halted(cw) {
 		return 2, time.Time{}
 	}
-	p := PlanOf(cw, now)
+	p := planOf(cw, now)
 	if len(p.Next) == 0 {
 		return 1, time.Time{}
 	}
@@ -352,7 +353,7 @@ func info(cw core.CronWorkflow, reveal bool, now time.Time) []kindlist.Field {
 		add("Timezone", cw.Timezone)
 	}
 
-	p := PlanOf(cw, now)
+	p := planOf(cw, now)
 	switch {
 	case p.Err != "":
 		warn("Next runs", "? "+p.Err)
@@ -385,7 +386,7 @@ func info(cw core.CronWorkflow, reveal bool, now time.Time) []kindlist.Field {
 
 	add("Concurrency", policy(cw.ConcurrencyPolicy))
 	if cw.StartingDeadlineSeconds != nil {
-		add("Deadline", "a missed run may start up to "+itoa(int(*cw.StartingDeadlineSeconds))+"s late")
+		add("Deadline", "a missed run may start up to "+strconv.Itoa(int(*cw.StartingDeadlineSeconds))+"s late")
 	} else {
 		add("Deadline", "none: a missed run is not started late")
 	}
@@ -458,36 +459,14 @@ func zoneOr(loc *time.Location) *time.Location {
 // which Argo documents as 3 succeeded and 1 failed run.
 func limit(n *int64, def int) string {
 	if n == nil {
-		return itoa(def) + " (default)"
+		return strconv.Itoa(def) + " (default)"
 	}
-	return itoa(int(*n))
+	return strconv.Itoa(int(*n))
 }
 
 func count(n *int64) string {
 	if n == nil {
 		return "?"
 	}
-	return itoa(int(*n))
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
+	return strconv.Itoa(int(*n))
 }
