@@ -464,7 +464,7 @@ func (x *index) withLog(f Finding, node, pod string) Finding {
 	case len(l.Lines) == 0:
 		f.Evidence = append(f.Evidence, Evidence{Label: "log", Text: "empty (see below)"})
 	default:
-		picked := PickLog(l.Lines, maxLogLines)
+		picked := pickLog(l.Lines, maxLogLines)
 		intro := "picked from the last " + plural(len(l.Lines), "line") + " of " + who + "'s log (container " + orMain(l.Container) + ")"
 		if !anyMatch(picked) {
 			intro = "no error in the last " + plural(len(l.Lines), "line") + " of " + who + "'s log (container " + orMain(l.Container) + "); it ends"
