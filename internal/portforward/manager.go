@@ -80,11 +80,11 @@ type Manager struct {
 }
 
 func New(target Target) (*Manager, error) {
-	return NewWithCommand(target, func(ctx context.Context, name string, args ...string) Process {
+	return newWithCommand(target, func(ctx context.Context, name string, args ...string) Process {
 		return execCommand{exec.CommandContext(ctx, name, args...)}
 	})
 }
-func NewWithCommand(target Target, command Command) (*Manager, error) {
+func newWithCommand(target Target, command Command) (*Manager, error) {
 	if err := target.validate(); err != nil {
 		return nil, err
 	}

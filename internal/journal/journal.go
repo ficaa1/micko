@@ -50,25 +50,14 @@ type Journal struct {
 	err  error
 }
 
-// New returns a journal writing to path. The file and its directory are
-// created on the first append, not here: a session that never writes
-// leaves nothing behind.
-func New(path string) *Journal { return &Journal{path: path} }
-
-// Open returns a journal at the default path. When no path can be resolved
-// the journal still exists and reports that on every append, so the
-// failure reaches the footer like any other.
+// Open returns a journal at the default path. The file and its directory
+// are created on the first append, not here: a session that never writes
+// leaves nothing behind. When no path can be resolved the journal still
+// exists and reports that on every append, so the failure reaches the
+// footer like any other.
 func Open() *Journal {
 	path, err := DefaultPath()
 	return &Journal{path: path, err: err}
-}
-
-// Path is the file the journal appends to.
-func (j *Journal) Path() string {
-	if j == nil {
-		return ""
-	}
-	return j.path
 }
 
 // DefaultPath is $XDG_STATE_HOME/micko/actions.jsonl, or

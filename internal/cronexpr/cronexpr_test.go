@@ -119,71 +119,69 @@ func TestDayOfMonthAndWeekRule(t *testing.T) {
 // Expressions the controller refuses are refused here, with a reason that
 // names the field.
 func TestParseErrors(t *testing.T) {
-	cases := map[string]string{
-		"":                               "empty",
-		"* * * *":                        "expected 5 fields",
-		"* * * * * *":                    "expected 5 fields",
-		"60 * * * *":                     "minute field: 60 is above the maximum 59",
-		"* 24 * * *":                     "hour field: 24 is above the maximum 23",
-		"* * 0 * *":                      "day of month field: 0 is below the minimum 1",
-		"* * 32 * *":                     "day of month field: 32 is above",
-		"* * * 13 *":                     "month field: 13 is above",
-		"* * * * 7":                      "Sunday is 0",
-		"* * * foo *":                    "month name",
-		"* * * * funday":                 "weekday name",
-		"5-1 * * * *":                    "runs backwards",
-		"*/0 * * * *":                    "positive number",
-		"*/x * * * *":                    "positive number",
-		"1-2-3 * * * *":                  "more than one -",
-		"1/2/3 * * * *":                  "more than one /",
-		"1,,2 * * * *":                   "empty list element",
-		"*-5 * * * *":                    "cannot range from *",
-		"@fortnightly":                   "unknown descriptor",
-		"@every tomorrow":                "@every needs a duration",
-		"CRON_TZ=Mars/Olympus 0 * * * *": "unknown time zone",
-		"TZ=UTC":                         "needs a schedule",
-		"L * * * *":                      "not a number",
+	cases := []struct{ expr, want string }{
+		{"", "empty"},
+		{"* * * *", "expected 5 fields"},
+		{"* * * * * *", "expected 5 fields"},
+		{"60 * * * *", "minute field: 60 is above the maximum 59"},
+		{"* 24 * * *", "hour field: 24 is above the maximum 23"},
+		{"* * 0 * *", "day of month field: 0 is below the minimum 1"},
+		{"* * 32 * *", "day of month field: 32 is above"},
+		{"* * * 13 *", "month field: 13 is above"},
+		{"* * * * 7", "Sunday is 0"},
+		{"* * * foo *", "month name"},
+		{"* * * * funday", "weekday name"},
+		{"5-1 * * * *", "runs backwards"},
+		{"*/0 * * * *", "positive number"},
+		{"*/x * * * *", "positive number"},
+		{"1-2-3 * * * *", "more than one -"},
+		{"1/2/3 * * * *", "more than one /"},
+		{"1,,2 * * * *", "empty list element"},
+		{"*-5 * * * *", "cannot range from *"},
+		{"@fortnightly", "unknown descriptor"},
+		{"@every tomorrow", "@every needs a duration"},
+		{"CRON_TZ=Mars/Olympus 0 * * * *", "unknown time zone"},
+		{"TZ=UTC", "needs a schedule"},
+		{"L * * * *", "not a number"},
 	}
-	for expr, want := range cases {
-		_, err := Parse(expr, nil)
+	for _, c := range cases {
+		_, err := Parse(c.expr, nil)
 		if err == nil {
-			t.Errorf("Parse(%q) accepted it", expr)
+			t.Errorf("Parse(%q) accepted it", c.expr)
 			continue
 		}
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("Parse(%q) = %q, want it to mention %q", expr, err, want)
+		if !strings.Contains(err.Error(), c.want) {
+			t.Errorf("Parse(%q) = %q, want it to mention %q", c.expr, err, c.want)
 		}
 	}
 }
 
-// A schedule runs on its zone's wall clock: 09:00 in Tokyo is 00:00 UTC.
+// A schedule runs on its zone's wall clock, a zone prefix wins over the zone
+// passed in, and the answer is in the caller's zone.
 func TestNextInZone(t *testing.T) {
 	tokyo := mustZone(t, "Asia/Tokyo")
-	got, ok := mustParse(t, "0 9 * * *", tokyo).Next(utc(2026, 9, 8, 12, 0))
-	if !ok || !got.Equal(utc(2026, 9, 9, 0, 0)) {
-		t.Fatalf("09:00 Tokyo after 12:00 UTC = %s, want 2026-09-09 00:00 UTC", got.UTC())
+	cases := []struct {
+		name string
+		expr string
+		loc  *time.Location
+		from time.Time
+		want time.Time
+	}{
+		{"09:00 Tokyo is 00:00 UTC", "0 9 * * *", tokyo, utc(2026, 9, 8, 12, 0), utc(2026, 9, 9, 0, 0)},
+		{"a local day starting on the previous UTC date", "0 8 * * *", tokyo, utc(2026, 9, 8, 22, 0), utc(2026, 9, 8, 23, 0)},
+		{"CRON_TZ over the zone passed in", "CRON_TZ=Asia/Tokyo 0 9 * * *", time.UTC, utc(2026, 9, 8, 12, 0), utc(2026, 9, 9, 0, 0)},
+		{"TZ prefix", "TZ=Europe/Berlin @daily", nil, utc(2026, 9, 8, 12, 0), utc(2026, 9, 8, 22, 0)},
 	}
-	if got.Location() != time.UTC {
-		t.Fatalf("Next answered in %s, want the caller's zone", got.Location())
-	}
-	// A local day that starts on the previous UTC date is not skipped:
-	// 08:00 Tokyo on the 9th is 23:00 UTC on the 8th.
-	got, _ = mustParse(t, "0 8 * * *", tokyo).Next(utc(2026, 9, 8, 22, 0))
-	if !got.Equal(utc(2026, 9, 8, 23, 0)) {
-		t.Fatalf("08:00 Tokyo after 22:00 UTC = %s, want 23:00 UTC the same day", got.UTC())
-	}
-}
-
-// The prefix form of the zone wins over the zone passed in.
-func TestZonePrefix(t *testing.T) {
-	s := mustParse(t, "CRON_TZ=Asia/Tokyo 0 9 * * *", time.UTC)
-	if s.Location().String() != "Asia/Tokyo" {
-		t.Fatalf("location = %s", s.Location())
-	}
-	s = mustParse(t, "TZ=Europe/Berlin @daily", nil)
-	got, _ := s.Next(utc(2026, 9, 8, 12, 0))
-	if !got.Equal(utc(2026, 9, 8, 22, 0)) {
-		t.Fatalf("Berlin midnight = %s, want 22:00 UTC (CEST)", got)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := mustParse(t, c.expr, c.loc).Next(c.from)
+			if !ok || !got.Equal(c.want) {
+				t.Fatalf("Next = %s %v, want %s", got.UTC(), ok, c.want)
+			}
+			if got.Location() != time.UTC {
+				t.Errorf("Next answered in %s, want the caller's zone", got.Location())
+			}
+		})
 	}
 }
 
