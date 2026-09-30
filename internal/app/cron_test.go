@@ -212,9 +212,8 @@ func TestCronStaleReplyDiscarded(t *testing.T) {
 		t.Fatalf("switch left the cron route: %v", m.route)
 	}
 	deliver(m, old)
-	rows := m.cronView.Rows()
-	if len(rows) != 1 || rows[0].Namespace != "demo-ml" {
-		t.Fatalf("rows after a stale reply: %+v", rows)
+	if ns, name := m.cronView.SelectedName(); m.cronView.Len() != 1 || ns != "demo-ml" {
+		t.Fatalf("after a stale reply: %d rows, cursor on %s/%s; want demo-ml's one", m.cronView.Len(), ns, name)
 	}
 }
 
@@ -303,7 +302,7 @@ func TestCronFilterIsolation(t *testing.T) {
 	if m.quitting || m.route != RouteCron || m.deps.allNamespaces || m.namespaceDialogOpen() {
 		t.Fatal("a key typed into the filter acted as a command")
 	}
-	if n := len(m.cronView.Rows()); n != 0 {
-		t.Fatalf("filter q0n matched %d rows", n)
+	if v := screen(m); !strings.Contains(v, "no cron workflows match the current filter") {
+		t.Fatalf("filter q0n matched rows:\n%s", v)
 	}
 }

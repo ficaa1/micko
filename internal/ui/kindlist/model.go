@@ -15,6 +15,7 @@ package kindlist
 import (
 	"cmp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -222,23 +223,8 @@ func (m *Model[T]) SetSize(w, h int) { m.width, m.height = w, h }
 // Searching reports whether the filter input owns printable keys.
 func (m *Model[T]) Searching() bool { return m.searchOn }
 
-// Query is the applied filter.
-func (m *Model[T]) Query() string { return m.query }
-
-// SetQuery applies a filter, as enter in the input does.
-func (m *Model[T]) SetQuery(q string) {
-	m.query = strings.TrimSpace(q)
-	m.applyView()
-}
-
-// SearchValue is the filter text being typed.
-func (m *Model[T]) SearchValue() string { return m.searchBuf }
-
-// InfoOpen reports whether the info panel is shown.
-func (m *Model[T]) InfoOpen() bool { return m.info }
-
-// Revealed reports whether the selected row's values are shown.
-func (m *Model[T]) Revealed() bool {
+// revealed reports whether the selected row's values are shown.
+func (m *Model[T]) revealed() bool {
 	if m.selKey == "" {
 		return false
 	}
@@ -252,16 +238,13 @@ func (m *Model[T]) SetRedact(redact bool) {
 	m.flipKey = ""
 }
 
-// SortLabel names the active sort.
-func (m *Model[T]) SortLabel() string {
+// sortLabel names the active sort.
+func (m *Model[T]) sortLabel() string {
 	if len(m.spec.Sorts) == 0 {
 		return "name"
 	}
 	return m.spec.Sorts[m.sortIdx].Label
 }
-
-// Rows is what the table shows, in display order.
-func (m *Model[T]) Rows() []T { return append([]T(nil), m.rows...) }
 
 // Len is the size of the whole snapshot, filtered or not.
 func (m *Model[T]) Len() int { return len(m.items) }
@@ -283,16 +266,6 @@ func (m *Model[T]) SelectedName() (string, string) {
 		return m.spec.Key(r)
 	}
 	return "", ""
-}
-
-// Select moves the cursor to the named row when it is listed.
-func (m *Model[T]) Select(namespace, name string) {
-	for _, r := range m.rows {
-		if ns, n := m.spec.Key(r); ns == namespace && n == name {
-			m.setSel(m.key(r))
-			return
-		}
-	}
 }
 
 func (m *Model[T]) key(item T) string {
@@ -486,12 +459,6 @@ func (m *Model[T]) handleKey(key string) tea.Cmd {
 	return nil
 }
 
-// EscapeConsumed reports whether esc would act inside the list (close the
-// panel, clear the filter, leave the input) rather than fall to the root.
-func (m *Model[T]) EscapeConsumed() bool {
-	return m.searchOn || m.info || m.query != ""
-}
-
 // searchKey edits the filter. It filters as the reader types; enter keeps
 // the filter, esc restores the one there was before.
 func (m *Model[T]) searchKey(key string) {
@@ -541,7 +508,7 @@ func (m *Model[T]) RawLines() []string {
 	if !ok || m.spec.Manifest == nil {
 		return []string{"(no " + m.spec.Noun + " selected)"}
 	}
-	out := detail.RenderManifest(m.spec.Manifest(sel), m.Revealed())
+	out := detail.RenderManifest(m.spec.Manifest(sel), m.revealed())
 	return strings.Split(strings.TrimRight(out, "\n"), "\n")
 }
 
@@ -558,7 +525,7 @@ func (m *Model[T]) Hints() string {
 		h = "enter open  " + h
 	}
 	if m.info {
-		if m.Revealed() {
+		if m.revealed() {
 			h += "  v redact"
 		} else {
 			h += "  v reveal"
@@ -573,29 +540,7 @@ func (m *Model[T]) Hints() string {
 // WindowStatus is the visible row range, for the footer.
 func (m *Model[T]) WindowStatus() string {
 	if m.winEnd-m.winStart <= 0 || m.winEnd-m.winStart >= len(m.rows) {
-		return itoa(len(m.rows)) + " shown"
+		return strconv.Itoa(len(m.rows)) + " shown"
 	}
-	return itoa(m.winStart+1) + "-" + itoa(m.winEnd) + "/" + itoa(len(m.rows))
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
+	return strconv.Itoa(m.winStart+1) + "-" + strconv.Itoa(m.winEnd) + "/" + strconv.Itoa(len(m.rows))
 }
