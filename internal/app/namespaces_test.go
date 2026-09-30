@@ -38,9 +38,8 @@ func TestNamespaceKeyOpensThePickerAndLoadsNames(t *testing.T) {
 		t.Fatalf("fetch message = %T", cmd())
 	}
 	m.Update(msg)
-	got := strings.Join(m.nsView.Names(), ",")
-	if !strings.Contains(got, "other-ns") || !strings.Contains(got, "ns") {
-		t.Fatalf("names = %q, want both namespaces", got)
+	if v := screen(m); !strings.Contains(v, "  other-ns") || !strings.Contains(v, "* ns") {
+		t.Fatalf("the picker does not list both namespaces:\n%s", v)
 	}
 }
 
