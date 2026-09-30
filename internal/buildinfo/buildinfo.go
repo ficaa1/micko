@@ -18,16 +18,21 @@ var Commit = vcsRevision()
 func UserAgent() string { return "micko/" + Version }
 
 // vcsRevision reads the revision Go stamps into a binary built inside a git
-// work tree. A build from a source archive has none, and a dirty tree makes
-// the revision misleading, so both report "unknown" rather than a commit the
-// binary does not actually match.
+// work tree.
 func vcsRevision() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
 	}
+	return revision(info.Settings)
+}
+
+// revision returns the short commit the build settings record. A build from a
+// source archive has none, and a dirty tree makes the revision misleading, so
+// both report "unknown" rather than a commit the binary does not match.
+func revision(settings []debug.BuildSetting) string {
 	rev, modified := "", false
-	for _, s := range info.Settings {
+	for _, s := range settings {
 		switch s.Key {
 		case "vcs.revision":
 			rev = s.Value
