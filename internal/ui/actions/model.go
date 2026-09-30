@@ -66,7 +66,6 @@ type Model struct {
 	action                       core.Action
 	typedName                    string
 	intent                       *core.ActionRequest
-	intentCount                  int
 	outcome                      *core.ActionResult
 	reason                       string
 	server, profile, phase       string
@@ -113,16 +112,9 @@ func New(ref core.Ref, flags ...bool) *Model {
 	return m
 }
 
-func (m *Model) Init() tea.Cmd    { return nil }
-func (m *Model) State() State     { return m.state }
-func (m *Model) Ref() core.Ref    { return m.ref }
-func (m *Model) IntentCount() int { return m.intentCount }
-func (m *Model) LastIntent() core.ActionRequest {
-	if m.intent == nil {
-		return core.ActionRequest{}
-	}
-	return *m.intent
-}
+func (m *Model) Init() tea.Cmd { return nil }
+func (m *Model) State() State  { return m.state }
+func (m *Model) Ref() core.Ref { return m.ref }
 
 // SetTargets records the workflows the action reaches, with the state the
 // menu's availability is judged from. One target is a single action on that
@@ -274,12 +266,6 @@ func (m *Model) OutcomeLine() string {
 	}
 }
 
-// Outcome returns the recorded result, or nil before one arrives.
-func (m *Model) Outcome() *core.ActionResult { return m.outcome }
-
-// BulkItems returns the bulk outcome, nil before it arrives.
-func (m *Model) BulkItems() []BulkItem { return append([]BulkItem(nil), m.items...) }
-
 func (m *Model) Cancel() {
 	if m.state == StateMenu || m.state == StateConfirm || m.state == StateTypedName || m.state == StateFinal {
 		m.state = StateIdle
@@ -319,12 +305,6 @@ func (m *Model) ConfirmFinal() bool {
 	return m.submitConfirmed("")
 }
 
-func (m *Model) SetTypedName(name string) {
-	if m.state == StateTypedName {
-		m.typedName = appendInput("", name)
-	}
-}
-func (m *Model) TypedName() string { return m.typedName }
 func (m *Model) SetContext(server, profile, phase string) {
 	m.server, m.profile, m.phase = server, profile, phase
 }
@@ -370,7 +350,6 @@ func (m *Model) submitConfirmed(typed string) bool {
 			reqs = append(reqs, core.ActionRequest{Ref: t.Ref, Action: m.action, Confirmation: c})
 		}
 		m.bulkIntent = reqs
-		m.intentCount++
 		m.sent = 0
 		m.stopRequested = false
 		m.items = nil
@@ -379,7 +358,6 @@ func (m *Model) submitConfirmed(typed string) bool {
 	}
 	req := core.ActionRequest{Ref: m.ref, Action: m.action, Confirmation: core.Confirmation{Confirmed: true, TypedName: typed, Final: final}}
 	m.intent = &req
-	m.intentCount++
 	m.state = StateSubmitting
 	return true
 }

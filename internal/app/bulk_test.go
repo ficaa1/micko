@@ -110,12 +110,15 @@ func drive(m *Root, cmd tea.Cmd, before func(step int)) {
 	}
 }
 
-func outcomes(m *Root) map[string]core.ActionOutcome {
-	out := map[string]core.ActionOutcome{}
-	for _, it := range m.actionView.BulkItems() {
-		out[it.Result.Target.Name] = it.Result.Outcome
+// wantOutcomes fails unless the screen shows every outcome line.
+func wantOutcomes(t *testing.T, m *Root, lines ...string) {
+	t.Helper()
+	view := screen(m)
+	for _, line := range lines {
+		if !strings.Contains(view, line) {
+			t.Errorf("outcome lacks %q:\n%s", line, view)
+		}
 	}
-	return out
 }
 
 // Marked workflows are acted on one at a time, in display order, once each.
@@ -138,11 +141,7 @@ func TestBulkStopRunsOncePerTargetInOrder(t *testing.T) {
 	if m.actionView.State() != actions.StateOutcome {
 		t.Fatalf("state = %v, want the outcome pane", m.actionView.State())
 	}
-	for name, o := range outcomes(m) {
-		if o != core.ActionConfirmed {
-			t.Errorf("%s: %s, want confirmed", name, o)
-		}
-	}
+	wantOutcomes(t, m, "CONFIRMED  ns/wf-a", "CONFIRMED  ns/wf-b", "CONFIRMED  ns/wf-c")
 	view := screen(m)
 	if !strings.Contains(view, "total: 3 confirmed, 0 accepted, 0 refused, 0 unknown (3 workflows)") ||
 		!strings.Contains(view, "CONFIRMED  ns/wf-b — phase Failed") {
@@ -161,10 +160,7 @@ func TestBulkRefusesAReplacedTargetAndContinues(t *testing.T) {
 			t.Fatal("a request was sent for the replaced workflow")
 		}
 	}
-	got := outcomes(m)
-	if got["wf-b"] != core.ActionRefused || got["wf-a"] != core.ActionConfirmed || got["wf-c"] != core.ActionConfirmed {
-		t.Fatalf("outcomes = %v", got)
-	}
+	wantOutcomes(t, m, "CONFIRMED  ns/wf-a", "REFUSED    ns/wf-b", "CONFIRMED  ns/wf-c")
 	if !strings.Contains(screen(m), "REFUSED    ns/wf-b — not sent: workflow UID mismatch") {
 		t.Fatalf("the refusal reason is not shown:\n%s", screen(m))
 	}
@@ -183,10 +179,7 @@ func TestBulkNeverResendsAnUnknownTarget(t *testing.T) {
 	if counts["wf-a"] != 1 || counts["wf-b"] != 1 {
 		t.Fatalf("sends = %v, want exactly one each", counts)
 	}
-	got := outcomes(m)
-	if got["wf-a"] != core.ActionUnknown || got["wf-b"] != core.ActionConfirmed {
-		t.Fatalf("outcomes = %v", got)
-	}
+	wantOutcomes(t, m, "UNKNOWN    ns/wf-a", "CONFIRMED  ns/wf-b")
 }
 
 // A target that no longer applies is refused unsent.
@@ -202,9 +195,7 @@ func TestBulkRefusesATargetThatNoLongerApplies(t *testing.T) {
 		}
 	}
 	drive(m, cmd, nil)
-	if got := outcomes(m); got["wf-b"] != core.ActionRefused {
-		t.Fatalf("outcomes = %v", got)
-	}
+	wantOutcomes(t, m, "REFUSED    ns/wf-b")
 	if len(f.sent) != 1 {
 		t.Fatalf("sent %v, want only wf-a", f.sentNames())
 	}
@@ -222,12 +213,9 @@ func TestBulkStopsWhenTheDataGoesStale(t *testing.T) {
 	if len(f.sent) != 1 {
 		t.Fatalf("sent %v after the connection was lost", f.sentNames())
 	}
-	items := m.actionView.BulkItems()
-	if len(items) != 3 || items[1].Result.Outcome != core.ActionRefused || items[2].Result.Outcome != core.ActionRefused {
-		t.Fatalf("items = %+v", items)
-	}
-	if !strings.Contains(items[1].Reason, "connection lost") {
-		t.Fatalf("reason = %q", items[1].Reason)
+	wantOutcomes(t, m, "CONFIRMED  ns/wf-a", "REFUSED    ns/wf-b", "REFUSED    ns/wf-c")
+	if !strings.Contains(screen(m), "REFUSED    ns/wf-b — not sent: actions blocked before it was sent (connection lost") {
+		t.Fatalf("missing connection refusal: %s", screen(m))
 	}
 }
 
@@ -243,8 +231,9 @@ func TestBulkEscStopsAfterTheRequestInFlight(t *testing.T) {
 	if len(f.sent) != 1 {
 		t.Fatalf("sent %v after esc", f.sentNames())
 	}
-	if got := outcomes(m); got[f.sent[0].Ref.Name] != core.ActionConfirmed || len(got) != 3 {
-		t.Fatalf("outcomes = %v", got)
+	wantOutcomes(t, m, "CONFIRMED  ns/wf-a", "REFUSED    ns/wf-b", "REFUSED    ns/wf-c")
+	if !strings.Contains(screen(m), "1 confirmed, 0 accepted, 2 refused, 0 unknown (3 workflows)") {
+		t.Fatalf("screen lacks the stopped total:\n%s", screen(m))
 	}
 }
 
