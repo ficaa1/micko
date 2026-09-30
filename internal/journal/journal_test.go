@@ -1,8 +1,6 @@
 package journal
 
 import (
-	"bufio"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,79 +8,67 @@ import (
 	"time"
 )
 
-// Each record is one JSON line with every field of the format, appended in
-// order.
+// openAt returns the journal Open builds with XDG_STATE_HOME set to a fresh
+// directory, and the file it appends to.
+func openAt(t *testing.T) (*Journal, string) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", dir)
+	return Open(), filepath.Join(dir, "micko", "actions.jsonl")
+}
+
+// Each record is one JSON line in the file format, appended in order, with
+// the error field only when there is an error.
 func TestRecordAppendsOneJSONLinePerEntry(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state", "micko", "actions.jsonl")
-	j := New(path)
+	j, path := openAt(t)
 	at := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
-	first := Entry{Time: at, Profile: "dev", Server: "https://argo.test", Namespace: "ns", Name: "wf-a", UID: "uid-a", Verb: "retry", Outcome: "confirmed"}
-	second := Entry{Time: at.Add(time.Second), Profile: "dev", Server: "https://argo.test", Namespace: "ns", Name: "wf-b", UID: "uid-b", Verb: "retry", Outcome: "refused", Error: "workflow UID mismatch"}
-	for _, e := range []Entry{first, second} {
+	for _, e := range []Entry{
+		{Time: at, Profile: "dev", Server: "https://argo.test", Namespace: "ns", Name: "wf-a", UID: "uid-a", Verb: "retry", Outcome: "confirmed"},
+		{Time: at.Add(time.Second), Profile: "dev", Server: "https://argo.test", Namespace: "ns", Name: "wf-b", UID: "uid-b", Verb: "retry", Outcome: "refused", Error: "workflow UID mismatch"},
+	} {
 		if err := j.Record(e); err != nil {
 			t.Fatalf("record: %v", err)
 		}
 	}
-	f, err := os.Open(path)
+	got, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("open: %v", err)
+		t.Fatal(err)
 	}
-	defer f.Close()
-	var lines []map[string]any
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		var line map[string]any
-		if err := json.Unmarshal(sc.Bytes(), &line); err != nil {
-			t.Fatalf("line %q is not JSON: %v", sc.Text(), err)
-		}
-		lines = append(lines, line)
-	}
-	if len(lines) != 2 {
-		t.Fatalf("lines = %d, want 2", len(lines))
-	}
-	for _, key := range []string{"time", "profile", "server", "namespace", "name", "uid", "verb", "outcome"} {
-		if _, ok := lines[0][key]; !ok {
-			t.Errorf("line has no %q field: %v", key, lines[0])
-		}
-	}
-	if lines[0]["name"] != "wf-a" || lines[1]["name"] != "wf-b" {
-		t.Fatalf("lines out of order: %v", lines)
-	}
-	if lines[0]["time"] != "2026-09-24T12:00:00Z" || lines[1]["error"] != "workflow UID mismatch" {
-		t.Fatalf("fields = %v / %v", lines[0], lines[1])
-	}
-	if _, ok := lines[0]["error"]; ok {
-		t.Fatal("an entry with no error wrote an error field")
+	want := `{"time":"2026-09-24T12:00:00Z","profile":"dev","server":"https://argo.test","namespace":"ns","name":"wf-a","uid":"uid-a","verb":"retry","outcome":"confirmed"}` + "\n" +
+		`{"time":"2026-09-24T12:00:01Z","profile":"dev","server":"https://argo.test","namespace":"ns","name":"wf-b","uid":"uid-b","verb":"retry","outcome":"refused","error":"workflow UID mismatch"}` + "\n"
+	if string(got) != want {
+		t.Errorf("journal =\n%s\nwant\n%s", got, want)
 	}
 }
 
-// The journal names workflows and servers; it is readable by its owner only.
-func TestTheJournalFileIsPrivate(t *testing.T) {
+// The journal names workflows and servers, so the file and the directory it
+// creates are readable by their owner only.
+func TestTheJournalIsPrivate(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX permissions")
 	}
-	path := filepath.Join(t.TempDir(), "actions.jsonl")
-	if err := New(path).Record(Entry{Verb: "stop"}); err != nil {
+	j, path := openAt(t)
+	if err := j.Record(Entry{Verb: "stop"}); err != nil {
 		t.Fatalf("record: %v", err)
 	}
-	st, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if mode := st.Mode().Perm(); mode != 0o600 {
-		t.Fatalf("mode = %o, want 600", mode)
+	for p, want := range map[string]os.FileMode{path: 0o600, filepath.Dir(path): 0o700} {
+		st, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := st.Mode().Perm(); mode != want {
+			t.Errorf("%s mode = %o, want %o", p, mode, want)
+		}
 	}
 }
 
 // A failed append is returned to the caller, and a later append to a path
 // that works again succeeds: nothing is latched.
 func TestAFailedAppendIsReturned(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "actions.jsonl")
-	if err := os.Mkdir(path, 0o700); err != nil {
+	j, path := openAt(t)
+	if err := os.MkdirAll(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	j := New(path)
 	if err := j.Record(Entry{Verb: "stop"}); err == nil {
 		t.Fatal("appending to a directory reported success")
 	}
@@ -94,35 +80,41 @@ func TestAFailedAppendIsReturned(t *testing.T) {
 	}
 }
 
-// A nil journal is the journal of a session that has none: it records
-// nothing and never fails.
-func TestANilJournalRecordsNothing(t *testing.T) {
+// A journal with no state directory reports it on every append; a nil one,
+// which a session without a journal holds, records nothing and never fails.
+func TestAJournalWithoutAFile(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("HOME", "")
+	if err := Open().Record(Entry{Verb: "stop"}); err == nil {
+		t.Error("a journal with no state directory reported success")
+	}
 	var j *Journal
 	if err := j.Record(Entry{Verb: "stop"}); err != nil {
-		t.Fatalf("nil journal: %v", err)
+		t.Errorf("nil journal: %v", err)
 	}
 }
 
-func TestDefaultPathFollowsXDGStateHome(t *testing.T) {
-	state := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", state)
-	got, err := DefaultPath()
-	if err != nil || got != filepath.Join(state, "micko", "actions.jsonl") {
-		t.Fatalf("path = %q, err = %v", got, err)
+// The journal lives under an absolute XDG_STATE_HOME, else under the home
+// directory's .local/state.
+func TestDefaultPath(t *testing.T) {
+	state, home := t.TempDir(), t.TempDir()
+	cases := []struct {
+		name string
+		xdg  string
+		want string
+	}{
+		{"XDG_STATE_HOME", state, filepath.Join(state, "micko", "actions.jsonl")},
+		{"unset", "", filepath.Join(home, ".local", "state", "micko", "actions.jsonl")},
+		{"relative XDG_STATE_HOME is ignored", "relative/state", filepath.Join(home, ".local", "state", "micko", "actions.jsonl")},
 	}
-
-	home := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", "")
-	t.Setenv("HOME", home)
-	got, err = DefaultPath()
-	if err != nil || got != filepath.Join(home, ".local", "state", "micko", "actions.jsonl") {
-		t.Fatalf("fallback path = %q, err = %v", got, err)
-	}
-
-	// The XDG spec says a relative value is invalid and must be ignored.
-	t.Setenv("XDG_STATE_HOME", "relative/state")
-	got, _ = DefaultPath()
-	if got != filepath.Join(home, ".local", "state", "micko", "actions.jsonl") {
-		t.Fatalf("relative XDG_STATE_HOME was used: %q", got)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", c.xdg)
+			t.Setenv("HOME", home)
+			got, err := DefaultPath()
+			if err != nil || got != c.want {
+				t.Errorf("DefaultPath() = %q, %v; want %q", got, err, c.want)
+			}
+		})
 	}
 }
