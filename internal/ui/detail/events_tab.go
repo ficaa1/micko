@@ -24,8 +24,10 @@ type eventsState struct {
 	// rows is the table as last built; stale marks it out of date.
 	rows      []eventRow
 	unmatched int
-	stale     bool
-	order     eventOrder
+	// reasonW and objectW are the widest cells of rows (eventTextWidths).
+	reasonW, objectW int
+	stale            bool
+	order            eventOrder
 	// editing is the filter input open; filter is its text.
 	editing bool
 	filter  string
@@ -105,6 +107,7 @@ func (m *Model) eventRows() []eventRow {
 		if m.ev.rows == nil {
 			m.ev.rows = []eventRow{}
 		}
+		m.ev.reasonW, m.ev.objectW = eventTextWidths(m.ev.rows)
 		m.ev.stale = false
 	}
 	return m.ev.rows
@@ -160,25 +163,37 @@ func (m *Model) eventsFilterActive() bool {
 
 // eventRenderer lays the table out for the pane's width.
 func (m *Model) eventRenderer(width int, theme shared.Theme) eventRenderer {
-	return eventRenderer{theme: theme, cols: eventColumnsFor(m.eventRows(), width), now: m.now}
+	m.eventRows() // brings reasonW and objectW up to date
+	return eventRenderer{theme: theme, cols: eventColumnsFor(m.ev.reasonW, m.ev.objectW, width), now: m.now}
 }
 
-// eventsLines is the section's scrolling content: the column heads and the
-// rows, or a line saying why there are none.
-func (m *Model) eventsLines() []string {
+// eventsLineCount is the length of the section's scrolling content: the
+// column heads and the rows, or the one line saying why there are none.
+func (m *Model) eventsLineCount() int { return len(m.eventRows()) + 1 }
+
+// eventsLines is at most h lines of the section's scrolling content from
+// line top. Only those lines are drawn: a frame costs the same with 20
+// events kept as with eventsCap.
+func (m *Model) eventsLines(top, h int) []string {
 	rows := m.eventRows()
 	if len(rows) == 0 {
 		msg := m.eventsEmpty()
 		if m.width > 0 {
 			msg = truncCell(msg, m.width)
 		}
-		return []string{m.theme.Muted.Render(msg)}
+		return sliceLines([]string{m.theme.Muted.Render(msg)}, top, h)
 	}
+	n := len(rows) + 1
+	top = min(max(top, 0), n)
+	end := min(max(top+h, top), n)
 	er := m.eventRenderer(m.width, m.theme)
-	out := make([]string, 0, len(rows)+1)
-	out = append(out, er.header())
-	for _, r := range rows {
-		out = append(out, er.render(r))
+	out := make([]string, 0, end-top)
+	for i := top; i < end; i++ {
+		if i == 0 {
+			out = append(out, er.header())
+			continue
+		}
+		out = append(out, er.render(rows[i-1]))
 	}
 	return out
 }

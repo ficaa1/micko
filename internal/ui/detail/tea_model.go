@@ -420,7 +420,7 @@ func (m *Model) scrollLines() int {
 	case "explain":
 		return len(m.explainLines())
 	case "events":
-		return len(m.eventsLines())
+		return m.eventsLineCount()
 	case "resource":
 		return len(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"))
 	default:
@@ -680,7 +680,7 @@ func (m *Model) windowedLines() []string {
 	case "explain":
 		return sliceLines(m.explainLines(), m.ex.top, h)
 	case "events":
-		return sliceLines(m.eventsLines(), m.ev.top, h)
+		return m.eventsLines(m.ev.top, h)
 	case "resource":
 		return sliceLines(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"), m.resourceTop, h)
 	default:

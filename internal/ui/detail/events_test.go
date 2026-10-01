@@ -168,15 +168,15 @@ func TestEventsStatusAndEmpty(t *testing.T) {
 
 	e := demoModel(t, "demo-cleanup", 136, 40)
 	e.SetSection("events")
-	if got := e.eventsLines(); got[0] != "(connecting to the event stream…)" {
+	if got := e.eventsLines(0, 1); got[0] != "(connecting to the event stream…)" {
 		t.Errorf("before any status: %q", got[0])
 	}
 	e.SetEventsStatus("live", false)
-	if got := e.eventsLines(); !strings.Contains(got[0], "Kubernetes keeps events for about an hour") {
+	if got := e.eventsLines(0, 1); !strings.Contains(got[0], "Kubernetes keeps events for about an hour") {
 		t.Errorf("live and empty: %q", got[0])
 	}
 	e.SetEventsStatus("not allowed to watch events in demo", true)
-	if got := e.eventsLines(); got[0] != "(no events: not allowed to watch events in demo)" {
+	if got := e.eventsLines(0, 1); got[0] != "(no events: not allowed to watch events in demo)" {
 		t.Errorf("stopped: %q", got[0])
 	}
 
@@ -212,6 +212,27 @@ func TestEventsAreCapped(t *testing.T) {
 	}
 	if _, ok := m.ev.byUID[fmt.Sprint(eventsCap+49)]; !ok {
 		t.Fatal("the newest event was dropped")
+	}
+}
+
+// A frame draws only the rows on screen, so it costs the same with eventsCap
+// events kept as with a screenful. Each streamed batch redraws the frame, and
+// keys wait behind it.
+func TestEventsFrameCostDoesNotGrowWithEvents(t *testing.T) {
+	frame := func(n int) float64 {
+		m := demoModel(t, "demo-oom-backfill", 136, 30)
+		m.SetSection("events")
+		var evs []core.Event
+		for i := 0; i < n; i++ {
+			evs = append(evs, ev(fmt.Sprint(i), "Workflow", "demo-oom-backfill", "Normal", "Tick", time.Duration(i)*time.Second))
+		}
+		m.ApplyEvents(evs)
+		m.BodyLines()
+		return testing.AllocsPerRun(5, func() { m.BodyLines() })
+	}
+	screenful, full := frame(30), frame(eventsCap)
+	if full > 2*screenful {
+		t.Errorf("a frame allocates %.0f times with %d events and %.0f with 30, want about the same", full, eventsCap, screenful)
 	}
 }
 
