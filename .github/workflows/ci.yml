@@ -25,15 +25,16 @@ env:
 jobs:
   check:
     # micko is a terminal program, and the two terminals it has to work in
-    # are Linux and macOS. Building only on Linux left every macOS-specific
-    # path — the config directory, the PTY, the clipboard write — untested
-    # until someone ran the binary.
+    # are Linux and macOS. The macOS paths — the config directory, the PTY,
+    # the clipboard write — are checked on main and on a manual run. A pull
+    # request runs on Linux only, because a macOS minute is billed at ten
+    # Linux minutes.
     name: check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -51,11 +52,9 @@ jobs:
       - name: vet
         run: go vet ./...
 
-      - name: unit tests
-        run: go test ./... -count=1
-
-      # The race detector needs CGO and a C toolchain.
-      - name: race detector
+      # One run with the race detector: it fails on everything a plain run
+      # fails on. It needs CGO and a C toolchain.
+      - name: unit tests with the race detector
         run: go test -race ./... -count=1
 
       # Fixture-server conformance over real HTTP, plus real PTY process
