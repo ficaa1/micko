@@ -1,9 +1,9 @@
 # Measuring performance
 
 Measure before a performance change and after it, with the same session on
-the same cluster. This page covers the three tools for that: the `--debug`
-request timings, the scripted sessions in `scripts/perf`, and the in-package
-benchmarks.
+the same cluster. This page covers the tools for that: the `--debug` request
+timings and spans, the scripted sessions in `scripts/perf`, and the
+in-package benchmarks.
 
 ## Request timings
 
@@ -31,6 +31,33 @@ micko --profile test --read-only --debug 2> diag.jsonl
 
 The endpoint names come from `internal/argo/timing.go`; no path, namespace or
 token reaches the file.
+
+## Spans
+
+A request timing shows the server and the network. A span shows what the
+reader waited for: the time from the key or the connection to the reply that
+changed the screen. `--debug` writes one line per span:
+
+```json
+{"stage":"span","state":"ok","span":"detail_open","total_ms":295}
+```
+
+| Span | Starts | Ends |
+| --- | --- | --- |
+| `first_list` | The connection is in use, at start or after a profile switch | The first list reply |
+| `allns` | `0` turns on all namespaces | The all-namespaces list reply |
+| `detail_open` | A workflow opens | Its detail reply |
+| `first_log` | The logs pane opens | The first log lines, or the end of the stream |
+| `cron_open`, `templates_open`, `clustertemplates_open`, `archived_open` | The route opens with no rows | Its list reply |
+
+`state` is `failed` when the reply was an error. A span ends only on the reply
+to the request that started it: a span whose request was replaced or
+canceled writes no line. A span does not include the frame that follows the
+reply; `TestEventsFrameCostDoesNotGrowWithEvents` shows how to measure that
+frame.
+
+A span longer than its request is time in micko: decoding, the update loop,
+or keys and other replies in front of the reply.
 
 ## Scripted sessions
 
@@ -71,6 +98,8 @@ and open a port-forward to it.
    ```text
    == after
      forward ready 1480 ms, first list 2079 ms
+     span first_list: 820 ms
+     span detail_open: 295 ms
      list (32 s): 3 requests, 69 KiB
        gate: 1 x, 0 KiB, median 34 ms, failed 0
        info: 1 x, 0 KiB, median 108 ms, failed 0
@@ -80,7 +109,7 @@ and open a port-forward to it.
    ```
 
 `allns.fish <label> <profile>` measures one key instead: the time from `0`
-(all namespaces) to the list answer.
+(all namespaces) to the list answer, and the `allns` span.
 
 Output goes to `perf-out/`, which Git ignores: the binary, the diagnostics,
 the phase marks and a capture of the detail screen. If the detail capture
@@ -118,3 +147,7 @@ Team-prod, namespace `workflows`, workflow `long-workflow-12345`
 
 `allns.fish` on `5b2bed6`: the first all-namespaces list starts 11–14 ms after
 the key, against 97–133 ms on `2aa28ec`.
+
+Spans, measured when they were added, same workflow: `first_list` 820 ms
+(list request 778 ms), `detail_open` 295 ms (`get` 274 ms), `allns` 514–518 ms
+(list request 480 ms, body read 488–494 ms after the key).

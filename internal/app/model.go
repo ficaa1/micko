@@ -46,6 +46,8 @@ type Root struct {
 	// request that replaced it.
 	mu       sync.Mutex
 	inflight map[string]inflightOp
+	// spans are the waits --debug reports, by name.
+	spans map[string]span
 
 	// listState is the collected snapshot for the list route.
 	listState listState
@@ -463,7 +465,9 @@ func (m *Root) Init() tea.Cmd {
 	if !m.connected() {
 		return tea.Batch(m.openProfilePicker(), m.backgroundQuery(), m.nextMascotBeat())
 	}
-	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery(), m.nextMascotBeat())
+	list := m.startListGeneration()
+	m.beginSpan("first_list", "list")
+	return tea.Batch(list, m.waitConnStates(), m.backgroundQuery(), m.nextMascotBeat())
 }
 
 // armTick schedules the next poll unless one is already scheduled. Every
@@ -1322,7 +1326,9 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 	m.detailState = detailState{ref: ref, loading: true}
 	m.detailView.SetArchived(false)
 	m.detailView.SetLoading()
-	return m.startDetailFetch()
+	cmd := m.startDetailFetch()
+	m.beginSpan("detail_open", "detail")
+	return cmd
 }
 
 // openLogs handles the logs intent. It records the route the logs pane is
@@ -1355,7 +1361,9 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	m.logsView.SetTheme(m.theme)
 	m.logsView.SetPipeCommand(m.pipeCommand)
 	m.logsView.KeepViewPrefs(prev)
-	return tea.Batch(m.startLogStream(msg), m.startLogSources(msg))
+	stream := m.startLogStream(msg)
+	m.beginSpan("first_log", "logs")
+	return tea.Batch(stream, m.startLogSources(msg))
 }
 
 // startLogSources gives a workflow-wide log pane the node each pod belongs
@@ -1466,6 +1474,8 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
 		return nil // stale: discard
 	}
+	m.endSpan("first_list", msg.RequestID, msg.Err != nil)
+	m.endSpan("allns", msg.RequestID, msg.Err != nil)
 	st := &m.listState
 	st.loading = false
 	if msg.Err != nil {
@@ -1559,6 +1569,7 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
 		return nil // stale
 	}
+	m.endSpan("detail_open", msg.RequestID, msg.Err != nil || msg.Workflow.Summary.Ref.UID != msg.Ref.UID)
 	if msg.Err != nil {
 		if msg.Err.Kind == core.ErrNotFound {
 			st.notFound = true
@@ -1597,6 +1608,9 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 		// duplicate lines, and its cancellation would mark the live stream
 		// canceled.
 		return msg.Next
+	}
+	if !msg.Canceled && (len(msg.Records) > 0 || msg.Done) {
+		m.endSpan("first_log", msg.RequestID, msg.Err != nil)
 	}
 	st := &m.logState
 	st.received += len(msg.Records)

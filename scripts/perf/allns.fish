@@ -3,8 +3,8 @@
 #
 # Builds the working tree and runs one read-only session that waits for the
 # first list, then presses 0 for all namespaces. Prints the time from the
-# key press to the list answer, and the /api/v1/info requests before and
-# after it.
+# key press to the list answer, the allns span, and the /api/v1/info
+# requests before and after it.
 
 if test (count $argv) -lt 2
     echo "usage: allns.fish <label> <profile>" >&2
@@ -45,8 +45,9 @@ tmux kill-session -t $sess 2>/dev/null
 
 jq -rs --arg label $label --argjson pressed $pressed '
   def epoch: capture("(?<s>.*)[.](?<f>[0-9]+)Z") | (.s + "Z" | fromdate) + ("0." + .f | tonumber);
-  map(select(.stage == "request") | . + {t: (.time | epoch)}) as $reqs
+  . as $all
+  | map(select(.stage == "request") | . + {t: (.time | epoch)}) as $reqs
   | ($reqs | map(select(.t >= $pressed))) as $after
   | ($after | map(select(.endpoint == "list")) | first) as $list
-  | "\($label): info before 0: \($reqs | map(select(.t < $pressed and .endpoint == "info")) | length), info after 0: \($after | map(select(.endpoint == "info")) | length), list answered \(if $list then (($list.t - $pressed) * 1000 | round | tostring) + " ms" else "never" end) after 0 (\($list.state // "-"), list request \($list.total_ms // 0 | round) ms)"
+  | "\($label): info before 0: \($reqs | map(select(.t < $pressed and .endpoint == "info")) | length), info after 0: \($after | map(select(.endpoint == "info")) | length), list answered \(if $list then (($list.t - $pressed) * 1000 | round | tostring) + " ms" else "never" end) after 0 (\($list.state // "-"), list request \($list.total_ms // 0 | round) ms), allns span \(first($all[] | select(.stage == "span" and .span == "allns") | (.total_ms | round | tostring) + " ms") // "none")"
 ' $diag

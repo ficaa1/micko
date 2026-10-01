@@ -67,6 +67,7 @@ func TestSinkWithoutAWriterIsSilent(t *testing.T) {
 	var s *Sink
 	s.Emit(StageConnect, "connected", 0, false, 0, "")
 	s.EmitRequest(Request{Endpoint: "list"})
+	s.EmitSpan("detail_open", time.Second, false)
 }
 
 // EmitRequest writes one timing line and drops a timing whose endpoint is
@@ -92,6 +93,48 @@ func TestEmitRequest(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			var b bytes.Buffer
 			New(&b).EmitRequest(c.req)
+			if c.want == nil {
+				if b.Len() != 0 {
+					t.Fatalf("emitted %q, want nothing", b.String())
+				}
+				return
+			}
+			var got Event
+			if err := json.Unmarshal(b.Bytes(), &got); err != nil {
+				t.Fatalf("output %q is not one JSON event: %v", b.String(), err)
+			}
+			got.Time = time.Time{}
+			if got != *c.want {
+				t.Errorf("event = %+v, want %+v", got, *c.want)
+			}
+		})
+	}
+}
+
+// EmitSpan writes one span line and drops a span whose name is caller text
+// or whose duration is negative.
+func TestEmitSpan(t *testing.T) {
+	cases := []struct {
+		name   string
+		span   string
+		d      time.Duration
+		failed bool
+		want   *Event
+	}{
+		{"answered", "detail_open", 1500 * time.Microsecond, false, &Event{Stage: StageSpan, State: "ok", Span: "detail_open", TotalMS: 1.5}},
+		{"failed", "first_list", 2 * time.Second, true, &Event{Stage: StageSpan, State: "failed", Span: "first_list", TotalMS: 2000}},
+		{"one word", "allns", time.Millisecond, false, &Event{Stage: StageSpan, State: "ok", Span: "allns", TotalMS: 1}},
+		{"no name", "", time.Millisecond, false, nil},
+		{"spaces", "detail open", time.Millisecond, false, nil},
+		{"capitals", "Detail_open", time.Millisecond, false, nil},
+		{"leading underscore", "_open", time.Millisecond, false, nil},
+		{"name with a token", "token_open", time.Millisecond, false, nil},
+		{"negative duration", "detail_open", -time.Millisecond, false, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var b bytes.Buffer
+			New(&b).EmitSpan(c.span, c.d, c.failed)
 			if c.want == nil {
 				if b.Len() != 0 {
 					t.Fatalf("emitted %q, want nothing", b.String())

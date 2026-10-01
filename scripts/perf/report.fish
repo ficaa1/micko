@@ -2,8 +2,9 @@
 # Usage: scripts/perf/report.fish <label>...
 #
 # Reads perf-out/<label>.jsonl and .marks from session.fish. Per run: the
-# time to the port-forward and to the first list, then per phase the
-# requests, KiB, median total_ms and failures by endpoint.
+# time to the port-forward and to the first list, the spans the reader
+# waited through, then per phase the requests, KiB, median total_ms and
+# failures by endpoint.
 
 set -l out (realpath (status dirname)/../..)/perf-out
 
@@ -25,6 +26,8 @@ for label in $argv
       | ($all | map(select(.stage == "forward" and .state == "ready")) | first | .t // null) as $ready
       | ($all | map(select(.endpoint == "list" and .state == "ok")) | first | .t // null) as $first
       | "  forward ready \(if $ready then $ready - $start else null end | ms), first list \(if $first then $first - $start else null end | ms)",
+        ( $all | map(select(.stage == "span"))[]
+          | "  span \(.span): \(.total_ms | round) ms\(if .state == "failed" then " (failed)" else "" end)" ),
         ( [["list", $start, $detail], ["detail", $detail, $quit]][] as [$phase, $from, $to]
           | ($all | map(select(.stage == "request" and .t >= $from and .t < $to))) as $reqs
           | "  \($phase) (\($to - $from | round) s): \($reqs | length) requests, \((($reqs | map(.bytes // 0) | add) // 0) / 1024 | round) KiB",

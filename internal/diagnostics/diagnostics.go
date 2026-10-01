@@ -17,6 +17,7 @@ const (
 	StageForward Stage = "forward"
 	StageRequest Stage = "request"
 	StageAction  Stage = "action"
+	StageSpan    Stage = "span"
 )
 
 type Event struct {
@@ -27,6 +28,9 @@ type Event struct {
 	Uncertain     bool      `json:"uncertain,omitempty"`
 	Status        int       `json:"status,omitempty"`
 	ErrorCategory string    `json:"error_category,omitempty"`
+
+	// Span is set on span timings only, with TotalMS.
+	Span string `json:"span,omitempty"`
 
 	// The fields below are set on request timings only.
 	Endpoint  string  `json:"endpoint,omitempty"`
@@ -96,6 +100,23 @@ func (s *Sink) EmitRequest(r Request) {
 	s.write(e)
 }
 
+// EmitSpan records how long the reader waited for one answer: from the key or
+// the connection that asked to the reply that changed the screen. A name
+// that is not lowercase words joined by underscores drops the event.
+func (s *Sink) EmitSpan(name string, d time.Duration, failed bool) {
+	if s == nil || s.w == nil {
+		return
+	}
+	if !validSpan(name) || d < 0 {
+		return
+	}
+	e := Event{Time: time.Now().UTC(), Stage: StageSpan, State: "ok", Span: name, TotalMS: millis(d)}
+	if failed {
+		e.State = "failed"
+	}
+	s.write(e)
+}
+
 // millis is d in milliseconds, rounded to a tenth.
 func millis(d time.Duration) float64 {
 	return float64(d.Round(100*time.Microsecond)) / float64(time.Millisecond)
@@ -109,11 +130,17 @@ func (s *Sink) write(e Event) {
 
 func validStage(s Stage) bool {
 	switch s {
-	case StageConnect, StageForward, StageRequest, StageAction:
+	case StageConnect, StageForward, StageRequest, StageAction, StageSpan:
 		return true
 	}
 	return false
 }
+
+// validSpan reports whether name is lowercase words joined by underscores.
+func validSpan(name string) bool {
+	return name != "" && strings.Trim(name, "_") == name && validToken(strings.ReplaceAll(name, "_", ""))
+}
+
 func validToken(s string) bool {
 	if s == "" {
 		return true

@@ -259,6 +259,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		Namespaces:  cfg.Namespaces,
 		Interval:    cfg.RefreshInterval,
 		States:      states,
+		Diagnostics: c.sink,
 	}
 	if forwarder != nil {
 		// Close is idempotent: the root closes a connection it replaces, and

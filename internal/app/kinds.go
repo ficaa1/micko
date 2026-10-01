@@ -108,7 +108,13 @@ func (m *Root) showKind(r Route, label string) tea.Cmd {
 	m.route = r
 	m.flash = label
 	if st := m.kindStates[r]; st == nil || !st.loading {
-		return m.startKindFetch(r)
+		cmd := m.startKindFetch(r)
+		// A pane with rows answers at once; only an empty one makes the
+		// reader wait.
+		if def := m.kind(r); def != nil && def.pane.Len() == 0 {
+			m.beginSpan(r.String()+"_open", kindPurpose(r))
+		}
+		return cmd
 	}
 	return nil
 }
@@ -188,6 +194,7 @@ func (m *Root) handleKindLoaded(msg kindLoadedMsg) tea.Cmd {
 	if msg.Canceled || msg.Conn != m.connGen {
 		return nil
 	}
+	m.endSpan(msg.Route.String()+"_open", msg.RequestID, msg.Err != nil)
 	now := m.deps.clock.Now()
 	if msg.Err != nil {
 		st.lastErr = msg.Err
