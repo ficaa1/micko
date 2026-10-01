@@ -1,29 +1,18 @@
-# F0 research cache — reproducible from pinned upstream sources (see docs/protocol.md)
-/f0-scratch/
-
-# user test notes
-/docs/notes.md
-
-# Go build/test artifacts
+# Go build and test output
 /dist/
 *.test
 *.out
 coverage.*
 
-# Editor / OS noise
+# Editor and OS files
 .DS_Store
 *.swp
 
-# Recovery-run leftovers: toolchain packages must never enter the repo
-# (re-downloadable; see AGENTS.md hygiene rules)
-*.deb
+# Local notes
+/docs/notes.md
 
-# Pending-approval draft (AGENTS.md write requires explicit user consent;
-# draft kept for review only)
-AGENTS.md.draft
-
-# perf measurement output (scripts/perf)
+# Output of scripts/perf
 /perf-out/
 
-# --debug output redirected in the repo root
+# --debug output written to the repo root
 /diag.jsonl
