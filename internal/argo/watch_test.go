@@ -198,8 +198,8 @@ func TestWatchRefusals(t *testing.T) {
 	}
 }
 
-// Canceling the context ends a stream the server holds open, after the
-// events it already sent.
+// A stream stays open while the server is quiet, also past the dial timeout
+// before its first event, and canceling the context ends it.
 func TestWatchesEndOnCancel(t *testing.T) {
 	cases := []struct {
 		name, line string
@@ -216,7 +216,9 @@ func TestWatchesEndOnCancel(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			const dialTimeout = 50 * time.Millisecond
 			srv := serve(t, func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(3 * dialTimeout)
 				_, _ = io.WriteString(w, c.line+"\n")
 				w.(http.Flusher).Flush()
 				<-r.Context().Done()
@@ -225,9 +227,12 @@ func TestWatchesEndOnCancel(t *testing.T) {
 			defer cancel()
 			got := make(chan struct{}, 4)
 			done := make(chan error, 1)
-			go func() { done <- c.watch(ctx, newTestClient(t, srv), got) }()
+			client := newClientWith(t, Options{Server: srv.URL, DialTimeout: dialTimeout})
+			go func() { done <- c.watch(ctx, client, got) }()
 			select {
 			case <-got:
+			case err := <-done:
+				t.Fatalf("the stream ended before its first event: %v", err)
 			case <-time.After(2 * time.Second):
 				t.Fatal("the first event did not arrive while the stream stayed open")
 			}

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -158,13 +159,16 @@ func NewClient(opts Options) (*Client, error) {
 		dialTimeout = 10 * time.Second
 	}
 
+	// No ResponseHeaderTimeout: a watch sends its headers with its first
+	// event, which can be minutes away. Unary requests are bounded by
+	// withUnaryDeadline instead.
 	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		MaxIdleConns:          8,
-		MaxIdleConnsPerHost:   4,
-		IdleConnTimeout:       60 * time.Second,
-		TLSHandshakeTimeout:   dialTimeout,
-		ResponseHeaderTimeout: dialTimeout,
+		Proxy:               http.ProxyFromEnvironment,
+		DialContext:         (&net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}).DialContext,
+		MaxIdleConns:        8,
+		MaxIdleConnsPerHost: 4,
+		IdleConnTimeout:     60 * time.Second,
+		TLSHandshakeTimeout: dialTimeout,
 		// Streaming responses must not be buffered through HTTP/2; force
 		// HTTP/1.1 like the official client (HTTP/1.1 semantics end-to-end).
 		ForceAttemptHTTP2: false,
