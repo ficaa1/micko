@@ -70,7 +70,7 @@ func (c *Client) ListCronWorkflows(ctx context.Context, namespace string) ([]cor
 		}
 	}
 	var out []core.CronWorkflow
-	err := c.listPages(ctx, kindPath(cronPathPrefix, namespace), "cron workflow list", func(body []byte) (string, error) {
+	err := c.listPages(ctx, endpointCron, kindPath(cronPathPrefix, namespace), "cron workflow list", func(body []byte) (string, error) {
 		var env kindListEnvelope
 		if err := json.Unmarshal(body, &env); err != nil {
 			return "", err

@@ -1,13 +1,17 @@
 package session
 
 import (
+	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/profiles"
 )
 
@@ -153,6 +157,32 @@ func TestConnect(t *testing.T) {
 				t.Error("a connection with no port-forward reported a transport lifecycle")
 			}
 		})
+	}
+}
+
+// Requests write timings to the diagnostics writer with --debug only.
+func TestRequestTimingsFollowDebug(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"metadata":{},"items":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	path := writeConfig(t, "profiles:\n  dev:\n    server: "+srv.URL+"\n    namespace: argo\n    tokenEnv: T\n")
+	for _, debug := range []bool{false, true} {
+		var out bytes.Buffer
+		connector, err := NewConnector(Options{ConfigPath: path, Skins: testSkins, Debug: debug, Diagnostics: &out})
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn, err := connector.Connect(context.Background(), "dev")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Reader.List(context.Background(), core.Query{Namespace: "argo"}); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(out.String(), `"endpoint":"list"`); got != debug {
+			t.Errorf("debug %v: diagnostics = %q, want a list timing %v", debug, out.String(), debug)
+		}
 	}
 }
 

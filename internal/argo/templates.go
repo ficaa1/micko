@@ -62,7 +62,7 @@ func (c *Client) ListWorkflowTemplates(ctx context.Context, namespace string) ([
 			return nil, err
 		}
 	}
-	return c.listTemplates(ctx, kindPath(templatePathPrefix, namespace), "workflow template list")
+	return c.listTemplates(ctx, endpointTemplates, kindPath(templatePathPrefix, namespace), "workflow template list")
 }
 
 // ListClusterWorkflowTemplates implements core.ClusterTemplateLister. A
@@ -71,12 +71,12 @@ func (c *Client) ListWorkflowTemplates(ctx context.Context, namespace string) ([
 func (c *Client) ListClusterWorkflowTemplates(ctx context.Context) ([]core.WorkflowTemplate, error) {
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
-	return c.listTemplates(ctx, clusterTemplatePath, "cluster workflow template list")
+	return c.listTemplates(ctx, endpointClusterTemplates, clusterTemplatePath, "cluster workflow template list")
 }
 
-func (c *Client) listTemplates(ctx context.Context, path, what string) ([]core.WorkflowTemplate, error) {
+func (c *Client) listTemplates(ctx context.Context, ep endpoint, path, what string) ([]core.WorkflowTemplate, error) {
 	var out []core.WorkflowTemplate
-	err := c.listPages(ctx, path, what, func(body []byte) (string, error) {
+	err := c.listPages(ctx, ep, path, what, func(body []byte) (string, error) {
 		var env kindListEnvelope
 		if err := json.Unmarshal(body, &env); err != nil {
 			return "", err

@@ -77,7 +77,7 @@ func (c *Client) Execute(ctx context.Context, req core.ActionRequest) (core.Acti
 	// The same helper every read goes through: it rejects a redirect with a
 	// clear message instead of a raw transport error, and names a TLS
 	// failure as one.
-	resp, err := c.do(ctx, httpReq)
+	resp, err := c.do(ctx, httpReq, endpointAction)
 	if err != nil {
 		if ctx.Err() != nil {
 			return result, ctx.Err()

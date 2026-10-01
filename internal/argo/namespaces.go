@@ -68,7 +68,7 @@ func (c *Client) ListNamespaces(ctx context.Context) ([]string, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	resp, err := c.do(ctx, req)
+	resp, err := c.do(ctx, req, endpointNamespaces)
 	if err != nil {
 		return nil, "", err
 	}
@@ -148,7 +148,7 @@ func (c *Client) managedNamespace(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := c.do(ctx, req)
+	resp, err := c.do(ctx, req, endpointInfo)
 	if err != nil {
 		return "", err
 	}

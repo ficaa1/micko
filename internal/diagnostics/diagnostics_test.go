@@ -63,6 +63,49 @@ func TestEmit(t *testing.T) {
 // A sink with no writer drops every event instead of failing.
 func TestSinkWithoutAWriterIsSilent(t *testing.T) {
 	New(nil).Emit(StageConnect, "connected", 0, false, 0, "")
+	New(nil).EmitRequest(Request{Endpoint: "list"})
 	var s *Sink
 	s.Emit(StageConnect, "connected", 0, false, 0, "")
+	s.EmitRequest(Request{Endpoint: "list"})
+}
+
+// EmitRequest writes one timing line and drops a timing whose endpoint is
+// caller text or whose counts are negative.
+func TestEmitRequest(t *testing.T) {
+	cases := []struct {
+		name string
+		req  Request
+		want *Event
+	}{
+		{"new connection", Request{Endpoint: "list", Status: 200, Connect: 1500 * time.Microsecond, TTFB: 20 * time.Millisecond, Total: 25 * time.Millisecond, Bytes: 512},
+			&Event{Stage: StageRequest, State: "ok", Status: 200, Endpoint: "list", Conn: "new", ConnectMS: 1.5, TTFBMS: 20, TotalMS: 25, Bytes: 512}},
+		{"reused connection", Request{Endpoint: "gate", Status: 200, Reused: true, TTFB: time.Millisecond, Total: time.Millisecond},
+			&Event{Stage: StageRequest, State: "ok", Status: 200, Endpoint: "gate", Conn: "reused", TTFBMS: 1, TotalMS: 1}},
+		{"failed request", Request{Endpoint: "get", Failed: true, Total: 3 * time.Second},
+			&Event{Stage: StageRequest, State: "failed", Endpoint: "get", Conn: "new", TotalMS: 3000}},
+		{"no endpoint", Request{Status: 200}, nil},
+		{"path as endpoint", Request{Endpoint: "/api/v1/workflows/team-a"}, nil},
+		{"endpoint naming a token", Request{Endpoint: "token"}, nil},
+		{"negative bytes", Request{Endpoint: "list", Bytes: -1}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var b bytes.Buffer
+			New(&b).EmitRequest(c.req)
+			if c.want == nil {
+				if b.Len() != 0 {
+					t.Fatalf("emitted %q, want nothing", b.String())
+				}
+				return
+			}
+			var got Event
+			if err := json.Unmarshal(b.Bytes(), &got); err != nil {
+				t.Fatalf("output %q is not one JSON event: %v", b.String(), err)
+			}
+			got.Time = time.Time{}
+			if got != *c.want {
+				t.Errorf("event = %+v, want %+v", got, *c.want)
+			}
+		})
+	}
 }

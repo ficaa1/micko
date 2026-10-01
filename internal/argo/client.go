@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/diagnostics"
 )
 
 // Client is the production core.Reader. It is safe for concurrent use.
@@ -62,6 +63,8 @@ type Client struct {
 	userAgent string
 	// unaryTimeout bounds one non-streaming request end to end.
 	unaryTimeout time.Duration
+	// diagnostics receives one timing per request; nil sends none.
+	diagnostics *diagnostics.Sink
 
 	// scopeMu guards the cached answer of serverScope. scopeKnown is set
 	// only by a successful answer, so a failed lookup is retried next time.
@@ -106,6 +109,9 @@ type Options struct {
 	// including reading the body. Empty uses unaryTimeout. Streaming calls
 	// ignore it.
 	RequestTimeout time.Duration
+	// Diagnostics receives one timing per request. Nil, the default, records
+	// nothing and adds no tracing to the requests.
+	Diagnostics *diagnostics.Sink
 }
 
 // defaultUserAgent carries no version: a wrong version is worse than none.
@@ -206,6 +212,7 @@ func NewClient(opts Options) (*Client, error) {
 		resolveBase:           opts.ResolveServer,
 		unaryTimeout:          opts.RequestTimeout,
 		userAgent:             userAgent,
+		diagnostics:           opts.Diagnostics,
 	}, nil
 }
 
@@ -314,11 +321,14 @@ func (c *Client) describeTokenSource() string {
 }
 
 // do executes the request with redirect rejection applied at transport
-// level. The response is returned with Body open; caller closes it.
-func (c *Client) do(ctx context.Context, req *http.Request) (*http.Response, error) {
-	req = req.WithContext(ctx)
+// level. The response is returned with Body open; caller closes it. ep names
+// the call in the request timing.
+func (c *Client) do(ctx context.Context, req *http.Request, ep endpoint) (*http.Response, error) {
+	timer := c.startTimer(ep)
+	req = req.WithContext(timer.trace(ctx))
 	resp, err := c.http.Do(req)
 	if err != nil {
+		timer.fail()
 		var rerr errRedirected
 		if errors.As(err, &rerr) {
 			return nil, core.ErrProtocalf(
@@ -335,6 +345,7 @@ func (c *Client) do(ctx context.Context, req *http.Request) (*http.Response, err
 		}
 		return nil, core.ErrUnavailablef("server unreachable: %s", sanitizeLine(msg))
 	}
+	timer.track(resp)
 	// No redirect hop may ever carry our credentials.
 	// A 3xx served as a *final* answer without a redirect hop (unusual
 	// gateway/proxy behavior) is still readable — but its Location, if
@@ -613,7 +624,7 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if err != nil {
 		return core.Page{}, err
 	}
-	resp, err := c.do(ctx, req)
+	resp, err := c.do(ctx, req, endpointList)
 	if err != nil {
 		return core.Page{}, err
 	}
@@ -674,7 +685,7 @@ func (c *Client) markSuspended(ctx context.Context, q core.Query, page *core.Pag
 	if err != nil {
 		return err
 	}
-	resp, err := c.do(ctx, req)
+	resp, err := c.do(ctx, req, endpointGate)
 	if err != nil {
 		return err
 	}
@@ -759,7 +770,7 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	if err != nil {
 		return core.Workflow{}, err
 	}
-	resp, err := c.do(ctx, req)
+	resp, err := c.do(ctx, req, endpointGet)
 	if err != nil {
 		return core.Workflow{}, err
 	}
