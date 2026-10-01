@@ -1,6 +1,9 @@
 # F0 research cache — reproducible from pinned upstream sources (see docs/protocol.md)
 /f0-scratch/
 
+# user test notes
+/docs/notes.md
+
 # Go build/test artifacts
 /dist/
 *.test
