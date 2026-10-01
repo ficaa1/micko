@@ -15,6 +15,8 @@ import (
 // timeline.go builds and draws the Timeline section: a Gantt chart of the
 // workflow's work against a time axis.
 //
+// TODO Remove below doc, shape of the UI is available in the golden tests.
+//
 //	NAME                         DURATION   0        1m       2m       3m  4m00s
 //	▾ ✗ demo-nightly-report DAG     4m00s   ├──────────────────────────────────┤
 //	├─ ✓ extract                      50s ◆ ▕███████▎···························

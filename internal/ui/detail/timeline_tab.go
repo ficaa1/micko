@@ -194,6 +194,7 @@ func (m *Model) criticalNote() string {
 		mark = asciiCritical
 	}
 	nodes := plural(n, "node")
+	// TODO: unclear text, what pace? what is critical path? do we even need this text?
 	if m.tl.running {
 		return mark + " critical path so far: the " + nodes + " that set the pace"
 	}

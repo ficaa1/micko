@@ -50,6 +50,7 @@ type Frame struct {
 	Mode      string // READ ONLY / ACTIONS ENABLED — the safety state
 	// ActionsEnabled draws the mode badge in the theme's armed style. The
 	// Mode words carry the meaning; the badge colour only repeats it.
+	// TODO Given this is the default, we should only have the mode badge for read only
 	ActionsEnabled bool
 
 	// Mascot asks for Mićko, the mascot, to perch on the pane (perch.go).
