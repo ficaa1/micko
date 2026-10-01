@@ -31,7 +31,7 @@ const kindMaxPages = 100
 // listPages collects a paged list from path. decode reads one page body and
 // returns its continuation token. A namespaced path whose namespace segment
 // is empty lists every namespace; the caller checks the server's scope first.
-func (c *Client) listPages(ctx context.Context, path, what string, decode func(body []byte) (string, error)) error {
+func (c *Client) listPages(ctx context.Context, ep endpoint, path, what string, decode func(body []byte) (string, error)) error {
 	cont := ""
 	for pages := 0; ; pages++ {
 		if pages >= kindMaxPages {
@@ -42,7 +42,7 @@ func (c *Client) listPages(ctx context.Context, path, what string, decode func(b
 		if cont != "" {
 			query.Set("listOptions.continue", cont)
 		}
-		body, err := c.getBody(ctx, path, query)
+		body, err := c.getBody(ctx, ep, path, query)
 		if err != nil {
 			return err
 		}
@@ -59,12 +59,12 @@ func (c *Client) listPages(ctx context.Context, path, what string, decode func(b
 
 // getBody performs one bounded GET and returns the body of a 200 answer. Every
 // other answer, and a login page served as 200, becomes a typed error.
-func (c *Client) getBody(ctx context.Context, path string, query url.Values) ([]byte, error) {
+func (c *Client) getBody(ctx context.Context, ep endpoint, path string, query url.Values) ([]byte, error) {
 	req, err := c.newRequest(ctx, path, query)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.do(ctx, req)
+	resp, err := c.do(ctx, req, ep)
 	if err != nil {
 		return nil, err
 	}

@@ -205,7 +205,9 @@ func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 		m.profView.Close()
 	}
 	m.flash = "profile: " + msg.Profile
-	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery())
+	list := m.startListGeneration()
+	m.beginSpan("first_list", "list")
+	return tea.Batch(list, m.waitConnStates(), m.backgroundQuery())
 }
 
 // resetRoutes drops everything the previous connection produced and returns

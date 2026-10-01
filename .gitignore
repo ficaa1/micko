@@ -1,6 +1,9 @@
 # F0 research cache — reproducible from pinned upstream sources (see docs/protocol.md)
 /f0-scratch/
 
+# user test notes
+/docs/notes.md
+
 # Go build/test artifacts
 /dist/
 *.test
@@ -18,3 +21,9 @@ coverage.*
 # Pending-approval draft (AGENTS.md write requires explicit user consent;
 # draft kept for review only)
 AGENTS.md.draft
+
+# perf measurement output (scripts/perf)
+/perf-out/
+
+# --debug output redirected in the repo root
+/diag.jsonl

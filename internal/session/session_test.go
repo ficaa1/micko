@@ -1,13 +1,18 @@
 package session
 
 import (
+	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/profiles"
 )
 
@@ -154,6 +159,50 @@ func TestConnect(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Requests write timings to the diagnostics writer with --debug only.
+func TestRequestTimingsFollowDebug(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"metadata":{},"items":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	path := writeConfig(t, "profiles:\n  dev:\n    server: "+srv.URL+"\n    namespace: argo\n    tokenEnv: T\n")
+	for _, debug := range []bool{false, true} {
+		out := &lockedBuffer{}
+		connector, err := NewConnector(Options{ConfigPath: path, Skins: testSkins, Debug: debug, Diagnostics: out})
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn, err := connector.Connect(context.Background(), "dev")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Reader.List(context.Background(), core.Query{Namespace: "argo"}); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(out.String(), `"endpoint":"list"`); got != debug {
+			t.Errorf("debug %v: diagnostics = %q, want a list timing %v", debug, out.String(), debug)
+		}
+	}
+}
+
+// Scope warm-up may write diagnostics while the test reads them.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 // The entrypoint always defers Close, so it is safe with nothing connected.

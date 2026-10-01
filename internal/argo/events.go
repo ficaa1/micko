@@ -67,7 +67,7 @@ func (c *Client) WatchEvents(ctx context.Context, req core.EventWatchRequest, cb
 	if req.ResourceVersion != "" {
 		query.Set("listOptions.resourceVersion", req.ResourceVersion)
 	}
-	body, err := c.openWatch(ctx, path, query, req.ResourceVersion)
+	body, err := c.openWatch(ctx, endpointEvents, path, query, req.ResourceVersion)
 	if err != nil {
 		var we *core.WatchError
 		if ae := core.AsAPIError(err); ae != nil && errors.As(err, &we) &&

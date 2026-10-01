@@ -128,3 +128,19 @@ func TestWatchRetryDelayIsExponentialAndCapped(t *testing.T) {
 		t.Fatalf("retry-after lower bound shortened: %v", got)
 	}
 }
+
+// Watch events refetch the open workflow even after its selection generation changes.
+func TestWatchEventRefetchesTheOpenWorkflow(t *testing.T) {
+	m := testRoot(t, fixtureReader(workflowFixture("a")))
+	m.listState.items = []core.Summary{summary("a")}
+	m.watchAttempt = 2
+	stamp := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.watchAttempt}
+	m.openWorkflow(summary("a").Ref)
+	m.cancelInflight("detail")
+	m.detailState.loading = false
+
+	m.Update(watchEventMsg{genStamp: stamp, Event: core.WatchEvent{Type: core.WatchModified, Summary: summary("a")}})
+	if !m.hasInflight("detail") {
+		t.Fatal("a change to the open workflow started no detail fetch")
+	}
+}

@@ -46,6 +46,7 @@ type Root struct {
 	// request that replaced it.
 	mu       sync.Mutex
 	inflight map[string]inflightOp
+	spans    map[string]span
 
 	// listState is the collected snapshot for the list route.
 	listState listState
@@ -296,6 +297,8 @@ type listState struct {
 	staleSince time.Time
 	// lastErr is the last error for the list (kept with last good data).
 	lastErr *core.APIError
+	// polledAt is when the last collection started.
+	polledAt time.Time
 }
 
 // detailState is the detail route's data + status.
@@ -308,6 +311,8 @@ type detailState struct {
 	// archived marks a workflow read from the workflow archive rather than
 	// the live route.
 	archived bool
+	// polledAt is when the last fetch started.
+	polledAt time.Time
 }
 
 // logState is the logs route's data + status.
@@ -459,7 +464,9 @@ func (m *Root) Init() tea.Cmd {
 	if !m.connected() {
 		return tea.Batch(m.openProfilePicker(), m.backgroundQuery(), m.nextMascotBeat())
 	}
-	return tea.Batch(m.startListGeneration(), m.waitConnStates(), m.backgroundQuery(), m.nextMascotBeat())
+	list := m.startListGeneration()
+	m.beginSpan("first_list", "list")
+	return tea.Batch(list, m.waitConnStates(), m.backgroundQuery(), m.nextMascotBeat())
 }
 
 // armTick schedules the next poll unless one is already scheduled. Every
@@ -716,7 +723,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.route == RouteList {
-			if m.listState.loading {
+			if m.listState.loading || !m.pollDue(m.listState.polledAt, m.watchLive()) {
 				return m, m.armTick()
 			}
 			// The poll re-arms the tick when it completes.
@@ -728,7 +735,8 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmds []tea.Cmd
 		// An archived run is fixed, so its detail is read once and not
 		// polled.
-		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" && !m.detailState.archived {
+		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" && !m.detailState.archived &&
+			m.pollDue(m.detailState.polledAt, m.watchLive() && m.inSnapshot(m.selection.UID)) {
 			cmds = append(cmds, m.startDetailFetch())
 		}
 		// A stale snapshot blocks every mutation, and only an accepted list
@@ -752,7 +760,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleWatchDone(msg)
 
 	case watchRetryMsg:
-		if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt || m.watchMode != "rate limited" {
+		if !m.watchReplyCurrent(msg.genStamp) || m.watchMode != "rate limited" {
 			return m, nil
 		}
 		return m, m.startWatch()
@@ -1307,13 +1315,19 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 	if m.route != RouteDetail {
 		m.detailFrom = m.route
 	}
+	if m.events.ref != ref {
+		// The pane drops another workflow's events, so their cursors go too.
+		m.stopEvents()
+	}
 	m.selection = ref
 	m.selGen++
 	m.route = RouteDetail
 	m.detailState = detailState{ref: ref, loading: true}
 	m.detailView.SetArchived(false)
 	m.detailView.SetLoading()
-	return m.startDetailFetch()
+	cmd := m.startDetailFetch()
+	m.beginSpan("detail_open", "detail")
+	return cmd
 }
 
 // openLogs handles the logs intent. It records the route the logs pane is
@@ -1346,7 +1360,9 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	m.logsView.SetTheme(m.theme)
 	m.logsView.SetPipeCommand(m.pipeCommand)
 	m.logsView.KeepViewPrefs(prev)
-	return tea.Batch(m.startLogStream(msg), m.startLogSources(msg))
+	stream := m.startLogStream(msg)
+	m.beginSpan("first_log", "logs")
+	return tea.Batch(stream, m.startLogSources(msg))
 }
 
 // startLogSources gives a workflow-wide log pane the node each pod belongs
@@ -1394,6 +1410,7 @@ func (m *Root) startListGeneration() tea.Cmd {
 	}
 	m.cancelInflight("list")
 	m.listState.loading = true
+	m.listState.polledAt = m.deps.clock.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
@@ -1405,6 +1422,7 @@ func (m *Root) startListGeneration() tea.Cmd {
 // startDetailFetch starts a detail fetch for the current selection.
 func (m *Root) startDetailFetch() tea.Cmd {
 	m.cancelInflight("detail")
+	m.detailState.polledAt = m.deps.clock.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
@@ -1455,6 +1473,8 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
 		return nil // stale: discard
 	}
+	m.endSpan("first_list", msg.RequestID, msg.Err != nil)
+	m.endSpan("allns", msg.RequestID, msg.Err != nil)
 	st := &m.listState
 	st.loading = false
 	if msg.Err != nil {
@@ -1537,10 +1557,7 @@ func (m *Root) listErrorText(ae *core.APIError) string {
 func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	m.clearInflight("detail", msg.RequestID)
 	st := &m.detailState
-	// loading tracks the fetch, not this reply. A canceled or stale reply
-	// still ends a fetch, so leaving the flag set here would tell the poll
-	// tick that a fetch is running for the rest of the session and stop the
-	// detail view refreshing on its own.
+	// A stale or canceled reply ends only its own fetch.
 	st.loading = m.hasInflight("detail")
 	if msg.Canceled {
 		return nil
@@ -1548,6 +1565,7 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
 		return nil // stale
 	}
+	m.endSpan("detail_open", msg.RequestID, msg.Err != nil || msg.Workflow.Summary.Ref.UID != msg.Ref.UID)
 	if msg.Err != nil {
 		if msg.Err.Kind == core.ErrNotFound {
 			st.notFound = true
@@ -1579,13 +1597,16 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 // handleLogRecord applies one batched delivery honoring staleness.
 func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
-		return nil // stale
+		return msg.Next // stale: drained and dropped
 	}
 	if msg.RequestID != m.logState.streamID {
 		// A stream replaced by a reopen on the same pane: its batches would
 		// duplicate lines, and its cancellation would mark the live stream
 		// canceled.
-		return nil
+		return msg.Next
+	}
+	if !msg.Canceled && (len(msg.Records) > 0 || msg.Done) {
+		m.endSpan("first_log", msg.RequestID, msg.Err != nil)
 	}
 	st := &m.logState
 	st.received += len(msg.Records)
@@ -1610,8 +1631,7 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 		m.clearInflight("logs", msg.RequestID)
 		return nil
 	}
-	// chain the next drain; the streamState rides in the closure
-	return nil
+	return msg.Next
 }
 
 // inflight bookkeeping --------------------------------------------------------

@@ -51,7 +51,7 @@ func (c *Client) ListArchivedWorkflows(ctx context.Context, q core.ArchiveQuery)
 	if q.Continue != "" {
 		query.Set("listOptions.continue", q.Continue)
 	}
-	body, err := c.getBody(ctx, archivePath, query)
+	body, err := c.getBody(ctx, endpointArchived, archivePath, query)
 	if err != nil {
 		return core.ArchivePage{}, archiveError(err, true)
 	}
@@ -82,7 +82,7 @@ func (c *Client) GetArchivedWorkflow(ctx context.Context, uid string) (core.Work
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
 	path := archivePath + "/" + url.PathEscape(uid)
-	body, err := c.getBody(ctx, path, nil)
+	body, err := c.getBody(ctx, endpointArchivedGet, path, nil)
 	if err != nil {
 		return core.Workflow{}, archiveError(err, false)
 	}

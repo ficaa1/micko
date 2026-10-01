@@ -87,6 +87,8 @@ type eventsMsg struct {
 	genStamp
 	Stream int
 	Events []core.Event
+	// Next runs as a separate command to avoid nesting drains.
+	Next tea.Cmd
 }
 
 type eventsDoneMsg struct {
@@ -100,12 +102,14 @@ type eventsRetryMsg struct {
 	Stream int
 }
 
-// syncEvents starts the streams the Events section wants and stops the
-// streams nobody is looking at. It runs after the same changes as
-// syncExplainLog.
+// Section changes retain cursors because the pane retains the workflow's events.
 func (m *Root) syncEvents() tea.Cmd {
-	if m.route != RouteDetail || m.detailView == nil || m.detailView.Section() != shared.SectionEvents {
+	if m.route != RouteDetail || m.detailView == nil {
 		m.stopEvents()
+		return nil
+	}
+	if m.detailView.Section() != shared.SectionEvents {
+		m.pauseEvents()
 		return nil
 	}
 	intent, ok := m.detailView.EventsWanted()
@@ -115,8 +119,15 @@ func (m *Root) syncEvents() tea.Cmd {
 	if m.events.active && m.events.ref == intent.Ref {
 		return nil
 	}
+	// Keep attempts distinct so replies from paused streams remain stale.
+	var kept [eventStreamCount]eventStream
+	if m.events.ref == intent.Ref {
+		for i, st := range m.events.streams {
+			kept[i] = eventStream{rv: st.rv, attempt: st.attempt}
+		}
+	}
 	m.stopEvents()
-	m.events = eventsSession{ref: intent.Ref, active: true}
+	m.events = eventsSession{ref: intent.Ref, active: true, streams: kept}
 	if m.deps.eventWatcher == nil {
 		for i := range m.events.streams {
 			m.events.streams[i].state = eventStopped
@@ -132,15 +143,21 @@ func (m *Root) syncEvents() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// stopEvents cancels both streams.
+// stopEvents cancels both streams and forgets their cursors.
 func (m *Root) stopEvents() {
+	m.pauseEvents()
+	m.events = eventsSession{}
+}
+
+// pauseEvents retains cursors for the workflow's next visit to Events.
+func (m *Root) pauseEvents() {
 	if !m.events.active {
 		return
 	}
 	for _, p := range eventPurposes {
 		m.cancelInflight(p)
 	}
-	m.events = eventsSession{}
+	m.events.active = false
 }
 
 // startEventStream opens stream i from its last resource version.
@@ -216,26 +233,18 @@ func drainEventsCmd(ctx context.Context, g genStamp, i int, ch chan any) tea.Cmd
 			select {
 			case item, ok := <-ch:
 				if !ok {
-					return tea.BatchMsg{
-						func() tea.Msg { return eventsMsg{genStamp: g, Stream: i, Events: batch} },
-						func() tea.Msg { return eventsDoneMsg{genStamp: g, Stream: i, Err: errors.New("event queue closed")} },
-					}
+					closed := eventsDoneMsg{genStamp: g, Stream: i, Err: errors.New("event queue closed")}
+					return eventsMsg{genStamp: g, Stream: i, Events: batch, Next: func() tea.Msg { return closed }}
 				}
 				if done := take(item); done != nil {
-					return tea.BatchMsg{
-						func() tea.Msg { return eventsMsg{genStamp: g, Stream: i, Events: batch} },
-						func() tea.Msg { return done },
-					}
+					return eventsMsg{genStamp: g, Stream: i, Events: batch, Next: func() tea.Msg { return done }}
 				}
 				continue
 			default:
 			}
 			break
 		}
-		return tea.BatchMsg{
-			func() tea.Msg { return eventsMsg{genStamp: g, Stream: i, Events: batch} },
-			drainEventsCmd(ctx, g, i, ch),
-		}
+		return eventsMsg{genStamp: g, Stream: i, Events: batch, Next: drainEventsCmd(ctx, g, i, ch)}
 	}
 }
 
@@ -249,7 +258,7 @@ func (m *Root) eventReplyCurrent(g genStamp, i int) bool {
 // handleEvents hands a batch to the pane and moves the stream's cursor.
 func (m *Root) handleEvents(msg eventsMsg) tea.Cmd {
 	if !m.eventReplyCurrent(msg.genStamp, msg.Stream) {
-		return nil
+		return msg.Next
 	}
 	st := &m.events.streams[msg.Stream]
 	for _, e := range msg.Events {
@@ -263,7 +272,7 @@ func (m *Root) handleEvents(msg eventsMsg) tea.Cmd {
 	if m.detailView != nil {
 		m.detailView.ApplyEvents(msg.Events)
 	}
-	return nil
+	return msg.Next
 }
 
 // handleEventsDone decides what an ended stream does next.

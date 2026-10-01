@@ -290,17 +290,17 @@ func (d deps) drainCmd(ctx context.Context, g genStamp, id uint64, ch chan strea
 			select {
 			case item, ok := <-ch:
 				if !ok {
-					return emitBatchThenEnd(g, id, batch, nil, false)
+					return batchThenEnd(g, id, batch, nil)
 				}
 				if item.end {
-					return emitBatchThenEnd(g, id, batch, item.err, false)
+					return batchThenEnd(g, id, batch, item.err)
 				}
 				batch = append(batch, item.rec)
 			default:
-				return emitBatchThenChain(g, id, batch, d.drainCmd(ctx, g, id, ch))
+				return logRecordMsg{genStamp: g, RequestID: id, Records: batch, Next: d.drainCmd(ctx, g, id, ch)}
 			}
 		}
-		return emitBatchThenChain(g, id, batch, d.drainCmd(ctx, g, id, ch))
+		return logRecordMsg{genStamp: g, RequestID: id, Records: batch, Next: d.drainCmd(ctx, g, id, ch)}
 	}
 }
 
@@ -311,20 +311,11 @@ func terminalLogMsg(g genStamp, id uint64, err error, canceled bool) logRecordMs
 	return msg
 }
 
-// emitBatchThenChain delivers the batch and chains the next drain command.
-func emitBatchThenChain(g genStamp, id uint64, batch []core.LogRecord, next func() tea.Msg) tea.Msg {
-	return tea.BatchMsg{
-		func() tea.Msg { return logRecordMsg{genStamp: g, RequestID: id, Records: batch} },
-		next,
-	}
-}
-
-// emitBatchThenEnd delivers the batch then the terminal message.
-func emitBatchThenEnd(g genStamp, id uint64, batch []core.LogRecord, err error, canceled bool) tea.Msg {
-	return tea.BatchMsg{
-		func() tea.Msg { return logRecordMsg{genStamp: g, RequestID: id, Records: batch} },
-		func() tea.Msg { return terminalLogMsg(g, id, err, canceled) },
-	}
+// batchThenEnd returns records and their terminal status together so the end cannot overtake them.
+func batchThenEnd(g genStamp, id uint64, batch []core.LogRecord, err error) logRecordMsg {
+	msg := terminalLogMsg(g, id, err, false)
+	msg.Records = batch
+	return msg
 }
 
 // tickCmd schedules the next poll after completion (the next

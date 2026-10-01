@@ -105,7 +105,7 @@ func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(co
 	if err != nil {
 		return err
 	}
-	resp, err := c.do(ctx, httpReq)
+	resp, err := c.do(ctx, httpReq, endpointLogs)
 	if err != nil {
 		return err
 	}

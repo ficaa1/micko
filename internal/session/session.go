@@ -56,8 +56,7 @@ type Options struct {
 	// RedactValues is the --redact-values flag, passed through to every
 	// profile's configuration.
 	RedactValues bool
-	// Diagnostics receives sanitized forwarding lifecycle lines when Debug is
-	// set. Nil silences them.
+	// Diagnostics receives debug lifecycle events, request timings, and spans; nil disables output.
 	Diagnostics io.Writer
 }
 
@@ -78,6 +77,8 @@ type Connector struct {
 	current string
 	// listErr says why the file yielded no profiles.
 	listErr string
+	// A shared sink prevents concurrent connections and forwards from interleaving lines.
+	sink *diagnostics.Sink
 
 	// mu guards live, the connection this connector last handed out. The
 	// entrypoint closes it on the way out, and Connect closes nothing: the
@@ -90,6 +91,9 @@ type Connector struct {
 // file is not an error: the picker opens empty and says where to write one.
 func NewConnector(opts Options) (*Connector, error) {
 	c := &Connector{opts: opts, path: opts.ConfigPath}
+	if opts.Debug && opts.Diagnostics != nil {
+		c.sink = diagnostics.New(opts.Diagnostics)
+	}
 	if c.path == "" {
 		c.path, _ = config.DefaultConfigPath()
 	}
@@ -226,6 +230,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		InsecureSkipTLSVerify: cfg.InsecureSkipTLSVerify,
 		ResolveServer:         resolveServer,
 		UserAgent:             buildinfo.UserAgent(),
+		Diagnostics:           c.sink,
 	})
 	if err != nil {
 		if forwarder != nil {
@@ -233,6 +238,9 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		}
 		return nil, err
 	}
+
+	// The client's deadline bounds this lookup even if the connection is replaced.
+	go client.WarmScope(context.Background())
 
 	var once sync.Once
 	conn := &app.Connection{
@@ -247,6 +255,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		Namespaces:  cfg.Namespaces,
 		Interval:    cfg.RefreshInterval,
 		States:      states,
+		Diagnostics: c.sink,
 	}
 	if forwarder != nil {
 		// Close is idempotent: the root closes a connection it replaces, and
@@ -285,16 +294,10 @@ func (c *Connector) startForward(ctx context.Context, cfg config.Config) (*portf
 	// recovery loop. The channel buffers the transitions until the update loop
 	// starts reading them.
 	states := make(chan app.ConnectionStateMsg, 32)
-	var sink *diagnostics.Sink
-	if c.opts.Debug && c.opts.Diagnostics != nil {
-		sink = diagnostics.New(c.opts.Diagnostics)
-	}
 	go func() {
 		defer close(states)
 		for e := range fwd.Events() {
-			if sink != nil {
-				sink.Emit(diagnostics.StageForward, string(e.State), e.Attempt-1, e.State == portforward.StateLost, 0, "")
-			}
+			c.sink.Emit(diagnostics.StageForward, string(e.State), e.Attempt-1, e.State == portforward.StateLost, 0, "")
 			switch e.State {
 			// Only a change in whether the transport can carry a request
 			// reaches the model. StateStarting sits between two of those,

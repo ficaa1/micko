@@ -126,7 +126,9 @@ func (m *Root) toggleAllNamespaces() tea.Cmd {
 	}
 	m.deps.allNamespaces = !m.deps.allNamespaces
 	if m.deps.allNamespaces {
-		return m.restartList("namespace: all")
+		cmd := m.restartList("namespace: all")
+		m.beginSpan("allns", "list")
+		return cmd
 	}
 	return m.restartList("namespace: " + m.deps.namespace)
 }

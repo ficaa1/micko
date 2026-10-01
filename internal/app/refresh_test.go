@@ -2,6 +2,7 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
@@ -111,5 +112,52 @@ func TestATickRecollectsOnlyAStaleSnapshotOffTheList(t *testing.T) {
 		if m.listState.loading == fresh {
 			t.Fatalf("fresh %v: recollected %v", fresh, m.listState.loading)
 		}
+	}
+}
+
+// A live watch slows polling only for workflows it covers.
+func TestALiveWatchSlowsThePoll(t *testing.T) {
+	wf := workflowFixture("wf-1")
+	other := workflowFixture("wf-2")
+	cases := []struct {
+		name     string
+		open     *core.Workflow
+		live     bool
+		after    time.Duration
+		wantPoll bool
+	}{
+		{"list, live watch", nil, true, 5 * time.Second, false},
+		{"list, live watch, a minute on", nil, true, time.Minute, true},
+		{"list, no watch", nil, false, 5 * time.Second, true},
+		{"detail, live watch", &wf, true, 5 * time.Second, false},
+		{"detail, live watch, a minute on", &wf, true, time.Minute, true},
+		{"detail outside the snapshot", &other, true, 5 * time.Second, true},
+		{"detail, no watch", &wf, false, 5 * time.Second, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := testRoot(t, fixtureReader(wf, other))
+			clock := m.deps.clock.(*testkit.FakeClock)
+			m.listState.items = []core.Summary{wf.Summary}
+			purpose := "list"
+			m.startListGeneration()
+			m.cancelInflight("list")
+			m.listState.loading = false
+			if c.open != nil {
+				purpose = "detail"
+				m.Update(OpenWorkflowMsg{Ref: c.open.Summary.Ref})
+				m.cancelInflight("detail")
+				m.detailState.loading = false
+			}
+			if c.live {
+				m.watchMode = "watch"
+				m.setInflight("watch", uint64(m.watchAttempt), func() {})
+			}
+			clock.Advance(c.after)
+			m.Update(tickMsg{})
+			if got := m.hasInflight(purpose); got != c.wantPoll {
+				t.Errorf("%s polled = %v, want %v", purpose, got, c.wantPoll)
+			}
+		})
 	}
 }

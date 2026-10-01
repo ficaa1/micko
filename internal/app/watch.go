@@ -17,6 +17,8 @@ const maxWatchRetries = 5
 type watchEventMsg struct {
 	genStamp
 	Event core.WatchEvent
+	// Next runs as a separate command to avoid nesting drains.
+	Next tea.Cmd
 }
 type watchDoneMsg struct {
 	genStamp
@@ -81,10 +83,7 @@ func drainWatchCmd(ctx context.Context, g genStamp, ch chan any) tea.Cmd {
 			}
 			switch value := item.(type) {
 			case core.WatchEvent:
-				return tea.BatchMsg{
-					func() tea.Msg { return watchEventMsg{genStamp: g, Event: value} },
-					drainWatchCmd(ctx, g, ch),
-				}
+				return watchEventMsg{genStamp: g, Event: value, Next: drainWatchCmd(ctx, g, ch)}
 			case watchDoneMsg:
 				return value
 			default:
@@ -95,7 +94,38 @@ func drainWatchCmd(ctx context.Context, g genStamp, ch chan any) tea.Cmd {
 }
 
 func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
-	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
+	return tea.Batch(m.applyWatchEvent(msg), msg.Next)
+}
+
+// watchReplyCurrent reports whether a reply belongs to the current list scope.
+// Opening a workflow changes the selection but leaves the watch current.
+func (m *Root) watchReplyCurrent(g genStamp) bool {
+	return g.Conn == m.connGen && g.Attempt == m.watchAttempt
+}
+
+// Reconciliation polls catch changes a live watch can miss.
+const watchReconcileInterval = time.Minute
+
+func (m *Root) watchLive() bool {
+	return m.watchMode == "watch" && m.hasInflight("watch")
+}
+
+func (m *Root) inSnapshot(uid string) bool {
+	for _, s := range m.listState.items {
+		if s.Ref.UID == uid {
+			return true
+		}
+	}
+	return false
+}
+
+// pollDue reports whether watch coverage permits a poll on this tick.
+func (m *Root) pollDue(last time.Time, covered bool) bool {
+	return !covered || m.deps.clock.Now().Sub(last) >= watchReconcileInterval
+}
+
+func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
+	if !m.watchReplyCurrent(msg.genStamp) {
 		return nil
 	}
 	e := msg.Event
@@ -142,7 +172,7 @@ func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
 }
 
 func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
-	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
+	if !m.watchReplyCurrent(msg.genStamp) {
 		return nil
 	}
 	m.clearInflight("watch", uint64(msg.Attempt))

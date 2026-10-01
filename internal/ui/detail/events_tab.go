@@ -24,8 +24,10 @@ type eventsState struct {
 	// rows is the table as last built; stale marks it out of date.
 	rows      []eventRow
 	unmatched int
-	stale     bool
-	order     eventOrder
+	// Cached widths keep layout work independent of the number of stored rows.
+	reasonW, objectW int
+	stale            bool
+	order            eventOrder
 	// editing is the filter input open; filter is its text.
 	editing bool
 	filter  string
@@ -51,9 +53,7 @@ func (m *Model) EventsWanted() (EventsIntent, bool) {
 	return EventsIntent{Ref: m.state.Summary.Ref}, true
 }
 
-// ApplyEvents keeps the events that may belong to the workflow on screen
-// and drops the ones the stream reports deleted. Past eventsCap the oldest
-// go.
+// ApplyEvents keeps candidate events up to eventsCap, discarding deletions and the oldest excess.
 func (m *Model) ApplyEvents(evs []core.Event) {
 	if !m.loaded {
 		return
@@ -62,10 +62,12 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 		m.ev.byUID = map[string]core.Event{}
 	}
 	name := m.state.Summary.Ref.Name
+	changed := false
 	for _, e := range evs {
 		if !candidateEvent(e, name) {
 			continue
 		}
+		changed = true
 		key := e.UID
 		if key == "" {
 			key = e.ObjectKind + "/" + e.ObjectName + "/" + e.Reason + "/" + e.FirstSeen.String()
@@ -88,7 +90,9 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 			delete(m.ev.byUID, k)
 		}
 	}
-	m.ev.stale = true
+	if changed {
+		m.ev.stale = true
+	}
 }
 
 // SetEventsStatus records how the stream is doing. problem marks a status
@@ -105,6 +109,7 @@ func (m *Model) eventRows() []eventRow {
 		if m.ev.rows == nil {
 			m.ev.rows = []eventRow{}
 		}
+		m.ev.reasonW, m.ev.objectW = eventTextWidths(m.ev.rows)
 		m.ev.stale = false
 	}
 	return m.ev.rows
@@ -158,27 +163,36 @@ func (m *Model) eventsFilterActive() bool {
 	return m.tab == "events" && (m.ev.editing || m.ev.filter != "")
 }
 
-// eventRenderer lays the table out for the pane's width.
+// eventRenderer returns the renderer for the current rows and pane width.
 func (m *Model) eventRenderer(width int, theme shared.Theme) eventRenderer {
-	return eventRenderer{theme: theme, cols: eventColumnsFor(m.eventRows(), width), now: m.now}
+	m.eventRows()
+	return eventRenderer{theme: theme, cols: eventColumnsFor(m.ev.reasonW, m.ev.objectW, width), now: m.now}
 }
 
-// eventsLines is the section's scrolling content: the column heads and the
-// rows, or a line saying why there are none.
-func (m *Model) eventsLines() []string {
+// eventsLineCount returns the row count plus a header or empty-state line.
+func (m *Model) eventsLineCount() int { return len(m.eventRows()) + 1 }
+
+// eventsLines returns at most h rendered lines starting at top.
+func (m *Model) eventsLines(top, h int) []string {
 	rows := m.eventRows()
 	if len(rows) == 0 {
 		msg := m.eventsEmpty()
 		if m.width > 0 {
 			msg = truncCell(msg, m.width)
 		}
-		return []string{m.theme.Muted.Render(msg)}
+		return sliceLines([]string{m.theme.Muted.Render(msg)}, top, h)
 	}
+	n := len(rows) + 1
+	top = min(max(top, 0), n)
+	end := min(max(top+h, top), n)
 	er := m.eventRenderer(m.width, m.theme)
-	out := make([]string, 0, len(rows)+1)
-	out = append(out, er.header())
-	for _, r := range rows {
-		out = append(out, er.render(r))
+	out := make([]string, 0, end-top)
+	for i := top; i < end; i++ {
+		if i == 0 {
+			out = append(out, er.header())
+			continue
+		}
+		out = append(out, er.render(rows[i-1]))
 	}
 	return out
 }

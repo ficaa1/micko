@@ -43,7 +43,7 @@ func (c *Client) Watch(ctx context.Context, req core.WatchRequest, cb func(core.
 	if req.LabelSelector != "" {
 		query.Set("listOptions.labelSelector", req.LabelSelector)
 	}
-	body, err := c.openWatch(ctx, path, query, req.ResourceVersion)
+	body, err := c.openWatch(ctx, endpointWatch, path, query, req.ResourceVersion)
 	if err != nil {
 		return err
 	}
@@ -64,12 +64,12 @@ func (c *Client) Watch(ctx context.Context, req core.WatchRequest, cb func(core.
 // openWatch starts a gateway watch stream and returns its body. A transport
 // failure and an HTTP error both come back as a *core.WatchError that keeps
 // lastRV and, where one applies, the APIError the status maps to.
-func (c *Client) openWatch(ctx context.Context, path string, query url.Values, lastRV string) (io.ReadCloser, error) {
+func (c *Client) openWatch(ctx context.Context, ep endpoint, path string, query url.Values, lastRV string) (io.ReadCloser, error) {
 	httpReq, err := c.newRequest(ctx, path, query)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.do(ctx, httpReq)
+	resp, err := c.do(ctx, httpReq, ep)
 	if err != nil {
 		return nil, watchTransportError(ctx, lastRV, err)
 	}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/diagnostics"
 )
 
 // connection.go is the boundary between the root model and the transport.
@@ -43,6 +44,8 @@ type Connection struct {
 	States <-chan ConnectionStateMsg
 	// Close releases the transport. Nil when there is nothing to release.
 	Close func()
+	// Diagnostics receives debug spans; nil disables them.
+	Diagnostics *diagnostics.Sink
 }
 
 // Connector opens a connection by profile name.

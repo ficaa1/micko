@@ -165,18 +165,19 @@ const (
 	eventColumnGap = 2
 )
 
-// eventColumnsFor fits the columns to width. The message is what a reader
-// came for, so it keeps room first: the reason and object shrink to a middle
-// width, then the count goes, then the type keeps its glyph without its
-// word, and last the reason and object shrink to their minimum. Below that
-// every line is cut at the width.
-func eventColumnsFor(rows []eventRow, width int) eventColumns {
-	c := eventColumns{age: eventAgeW, typ: cellWidth(eventType("Warning", true)), count: eventCountW, typeWord: true, width: width}
-	reason, object := len("REASON"), len("OBJECT")
+// eventTextWidths returns the widest reason and object cells, including headers.
+func eventTextWidths(rows []eventRow) (reason, object int) {
+	reason, object = len("REASON"), len("OBJECT")
 	for _, r := range rows {
 		reason = max(reason, cellWidth(oneLine(r.ev.Reason)))
 		object = max(object, cellWidth(oneLine(r.object)))
 	}
+	return reason, object
+}
+
+// eventColumnsFor returns columns that preserve message space before other cells.
+func eventColumnsFor(reason, object, width int) eventColumns {
+	c := eventColumns{age: eventAgeW, typ: cellWidth(eventType("Warning", true)), count: eventCountW, typeWord: true, width: width}
 	if width <= 0 {
 		c.reason, c.object = reason, object
 		return c
