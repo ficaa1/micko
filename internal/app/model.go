@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/micko/internal/config"
 	"github.com/ficaa1/micko/internal/core"
@@ -1066,6 +1066,7 @@ func splitLines(s string) []string {
 // session can mutate anything. It is always shown.
 func (m *Root) modeLabel() string {
 	if m.actionsEnabled() {
+		// TODO Actions enabled shouldn't be signaled, READ ONLY should be signalled to user
 		return "ACTIONS ENABLED"
 	}
 	return "READ ONLY"
