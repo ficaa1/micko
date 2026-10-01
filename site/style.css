@@ -5,7 +5,8 @@
 /* Mićko on paper: his plumage printed like riso ink on warm paper, as in the video. */
 :root {
   --paper: #efe4cf; --paper2: #e4d5b9; --cream: #fbf8f1; --ink: #1f1a17; --soft: #4a3f36; --dim: #8a7b69;
-  --red: #d7263d; --verm: #e8553b; --yellow: #f2c14e; --ochre: #e3a21a; --olive: #6f8a2a;
+  /* --red is small-label text on --paper: keep it at 4.5:1 or darker. */
+  --red: #ca1b1d; --verm: #e8553b; --yellow: #f2c14e; --ochre: #e3a21a; --olive: #6f8a2a;
   --blue: #3f5bb8; --violet: #6f7fd6; --teal: #2e5e6e;
   --max: 1180px;
   color-scheme: light;
