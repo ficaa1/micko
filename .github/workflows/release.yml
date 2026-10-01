@@ -78,13 +78,21 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
+          # The notes are the version's CHANGELOG.md section.
+          awk -v v="## ${VERSION}" '$0 == v {f = 1; next} /^## / {f = 0} f' CHANGELOG.md \
+            | sed '/./,$!d' > /tmp/notes.md
+          if [ ! -s /tmp/notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for ${VERSION}"
+            exit 1
+          fi
           # --target is the commit a run by hand tags. A pushed tag already
           # exists, and gh publishes it as it is.
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --title "$TAG" \
-            --generate-notes \
+            --notes-file /tmp/notes.md \
             dist/*.tar.gz dist/checksums.txt
 
       # The formula is written from the checksums this job just produced, so
