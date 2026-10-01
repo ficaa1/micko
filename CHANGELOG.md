@@ -2,24 +2,37 @@
 
 ## 0.8.0
 
-- `micko --version` names the commit a release or `make build` was built
-  from. The linker could not set it, so the version line fell back to Go's
-  own stamp and read `unknown` for a tree with uncommitted changes.
-- The archive's DURATION column is wide enough for `unfinished`, which it
-  used to cut to `unfinish…`.
-
-## 0.7.2
-
 - Workflow actions are on by default. Resume, suspend, retry, resubmit,
   stop, terminate and delete no longer need `--allow-actions`; each still
   asks for confirmation, with the typed-name gate for terminate and the
   final screen for delete. `--read-only` turns them off for a session and
-  shows `READ ONLY` in the header, as a session without `--allow-actions`
-  did before. `--allow-actions` is still accepted and does nothing. The
-  demo still writes nothing.
-- `--version` and the header show the commit that `make build` or the
-  release build injected. The injected value was ignored, so a build from a
-  tree with uncommitted changes said `unknown`.
+  shows `READ ONLY` in the header. `--allow-actions` is still accepted and
+  does nothing. The demo still writes nothing.
+- The header badge appears only for a read-only session. A session that
+  can act no longer gets a coloured badge for it.
+- Opening a workflow shows the Nodes tab first.
+- An open workflow follows the watch. Watch events for it were dropped, so
+  the detail view changed only when the poll came round.
+- A watch on a quiet namespace stays open. It used to end after 10 seconds
+  without an event and fall back to a relist.
+- Less traffic while the watch is live: the list and the open workflow are
+  polled once a minute to catch what a watch can miss, instead of every
+  interval. Without a live watch the poll keeps its interval.
+- The events section draws only the rows on screen, skips the rebuild for
+  other workflows' events, and resumes its streams when you come back to it
+  from another section of the same workflow, instead of replaying every pod
+  event in the namespace. A busy namespace no longer makes keys lag.
+- `--debug` writes the timing of every request, and spans for the waits you
+  see: the first list, all namespaces, opening a workflow, the first log
+  line and opening a kind. [docs/performance.md](docs/performance.md)
+  explains the fields and the scripts under `scripts/perf`.
+- `micko --version` and the header name the commit a release or
+  `make build` was built from. The injected value was ignored, so a tree
+  with uncommitted changes said `unknown`.
+- The archive's DURATION column is wide enough for `unfinished`, which it
+  used to cut to `unfinish…`.
+- micko installs with [mise](https://mise.jdx.dev):
+  `mise use -g github:ficaa1/micko`.
 
 ## 0.7.1
 
