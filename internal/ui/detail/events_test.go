@@ -168,16 +168,21 @@ func TestEventsStatusAndEmpty(t *testing.T) {
 
 	e := demoModel(t, "demo-cleanup", 136, 40)
 	e.SetSection("events")
-	if got := e.eventsLines(0, 1); got[0] != "(connecting to the event stream…)" {
-		t.Errorf("before any status: %q", got[0])
-	}
-	e.SetEventsStatus("live", false)
-	if got := e.eventsLines(0, 1); !strings.Contains(got[0], "Kubernetes keeps events for about an hour") {
-		t.Errorf("live and empty: %q", got[0])
-	}
-	e.SetEventsStatus("not allowed to watch events in demo", true)
-	if got := e.eventsLines(0, 1); got[0] != "(no events: not allowed to watch events in demo)" {
-		t.Errorf("stopped: %q", got[0])
+	for _, c := range []struct {
+		name, status string
+		stopped      bool
+		want         string
+	}{
+		{"before any status", "", false, "(connecting to the event stream…)"},
+		{"live and empty", "live", false, "Kubernetes keeps events for about an hour"},
+		{"stopped", "not allowed to watch events in demo", true, "(no events: not allowed to watch events in demo)"},
+	} {
+		if c.status != "" {
+			e.SetEventsStatus(c.status, c.stopped)
+		}
+		if body := strings.Join(e.BodyLines(), "\n"); !strings.Contains(body, c.want) {
+			t.Errorf("%s: the pane lacks %q:\n%s", c.name, c.want, body)
+		}
 	}
 
 	wf := demoWorkflow(t, "demo-oom-backfill")
@@ -215,13 +220,14 @@ func TestEventsAreCapped(t *testing.T) {
 	}
 }
 
-// A frame draws only the rows on screen, so it costs the same with eventsCap
-// events kept as with a screenful, also after a batch of other workflows'
-// events. Each streamed batch redraws the frame, and keys wait behind it.
+// A frame draws only the rows on screen, so at every pane height it costs
+// the same with eventsCap events kept as with a screenful, also after a batch
+// of other workflows' events. Each streamed batch redraws the frame, and keys
+// wait behind it.
 func TestEventsFrameCostDoesNotGrowWithEvents(t *testing.T) {
 	other := []core.Event{ev("x", "Pod", "other-workflow-main-1", "Normal", "Scheduled", time.Minute)}
-	frame := func(n int, batch []core.Event) float64 {
-		m := demoModel(t, "demo-oom-backfill", 136, 30)
+	frame := func(h, n int, batch []core.Event) float64 {
+		m := demoModel(t, "demo-oom-backfill", 136, h)
 		m.SetSection("events")
 		var evs []core.Event
 		for i := 0; i < n; i++ {
@@ -236,16 +242,18 @@ func TestEventsFrameCostDoesNotGrowWithEvents(t *testing.T) {
 			m.BodyLines()
 		})
 	}
-	screenful := frame(30, nil)
-	for _, c := range []struct {
-		name  string
-		batch []core.Event
-	}{
-		{"redraw", nil},
-		{"batch for other workflows", other},
-	} {
-		if full := frame(eventsCap, c.batch); full > 2*screenful {
-			t.Errorf("%s: a frame allocates %.0f times with %d events and %.0f with 30, want about the same", c.name, full, eventsCap, screenful)
+	for _, h := range []int{12, 30, 60} {
+		screenful := frame(h, h, nil)
+		for _, c := range []struct {
+			name  string
+			batch []core.Event
+		}{
+			{"redraw", nil},
+			{"batch for other workflows", other},
+		} {
+			if full := frame(h, eventsCap, c.batch); full > 2*screenful {
+				t.Errorf("height %d, %s: a frame allocates %.0f times with %d events and %.0f with %d, want about the same", h, c.name, full, eventsCap, screenful, h)
+			}
 		}
 	}
 }
