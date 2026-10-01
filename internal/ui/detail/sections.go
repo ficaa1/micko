@@ -22,12 +22,12 @@ type section struct {
 
 // sections is the tab strip, in order. The position is the digit key.
 var sections = []section{
-	{id: "summary", title: "Summary"},
 	{id: "nodes", title: "Nodes"},
 	{id: "timeline", title: "Timeline", key: "T"},
 	{id: "explain", title: "Explain", key: "X"},
 	{id: "events", title: "Events", key: "E"},
 	{id: "resource", title: "Resource"},
+	{id: "summary", title: "Summary"},
 }
 
 // sectionIndex is id's position in the strip, and -1 for an unknown ID.
