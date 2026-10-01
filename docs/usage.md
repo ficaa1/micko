@@ -309,5 +309,5 @@ the floor.
   replacement between micko's identity check and the write is possible.
 - Tested live against Argo Workflows v4.1.2 on macOS arm64, through
   `kubectl port-forward` to an Argo Server in server auth mode without TLS.
-  A direct connection with a bearer token is untested. Windows builds but
+  A direct connection with a bearer token is untested. The Windows release
   is untested, and log piping needs `/bin/sh`.

@@ -33,9 +33,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
           go-version: "${{ env.GO_VERSION }}"
+
+      - name: Check out the tag of a version already released
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            git checkout -q "$TAG"
+          fi
 
       - name: Check
         run: |
@@ -62,24 +71,47 @@ jobs:
         run: |
           mkdir -p dist
           commit="$(git rev-parse --short HEAD)"
-          for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do
+          for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
             os="${target%/*}"
             arch="${target#*/}"
+            bin=micko
+            [ "$os" = windows ] && bin=micko.exe
             GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
               -ldflags "-s -w -X github.com/ficaa1/micko/internal/buildinfo.Commit=$commit" \
-              -o dist/micko ./cmd/micko
-            tar -czf "dist/micko_${VERSION}_${os}_${arch}.tar.gz" \
-              -C dist micko \
-              -C "$GITHUB_WORKSPACE" README.md CHANGELOG.md
-            rm dist/micko
+              -o "dist/$bin" ./cmd/micko
+            name="micko_${VERSION}_${os}_${arch}"
+            if [ "$os" = windows ]; then
+              zip -jq "dist/$name.zip" "dist/$bin" README.md CHANGELOG.md
+            else
+              tar -czf "dist/$name.tar.gz" \
+                -C dist "$bin" \
+                -C "$GITHUB_WORKSPACE" README.md CHANGELOG.md
+            fi
+            rm "dist/$bin"
           done
-          cd dist && sha256sum ./*.tar.gz > checksums.txt && cat checksums.txt
+          cd dist && sha256sum ./*.tar.gz ./*.zip > checksums.txt && cat checksums.txt
 
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # A rebuilt archive differs byte for byte from the published one,
+            # so the published checksums stay, and the tap below reads them.
+            gh release download "$TAG" --pattern checksums.txt --dir /tmp/published
+            have="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+            for f in dist/*.tar.gz dist/*.zip; do
+              n="$(basename "$f")"
+              if grep -qxF "$n" <<<"$have"; then continue; fi
+              grep -F " ./$n" dist/checksums.txt >> /tmp/published/checksums.txt
+              gh release upload "$TAG" "$f"
+            done
+            cp /tmp/published/checksums.txt dist/checksums.txt
+            gh release upload "$TAG" dist/checksums.txt --clobber
+            exit 0
+          fi
           # The notes are the version's CHANGELOG.md section.
           awk -v v="## ${VERSION}" '$0 == v {f = 1; next} /^## / {f = 0} f' CHANGELOG.md \
             | sed '/./,$!d' > /tmp/notes.md
@@ -93,7 +125,7 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$TAG" \
             --notes-file /tmp/notes.md \
-            dist/*.tar.gz dist/checksums.txt
+            dist/*.tar.gz dist/*.zip dist/checksums.txt
 
       # The formula is written from the checksums this job just produced, so
       # the tap can never point at a build it did not verify. A pre-release
