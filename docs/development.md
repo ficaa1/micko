@@ -87,7 +87,7 @@ live in [ci.yml](../.github/workflows/ci.yml).
   arbitrary application logs contain no secrets.
 
 The adapter and fixtures target Argo Workflows v4.1.2. See the
-[README](../README.md#troubleshooting-and-limits) for the scope of recorded
+[usage guide](usage.md#limits-and-troubleshooting) for the scope of recorded
 live testing. Synthetic test results do not establish deployment compatibility.
 
 ## Local checks
