@@ -37,7 +37,7 @@ func demoNames() []string {
 	return out
 }
 
-// workflowModel is a w×h pane in the plain theme showing wf on its summary.
+// workflowModel is a w×h pane in the plain theme showing wf on its nodes tab.
 func workflowModel(wf core.Workflow, w, h int) *Model {
 	m := New()
 	m.SetTheme(shared.NewTheme(true))
@@ -49,9 +49,7 @@ func workflowModel(wf core.Workflow, w, h int) *Model {
 // demoModel is the nodes tab of one demo workflow in the plain theme.
 func demoModel(t testing.TB, name string, w, h int) *Model {
 	t.Helper()
-	m := workflowModel(demoWorkflow(t, name), w, h)
-	press(m, "tab")
-	return m
+	return workflowModel(demoWorkflow(t, name), w, h)
 }
 
 // sectionModel is one section of a demo workflow in the plain theme.

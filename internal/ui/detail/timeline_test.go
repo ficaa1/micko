@@ -546,11 +546,11 @@ func TestTimelineFollowsChangesMadeElsewhere(t *testing.T) {
 	m := demoModel(t, "demo-nightly-report", 136, 40)
 	cursorTo(t, m, "transform")
 	press(m, "space")
-	press(m, "3")
+	press(m, "2")
 	if r := tlRowNamed(t, m, "transform"); !r.Folded {
 		t.Fatal("the nodes tab's fold is not on the timeline")
 	}
-	press(m, "2")
+	press(m, "1")
 	press(m, "space")
 	wf := demoWorkflow(t, "demo-nightly-report")
 	n := wf.Nodes

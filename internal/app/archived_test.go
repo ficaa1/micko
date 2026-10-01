@@ -103,6 +103,7 @@ func TestArchivedDetail(t *testing.T) {
 	if rec.archGets != 1 || rec.liveGets != 0 {
 		t.Fatalf("reads: archive %d live %d", rec.archGets, rec.liveGets)
 	}
+	typeKeys(m, "6")
 	v := screen(m)
 	for _, s := range []string{"Detail " + want + " (archived)", "source:    the workflow archive", "phase=Failed (archived)"} {
 		if !strings.Contains(v, s) {

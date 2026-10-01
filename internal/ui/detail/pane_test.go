@@ -48,9 +48,18 @@ func TestPaneGolden(t *testing.T) {
 		{"loading", func() *Model { m := workflowModel(failed, 80, 12); m.SetLoading(); return m }},
 		{"error", func() *Model { m := workflowModel(failed, 80, 12); m.SetError("forbidden: RBAC"); return m }},
 		{"not found", func() *Model { m := workflowModel(failed, 80, 12); m.SetNotFound(); return m }},
-		{"summary", func() *Model { return workflowModel(failed, 80, 12) }},
-		{"summary, suspended", func() *Model { return workflowModel(demoWorkflow(t, "demo-release-gate"), 80, 12) }},
-		{"summary, archived", func() *Model { m := workflowModel(failed, 80, 12); m.SetArchived(true); return m }},
+		{"summary", func() *Model { m := workflowModel(failed, 80, 12); m.SetSection("summary"); return m }},
+		{"summary, suspended", func() *Model {
+			m := workflowModel(demoWorkflow(t, "demo-release-gate"), 80, 12)
+			m.SetSection("summary")
+			return m
+		}},
+		{"summary, archived", func() *Model {
+			m := workflowModel(failed, 80, 12)
+			m.SetArchived(true)
+			m.SetSection("summary")
+			return m
+		}},
 		{"resource", func() *Model {
 			m := workflowModel(resourceFixture(), 80, 12)
 			m.SetSection("resource")
@@ -76,7 +85,7 @@ func TestPaneGolden(t *testing.T) {
 func TestSectionKeys(t *testing.T) {
 	m := workflowModel(demoWorkflow(t, "demo-nightly-report"), 80, 20)
 	for _, c := range []struct{ key, want string }{
-		{"2", "nodes"}, {"3", "timeline"}, {"4", "explain"}, {"5", "events"}, {"6", "resource"}, {"1", "summary"},
+		{"2", "timeline"}, {"3", "explain"}, {"4", "events"}, {"5", "resource"}, {"6", "summary"}, {"1", "nodes"},
 		{"T", "timeline"}, {"X", "explain"}, {"E", "events"},
 		{"9", "events"}, {"0", "events"}, {"t", "events"}, {"x", "events"},
 		{"tab", "resource"}, {"tab", "summary"}, {"tab", "nodes"},
@@ -100,11 +109,11 @@ func TestTabStripFits(t *testing.T) {
 		width  int
 		want   string
 	}{
-		{"explain", 80, " Summary   Nodes   Timeline  [Explain]  Events   Resource "},
-		{"explain", 50, "Summary Nodes Timeline [Explain] Events Resource"},
+		{"explain", 80, " Nodes   Timeline  [Explain]  Events   Resource   Summary "},
+		{"explain", 50, "Nodes Timeline [Explain] Events Resource Summary"},
 		{"explain", 30, "… Timeline [Explain] Events …"},
-		{"summary", 30, "[Summary] Nodes Timeline …"},
-		{"resource", 24, "… Events [Resource]"},
+		{"nodes", 30, "[Nodes] Timeline Explain …"},
+		{"summary", 24, "… Resource [Summary]"},
 		{"explain", 13, "… [Explain] …"},
 		{"explain", 8, "… [Expl…"},
 	} {

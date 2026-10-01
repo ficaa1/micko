@@ -1,5 +1,5 @@
 == demo-release-gate
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 progress 2/2 ================  ✓ 2  ◐ 1  elapsed 12m00s
 4 nodes · sort pipeline · 1/4
 NAME                             TEMPLATE  DURATION  TIMELINE            12m00s  MESSAGE
@@ -8,7 +8,7 @@ NAME                             TEMPLATE  DURATION  TIMELINE            12m00s 
 ├─ ✓ integration-test            test         4m00s  ------=========-----------
 └─ ◐ approve-production Suspend  approval     4m50s  ---------------==========>  AWAITING RESUME
 == demo-nightly-report
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 progress 5/6 =============---  ✓ 2  ✗ 3  ⊘ 1  took 4m00s
 8 nodes · sort pipeline · 1/8
 NAME                                TEMPLATE   DURATION  TIMELINE             4m00s  MESSAGE
@@ -21,7 +21,7 @@ NAME                                TEMPLATE   DURATION  TIMELINE             4m
 └─ ⊘ load ← transform               load                 --------------------------  omitted: depends condition not met
   ✓ onExit exit handler             notify          20s  -----------------------===
 == demo-train-pipeline
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 progress 3/8 ===========>----  ✓ 3  ● 3  ○ 2  elapsed 4m00s of ~9m
 9 nodes · sort pipeline · 1/9
 NAME                                                   TEMPLATE     DURATION  TIMELINE             4m00s  MESSAGE
@@ -35,7 +35,7 @@ NAME                                                   TEMPLATE     DURATION  TI
 ├─ ○ train-shard(5:5) ← preprocess                     train-shard            --------------------------
 └─ ○ evaluate ← train-shard(0:0), train-shard(1:1) +4  evaluate               --------------------------
 == demo-data-pull
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 progress 3/5 ===============>  ✓ 3  ● 2  ⊘ 1  elapsed 40m00s of ~55m
 6 nodes · 1 skipped hidden · sort pipeline · 1/6
 NAME                      TEMPLATE          DURATION  TIMELINE            40m00s  MESSAGE
@@ -46,7 +46,7 @@ NAME                      TEMPLATE          DURATION  TIMELINE            40m00s
 ├─ ● pull(us)             pull-region         11m49s  ------------------=======>
 └─ ● pull(apac)           pull-region         11m49s  ------------------=======>
 == demo-deploy-multi-layer
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 progress 5/5 ================  ✓ 5  ⊘ 16  took 11m00s
 10 nodes · 16 skipped hidden · sort pipeline · 1/10
 NAME                             TEMPLATE  DURATION  TIMELINE            11m00s  MESSAGE
@@ -61,7 +61,7 @@ NAME                             TEMPLATE  DURATION  TIMELINE            11m00s 
 └▾ ✓ edge DAG ← plan             layer        2m00s  ------------------=====---
    └─ ✓ apply-eu-west            apply        1m50s  ------------------=====---
 == demo-nightly-report, info on extract
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 progress 5/6 =============---  ✓ 2  ✗ 3  ⊘ 1  took 4m00s
 8 nodes · sort pipeline · 2/8 · l logs
 NAME                                DURATION  TIMELINE      MESSAGE                   │ NODE extract  values shown (v redacts)

@@ -1,26 +1,26 @@
 == nothing loaded
 Detail
 (no workflow loaded)
-tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 
 == loading
 Detail demo-nightly-report
 loading detail…
-tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ✗ Failed
 == error
 Detail demo-nightly-report
 detail error: forbidden: RBAC
-tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ✗ Failed
 == not found
 Detail demo-nightly-report
 workflow no longer available
-tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ✗ Failed
 == summary
 Detail demo-nightly-report
-[Summary]  Nodes   Timeline   Explain   Events   Resource 
+ Nodes   Timeline   Explain   Events   Resource  [Summary]
 summary · tab changes section
 name:      demo-nightly-report
 namespace: demo
@@ -32,7 +32,7 @@ tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
 ✗ Failed
 == summary, suspended
 Detail demo-release-gate
-[Summary]  Nodes   Timeline   Explain   Events   Resource 
+ Nodes   Timeline   Explain   Events   Resource  [Summary]
 summary · tab changes section
 name:      demo-release-gate
 namespace: demo
@@ -43,7 +43,7 @@ tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
 ● Running
 == summary, archived
 Detail demo-nightly-report (archived)
-[Summary]  Nodes   Timeline   Explain   Events   Resource 
+ Nodes   Timeline   Explain   Events   Resource  [Summary]
 summary · tab changes section
 source:    the workflow archive — a record kept after the run; actions do not apply
 name:      demo-nightly-report
@@ -56,7 +56,7 @@ tab section  1-9 jump  v reveal  y copy  f raw  r refresh  esc back
 ✗ Failed
 == resource
 Detail redact-wf
- Summary   Nodes   Timeline   Explain   Events  [Resource]
+ Nodes   Timeline   Explain   Events  [Resource]  Summary 
 resource · values shown (v redacts) · 1/24
 metadata:
   annotations:
@@ -72,7 +72,7 @@ tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
 ✓ Succeeded
 == nodes, offloaded
 Detail fixture-offloaded
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 
 node status unavailable
 node status offloaded and not hydrated by the server
@@ -80,7 +80,7 @@ tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs
 ● Running
 == nodes, not started
 Detail pending
- Summary  [Nodes]  Timeline   Explain   Events   Resource 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 
 0 nodes · sort pipeline
 (no nodes yet — workflow not started)

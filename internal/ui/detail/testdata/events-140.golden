@@ -1,5 +1,5 @@
 == demo-nightly-report
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 28 events · 7 warnings · newest first · live
 AGE     TYPE       REASON              OBJECT        COUNT  MESSAGE
 1h56m   ▲ Warning  WorkflowFailed      workflow          1  child 'transform' failed
@@ -31,7 +31,7 @@ AGE     TYPE       REASON              OBJECT        COUNT  MESSAGE
 1h59m   ◇ Normal   Scheduled           extract           1  Successfully assigned demo/demo-nightly-report-extract-3295999816 to demo-w…
 2h00m   ◇ Normal   WorkflowRunning     workflow          1  Workflow Running
 == demo-oom-backfill
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 8 events · 3 warnings · newest first · live
 AGE     TYPE       REASON              OBJECT            COUNT  MESSAGE
 4h42m   ▲ Warning  WorkflowNodeFailed  workflow              1  Failed node demo-oom-backfill[0].backfill-2026-q2: OOMKilled (exit code…
@@ -43,7 +43,7 @@ AGE     TYPE       REASON              OBJECT            COUNT  MESSAGE
 4h59m   ◇ Normal   Scheduled           backfill-2026-q2      1  Successfully assigned demo/demo-oom-backfill-backfill-quarter-277898626…
 5h00m   ◇ Normal   WorkflowRunning     workflow              1  Workflow Running
 == demo-train-pipeline
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 25 events · newest first · live
 AGE     TYPE       REASON           OBJECT            COUNT  MESSAGE
 2m38s   ◇ Normal   Started          train-shard(4:4)      1  Started container main
@@ -72,12 +72,12 @@ AGE     TYPE       REASON           OBJECT            COUNT  MESSAGE
 3m56s   ◇ Normal   Scheduled        preprocess            1  Successfully assigned demo/demo-train-pipeline-preprocess-38337574 to demo…
 4m00s   ◇ Normal   WorkflowRunning  workflow              1  Workflow Running
 == demo-param-check
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 1 event · 1 warning · newest first · live
 AGE     TYPE       REASON          OBJECT    COUNT  MESSAGE
 6h00m   ▲ Warning  WorkflowFailed  workflow      1  invalid spec: templates.main.steps[0].fetch failed to resolve {{inputs.parameters.b…
 == demo-nightly-report, warnings first, /backoff
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 3 events · /backoff · 3 warnings · warnings first · live
 AGE     TYPE       REASON   OBJECT        COUNT  MESSAGE
 1h56m   ▲ Warning  BackOff  transform(2)      3  Back-off restarting failed container main in pod demo-nightly-report-transform-3989421…

@@ -136,7 +136,7 @@ type workflowState struct {
 // New builds the detail child model.
 func New() *Model {
 	return &Model{
-		tab: "summary", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortPipeline,
+		tab: "nodes", hideSkipped: true, nodePhase: NodePhaseAll, nodeSort: NodeSortPipeline,
 		theme: shared.NewTheme(false), folded: map[string]bool{}, autoFolded: map[string]bool{}, revealResource: true,
 	}
 }
