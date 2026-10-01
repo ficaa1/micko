@@ -12,7 +12,8 @@
   color-scheme: light;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
+/* iOS enlarges text on rotation to landscape and the terminals overflow their windows. */
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { background: var(--paper); color: var(--ink); font: 400 17px/1.6 JBM, ui-monospace, monospace; overflow-x: hidden; }
 a { color: inherit; }
 ::selection { background: var(--yellow); color: var(--ink); }
@@ -80,6 +81,7 @@ kbd { display: inline-block; min-width: 1.9em; text-align: center; font-weight: 
 .try .ln + .ln { margin-top: 10px; }
 .try .ps { color: var(--olive); }
 .try .cm { color: var(--dim); font-size: 14px; margin-top: 10px; white-space: normal; }
+@media (max-width: 420px) { .try { padding: 16px 12px; } .try .ln { font-size: 12px; gap: 8px; flex-wrap: wrap; } }
 .copy { margin-left: auto; font: 700 12px JBM, monospace; padding: 3px 8px; cursor: pointer; background: var(--paper2);
   border: 2px solid var(--ink); border-radius: 5px; box-shadow: 2px 2px 0 var(--ink); }
 .copy:active { transform: translate(2px, 2px); box-shadow: none; }
@@ -141,6 +143,7 @@ section { padding: 72px 0; }
 
 .stack { position: relative; padding-bottom: 18%; }
 .stack .win + .win { position: absolute; width: 58%; right: -3%; bottom: 0; transform: rotate(1.5deg); }
+@media (max-width: 1240px) { .stack .win + .win { right: 0; } }
 
 /* Filter: the query typed live. */
 .query { font-size: clamp(26px, 4vw, 44px); font-weight: 800; margin: 6px 0 22px; white-space: pre; min-height: 1.3em; }
