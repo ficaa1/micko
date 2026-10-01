@@ -97,9 +97,16 @@ func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
 	return tea.Batch(m.applyWatchEvent(msg), msg.Next)
 }
 
+// watchReplyCurrent reports whether a reply belongs to the watch now
+// running. The watch belongs to the list's scope, not to the selection:
+// opening a workflow leaves it current, and a scope change replaces it.
+func (m *Root) watchReplyCurrent(g genStamp) bool {
+	return g.Conn == m.connGen && g.Attempt == m.watchAttempt
+}
+
 // applyWatchEvent folds one event into the list snapshot.
 func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
-	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
+	if !m.watchReplyCurrent(msg.genStamp) {
 		return nil
 	}
 	e := msg.Event
@@ -146,7 +153,7 @@ func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 }
 
 func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
-	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
+	if !m.watchReplyCurrent(msg.genStamp) {
 		return nil
 	}
 	m.clearInflight("watch", uint64(msg.Attempt))

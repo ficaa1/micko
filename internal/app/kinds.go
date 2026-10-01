@@ -321,6 +321,7 @@ func (m *Root) restartWorkflowList() tea.Cmd {
 func (m *Root) resetWorkflowList() {
 	m.cancelInflight("list")
 	m.cancelInflight("watch")
+	m.watchAttempt++
 	m.selGen++
 	m.listState = listState{loading: true}
 	m.watchRV, m.watchMode, m.watchRetries = "", "", 0

@@ -752,7 +752,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleWatchDone(msg)
 
 	case watchRetryMsg:
-		if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt || m.watchMode != "rate limited" {
+		if !m.watchReplyCurrent(msg.genStamp) || m.watchMode != "rate limited" {
 			return m, nil
 		}
 		return m, m.startWatch()
