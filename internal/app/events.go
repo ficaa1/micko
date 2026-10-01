@@ -103,9 +103,17 @@ type eventsRetryMsg struct {
 // syncEvents starts the streams the Events section wants and stops the
 // streams nobody is looking at. It runs after the same changes as
 // syncExplainLog.
+//
+// Another section of the same workflow pauses the streams: the pane keeps
+// its events, so coming back resumes each stream from its cursor instead of
+// replaying the namespace's pod events again.
 func (m *Root) syncEvents() tea.Cmd {
-	if m.route != RouteDetail || m.detailView == nil || m.detailView.Section() != shared.SectionEvents {
+	if m.route != RouteDetail || m.detailView == nil {
 		m.stopEvents()
+		return nil
+	}
+	if m.detailView.Section() != shared.SectionEvents {
+		m.pauseEvents()
 		return nil
 	}
 	intent, ok := m.detailView.EventsWanted()
@@ -115,8 +123,16 @@ func (m *Root) syncEvents() tea.Cmd {
 	if m.events.active && m.events.ref == intent.Ref {
 		return nil
 	}
+	// A resumed stream also keeps counting its attempts, so a late reply
+	// from the paused one cannot pass for the new one.
+	var kept [eventStreamCount]eventStream
+	if m.events.ref == intent.Ref {
+		for i, st := range m.events.streams {
+			kept[i] = eventStream{rv: st.rv, attempt: st.attempt}
+		}
+	}
 	m.stopEvents()
-	m.events = eventsSession{ref: intent.Ref, active: true}
+	m.events = eventsSession{ref: intent.Ref, active: true, streams: kept}
 	if m.deps.eventWatcher == nil {
 		for i := range m.events.streams {
 			m.events.streams[i].state = eventStopped
@@ -132,15 +148,22 @@ func (m *Root) syncEvents() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// stopEvents cancels both streams.
+// stopEvents cancels both streams and forgets their cursors.
 func (m *Root) stopEvents() {
+	m.pauseEvents()
+	m.events = eventsSession{}
+}
+
+// pauseEvents cancels both streams and keeps the workflow and the cursors,
+// for syncEvents to resume from.
+func (m *Root) pauseEvents() {
 	if !m.events.active {
 		return
 	}
 	for _, p := range eventPurposes {
 		m.cancelInflight(p)
 	}
-	m.events = eventsSession{}
+	m.events.active = false
 }
 
 // startEventStream opens stream i from its last resource version.

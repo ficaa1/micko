@@ -1,6 +1,7 @@
 package app
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -143,13 +144,31 @@ func TestEventsStreamLive(t *testing.T) {
 	}
 }
 
-// Leaving the section or the workflow cancels both streams; coming back reopens them.
+// Leaving the section or the workflow cancels both streams. Coming back to
+// the section resumes each from its cursor; coming back to the workflow
+// starts them over.
 func TestEventsStreamsAreCanceledWhenLeft(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	f := m.deps.reader.(*testkit.FakeReader)
-	m, _ = openOnEvents(t, m, "demo-oom-backfill")
+	m, left := openOnEvents(t, m, "demo-oom-backfill")
 	if !m.hasInflight("events-workflow") || !m.hasInflight("events-pods") {
 		t.Fatal("the streams are not in flight")
+	}
+	var pod string
+	for _, n := range m.detailState.workflow.Nodes {
+		if n.PodName != "" {
+			pod = n.PodName
+		}
+	}
+	f.PublishEvent(core.Event{UID: "rv-w", Namespace: "demo", ObjectKind: "Workflow", ObjectName: "demo-oom-backfill", ResourceVersion: "701"})
+	f.PublishEvent(core.Event{UID: "rv-p", Namespace: "demo", ObjectKind: "Pod", ObjectName: pod, ResourceVersion: "702"})
+	m, _ = resume(m, 150*time.Millisecond, left)
+	cursors := func(reqs []core.EventWatchRequest) map[string]string {
+		out := map[string]string{}
+		for _, r := range reqs {
+			out[r.FieldSelector] = r.ResourceVersion
+		}
+		return out
 	}
 	typeKeys(m, "1")
 	if m.hasInflight("events-workflow") || m.hasInflight("events-pods") || m.events.active {
@@ -162,6 +181,10 @@ func TestEventsStreamsAreCanceledWhenLeft(t *testing.T) {
 	if f.EventStartCount() != 4 || !m.events.active {
 		t.Fatalf("coming back opened %d streams in all", f.EventStartCount())
 	}
+	want := map[string]string{"involvedObject.kind=Workflow,involvedObject.name=demo-oom-backfill": "701", "involvedObject.kind=Pod": "702"}
+	if got := cursors(f.EventRequestLog()[2:]); !reflect.DeepEqual(got, want) {
+		t.Errorf("coming back to the section asked for %v, want the cursors %v", got, want)
+	}
 	if !strings.Contains(screen(m), "OOMKilling") {
 		t.Errorf("the events are gone after coming back:\n%s", screen(m))
 	}
@@ -172,6 +195,13 @@ func TestEventsStreamsAreCanceledWhenLeft(t *testing.T) {
 		t.Fatalf("esc: route %v, streams in flight", m.route)
 	}
 	waitFor(t, "the streams to end after esc", func() bool { return f.EventCancelCount() == 4 })
+
+	m, _ = openOnEvents(t, m, "demo-oom-backfill")
+	for sel, rv := range cursors(f.EventRequestLog()[4:]) {
+		if rv != "" {
+			t.Errorf("reopening the workflow resumed %s from %q, want a fresh start", sel, rv)
+		}
+	}
 }
 
 func TestEventsDropStaleReplies(t *testing.T) {

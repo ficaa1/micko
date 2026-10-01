@@ -1307,6 +1307,10 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 	if m.route != RouteDetail {
 		m.detailFrom = m.route
 	}
+	if m.events.ref != ref {
+		// The pane drops another workflow's events, so their cursors go too.
+		m.stopEvents()
+	}
 	m.selection = ref
 	m.selGen++
 	m.route = RouteDetail
