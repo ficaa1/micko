@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ficaa1/micko/internal/core"
@@ -168,8 +169,8 @@ func TestRequestTimingsFollowDebug(t *testing.T) {
 	t.Cleanup(srv.Close)
 	path := writeConfig(t, "profiles:\n  dev:\n    server: "+srv.URL+"\n    namespace: argo\n    tokenEnv: T\n")
 	for _, debug := range []bool{false, true} {
-		var out bytes.Buffer
-		connector, err := NewConnector(Options{ConfigPath: path, Skins: testSkins, Debug: debug, Diagnostics: &out})
+		out := &lockedBuffer{}
+		connector, err := NewConnector(Options{ConfigPath: path, Skins: testSkins, Debug: debug, Diagnostics: out})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -184,6 +185,25 @@ func TestRequestTimingsFollowDebug(t *testing.T) {
 			t.Errorf("debug %v: diagnostics = %q, want a list timing %v", debug, out.String(), debug)
 		}
 	}
+}
+
+// lockedBuffer is a diagnostics writer the test reads while the connection's
+// scope check may still write to it.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 // The entrypoint always defers Close, so it is safe with nothing connected.
