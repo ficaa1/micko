@@ -129,6 +129,11 @@ shell; in PowerShell set `$env:NAME` before running the command.
 PTY helpers are provided for Linux and macOS; terminal availability can cause
 skips. Inspect test output before claiming that a suite exercised every path.
 
+## Performance
+
+[performance.md](performance.md) covers the request timings of `--debug`, the
+scripted sessions in `scripts/perf` and the benchmarks.
+
 ## Real-cluster tests
 
 Use a disposable Argo environment and a dedicated namespace. The E2E journey

@@ -21,3 +21,6 @@ coverage.*
 # Pending-approval draft (AGENTS.md write requires explicit user consent;
 # draft kept for review only)
 AGENTS.md.draft
+
+# perf measurement output (scripts/perf)
+/perf-out/
