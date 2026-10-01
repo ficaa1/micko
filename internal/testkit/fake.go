@@ -297,6 +297,12 @@ func (f *FakeReader) StreamLogs(ctx context.Context, req core.LogRequest, cb fun
 			rec.Content = serverTimestamp(rec.ReceivedAt) + " " + rec.Content
 		}
 		if err := cb(rec); err != nil {
+			// A callback that saw the cancel first ends the stream the same way.
+			if ctx.Err() != nil {
+				f.mu.Lock()
+				f.StreamCancels++
+				f.mu.Unlock()
+			}
 			return err
 		}
 	}
