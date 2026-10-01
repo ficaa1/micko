@@ -40,8 +40,8 @@ func TestDetailSectionKeys(t *testing.T) {
 		key  rune
 		want string
 	}{
-		{'T', "timeline"}, {'1', "summary"}, {'6', "resource"}, {'2', "nodes"},
-		{'9', "nodes"}, {'3', "timeline"},
+		{'T', "timeline"}, {'6', "summary"}, {'5', "resource"}, {'1', "nodes"},
+		{'9', "nodes"}, {'2', "timeline"},
 	}
 	for _, s := range steps {
 		typeKeys(m, string(s.key))
@@ -50,7 +50,7 @@ func TestDetailSectionKeys(t *testing.T) {
 		}
 	}
 
-	typeKeys(m, "2")
+	typeKeys(m, "1")
 	typeKeys(m, "/")
 	for _, r := range "T13" {
 		typeKeys(m, string(r))

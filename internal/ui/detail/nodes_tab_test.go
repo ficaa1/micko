@@ -52,7 +52,6 @@ func TestHideSkipped(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			m := workflowModel(c.wf, 120, 40)
-			press(m, "tab")
 			if got := strings.Join(rowNames(m), " "); got != c.shown {
 				t.Errorf("rows = %s, want %s", got, c.shown)
 			}
@@ -184,7 +183,6 @@ func retryOfSteps(attempts int) core.Workflow {
 // Finished attempts but the last start folded, once per node: one the reader opens stays open.
 func TestOlderRetryAttemptsStartFolded(t *testing.T) {
 	m := workflowModel(retryOfSteps(3), 120, 30)
-	press(m, "tab")
 	if !m.folded["a0"] || !m.folded["a1"] || m.folded["a2"] {
 		t.Fatalf("default folds = %v, want a0 and a1", m.folded)
 	}
@@ -415,7 +413,6 @@ func sortWorkflow() core.Workflow {
 // s cycles the sibling order, keeps the cursor on its node, and returns to the tree's own order.
 func TestNodeSort(t *testing.T) {
 	m := workflowModel(sortWorkflow(), 120, 30)
-	press(m, "tab")
 	pipeline := strings.Join(rowNames(m), " ")
 	cursorTo(t, m, "mike")
 	for _, step := range []struct{ sort, rows string }{
@@ -447,19 +444,16 @@ func TestLogsKey(t *testing.T) {
 	}{
 		{"a pod on the nodes tab", func(t *testing.T) *Model {
 			m := workflowModel(gateWorkflow(), 120, 20)
-			press(m, "tab")
 			cursorTo(t, m, "plan-prd")
 			return m
 		}, "l", "deploy-terraform-1234"},
 		{"enter on a pod", func(t *testing.T) *Model {
 			m := workflowModel(gateWorkflow(), 120, 20)
-			press(m, "tab")
 			cursorTo(t, m, "plan-prd")
 			return m
 		}, "enter", "deploy-terraform-1234"},
 		{"a Suspend node", func(t *testing.T) *Model {
 			m := workflowModel(gateWorkflow(), 120, 20)
-			press(m, "tab")
 			cursorTo(t, m, "suspend")
 			return m
 		}, "l", ""},
@@ -496,7 +490,6 @@ func TestLogsKey(t *testing.T) {
 // gg is two presses: a single g neither jumps nor swallows the next key.
 func TestGGPrefixDoesNotSwallowTheNextKey(t *testing.T) {
 	m := workflowModel(gateWorkflow(), 120, 20)
-	press(m, "tab")
 	typeText(m, "jj")
 	press(m, "g")
 	if m.nodeCursor != 2 {

@@ -217,9 +217,7 @@ func openFromList(t *testing.T, m *Root, name string, k tea.KeyPressMsg) *Root {
 func openDetailNodes(t *testing.T) *Root {
 	t.Helper()
 	m := resize(t, loadDemoList(t), 120, 30)
-	m = openFromList(t, m, m.listView.SelectedRef().Name, key("enter"))
-	keys(m, "tab")
-	return m
+	return openFromList(t, m, m.listView.SelectedRef().Name, key("enter"))
 }
 
 // waitFor polls cond until it holds or a second passes.

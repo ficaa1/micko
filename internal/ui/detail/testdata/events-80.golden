@@ -1,5 +1,5 @@
 == demo-nightly-report
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 28 events · 7 warnings · newest first · live
 AGE     TYPE       REASON          OBJECT        MESSAGE
 1h56m   ▲ Warning  WorkflowFailed  workflow      child 'transform' failed
@@ -31,7 +31,7 @@ AGE     TYPE       REASON          OBJECT        MESSAGE
 1h59m   ◇ Normal   Scheduled       extract       Successfully assigned demo…
 2h00m   ◇ Normal   WorkflowRunni…  workflow      Workflow Running
 == demo-oom-backfill
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 8 events · 3 warnings · newest first · live
 AGE     TYPE       REASON          OBJECT          MESSAGE
 4h42m   ▲ Warning  WorkflowNodeF…  workflow        Failed node demo-oom-bac…
@@ -43,7 +43,7 @@ AGE     TYPE       REASON          OBJECT          MESSAGE
 4h59m   ◇ Normal   Scheduled       …kfill-2026-q2  Successfully assigned de…
 5h00m   ◇ Normal   WorkflowRunni…  workflow        Workflow Running
 == demo-train-pipeline
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 25 events · newest first · live
 AGE     TYPE       REASON          OBJECT          MESSAGE
 2m38s   ◇ Normal   Started         …in-shard(4:4)  Started container main
@@ -72,12 +72,12 @@ AGE     TYPE       REASON          OBJECT          MESSAGE
 3m56s   ◇ Normal   Scheduled       preprocess      Successfully assigned de…
 4m00s   ◇ Normal   WorkflowRunni…  workflow        Workflow Running
 == demo-param-check
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 1 event · 1 warning · newest first · live
 AGE     TYPE       REASON          OBJECT    COUNT  MESSAGE
 6h00m   ▲ Warning  WorkflowFailed  workflow      1  invalid spec: templates…
 == demo-nightly-report, warnings first, /backoff
- Summary   Nodes   Timeline   Explain  [Events]  Resource 
+ Nodes   Timeline   Explain  [Events]  Resource   Summary 
 events · 3 events · /backoff · 3 warnings · warnings first · live
 AGE     TYPE       REASON   OBJECT        COUNT  MESSAGE
 1h56m   ▲ Warning  BackOff  transform(2)      3  Back-off restarting failed…

@@ -36,10 +36,10 @@ var demoRows = []string{
 // demoListed is the list pane's count once the whole demo snapshot is in.
 const demoListed = "list: 12 workflows"
 
-// uid is the detail summary line that names wf. The pane title shares its
-// line with a summary the renderer repaints cell by cell, so a capture can
-// hold it spliced; the uid line is written whole.
-func uid(wf string) string { return "synthetic-uid-" + wf }
+// rootRow is the nodes tab's top row for wf, a Steps workflow. The pane title
+// shares its line with a summary the renderer repaints cell by cell, so a
+// capture can hold it spliced; the root row is written whole.
+func rootRow(wf string) string { return wf + " Steps" }
 
 var (
 	buildOnce sync.Once
@@ -258,20 +258,20 @@ func TestPTYDemoJourneys(t *testing.T) {
 		quit       []string
 	}{
 		{"j and enter open the second row", 80, 24, []step{
-			{keys: []string{"j", "enter"}, want: []string{uid(demoRows[1]), "✗ Failed"}},
+			{keys: []string{"j", "enter"}, want: []string{rootRow(demoRows[1]), "✗ Failed"}},
 		}, nil},
 		{"the detail keeps the frame", 100, 30, []step{
-			{keys: []string{"enter"}, want: []string{uid(demoRows[0]), "tab section", "? help"}},
+			{keys: []string{"enter"}, want: []string{rootRow(demoRows[0]), "tab section", "? help"}},
 		}, nil},
 		{"esc from logs opened on the list returns to it", 80, 24, []step{
 			{keys: []string{"j", "l"}, want: []string{"Logs " + demoRows[1]}},
 			{keys: []string{"esc"}, clear: true, want: []string{demoListed}, absent: []string{"(no workflow loaded)"}},
 		}, nil},
 		{"esc from logs never lands on an earlier detail", 80, 24, []step{
-			{keys: []string{"j", "enter"}, want: []string{uid(demoRows[1])}},
+			{keys: []string{"j", "enter"}, want: []string{rootRow(demoRows[1])}},
 			{keys: []string{"esc"}, clear: true, want: []string{demoListed}},
 			{keys: []string{"j", "l"}, clear: true, want: []string{"Logs " + demoRows[2]}},
-			{keys: []string{"esc"}, clear: true, want: []string{demoListed}, absent: []string{uid(demoRows[1])}},
+			{keys: []string{"esc"}, clear: true, want: []string{demoListed}, absent: []string{rootRow(demoRows[1])}},
 		}, nil},
 		{"? opens help and esc closes it", 100, 30, []step{
 			{keys: []string{"?"}, want: []string{"KEYS"}},
@@ -315,7 +315,8 @@ func TestPTYDemoJourneys(t *testing.T) {
 		}, nil},
 		{"an archived run opens and esc returns to the archive", 120, 30, []step{
 			{keys: []string{":aw", "enter"}, clear: true, want: []string{"Sort: newest", "demo-backfill-2026-q1"}},
-			{keys: []string{"enter"}, clear: true, want: []string{"the workflow archive", "synthetic-uid-archived-"}},
+			{keys: []string{"enter"}, clear: true, want: []string{"[Nodes]"}},
+			{keys: []string{"6"}, clear: true, want: []string{"the workflow archive", "synthetic-uid-archived-"}},
 			{keys: []string{"esc"}, clear: true, want: []string{"Sort: newest"}},
 		}, nil},
 		{"resizing re-lays out the frame", 120, 40, []step{
