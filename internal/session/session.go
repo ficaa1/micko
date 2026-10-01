@@ -241,6 +241,11 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		return nil, err
 	}
 
+	// The scope check runs off the update loop and is bounded by the
+	// client's request deadline, so a connection replaced meanwhile only
+	// lets it finish.
+	go client.WarmScope(context.Background())
+
 	var once sync.Once
 	conn := &app.Connection{
 		Reader:      client,

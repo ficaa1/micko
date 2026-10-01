@@ -123,6 +123,15 @@ func (c *Client) serverScope(ctx context.Context) (string, error) {
 	return ns, nil
 }
 
+// WarmScope asks the server for its scope now, so the first cluster-wide
+// list or namespace picker does not wait for it. A failed answer is not
+// kept; the next caller asks again.
+func (c *Client) WarmScope(ctx context.Context) {
+	ctx, cancel := c.withUnaryDeadline(ctx)
+	defer cancel()
+	_, _ = c.serverScope(ctx)
+}
+
 // checkClusterScope refuses a cluster-wide list on a server that manages one
 // namespace.
 //

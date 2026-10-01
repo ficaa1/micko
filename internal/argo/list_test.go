@@ -227,17 +227,21 @@ func TestEveryNamespaceLists(t *testing.T) {
 }
 
 // The server's scope is asked once per client for cluster-wide lists and
-// never for one namespace; a failed answer is asked again.
+// never for one namespace; a failed answer is asked again. A scope warmed at
+// connect answers the lists that follow.
 func TestServerScopeIsAskedOnce(t *testing.T) {
 	cases := []struct {
 		name       string
 		namespace  string
 		infoStatus int
+		warm       bool
 		want       int
 	}{
-		{"cluster-wide", "", http.StatusOK, 1},
-		{"failed lookup", "", http.StatusNotFound, 2},
-		{"one namespace", "team-a", http.StatusOK, 0},
+		{"cluster-wide", "", http.StatusOK, false, 1},
+		{"failed lookup", "", http.StatusNotFound, false, 2},
+		{"one namespace", "team-a", http.StatusOK, false, 0},
+		{"warmed", "", http.StatusOK, true, 0},
+		{"warmed, failed", "", http.StatusNotFound, true, 2},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -255,13 +259,17 @@ func TestServerScopeIsAskedOnce(t *testing.T) {
 				}
 			})
 			cl := newTestClient(t, srv)
+			if c.warm {
+				cl.WarmScope(context.Background())
+				asked = 0
+			}
 			for i := 0; i < 2; i++ {
 				if _, err := cl.List(context.Background(), core.Query{Namespace: c.namespace}); err != nil {
 					t.Fatal(err)
 				}
 			}
 			if asked != c.want {
-				t.Errorf("scope asked %d times, want %d", asked, c.want)
+				t.Errorf("the lists asked the scope %d times, want %d", asked, c.want)
 			}
 		})
 	}
