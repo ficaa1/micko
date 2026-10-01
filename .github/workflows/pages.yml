@@ -1,0 +1,43 @@
+# Publishes site/ to GitHub Pages when it changes on main, and on demand.
+#
+# Only what the page loads is published: the capture script, the converter
+# and the raw screens stay in the repository.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: publish site/
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Collect the page
+        run: |
+          mkdir _site
+          cp -r site/index.html site/style.css site/site.js site/screens.js site/fonts site/img site/media _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
