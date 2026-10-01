@@ -129,7 +129,8 @@ func (t *requestTimer) emit(failed bool) {
 
 // timedBody counts the bytes read and reports the timing at the end of the
 // body or on Close, whichever comes first. A caller that closes the body
-// late, after a second request, does not add that request to this one.
+// late, after a second request, does not add that request to this one. A
+// read error, such as a canceled stream, reports the timing as failed.
 type timedBody struct {
 	io.ReadCloser
 	t *requestTimer
@@ -140,8 +141,11 @@ func (b *timedBody) Read(p []byte) (int, error) {
 	b.t.mu.Lock()
 	b.t.bytes += int64(n)
 	b.t.mu.Unlock()
-	if err == io.EOF {
+	switch {
+	case err == io.EOF:
 		b.t.emit(false)
+	case err != nil:
+		b.t.emit(true)
 	}
 	return n, err
 }

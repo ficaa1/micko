@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -14,7 +15,8 @@ import (
 
 // Each request writes one timing named by its endpoint. A list's timing ends
 // with its own body, not after the gate scan that follows it, and the next
-// list rides on the open connection.
+// list rides on the open connection. A stream canceled after an event is a
+// failed request.
 func TestRequestTimings(t *testing.T) {
 	page := loadFixture(t, "list_page1.json")
 	srv := serve(t, func(w http.ResponseWriter, r *http.Request) {
@@ -71,5 +73,22 @@ func TestRequestTimings(t *testing.T) {
 	}
 	if list := got[0].TotalMS; list >= 50 {
 		t.Errorf("list total = %.1f ms, want less than the 50 ms gate scan after it", list)
+	}
+
+	var streamOut bytes.Buffer
+	stream := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"result":{"type":"ADDED","object":{"metadata":{"namespace":"ns","name":"wf","uid":"u","resourceVersion":"1"}}}}`+"\n")
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	})
+	sc := newClientWith(t, Options{Server: stream.URL, Diagnostics: diagnostics.New(&streamOut)})
+	ctx, cancel := context.WithCancel(context.Background())
+	_ = sc.Watch(ctx, core.WatchRequest{Namespace: "ns"}, func(core.WatchEvent) error { cancel(); return nil })
+	var watch diagnostics.Event
+	if err := json.Unmarshal(streamOut.Bytes(), &watch); err != nil {
+		t.Fatalf("watch timing %q: %v", streamOut.String(), err)
+	}
+	if watch.Endpoint != "watch" || watch.State != "failed" || watch.Bytes == 0 {
+		t.Errorf("canceled watch = %s %s, %d bytes; want watch failed with its event's bytes", watch.Endpoint, watch.State, watch.Bytes)
 	}
 }
