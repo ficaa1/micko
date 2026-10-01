@@ -91,8 +91,10 @@ credentials and no writes.
 Tested live against Argo Workflows v4.1.2 on macOS arm64, through
 `kubectl port-forward` to an Argo Server in server auth mode, so with no
 token. A direct connection with a bearer token and other Argo versions are
-untested; an issue saying how micko fared on yours is welcome. Windows
-builds but is untested.
+untested; an issue saying how micko fared on yours is welcome.
+
+Releases are for macOS and Linux. On Windows, `go install` builds micko,
+but it has not been tested there.
 
 ## Documentation
 
