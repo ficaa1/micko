@@ -1,10 +1,7 @@
 #!/usr/bin/env fish
 # Usage: scripts/perf/allns.fish <label> <profile>
 #
-# Builds the working tree and runs one read-only session that waits for the
-# first list, then presses 0 for all namespaces. Prints the time from the
-# key press to the list answer, the allns span, and the /api/v1/info
-# requests before and after it.
+# Measures the all-namespaces switch in a read-only session built from the working tree.
 
 if test (count $argv) -lt 2
     echo "usage: allns.fish <label> <profile>" >&2

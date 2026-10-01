@@ -1,10 +1,8 @@
 #!/usr/bin/env fish
 # Usage: scripts/perf/session.fish <label> <profile> <workflow> [list-secs] [detail-secs]
 #
-# Builds the working tree and runs one scripted, read-only session in tmux:
-# the list for list-secs (default 30), then <workflow> in the detail view for
-# detail-secs (default 60), then q. Writes perf-out/<label>.jsonl (the
-# --debug diagnostics) and perf-out/<label>.marks (phase start times).
+# Runs a read-only list/detail session built from the working tree.
+# Writes diagnostics, phase marks, and a detail capture to perf-out/<label>.*.
 
 if test (count $argv) -lt 3
     echo "usage: session.fish <label> <profile> <workflow> [list-secs] [detail-secs]" >&2

@@ -42,16 +42,13 @@ type Event struct {
 	Bytes     int64   `json:"bytes,omitempty"`
 }
 
-// Request is the timing of one HTTP request. Endpoint names the call from a
-// fixed set, never a path. Reused says whether the request rode on an open
-// connection; a new one through a port-forward also opens a tunnel stream.
-// TTFB runs to the response headers and Total to the closed body, so a
-// stream's Total is its lifetime.
+// Request contains HTTP timings with a fixed endpoint name instead of a path.
 type Request struct {
-	Endpoint                  string
-	Failed                    bool
-	Status                    int
-	Reused                    bool
+	Endpoint string
+	Failed   bool
+	Status   int
+	Reused   bool
+	// Total includes body reads and spans the lifetime of a streaming response.
 	Connect, TLS, TTFB, Total time.Duration
 	Bytes                     int64
 }
@@ -76,8 +73,7 @@ func (s *Sink) Emit(stage Stage, state string, retry int, uncertain bool, status
 	s.write(Event{Time: time.Now().UTC(), Stage: stage, State: state, Retry: retry, Uncertain: uncertain, Status: status, ErrorCategory: category})
 }
 
-// EmitRequest records one request timing. An endpoint that is not a plain
-// lowercase word, or a negative count, drops the event.
+// EmitRequest writes a timing unless its endpoint or counts are invalid.
 func (s *Sink) EmitRequest(r Request) {
 	if s == nil || s.w == nil {
 		return
@@ -100,9 +96,7 @@ func (s *Sink) EmitRequest(r Request) {
 	s.write(e)
 }
 
-// EmitSpan records how long the reader waited for one answer: from the key or
-// the connection that asked to the reply that changed the screen. A name
-// that is not lowercase words joined by underscores drops the event.
+// EmitSpan writes a wait duration unless its name or duration is invalid.
 func (s *Sink) EmitSpan(name string, d time.Duration, failed bool) {
 	if s == nil || s.w == nil {
 		return

@@ -87,7 +87,7 @@ type eventsMsg struct {
 	genStamp
 	Stream int
 	Events []core.Event
-	// Next continues the stream (see logRecordMsg.Next).
+	// Next runs as a separate command to avoid nesting drains.
 	Next tea.Cmd
 }
 
@@ -102,13 +102,7 @@ type eventsRetryMsg struct {
 	Stream int
 }
 
-// syncEvents starts the streams the Events section wants and stops the
-// streams nobody is looking at. It runs after the same changes as
-// syncExplainLog.
-//
-// Another section of the same workflow pauses the streams: the pane keeps
-// its events, so coming back resumes each stream from its cursor instead of
-// replaying the namespace's pod events again.
+// Section changes retain cursors because the pane retains the workflow's events.
 func (m *Root) syncEvents() tea.Cmd {
 	if m.route != RouteDetail || m.detailView == nil {
 		m.stopEvents()
@@ -125,8 +119,7 @@ func (m *Root) syncEvents() tea.Cmd {
 	if m.events.active && m.events.ref == intent.Ref {
 		return nil
 	}
-	// A resumed stream also keeps counting its attempts, so a late reply
-	// from the paused one cannot pass for the new one.
+	// Keep attempts distinct so replies from paused streams remain stale.
 	var kept [eventStreamCount]eventStream
 	if m.events.ref == intent.Ref {
 		for i, st := range m.events.streams {
@@ -156,8 +149,7 @@ func (m *Root) stopEvents() {
 	m.events = eventsSession{}
 }
 
-// pauseEvents cancels both streams and keeps the workflow and the cursors,
-// for syncEvents to resume from.
+// pauseEvents retains cursors for the workflow's next visit to Events.
 func (m *Root) pauseEvents() {
 	if !m.events.active {
 		return

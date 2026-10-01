@@ -64,8 +64,7 @@ type Client struct {
 	userAgent string
 	// unaryTimeout bounds one non-streaming request end to end.
 	unaryTimeout time.Duration
-	// diagnostics receives one timing per request; nil sends none.
-	diagnostics *diagnostics.Sink
+	diagnostics  *diagnostics.Sink
 
 	// scopeMu guards the cached answer of serverScope. scopeKnown is set
 	// only by a successful answer, so a failed lookup is retried next time.
@@ -110,8 +109,7 @@ type Options struct {
 	// including reading the body. Empty uses unaryTimeout. Streaming calls
 	// ignore it.
 	RequestTimeout time.Duration
-	// Diagnostics receives one timing per request. Nil, the default, records
-	// nothing and adds no tracing to the requests.
+	// Diagnostics receives request timings; nil disables tracing.
 	Diagnostics *diagnostics.Sink
 }
 
@@ -159,9 +157,7 @@ func NewClient(opts Options) (*Client, error) {
 		dialTimeout = 10 * time.Second
 	}
 
-	// No ResponseHeaderTimeout: a watch sends its headers with its first
-	// event, which can be minutes away. Unary requests are bounded by
-	// withUnaryDeadline instead.
+	// Unary deadlines bound reads without imposing a header timeout on quiet watches.
 	transport := &http.Transport{
 		Proxy:               http.ProxyFromEnvironment,
 		DialContext:         (&net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}).DialContext,
@@ -324,9 +320,7 @@ func (c *Client) describeTokenSource() string {
 	return "configured credential source"
 }
 
-// do executes the request with redirect rejection applied at transport
-// level. The response is returned with Body open; caller closes it. ep names
-// the call in the request timing.
+// do returns a response with an open body; the caller must close it.
 func (c *Client) do(ctx context.Context, req *http.Request, ep endpoint) (*http.Response, error) {
 	timer := c.startTimer(ep)
 	req = req.WithContext(timer.trace(ctx))

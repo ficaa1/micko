@@ -56,8 +56,7 @@ type Options struct {
 	// RedactValues is the --redact-values flag, passed through to every
 	// profile's configuration.
 	RedactValues bool
-	// Diagnostics receives sanitized forwarding lifecycle lines and request
-	// timings when Debug is set. Nil silences them.
+	// Diagnostics receives debug lifecycle events, request timings, and spans; nil disables output.
 	Diagnostics io.Writer
 }
 
@@ -78,8 +77,7 @@ type Connector struct {
 	current string
 	// listErr says why the file yielded no profiles.
 	listErr string
-	// sink is shared by every connection, so the lines of a forward and a
-	// client never interleave. It is nil unless Debug is set.
+	// A shared sink prevents concurrent connections and forwards from interleaving lines.
 	sink *diagnostics.Sink
 
 	// mu guards live, the connection this connector last handed out. The
@@ -241,9 +239,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		return nil, err
 	}
 
-	// The scope check runs off the update loop and is bounded by the
-	// client's request deadline, so a connection replaced meanwhile only
-	// lets it finish.
+	// The client's deadline bounds this lookup even if the connection is replaced.
 	go client.WarmScope(context.Background())
 
 	var once sync.Once

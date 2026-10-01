@@ -109,8 +109,7 @@ func (m *Root) showKind(r Route, label string) tea.Cmd {
 	m.flash = label
 	if st := m.kindStates[r]; st == nil || !st.loading {
 		cmd := m.startKindFetch(r)
-		// A pane with rows answers at once; only an empty one makes the
-		// reader wait.
+		// Existing rows let the reader use the pane during the fetch.
 		if def := m.kind(r); def != nil && def.pane.Len() == 0 {
 			m.beginSpan(r.String()+"_open", kindPurpose(r))
 		}

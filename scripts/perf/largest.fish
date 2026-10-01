@@ -1,8 +1,7 @@
 #!/usr/bin/env fish
 # Usage: scripts/perf/largest.fish <kube-context> <namespace> [count]
 #
-# Lists the workflows of a namespace with the most nodes, the ones that make
-# the detail view's cost visible in session.fish. Read only.
+# Lists the namespace's workflows with the most nodes.
 
 if test (count $argv) -lt 2
     echo "usage: largest.fish <kube-context> <namespace> [count]" >&2

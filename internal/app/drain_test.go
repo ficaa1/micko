@@ -11,9 +11,7 @@ import (
 	"github.com/ficaa1/micko/internal/testkit"
 )
 
-// Each step of a stream's drain is one message that carries the next step.
-// A step returned as a tea.BatchMsg runs nested in the batch before it, so a
-// long stream would park a goroutine for every batch it delivered.
+// Stream drains continue without nesting batches.
 func TestStreamDrainsDoNotNest(t *testing.T) {
 	const items = 300
 	g := genStamp{Conn: 1, Sel: 1, Attempt: 1}

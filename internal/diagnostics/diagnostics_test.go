@@ -70,8 +70,7 @@ func TestSinkWithoutAWriterIsSilent(t *testing.T) {
 	s.EmitSpan("detail_open", time.Second, false)
 }
 
-// EmitRequest writes one timing line and drops a timing whose endpoint is
-// caller text or whose counts are negative.
+// Request diagnostics emit valid timings and discard invalid inputs.
 func TestEmitRequest(t *testing.T) {
 	cases := []struct {
 		name string
@@ -111,8 +110,7 @@ func TestEmitRequest(t *testing.T) {
 	}
 }
 
-// EmitSpan writes one span line and drops a span whose name is caller text
-// or whose duration is negative.
+// Span diagnostics emit valid waits and discard invalid inputs.
 func TestEmitSpan(t *testing.T) {
 	cases := []struct {
 		name   string

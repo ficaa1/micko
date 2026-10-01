@@ -198,8 +198,7 @@ func TestWatchRefusals(t *testing.T) {
 	}
 }
 
-// A stream stays open while the server is quiet, also past the dial timeout
-// before its first event, and canceling the context ends it.
+// A quiet watch survives the dial timeout until its context is canceled.
 func TestWatchesEndOnCancel(t *testing.T) {
 	cases := []struct {
 		name, line string

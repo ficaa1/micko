@@ -220,10 +220,7 @@ func TestEventsAreCapped(t *testing.T) {
 	}
 }
 
-// A frame draws only the rows on screen, so at every pane height it costs
-// the same with eventsCap events kept as with a screenful, also after a batch
-// of other workflows' events. Each streamed batch redraws the frame, and keys
-// wait behind it.
+// Frame allocations depend on visible rows, including after unrelated event batches.
 func TestEventsFrameCostDoesNotGrowWithEvents(t *testing.T) {
 	other := []core.Event{ev("x", "Pod", "other-workflow-main-1", "Normal", "Scheduled", time.Minute)}
 	frame := func(h, n int, batch []core.Event) float64 {

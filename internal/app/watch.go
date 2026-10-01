@@ -17,7 +17,7 @@ const maxWatchRetries = 5
 type watchEventMsg struct {
 	genStamp
 	Event core.WatchEvent
-	// Next continues the stream (see logRecordMsg.Next).
+	// Next runs as a separate command to avoid nesting drains.
 	Next tea.Cmd
 }
 type watchDoneMsg struct {
@@ -97,25 +97,19 @@ func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
 	return tea.Batch(m.applyWatchEvent(msg), msg.Next)
 }
 
-// watchReplyCurrent reports whether a reply belongs to the watch now
-// running. The watch belongs to the list's scope, not to the selection:
-// opening a workflow leaves it current, and a scope change replaces it.
+// watchReplyCurrent reports whether a reply belongs to the current list scope.
+// Opening a workflow changes the selection but leaves the watch current.
 func (m *Root) watchReplyCurrent(g genStamp) bool {
 	return g.Conn == m.connGen && g.Attempt == m.watchAttempt
 }
 
-// watchReconcileInterval is how often the tick still polls what a live
-// watch covers. The watch carries the changes; the poll catches what a
-// watch can miss.
+// Reconciliation polls catch changes a live watch can miss.
 const watchReconcileInterval = time.Minute
 
-// watchLive reports whether a watch is open and carrying the list's changes.
 func (m *Root) watchLive() bool {
 	return m.watchMode == "watch" && m.hasInflight("watch")
 }
 
-// inSnapshot reports whether the list snapshot, and so the watch, holds the
-// workflow with this UID.
 func (m *Root) inSnapshot(uid string) bool {
 	for _, s := range m.listState.items {
 		if s.Ref.UID == uid {
@@ -125,14 +119,11 @@ func (m *Root) inSnapshot(uid string) bool {
 	return false
 }
 
-// pollDue reports whether a poll that last started at last is due. What a
-// live watch covers is polled once per watchReconcileInterval, the rest on
-// every tick.
+// pollDue reports whether watch coverage permits a poll on this tick.
 func (m *Root) pollDue(last time.Time, covered bool) bool {
 	return !covered || m.deps.clock.Now().Sub(last) >= watchReconcileInterval
 }
 
-// applyWatchEvent folds one event into the list snapshot.
 func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 	if !m.watchReplyCurrent(msg.genStamp) {
 		return nil

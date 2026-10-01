@@ -16,8 +16,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/actions"
 )
 
-// --debug reports each wait the reader sees, from the key or the connection
-// to the reply on screen, once, and only when the reader had to wait.
+// Debug spans report waits from the initiating action to the accepted reply.
 func TestDebugReportsTheWaitsTheReaderSees(t *testing.T) {
 	const wait = 250 * time.Millisecond
 	cases := []struct {
@@ -97,10 +96,9 @@ func TestDebugReportsTheWaitsTheReaderSees(t *testing.T) {
 	}
 }
 
-// loaded delivers the first list.
 func loaded(m *Root, _ *testkit.FakeReader) { deliver(m, m.Init()) }
 
-// paletteEnter runs line in the palette up to the command the line starts.
+// paletteEnter returns the commands started by a palette line.
 func paletteEnter(m *Root, line string) tea.Cmd {
 	deliver(m, typeKeys(m, ":"))
 	typeKeys(m, line)

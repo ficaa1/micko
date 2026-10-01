@@ -1,15 +1,10 @@
 #!/usr/bin/env fish
 # Usage: scripts/perf/report.fish <label>...
 #
-# Reads perf-out/<label>.jsonl and .marks from session.fish. Per run: the
-# time to the port-forward and to the first list, the spans the reader
-# waited through, then per phase the requests, KiB, median total_ms and
-# failures by endpoint.
+# Reports timings and phase totals from perf-out/<label>.jsonl and .marks.
 #
-# A request belongs to the phase it started in. A timing line is written
-# when the request ends, so its start is its time less total_ms. A stream
-# that outlives its phase counts there with all its bytes; the phase line
-# says how many did.
+# Completion timestamps minus total_ms recover request starts for phase attribution.
+# Streams count in their starting phase with all their bytes, even if they end later.
 
 set -l out (realpath (status dirname)/../..)/perf-out
 

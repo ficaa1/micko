@@ -311,8 +311,7 @@ func terminalLogMsg(g genStamp, id uint64, err error, canceled bool) logRecordMs
 	return msg
 }
 
-// batchThenEnd is the last batch with the stream's end, in one message so
-// the end cannot overtake its records.
+// batchThenEnd returns records and their terminal status together so the end cannot overtake them.
 func batchThenEnd(g genStamp, id uint64, batch []core.LogRecord, err error) logRecordMsg {
 	msg := terminalLogMsg(g, id, err, false)
 	msg.Records = batch

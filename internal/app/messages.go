@@ -110,8 +110,7 @@ type logRecordMsg struct {
 	// Canceled distinguishes cancellation from network failure.
 	Canceled bool
 	Err      error
-	// Next continues the stream. Update returns it, so the drain runs as a
-	// command of its own and not nested in the batch that delivered it.
+	// Next runs as a separate command to avoid nesting drains.
 	Next tea.Cmd
 }
 

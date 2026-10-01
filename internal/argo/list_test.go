@@ -226,9 +226,7 @@ func TestEveryNamespaceLists(t *testing.T) {
 	}
 }
 
-// The server's scope is asked once per client for cluster-wide lists and
-// never for one namespace; a failed answer is asked again. A scope warmed at
-// connect answers the lists that follow.
+// Cluster-wide lists reuse successful scope lookups and retry failed ones.
 func TestServerScopeIsAskedOnce(t *testing.T) {
 	cases := []struct {
 		name       string

@@ -187,8 +187,7 @@ func TestRequestTimingsFollowDebug(t *testing.T) {
 	}
 }
 
-// lockedBuffer is a diagnostics writer the test reads while the connection's
-// scope check may still write to it.
+// Scope warm-up may write diagnostics while the test reads them.
 type lockedBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer

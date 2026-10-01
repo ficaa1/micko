@@ -12,8 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/diagnostics"
 )
 
-// endpoint names a call in request timings. It is one of the fixed values
-// below, so no namespace, workflow name or query reaches the diagnostics.
+// Fixed endpoint names keep paths and query values out of diagnostics.
 type endpoint string
 
 const (
@@ -33,8 +32,7 @@ const (
 	endpointAction           endpoint = "action"
 )
 
-// requestTimer collects the timings of one request. httptrace calls it from
-// the transport's goroutines, so every field is guarded by mu.
+// Trace hooks run in transport goroutines, so timing fields need a lock.
 type requestTimer struct {
 	sink *diagnostics.Sink
 	ep   endpoint
@@ -96,15 +94,13 @@ func (t *requestTimer) trace(ctx context.Context) context.Context {
 	})
 }
 
-// fail records a request that got no response.
 func (t *requestTimer) fail() {
 	if t != nil {
 		t.emit(true)
 	}
 }
 
-// track records resp when its body is read, so the timing covers reading
-// the body too.
+// Body reads belong to the request's duration.
 func (t *requestTimer) track(resp *http.Response) {
 	if t == nil {
 		return
@@ -127,10 +123,7 @@ func (t *requestTimer) emit(failed bool) {
 	})
 }
 
-// timedBody counts the bytes read and reports the timing at the end of the
-// body or on Close, whichever comes first. A caller that closes the body
-// late, after a second request, does not add that request to this one. A
-// read error, such as a canceled stream, reports the timing as failed.
+// Timings end at EOF, a read error, or Close so deferred cleanup cannot extend a completed request.
 type timedBody struct {
 	io.ReadCloser
 	t *requestTimer

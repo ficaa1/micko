@@ -46,8 +46,7 @@ type Root struct {
 	// request that replaced it.
 	mu       sync.Mutex
 	inflight map[string]inflightOp
-	// spans are the waits --debug reports, by name.
-	spans map[string]span
+	spans    map[string]span
 
 	// listState is the collected snapshot for the list route.
 	listState listState
@@ -1558,10 +1557,7 @@ func (m *Root) listErrorText(ae *core.APIError) string {
 func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	m.clearInflight("detail", msg.RequestID)
 	st := &m.detailState
-	// loading tracks the fetch, not this reply. A canceled or stale reply
-	// still ends a fetch, so leaving the flag set here would tell the poll
-	// tick that a fetch is running for the rest of the session and stop the
-	// detail view refreshing on its own.
+	// A stale or canceled reply ends only its own fetch.
 	st.loading = m.hasInflight("detail")
 	if msg.Canceled {
 		return nil

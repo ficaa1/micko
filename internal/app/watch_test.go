@@ -129,9 +129,7 @@ func TestWatchRetryDelayIsExponentialAndCapped(t *testing.T) {
 	}
 }
 
-// A watch event for the workflow open in the detail view refetches it. The
-// watch belongs to the list's scope, so opening the workflow does not make
-// its events stale.
+// Watch events refetch the open workflow even after its selection generation changes.
 func TestWatchEventRefetchesTheOpenWorkflow(t *testing.T) {
 	m := testRoot(t, fixtureReader(workflowFixture("a")))
 	m.listState.items = []core.Summary{summary("a")}

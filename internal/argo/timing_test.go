@@ -13,10 +13,7 @@ import (
 	"github.com/ficaa1/micko/internal/diagnostics"
 )
 
-// Each request writes one timing named by its endpoint. A list's timing ends
-// with its own body, not after the gate scan that follows it, and the next
-// list rides on the open connection. A stream canceled after an event is a
-// failed request.
+// Request timings describe each request's connection, duration, bytes, and failure state.
 func TestRequestTimings(t *testing.T) {
 	page := loadFixture(t, "list_page1.json")
 	srv := serve(t, func(w http.ResponseWriter, r *http.Request) {

@@ -115,9 +115,7 @@ func TestATickRecollectsOnlyAStaleSnapshotOffTheList(t *testing.T) {
 	}
 }
 
-// While the watch is live, the tick polls what the watch covers only once a
-// minute: the list, and an open workflow that is in the list's snapshot.
-// Without a live watch it polls on every tick.
+// A live watch slows polling only for workflows it covers.
 func TestALiveWatchSlowsThePoll(t *testing.T) {
 	wf := workflowFixture("wf-1")
 	other := workflowFixture("wf-2")

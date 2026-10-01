@@ -44,8 +44,7 @@ type Connection struct {
 	States <-chan ConnectionStateMsg
 	// Close releases the transport. Nil when there is nothing to release.
 	Close func()
-	// Diagnostics receives the spans the reader waits through. Nil unless
-	// --debug is set.
+	// Diagnostics receives debug spans; nil disables them.
 	Diagnostics *diagnostics.Sink
 }
 

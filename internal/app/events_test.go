@@ -144,9 +144,7 @@ func TestEventsStreamLive(t *testing.T) {
 	}
 }
 
-// Leaving the section or the workflow cancels both streams. Coming back to
-// the section resumes each from its cursor; coming back to the workflow
-// starts them over.
+// Event streams resume after a section change and start fresh after leaving the workflow.
 func TestEventsStreamsAreCanceledWhenLeft(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	f := m.deps.reader.(*testkit.FakeReader)

@@ -24,7 +24,7 @@ type eventsState struct {
 	// rows is the table as last built; stale marks it out of date.
 	rows      []eventRow
 	unmatched int
-	// reasonW and objectW are the widest cells of rows (eventTextWidths).
+	// Cached widths keep layout work independent of the number of stored rows.
 	reasonW, objectW int
 	stale            bool
 	order            eventOrder
@@ -53,9 +53,7 @@ func (m *Model) EventsWanted() (EventsIntent, bool) {
 	return EventsIntent{Ref: m.state.Summary.Ref}, true
 }
 
-// ApplyEvents keeps the events that may belong to the workflow on screen
-// and drops the ones the stream reports deleted. Past eventsCap the oldest
-// go. A batch with none of the workflow's events leaves the table as it is.
+// ApplyEvents keeps candidate events up to eventsCap, discarding deletions and the oldest excess.
 func (m *Model) ApplyEvents(evs []core.Event) {
 	if !m.loaded {
 		return
@@ -165,19 +163,16 @@ func (m *Model) eventsFilterActive() bool {
 	return m.tab == "events" && (m.ev.editing || m.ev.filter != "")
 }
 
-// eventRenderer lays the table out for the pane's width.
+// eventRenderer returns the renderer for the current rows and pane width.
 func (m *Model) eventRenderer(width int, theme shared.Theme) eventRenderer {
-	m.eventRows() // brings reasonW and objectW up to date
+	m.eventRows()
 	return eventRenderer{theme: theme, cols: eventColumnsFor(m.ev.reasonW, m.ev.objectW, width), now: m.now}
 }
 
-// eventsLineCount is the length of the section's scrolling content: the
-// column heads and the rows, or the one line saying why there are none.
+// eventsLineCount returns the row count plus a header or empty-state line.
 func (m *Model) eventsLineCount() int { return len(m.eventRows()) + 1 }
 
-// eventsLines is at most h lines of the section's scrolling content from
-// line top. Only those lines are drawn: a frame costs the same with 20
-// events kept as with eventsCap.
+// eventsLines returns at most h rendered lines starting at top.
 func (m *Model) eventsLines(top, h int) []string {
 	rows := m.eventRows()
 	if len(rows) == 0 {
