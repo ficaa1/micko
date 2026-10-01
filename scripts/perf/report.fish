@@ -5,6 +5,11 @@
 # time to the port-forward and to the first list, the spans the reader
 # waited through, then per phase the requests, KiB, median total_ms and
 # failures by endpoint.
+#
+# A request belongs to the phase it started in. A timing line is written
+# when the request ends, so its start is its time less total_ms. A stream
+# that outlives its phase counts there with all its bytes; the phase line
+# says how many did.
 
 set -l out (realpath (status dirname)/../..)/perf-out
 
@@ -22,15 +27,15 @@ for label in $argv
       def epoch: capture("(?<s>.*)[.](?<f>[0-9]+)Z") | (.s + "Z" | fromdate) + ("0." + .f | tonumber);
       def median: sort | if length == 0 then 0 else .[(length / 2 | floor)] end;
       def ms: if . == null then "-" else (. * 1000 | round | tostring) + " ms" end;
-      map(. + {t: (.time | epoch)}) as $all
+      map(. + {t: (.time | epoch)} | . + {start: (.t - (.total_ms // 0) / 1000)}) as $all
       | ($all | map(select(.stage == "forward" and .state == "ready")) | first | .t // null) as $ready
       | ($all | map(select(.endpoint == "list" and .state == "ok")) | first | .t // null) as $first
       | "  forward ready \(if $ready then $ready - $start else null end | ms), first list \(if $first then $first - $start else null end | ms)",
         ( $all | map(select(.stage == "span"))[]
           | "  span \(.span): \(.total_ms | round) ms\(if .state == "failed" then " (failed)" else "" end)" ),
         ( [["list", $start, $detail], ["detail", $detail, $quit]][] as [$phase, $from, $to]
-          | ($all | map(select(.stage == "request" and .t >= $from and .t < $to))) as $reqs
-          | "  \($phase) (\($to - $from | round) s): \($reqs | length) requests, \((($reqs | map(.bytes // 0) | add) // 0) / 1024 | round) KiB",
+          | ($all | map(select(.stage == "request" and .start >= $from and .start < $to))) as $reqs
+          | "  \($phase) (\($to - $from | round) s): \($reqs | length) requests, \((($reqs | map(.bytes // 0) | add) // 0) / 1024 | round) KiB, \($reqs | map(select(.t >= $to)) | length) open at its end",
             ( $reqs | group_by(.endpoint)[]
               | "    \(.[0].endpoint): \(length) x, \(map(.bytes // 0) | add / 1024 | round) KiB, median \(map(.total_ms // 0) | median | round) ms, failed \(map(select(.state == "failed")) | length)" ) )
     ' $out/$label.jsonl

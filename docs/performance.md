@@ -100,13 +100,19 @@ and open a port-forward to it.
      forward ready 1480 ms, first list 2079 ms
      span first_list: 820 ms
      span detail_open: 295 ms
-     list (32 s): 3 requests, 69 KiB
-       gate: 1 x, 0 KiB, median 34 ms, failed 0
-       info: 1 x, 0 KiB, median 108 ms, failed 0
-       list: 1 x, 69 KiB, median 578 ms, failed 0
-     detail (61 s): 1 requests, 455 KiB
-       get: 1 x, 455 KiB, median 219 ms, failed 0
+     list (32 s): 4 requests, 69 KiB, 1 open at its end
+       gate: 1 x, 0 KiB, median 35 ms, failed 0
+       info: 1 x, 0 KiB, median 89 ms, failed 0
+       list: 1 x, 69 KiB, median 778 ms, failed 0
+       watch: 1 x, 0 KiB, median 91406 ms, failed 1
+     detail (61 s): 1 requests, 455 KiB, 0 open at its end
+       get: 1 x, 455 KiB, median 274 ms, failed 0
    ```
+
+   A request counts in the phase where it started. A stream that is still
+   open at the end of its phase counts there with all its bytes, and the
+   phase line says how many streams did that. The watch above ran until the
+   quit, so it ends as `failed`.
 
 `allns.fish <label> <profile>` measures one key instead: the time from `0`
 (all namespaces) to the list answer, and the `allns` span.
@@ -143,7 +149,10 @@ Team-prod, namespace `workflows`, workflow `long-workflow-12345`
 | Commit | List, 30 s | Detail, 60 s |
 | --- | --- | --- |
 | `a1bff8b` | 17 requests, 412 KiB, 5 watches restarted | 13 `get`, 5,915 KiB |
-| `5b2bed6` | 3 requests, 69 KiB | 1 `get`, 455 KiB |
+| `5b2bed6` | 3 requests, 69 KiB, and the watch | 1 `get`, 455 KiB |
+
+These rows count requests by their end time. The `5b2bed6` row leaves out
+the watch, which ended at the quit; it carried no bytes.
 
 `allns.fish` on `5b2bed6`: the first all-namespaces list starts 11–14 ms after
 the key, against 97–133 ms on `2aa28ec`.
