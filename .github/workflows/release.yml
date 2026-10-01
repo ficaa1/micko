@@ -3,11 +3,6 @@
 # tag on the commit the run checked out, so a release can be cut from the
 # Actions tab without pushing a tag.
 #
-# Run by hand for a version that is already released, it rebuilds that tag and
-# adds only the archives the release lacks, such as a newly supported
-# platform. A published archive is never replaced: whoever downloaded it holds
-# its checksum.
-#
 # The tag must match the version the binary reports, or the job stops before
 # it publishes: the tag and the binary must never announce different
 # versions. internal/buildinfo.Version is the source of that number.
