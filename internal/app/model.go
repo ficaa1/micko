@@ -296,6 +296,8 @@ type listState struct {
 	staleSince time.Time
 	// lastErr is the last error for the list (kept with last good data).
 	lastErr *core.APIError
+	// polledAt is when the last collection started.
+	polledAt time.Time
 }
 
 // detailState is the detail route's data + status.
@@ -308,6 +310,8 @@ type detailState struct {
 	// archived marks a workflow read from the workflow archive rather than
 	// the live route.
 	archived bool
+	// polledAt is when the last fetch started.
+	polledAt time.Time
 }
 
 // logState is the logs route's data + status.
@@ -716,7 +720,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.route == RouteList {
-			if m.listState.loading {
+			if m.listState.loading || !m.pollDue(m.listState.polledAt, m.watchLive()) {
 				return m, m.armTick()
 			}
 			// The poll re-arms the tick when it completes.
@@ -728,7 +732,8 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmds []tea.Cmd
 		// An archived run is fixed, so its detail is read once and not
 		// polled.
-		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" && !m.detailState.archived {
+		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" && !m.detailState.archived &&
+			m.pollDue(m.detailState.polledAt, m.watchLive() && m.inSnapshot(m.selection.UID)) {
 			cmds = append(cmds, m.startDetailFetch())
 		}
 		// A stale snapshot blocks every mutation, and only an accepted list
@@ -1398,6 +1403,7 @@ func (m *Root) startListGeneration() tea.Cmd {
 	}
 	m.cancelInflight("list")
 	m.listState.loading = true
+	m.listState.polledAt = m.deps.clock.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
@@ -1409,6 +1415,7 @@ func (m *Root) startListGeneration() tea.Cmd {
 // startDetailFetch starts a detail fetch for the current selection.
 func (m *Root) startDetailFetch() tea.Cmd {
 	m.cancelInflight("detail")
+	m.detailState.polledAt = m.deps.clock.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
