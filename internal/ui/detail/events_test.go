@@ -216,10 +216,11 @@ func TestEventsAreCapped(t *testing.T) {
 }
 
 // A frame draws only the rows on screen, so it costs the same with eventsCap
-// events kept as with a screenful. Each streamed batch redraws the frame, and
-// keys wait behind it.
+// events kept as with a screenful, also after a batch of other workflows'
+// events. Each streamed batch redraws the frame, and keys wait behind it.
 func TestEventsFrameCostDoesNotGrowWithEvents(t *testing.T) {
-	frame := func(n int) float64 {
+	other := []core.Event{ev("x", "Pod", "other-workflow-main-1", "Normal", "Scheduled", time.Minute)}
+	frame := func(n int, batch []core.Event) float64 {
 		m := demoModel(t, "demo-oom-backfill", 136, 30)
 		m.SetSection("events")
 		var evs []core.Event
@@ -228,11 +229,24 @@ func TestEventsFrameCostDoesNotGrowWithEvents(t *testing.T) {
 		}
 		m.ApplyEvents(evs)
 		m.BodyLines()
-		return testing.AllocsPerRun(5, func() { m.BodyLines() })
+		return testing.AllocsPerRun(5, func() {
+			if batch != nil {
+				m.ApplyEvents(batch)
+			}
+			m.BodyLines()
+		})
 	}
-	screenful, full := frame(30), frame(eventsCap)
-	if full > 2*screenful {
-		t.Errorf("a frame allocates %.0f times with %d events and %.0f with 30, want about the same", full, eventsCap, screenful)
+	screenful := frame(30, nil)
+	for _, c := range []struct {
+		name  string
+		batch []core.Event
+	}{
+		{"redraw", nil},
+		{"batch for other workflows", other},
+	} {
+		if full := frame(eventsCap, c.batch); full > 2*screenful {
+			t.Errorf("%s: a frame allocates %.0f times with %d events and %.0f with 30, want about the same", c.name, full, eventsCap, screenful)
+		}
 	}
 }
 

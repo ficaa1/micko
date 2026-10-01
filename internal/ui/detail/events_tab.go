@@ -55,7 +55,7 @@ func (m *Model) EventsWanted() (EventsIntent, bool) {
 
 // ApplyEvents keeps the events that may belong to the workflow on screen
 // and drops the ones the stream reports deleted. Past eventsCap the oldest
-// go.
+// go. A batch with none of the workflow's events leaves the table as it is.
 func (m *Model) ApplyEvents(evs []core.Event) {
 	if !m.loaded {
 		return
@@ -64,10 +64,12 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 		m.ev.byUID = map[string]core.Event{}
 	}
 	name := m.state.Summary.Ref.Name
+	changed := false
 	for _, e := range evs {
 		if !candidateEvent(e, name) {
 			continue
 		}
+		changed = true
 		key := e.UID
 		if key == "" {
 			key = e.ObjectKind + "/" + e.ObjectName + "/" + e.Reason + "/" + e.FirstSeen.String()
@@ -90,7 +92,9 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 			delete(m.ev.byUID, k)
 		}
 	}
-	m.ev.stale = true
+	if changed {
+		m.ev.stale = true
+	}
 }
 
 // SetEventsStatus records how the stream is doing. problem marks a status
