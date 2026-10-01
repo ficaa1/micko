@@ -12,30 +12,6 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// timeline.go builds and draws the Timeline section: a Gantt chart of the
-// workflow's work against a time axis.
-//
-// TODO Remove below doc, shape of the UI is available in the golden tests.
-//
-//	NAME                         DURATION   0        1m       2m       3m  4m00s
-//	▾ ✗ demo-nightly-report DAG     4m00s   ├──────────────────────────────────┤
-//	├─ ✓ extract                      50s ◆ ▕███████▎···························
-//	├▾ ✗ transform Retry            2m30s           ░├─────────────────────┤
-//	│  ├─ ✗ transform(0)              40s ◆ ·········██████·····················
-//	│  ├─ ✗ transform(1)              45s ◆ ···············░▕██████▌············
-//	│  └─ ✗ transform(2)              50s ◆ ·······················░▕███████▏···
-//	└─ ⊘ load                               ····································
-//	  ✓ onExit exit handler           20s   ································▐██▎
-//
-// The rows are the node tree in pipeline order. Pods and suspend gates are
-// bars; DAG, Steps, Retry and TaskGroup nodes only group them, so they are
-// drawn as a bracket over the time their group took. The stretch between the
-// moment a node could have started and the moment it did is shaded, which is
-// where a step waited: for the controller, for a retry's backoff, or for a
-// slot. ◆ marks the critical path. While the workflow runs, the chart ends
-// at a now line. Bar geometry is the nodes tab's, so a node sits at the same
-// place in both sections.
-
 // structuralType reports whether a node type only groups other nodes. Such
 // a node does no work of its own, so the timeline draws it as a heading.
 func structuralType(t string) bool {
@@ -309,12 +285,7 @@ func (x *tlIndex) lastWork(r *OutlineRow) *OutlineRow {
 	return nil
 }
 
-// criticalPath is the chain of work that set the workflow's end time. It
-// starts at the piece of work that finished last and walks back: each step
-// is the work that finished last inside the node the current one waited
-// for. Any delay on this chain delays the whole run, and no delay anywhere
-// else does. While the workflow runs, the chain ends at the work still
-// going that has the latest end, which is now. The result is in run order.
+// criticalPath returns the dependency chain ending last, in run order.
 func (x *tlIndex) criticalPath() []string {
 	var target *OutlineRow
 	var targetEnd time.Time

@@ -100,7 +100,7 @@ func TestUnknownSkinErrorListsTheValidNames(t *testing.T) {
 func TestEveryTruecolorSkinDefinesEveryToken(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	// Tokens drawn as a block of colour, whose background is the point.
-	backed := map[string]bool{"Selected": true, "Band": true, "BadgeReadOnly": true, "BadgeActions": true}
+	backed := map[string]bool{"Selected": true, "Band": true, "BadgeReadOnly": true}
 	for _, name := range truecolorSkins {
 		th := skinTheme(t, name, false)
 		if th.Skin != name {

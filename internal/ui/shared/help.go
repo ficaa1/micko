@@ -6,9 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// HelpOverlay is the `?` key overlay. Every route footer advertises `? help`,
-// so the overlay is the single place that documents the key contract frozen
-// in keys.go.
+// HelpOverlay documents the keys available on each route.
 type HelpOverlay struct {
 	open  bool
 	theme Theme
@@ -66,9 +64,9 @@ func helpLines() []string {
 		"          esc clear marks, then filter",
 		"          / filter: word  a|b  !word  /regex/  ~fuzzy  (spaces: AND)",
 		"          phase=failed  age<2h  dur>10m  tmpl=x  cron=x  label:k=v  label:!k",
-		"Command   : then a command; tab completes, ctrl+p / n history",
+		"Command   : command  tab completes  enter runs  ctrl+p / n history",
 		"          wf  cron  tmpl  cwftmpl  aw  ns [name]  all  ctx [name]  help  q",
-		"Kinds     :cron :tmpl :cwftmpl :aw",
+		"Kinds     :cron :tmpl :cwftmpl enter lists runs; :aw enter opens run",
 		"          i info panel  v hide / reveal values  f manifest",
 		"",
 		"Detail    tab / shift+tab section  1-9 section  T / X / E jump  r refresh",

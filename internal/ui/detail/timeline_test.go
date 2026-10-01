@@ -475,14 +475,14 @@ func TestTimelineFolding(t *testing.T) {
 // The status line says what the marker means and what is left out; the hints name the keys.
 func TestTimelineStatusAndHints(t *testing.T) {
 	m := sectionModel(t, "demo-release-gate", "timeline", 136, 40)
-	s := m.timelineStatusLine()
-	for _, want := range []string{"4 rows", "1/4", "critical path so far", "3 nodes"} {
+	s := body(m)
+	for _, want := range []string{"4 rows", "1/4", "chain ending last so far", "3 nodes"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("status %q lacks %q", s, want)
 		}
 	}
 	f := sectionModel(t, "demo-nightly-report", "timeline", 136, 40)
-	if s := f.timelineStatusLine(); !strings.Contains(s, "critical path: the 4 nodes that set the end time") {
+	if s := body(f); !strings.Contains(s, "chain ending last: 4 nodes") {
 		t.Errorf("finished status %q", s)
 	}
 	h := m.Hints()
@@ -505,7 +505,7 @@ func TestTimelineRawLines(t *testing.T) {
 	if len(raw) != len(m.tl.rows)+2 {
 		t.Fatalf("raw has %d lines, want %d", len(raw), len(m.tl.rows)+2)
 	}
-	if !strings.HasPrefix(raw[0], "* critical path") || !strings.HasPrefix(raw[1], "NAME") {
+	if !strings.HasPrefix(raw[0], "* chain ending last") || !strings.HasPrefix(raw[1], "NAME") {
 		t.Errorf("raw head %q / %q", raw[0], raw[1])
 	}
 	for _, l := range raw {

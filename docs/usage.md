@@ -122,9 +122,10 @@ running workflow ends at a `now` line.
 
 A shaded stretch (`░`) before a bar is time the node waited after what it
 depended on had finished: a retry's backoff, or a queue for a free slot.
-Nodes marked `◆` are the critical path, the chain of work that set the end
-time; shortening anything else would not have finished the run sooner. Rows
-share the Nodes tab's order and folds, `i` opens the same info panel and
+Nodes marked `◆` follow the dependency chain ending last, also called the
+critical path. While the run is active, this chain can change as nodes finish.
+The status line shows its node count. Rows share the Nodes tab's order and
+folds, `i` opens the same info panel and
 `enter` opens the pod's log.
 
 ### Explain

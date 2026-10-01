@@ -79,11 +79,8 @@ type Theme struct {
 	Band    lipgloss.Style
 	AppName lipgloss.Style
 
-	// The safety-mode badge at the right of the header band. Actions
-	// enabled is the state that can change a cluster, so it gets the louder
-	// style; the words READ ONLY and ACTIONS ENABLED carry the meaning.
+	// BadgeReadOnly styles the read-only notice in the header.
 	BadgeReadOnly lipgloss.Style
-	BadgeActions  lipgloss.Style
 
 	// Key hints: the key a reader presses and what it does.
 	HintKey  lipgloss.Style
@@ -151,7 +148,6 @@ func defaultTheme() Theme {
 		Band:          lipgloss.NewStyle(),
 		AppName:       ansi("6").Bold(true),
 		BadgeReadOnly: ansi("2").Bold(true),
-		BadgeActions:  ansi("1").Bold(true).Reverse(true),
 		HintKey:       ansi("6").Bold(true),
 		HintDesc:      faint,
 		TabActive:     ansi("6").Bold(true),
@@ -193,7 +189,6 @@ func plainTheme() Theme {
 		Band:           none,
 		AppName:        none,
 		BadgeReadOnly:  none,
-		BadgeActions:   none,
 		HintKey:        none,
 		HintDesc:       none,
 		TabActive:      none,

@@ -909,23 +909,17 @@ func (m *Root) View() tea.View {
 		return m.rawView()
 	}
 	f := shell.Frame{
-		// `:` and `?` are root-owned on every route, so the shell advertises
-		// them once rather than each pane repeating them in its own hints.
-		// They share the protected right-hand cell: between them they lead to
-		// every command and every key, so a narrow terminal drops route hints
-		// before it drops them.
-		Help:      ": command  ? help",
-		Width:     m.width,
-		Height:    m.height,
-		App:       "micko " + m.version,
-		Server:    m.serverLabel(),
-		Namespace: m.namespaceLabel(),
-		Mode:      m.modeLabel(),
-		// The badge colour repeats what the mode words say.
-		ActionsEnabled: m.actionsEnabled(),
-		Mascot:         m.mascot != config.MascotOff,
-		MascotFloor:    m.mascot == config.MascotFloor,
-		MascotPose:     m.mascotBeats()[m.mascotBeat].Pose,
+		// Global command and help hints stay visible when route hints are clipped.
+		Help:        ": command  ? help",
+		Width:       m.width,
+		Height:      m.height,
+		App:         "micko " + m.version,
+		Server:      m.serverLabel(),
+		Namespace:   m.namespaceLabel(),
+		Mode:        m.modeLabel(),
+		Mascot:      m.mascot != config.MascotOff,
+		MascotFloor: m.mascot == config.MascotFloor,
+		MascotPose:  m.mascotBeats()[m.mascotBeat].Pose,
 	}
 
 	// An action modal is a dialog: it takes the pane so the route behind it
@@ -1062,12 +1056,10 @@ func splitLines(s string) []string {
 	return strings.Split(strings.TrimRight(s, "\n"), "\n")
 }
 
-// modeLabel is the safety state: the single word that says whether this
-// session can mutate anything. It is always shown.
+// modeLabel returns a badge label only for read-only sessions.
 func (m *Root) modeLabel() string {
 	if m.actionsEnabled() {
-		// TODO Actions enabled shouldn't be signaled, READ ONLY should be signalled to user
-		return "ACTIONS ENABLED"
+		return ""
 	}
 	return "READ ONLY"
 }
