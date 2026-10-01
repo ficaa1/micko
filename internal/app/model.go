@@ -1583,13 +1583,13 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 // handleLogRecord applies one batched delivery honoring staleness.
 func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
-		return nil // stale
+		return msg.Next // stale: drained and dropped
 	}
 	if msg.RequestID != m.logState.streamID {
 		// A stream replaced by a reopen on the same pane: its batches would
 		// duplicate lines, and its cancellation would mark the live stream
 		// canceled.
-		return nil
+		return msg.Next
 	}
 	st := &m.logState
 	st.received += len(msg.Records)
@@ -1614,8 +1614,7 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 		m.clearInflight("logs", msg.RequestID)
 		return nil
 	}
-	// chain the next drain; the streamState rides in the closure
-	return nil
+	return msg.Next
 }
 
 // inflight bookkeeping --------------------------------------------------------

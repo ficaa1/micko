@@ -8,6 +8,8 @@
 package app
 
 import (
+	"charm.land/bubbletea/v2"
+
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
@@ -108,6 +110,9 @@ type logRecordMsg struct {
 	// Canceled distinguishes cancellation from network failure.
 	Canceled bool
 	Err      error
+	// Next continues the stream. Update returns it, so the drain runs as a
+	// command of its own and not nested in the batch that delivered it.
+	Next tea.Cmd
 }
 
 // logSourcesMsg carries the pod-to-step map for a workflow-wide log pane.

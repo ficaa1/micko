@@ -192,13 +192,18 @@ func TestAStreamCancellationIsNotAFailure(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 		cancel()
 	}()
-	for _, msg := range runCmd(cmd) {
-		if lm, ok := msg.(logRecordMsg); ok && lm.Done {
+	for cmd != nil {
+		lm, ok := cmd().(logRecordMsg)
+		if !ok {
+			break
+		}
+		if lm.Done {
 			if !lm.Canceled || (lm.Err != nil && !errors.Is(lm.Err, context.Canceled)) {
 				t.Fatalf("end = canceled %v, err %v", lm.Canceled, lm.Err)
 			}
 			return
 		}
+		cmd = lm.Next
 	}
 	t.Fatal("the stream never ended")
 }

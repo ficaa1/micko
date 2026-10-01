@@ -87,6 +87,8 @@ type eventsMsg struct {
 	genStamp
 	Stream int
 	Events []core.Event
+	// Next continues the stream (see logRecordMsg.Next).
+	Next tea.Cmd
 }
 
 type eventsDoneMsg struct {
@@ -239,26 +241,18 @@ func drainEventsCmd(ctx context.Context, g genStamp, i int, ch chan any) tea.Cmd
 			select {
 			case item, ok := <-ch:
 				if !ok {
-					return tea.BatchMsg{
-						func() tea.Msg { return eventsMsg{genStamp: g, Stream: i, Events: batch} },
-						func() tea.Msg { return eventsDoneMsg{genStamp: g, Stream: i, Err: errors.New("event queue closed")} },
-					}
+					closed := eventsDoneMsg{genStamp: g, Stream: i, Err: errors.New("event queue closed")}
+					return eventsMsg{genStamp: g, Stream: i, Events: batch, Next: func() tea.Msg { return closed }}
 				}
 				if done := take(item); done != nil {
-					return tea.BatchMsg{
-						func() tea.Msg { return eventsMsg{genStamp: g, Stream: i, Events: batch} },
-						func() tea.Msg { return done },
-					}
+					return eventsMsg{genStamp: g, Stream: i, Events: batch, Next: func() tea.Msg { return done }}
 				}
 				continue
 			default:
 			}
 			break
 		}
-		return tea.BatchMsg{
-			func() tea.Msg { return eventsMsg{genStamp: g, Stream: i, Events: batch} },
-			drainEventsCmd(ctx, g, i, ch),
-		}
+		return eventsMsg{genStamp: g, Stream: i, Events: batch, Next: drainEventsCmd(ctx, g, i, ch)}
 	}
 }
 
@@ -272,7 +266,7 @@ func (m *Root) eventReplyCurrent(g genStamp, i int) bool {
 // handleEvents hands a batch to the pane and moves the stream's cursor.
 func (m *Root) handleEvents(msg eventsMsg) tea.Cmd {
 	if !m.eventReplyCurrent(msg.genStamp, msg.Stream) {
-		return nil
+		return msg.Next
 	}
 	st := &m.events.streams[msg.Stream]
 	for _, e := range msg.Events {
@@ -286,7 +280,7 @@ func (m *Root) handleEvents(msg eventsMsg) tea.Cmd {
 	if m.detailView != nil {
 		m.detailView.ApplyEvents(msg.Events)
 	}
-	return nil
+	return msg.Next
 }
 
 // handleEventsDone decides what an ended stream does next.

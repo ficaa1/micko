@@ -17,6 +17,8 @@ const maxWatchRetries = 5
 type watchEventMsg struct {
 	genStamp
 	Event core.WatchEvent
+	// Next continues the stream (see logRecordMsg.Next).
+	Next tea.Cmd
 }
 type watchDoneMsg struct {
 	genStamp
@@ -81,10 +83,7 @@ func drainWatchCmd(ctx context.Context, g genStamp, ch chan any) tea.Cmd {
 			}
 			switch value := item.(type) {
 			case core.WatchEvent:
-				return tea.BatchMsg{
-					func() tea.Msg { return watchEventMsg{genStamp: g, Event: value} },
-					drainWatchCmd(ctx, g, ch),
-				}
+				return watchEventMsg{genStamp: g, Event: value, Next: drainWatchCmd(ctx, g, ch)}
 			case watchDoneMsg:
 				return value
 			default:
@@ -95,6 +94,11 @@ func drainWatchCmd(ctx context.Context, g genStamp, ch chan any) tea.Cmd {
 }
 
 func (m *Root) handleWatchEvent(msg watchEventMsg) tea.Cmd {
+	return tea.Batch(m.applyWatchEvent(msg), msg.Next)
+}
+
+// applyWatchEvent folds one event into the list snapshot.
+func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.watchAttempt {
 		return nil
 	}
