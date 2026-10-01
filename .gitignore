@@ -24,3 +24,6 @@ AGENTS.md.draft
 
 # perf measurement output (scripts/perf)
 /perf-out/
+
+# --debug output redirected in the repo root
+/diag.jsonl
