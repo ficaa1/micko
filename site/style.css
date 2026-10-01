@@ -5,7 +5,8 @@
 /* Mićko on paper: his plumage printed like riso ink on warm paper, as in the video. */
 :root {
   --paper: #efe4cf; --paper2: #e4d5b9; --cream: #fbf8f1; --ink: #1f1a17; --soft: #4a3f36; --dim: #8a7b69;
-  --red: #d7263d; --verm: #e8553b; --yellow: #f2c14e; --ochre: #e3a21a; --olive: #6f8a2a;
+  /* --red is small-label text on --paper: keep it at 4.5:1 or darker. */
+  --red: #ca1b1d; --verm: #e8553b; --yellow: #f2c14e; --ochre: #e3a21a; --olive: #6f8a2a;
   --blue: #3f5bb8; --violet: #6f7fd6; --teal: #2e5e6e;
   --max: 1180px;
   color-scheme: light;
@@ -161,6 +162,9 @@ table.q td:first-child { white-space: nowrap; color: var(--ink); font-weight: 70
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
 .facts div { padding: 10px 14px; font-size: 13px; color: var(--soft); background: var(--cream); border: 2.5px solid var(--ink); border-radius: 8px; box-shadow: 4px 4px 0 var(--ink); }
 .facts b { display: block; color: var(--ink); font-size: 15px; }
+#argo-ui p, #argo-ui .facts { max-width: 760px; margin-inline: auto; }
+#argo-ui .facts { text-align: left; }
+@media (max-width: 560px) { .facts { grid-template-columns: 1fr; } }
 
 /* Skins */
 .skins { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 26px 0 36px; }

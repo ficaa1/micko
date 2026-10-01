@@ -86,6 +86,16 @@ loopback addresses.
 No cluster at hand? `micko --demo` runs on synthetic data, with no
 credentials and no writes.
 
+## Compatibility
+
+Tested live against Argo Workflows v4.1.2 on macOS arm64, through
+`kubectl port-forward` to an Argo Server in server auth mode, so with no
+token. A direct connection with a bearer token and other Argo versions are
+untested; an issue saying how micko fared on yours is welcome.
+
+Releases are for macOS and Linux. On Windows, `go install` builds micko,
+but it has not been tested there.
+
 ## Documentation
 
 - [Usage guide](docs/usage.md): connecting, authentication, every feature, flags and limits
@@ -102,6 +112,11 @@ cd micko
 make build        # or: go build -o dist/micko ./cmd/micko
 ./dist/micko --demo
 ```
+
+## Security
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability and for how micko
+handles your token.
 
 ## Contributing
 
