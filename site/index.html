@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>micko: Argo Workflows in your terminal</title>
+<meta name="description" content="A keyboard-first terminal UI for Argo Workflows: the list, a timeline of each run, why it failed in plain words, logs, events and actions.">
+<meta property="og:title" content="micko">
+<meta property="og:description" content="A keyboard-first terminal UI for Argo Workflows.">
+<meta property="og:image" content="https://ficaa1.github.io/micko/media/poster.jpg">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23efe4cf'/><rect x='9' y='6' width='14' height='20' fill='%23d7263d'/></svg>">
+<link rel="preload" href="fonts/JetBrainsMono-ExtraBold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="paper"></div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand grad" href="#">micko</a>
+    <nav>
+      <a class="opt" href="#features">features</a>
+      <a class="opt" href="#micko">Mićko</a>
+      <a href="#install">install</a>
+      <a class="opt" href="https://github.com/ficaa1/micko/blob/main/docs/usage.md">docs</a>
+      <a class="gh" href="https://github.com/ficaa1/micko">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero wrap">
+    <h1 class="mark"><span class="grad">micko</span><span class="blk"></span></h1>
+    <p class="tagline">A keyboard-first terminal UI for Argo Workflows</p>
+    <ul class="phases">
+      <li class="chip"><span style="color:var(--olive)">✓</span> Succeeded</li>
+      <li class="chip"><span style="color:var(--blue)">●</span> Running</li>
+      <li class="chip"><span style="color:var(--ochre)">◐</span> Suspended</li>
+      <li class="chip"><span style="color:var(--red)">✗</span> Failed</li>
+      <li class="chip"><span style="color:var(--soft)">○</span> Pending</li>
+    </ul>
+    <div class="card try">
+      <div class="ln"><span class="ps">$</span> brew install ficaa1/tap/micko <button class="copy" data-copy="brew install ficaa1/tap/micko">copy</button></div>
+      <div class="ln"><span class="ps">$</span> micko --demo <button class="copy" data-copy="micko --demo">copy</button></div>
+      <div class="cm"># no cluster needed: synthetic data, no writes</div>
+    </div>
+
+    <div class="film win">
+      <div class="bar"><i></i><i></i><i></i><b>micko --tour</b></div>
+      <video muted loop playsinline autoplay preload="auto" poster="media/poster.jpg"
+        aria-label="A 90-second tour of micko: the workflow list, timeline, explain, nodes, logs, the command palette, filters, actions, skins and Mićko">
+        <source src="media/tour-av1.mp4" type='video/mp4; codecs="av01.0.08M.08"'>
+        <source src="media/tour-h264.mp4" type="video/mp4">
+      </video>
+      <div class="ctl">
+        <button class="pill" data-play>❚❚ pause</button>
+        <button class="pill red" data-sound>sound off</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="features" class="wrap center">
+    <div class="kicker">what micko does</div>
+    <h2>Argo Workflows, in your terminal</h2>
+    <div class="jobs">
+      <article class="card job">
+        <div class="win"><div class="bar"><i></i><i></i><i></i></div><div class="screen" data-screen="list"></div></div>
+        <h3>Browse <span><kbd>↑↓</kbd><kbd>⏎</kbd></span></h3>
+        <div class="rule" style="background:var(--blue)"></div>
+        <p>Every run: its phase, progress and why it failed.</p>
+      </article>
+      <article class="card job">
+        <div class="win"><div class="bar"><i></i><i></i><i></i></div><div class="screen" data-screen="explain"></div></div>
+        <h3>Understand <span><kbd>T</kbd><kbd>X</kbd></span></h3>
+        <div class="rule" style="background:var(--red)"></div>
+        <p>A timeline of the run, and a plain-words account of what went wrong.</p>
+      </article>
+      <article class="card job">
+        <div class="win"><div class="bar"><i></i><i></i><i></i></div><div class="screen" data-screen="logs"></div></div>
+        <h3>Follow <span><kbd>l</kbd><kbd>E</kbd></span></h3>
+        <div class="rule" style="background:var(--ochre)"></div>
+        <p>Logs labelled by step, and Kubernetes events as they happen.</p>
+      </article>
+      <article class="card job">
+        <div class="win"><div class="bar"><i></i><i></i><i></i></div><div class="screen" data-screen="marks"></div></div>
+        <h3>Act <span><kbd>a</kbd></span></h3>
+        <div class="rule" style="background:var(--olive)"></div>
+        <p>Resume, retry, stop or delete. Each one asks first, and none is retried.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat in">
+      <div class="copy-side">
+        <div class="kicker">the workflow list</div>
+        <h2>Every run, at a glance</h2>
+        <p>The phase is a glyph, a word and a colour, so it reads without colour too. Progress is a bar. The reason a run failed sits right in its row.</p>
+        <p>Suspended runs sort first, so a gate waiting for you is the first thing you see.</p>
+        <div class="keys"><span><kbd>⏎</kbd> open</span><span><kbd>w</kbd> wide columns</span><span><kbd>s</kbd> sort</span><span><kbd>0</kbd> all namespaces</span></div>
+      </div>
+      <div class="shot">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>micko --demo</b></div><div class="screen" data-screen="list"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat flip in">
+      <div class="copy-side">
+        <div class="kicker">timeline</div>
+        <h2>The run as a Gantt chart</h2>
+        <p>Pods and approval gates are bars coloured by phase. DAG, Steps and Retry nodes bracket the time their children took, and a running workflow ends at a <code>now</code> line.</p>
+        <p>Nodes marked <code>◆</code> are the critical path: the chain that set the end time. Shading before a bar is time spent waiting.</p>
+        <div class="keys"><span><kbd>T</kbd> timeline</span><span><kbd>i</kbd> node info</span><span><kbd>⏎</kbd> pod log</span></div>
+      </div>
+      <div class="shot">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>demo-nightly-report</b></div><div class="screen" data-screen="timeline"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat in">
+      <div class="copy-side">
+        <div class="kicker">explain</div>
+        <h2>Why it failed, in plain words</h2>
+        <p>Findings come from what the workflow records and nothing else. No network service, no model, the same answer every time.</p>
+        <p>For a failed pod micko reads the end of its log and quotes the lines that matter: the error, the traceback, the line before. Then it says what to do next.</p>
+        <div class="keys"><span><kbd>X</kbd> explain</span><span><kbd>y</kbd> copy the report</span><span><kbd>l</kbd> failing log</span></div>
+      </div>
+      <div class="shot">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>demo-nightly-report</b></div><div class="screen" data-screen="explain"></div></div>
+        <span class="note pill" style="left:6%;bottom:-18px">it quotes the lines that matter</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat flip in">
+      <div class="copy-side">
+        <div class="kicker">nodes</div>
+        <h2>Reads like the pipeline</h2>
+        <p>Steps sit under their Steps node in order. DAG tasks come in dependency order with what each waits for. Retry attempts nest under their Retry node with exit codes, and the exit handler gets a tree of its own.</p>
+        <div class="keys"><span><kbd>space</kbd> fold</span><span><kbd>i</kbd> everything about a node</span><span><kbd>/</kbd> find</span></div>
+      </div>
+      <div class="shot">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>demo-nightly-report</b></div><div class="screen" data-screen="nodes"></div></div>
+        <span class="note pill red" style="right:4%;bottom:-18px">retries nest under their Retry node</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat in">
+      <div class="copy-side">
+        <div class="kicker">logs &amp; events</div>
+        <h2>Who said it, and what happened</h2>
+        <p>A workflow's logs mix every pod, so each line starts with the step that wrote it. Search, filter like <code>less</code>, or pipe what you have to <code>lnav</code>.</p>
+        <p>Kubernetes events about the workflow and its pods stream in while the section is open.</p>
+        <div class="keys"><span><kbd>l</kbd> logs</span><span><kbd>&amp;</kbd> only matches</span><span><kbd>|</kbd> pipe</span><span><kbd>E</kbd> events</span></div>
+      </div>
+      <div class="shot stack">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>logs</b></div><div class="screen" data-screen="logs"></div></div>
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>events</b></div><div class="screen" data-screen="events"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="filter" class="wrap">
+    <div class="feat flip in">
+      <div class="copy-side">
+        <div class="kicker">a small query language</div>
+        <div class="query"><span class="sl">/ </span><span class="t"></span><span class="c"></span></div>
+        <p>Filters as you type. A plain word matches names; the rest narrows by what you know about the run.</p>
+        <table class="q">
+          <tr><td>etl|report</td><td>either name</td></tr>
+          <tr><td>!etl</td><td>not this one</td></tr>
+          <tr><td>~ddp</td><td>fuzzy</td></tr>
+          <tr><td>/^demo-.*$/</td><td>a regular expression</td></tr>
+          <tr><td>dur&gt;10m</td><td>run time</td></tr>
+          <tr><td>label:team=data</td><td>a label</td></tr>
+          <tr><td>cron=etl-hourly</td><td>started by this CronWorkflow</td></tr>
+        </table>
+      </div>
+      <div class="shot">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>micko --demo</b></div><div class="screen"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat in">
+      <div class="copy-side">
+        <div class="kicker">command palette</div>
+        <h2>One key, every view</h2>
+        <p><kbd>:</kbd> opens the palette on every screen. Commands rank as you type and <kbd>tab</kbd> completes. A word that names no command is reported, never guessed.</p>
+        <p><code>:cron</code> lists CronWorkflows with their next run, computed the way the controller does it, time zones and daylight saving included. <code>:tmpl</code>, <code>:cwftmpl</code> and <code>:aw</code> list templates and the archive.</p>
+      </div>
+      <div class="shot">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>:cron</b></div><div class="screen" data-screen="cron"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat flip in">
+      <div class="copy-side">
+        <div class="kicker">marks &amp; bulk actions</div>
+        <h2>Act on many, safely</h2>
+        <p>Mark rows with <kbd>space</kbd> and press <kbd>a</kbd>. The menu counts how many runs each verb applies to. Requests go one at a time, each checked again just before it is sent and never retried.</p>
+        <p>Terminate asks you to type the name. Delete asks twice. <code>--read-only</code> turns actions off for a session.</p>
+        <div class="outcomes">
+          <div><b style="color:var(--olive)">CONFIRMED</b>end state observed</div>
+          <div><b style="color:var(--blue)">ACCEPTED</b>applied, end state not yet seen</div>
+          <div><b style="color:var(--ochre)">REFUSED</b>nothing was sent</div>
+          <div><b style="color:var(--red)">UNKNOWN</b>inspect before acting again</div>
+        </div>
+      </div>
+      <div class="shot">
+        <div class="win"><div class="bar"><i></i><i></i><i></i><b>3 marked</b></div><div class="screen" data-screen="marks"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat in">
+      <div class="copy-side">
+        <div class="kicker">connect</div>
+        <h2>Point it at your cluster</h2>
+        <p>One profile per cluster in <code>~/.config/micko/config.yaml</code>. Give each its own skin and you will never mistake prod for dev.</p>
+        <div class="facts">
+          <div><b>kubectl port-forward</b>started for you, closed on exit</div>
+          <div><b>token from env or file</b>read on every request, never logged</div>
+          <div><b>TLS verified</b><code>caFile</code> for a private CA</div>
+          <div><b>--read-only</b>when you only want to look</div>
+        </div>
+      </div>
+      <div class="shot">
+        <div class="card yaml"><span class="k">profiles:</span>
+  <span class="k">dev:</span>
+    <span class="k">kubeContext:</span> <span class="s">my-cluster</span>
+    <span class="k">service:</span> <span class="s">argo-workflows-server</span>
+    <span class="k">serviceNamespace:</span> <span class="s">argo</span>
+    <span class="k">remotePort:</span> <span class="s">2746</span>
+    <span class="k">server:</span> <span class="s">https://127.0.0.1:2746</span>
+    <span class="k">namespace:</span> <span class="s">workflows</span>
+    <span class="k">tokenEnv:</span> <span class="s">MICKO_TOKEN</span>
+  <span class="k">prod:</span>
+    <span class="k">server:</span> <span class="s">https://argo.example.com</span>
+    <span class="k">namespace:</span> <span class="s">workflows</span>
+    <span class="k">tokenFile:</span> <span class="s">/run/secrets/argo-token</span>
+    <span class="k">skin:</span> <span class="s">dracula</span>   <span class="c"># tell clusters apart</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="skins" class="wrap center">
+    <div class="kicker">skins</div>
+    <h2>13 truecolor skins</h2>
+    <p>Or <code>--skin auto</code> picks dark or light from your terminal. <code>NO_COLOR</code> works too; colour never carries meaning on its own.</p>
+    <div class="skins">
+      <button data-skin="catppuccin-mocha">catppuccin-mocha</button>
+      <button data-skin="catppuccin-latte">catppuccin-latte</button>
+      <button data-skin="gruvbox-dark">gruvbox-dark</button>
+      <button data-skin="gruvbox-light">gruvbox-light</button>
+      <button data-skin="nord">nord</button>
+      <button data-skin="dracula">dracula</button>
+      <button data-skin="tokyo-night">tokyo-night</button>
+      <button data-skin="solarized-dark">solarized-dark</button>
+      <button data-skin="solarized-light">solarized-light</button>
+      <button data-skin="one-dark">one-dark</button>
+      <button data-skin="rose-pine">rose-pine</button>
+      <button data-skin="rose-pine-dawn">rose-pine-dawn</button>
+      <button data-skin="monokai">monokai</button>
+    </div>
+    <div class="win skinwin"><div class="bar"><i></i><i></i><i></i><b>micko --skin</b></div><div class="screen"></div></div>
+  </section>
+
+  <section id="micko" class="wrap">
+    <div class="bird in">
+      <figure class="photo">
+        <span class="tape"></span>
+        <img src="img/micko-perch.jpg" alt="Mićko, an eastern rosella with a red head and yellow and blue plumage" loading="lazy" width="900" height="676">
+        <figcaption>the real Mićko</figcaption>
+      </figure>
+      <div>
+        <div class="kicker">the mascot</div>
+        <h2>And Mićko</h2>
+        <p>micko is named after Mićko, an eastern rosella, and he lives in the app too. He's off by default. <code>--mascot</code> perches him on top of the pane, where he blinks, dozes and looks around. <code>--mascot=floor</code> sits him in the corner, where now and then he hops over to kiss himself in his mirror.</p>
+        <div class="win" style="margin-top:28px"><div class="bar"><i></i><i></i><i></i><b>micko --mascot</b></div><div class="screen" data-rows="40"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" class="wrap center">
+    <div class="kicker">install</div>
+    <h2>Try it in a minute</h2>
+    <p><code>micko --demo</code> runs on synthetic data, with no cluster, no credentials and no writes.</p>
+    <div class="ways" style="text-align:left">
+      <div class="card way">
+        <h3>Homebrew</h3>
+        <pre><span class="ps">$</span> brew install ficaa1/tap/micko</pre>
+      </div>
+      <div class="card way">
+        <h3>mise</h3>
+        <pre><span class="ps">$</span> mise use -g github:ficaa1/micko</pre>
+      </div>
+      <div class="card way">
+        <h3>Go</h3>
+        <pre><span class="ps">$</span> go install github.com/ficaa1/micko/cmd/micko@latest</pre>
+        <p>Needs Go 1.25 or later.</p>
+      </div>
+      <div class="card way">
+        <h3>A binary</h3>
+        <pre><span class="ps">$</span> gh release download --repo ficaa1/micko</pre>
+        <p>Or grab one from <a href="https://github.com/ficaa1/micko/releases">the releases page</a>.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="ticker" aria-hidden="true"><div>Workflow list · Timeline · Explain · Nodes · Logs · Events · Command palette · Query filters · Bulk actions · Cron workflows · Templates · Archive · All namespaces · Profiles · port-forward · 13 skins · Mićko · Workflow list · Timeline · Explain · Nodes · Logs · Events · Command palette · Query filters · Bulk actions · Cron workflows · Templates · Archive · All namespaces · Profiles · port-forward · 13 skins · Mićko · </div></div>
+
+<footer>
+  <div class="wrap">
+    <span class="brand grad">micko</span>
+    <nav>
+      <a href="https://github.com/ficaa1/micko/blob/main/docs/usage.md">usage guide</a>
+      <a href="https://github.com/ficaa1/micko/blob/main/docs/keybindings.md">keybindings</a>
+      <a href="https://github.com/ficaa1/micko/blob/main/CHANGELOG.md">changelog</a>
+      <a href="https://github.com/ficaa1/micko">source</a>
+    </nav>
+    <p>GPL-3.0 · © 2026 Filip Biljic</p>
+  </div>
+</footer>
+
+<script src="screens.js"></script>
+<script src="site.js"></script>
+</body>
+</html>
