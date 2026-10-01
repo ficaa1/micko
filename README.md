@@ -88,9 +88,11 @@ credentials and no writes.
 
 ## Compatibility
 
-Tested live against Argo Workflows v4.1.2, on macOS arm64 in server auth
-mode. Other Argo versions are untested; an issue saying how micko fared on
-yours is welcome. Windows builds but is untested.
+Tested live against Argo Workflows v4.1.2 on macOS arm64, through
+`kubectl port-forward` to an Argo Server in server auth mode, so with no
+token. A direct connection with a bearer token and other Argo versions are
+untested; an issue saying how micko fared on yours is welcome. Windows
+builds but is untested.
 
 ## Documentation
 

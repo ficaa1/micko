@@ -307,6 +307,7 @@ the floor.
   submit cron workflows and templates.
 - Argo's action endpoints address workflows by name, so a same-name
   replacement between micko's identity check and the write is possible.
-- Tested live against Argo Workflows v4.1.2 on macOS arm64, in server auth
-  mode without TLS. Windows builds but is untested, and log piping needs
-  `/bin/sh`.
+- Tested live against Argo Workflows v4.1.2 on macOS arm64, through
+  `kubectl port-forward` to an Argo Server in server auth mode without TLS.
+  A direct connection with a bearer token is untested. Windows builds but
+  is untested, and log piping needs `/bin/sh`.
