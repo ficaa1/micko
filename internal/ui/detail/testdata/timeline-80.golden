@@ -1,6 +1,6 @@
 == demo-release-gate
  Nodes  [Timeline]  Explain   Events   Resource   Summary 
-4 rows · 1/4 · * critical path so far: the 3 nodes that set the pace
+4 rows · 1/4 · * chain ending last so far: 3 nodes
 NAME                            DURATION   0    2m   4m    6m   8m   10m now
 ▾ ● demo-release-gate Steps       12m00s   |-------------------------------|
 ├─ ✓ build                         3m00s * ========------------------------|
@@ -8,7 +8,7 @@ NAME                            DURATION   0    2m   4m    6m   8m   10m now
 └─ ◐ approve-production            4m50s * -------------------============>|
 == demo-nightly-report
  Nodes  [Timeline]  Explain   Events   Resource   Summary 
-8 rows · 1/8 · * critical path: the 4 nodes that set the end time
+8 rows · 1/8 · * chain ending last: 4 nodes
 NAME                         DURATION   0        1m       2m       3m  4m00s
 ▾ ✗ demo-nightly-report DAG     4m00s   |----------------------------------|
 ├─ ✓ extract                      50s * ========----------------------------
@@ -20,7 +20,7 @@ NAME                         DURATION   0        1m       2m       3m  4m00s
   ✓ onExit exit handler           20s   --------------------------------===-
 == demo-train-pipeline
  Nodes  [Timeline]  Explain   Events   Resource   Summary 
-9 rows · 1/9 · * critical path so far: the 2 nodes that set the pace
+9 rows · 1/9 · * chain ending last so far: 2 nodes
 NAME                         DURATION   0       1m       2m       3m     now
 ▾ ● demo-train-pipeline DAG     4m00s   |----------------------------------|
 ├─ ✓ preprocess                 1m10s * ===========------------------------|
@@ -33,7 +33,7 @@ NAME                         DURATION   0       1m       2m       3m     now
 └─ ○ evaluate                           -----------------------------------|
 == demo-data-pull
  Nodes  [Timeline]  Explain   Events   Resource   Summary 
-6 rows · 1 skipped not drawn · 1/6 · * critical path so far: the 3 nodes th…
+6 rows · 1 skipped not drawn · 1/6 · * chain ending last so far: 3 nodes
 NAME                      DURATION   0        10m       20m      30m     now
 ▾ ● demo-data-pull Steps    40m00s   |-------------------------------------|
 ├─ ✓ list-sources            8m00s * ========------------------------------|
@@ -43,7 +43,7 @@ NAME                      DURATION   0        10m       20m      30m     now
 └─ ● pull(apac)             11m49s   --------------------------===========>|
 == demo-deploy-multi-layer
  Nodes  [Timeline]  Explain   Events   Resource   Summary 
-10 rows · 16 skipped not drawn · 1/10 · * critical path: the 2 nodes that s…
+10 rows · 16 skipped not drawn · 1/10 · * chain ending last: 2 nodes
 NAME                            DURATION   0     2m    4m    6m    8m 11m00s
 ▾ ✓ demo-deploy-multi-layer       11m00s   |-------------------------------|
 ├─ ✓ plan                          1m30s * =====----------------------------
@@ -61,7 +61,7 @@ NAME                            DURATION   0     2m    4m    6m    8m 11m00s
 (no nodes — the workflow ended before any node ran)
 == demo-nightly-report, info on transform(1)
  Nodes  [Timeline]  Explain   Events   Resource   Summary 
-8 rows · 5/8 · l logs · * critical path: the 4 nodes that set the end time
+8 rows · 5/8 · l logs · * chain ending last: 4 nodes
 NAME                         DURATION   0        1m       2m       3m  4m00s
 ▾ ✗ demo-nightly-report DAG     4m00s   |----------------------------------|
 ├─ ✓ extract                      50s * ========----------------------------
