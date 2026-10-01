@@ -188,21 +188,31 @@ func TestAProfileSkinArrivesWithItsConnection(t *testing.T) {
 	}
 }
 
-// The mode badge uses the armed style only when actions are enabled.
+// Only read-only sessions show a mode badge.
 func TestHeaderBadgeFollowsTheSafetyMode(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
-	reader := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
-	armed := NewRoot(reader, testkit.NewFakeClock(testkit.FixtureEpoch), "demo", time.Second,
-		actions.Options{AllowActions: true})
-	armed = resize(t, armed, 100, 20)
-	th := armed.Theme()
-	head := strings.Split(armed.View().Content, "\n")[0]
-	if !strings.Contains(head, th.BadgeActions.Render(" ACTIONS ENABLED ")) {
-		t.Errorf("armed header lacks the actions badge: %q", head)
-	}
-	safe := resize(t, loadDemoList(t), 100, 20)
-	head = strings.Split(safe.View().Content, "\n")[0]
-	if !strings.Contains(head, th.BadgeReadOnly.Render("READ ONLY")) {
-		t.Errorf("read-only header lacks its badge: %q", head)
+	for _, c := range []struct {
+		name  string
+		opts  actions.Options
+		badge bool
+	}{
+		{"enabled", actions.Options{AllowActions: true}, false},
+		{"disabled", actions.Options{}, true},
+		{"read only", actions.Options{AllowActions: true, ReadOnly: true}, true},
+		{"demo", actions.Options{AllowActions: true, Demo: true}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, width := range []int{48, 80, 140} {
+				clock := testkit.NewFakeClock(testkit.FixtureEpoch)
+				m := resize(t, NewRoot(testkit.DemoReader(clock), clock, "demo", time.Second, c.opts), width, 20)
+				head := strings.Split(m.View().Content, "\n")[0]
+				if strings.Contains(head, "ACTIONS ENABLED") {
+					t.Errorf("width %d: header has an enabled badge: %q", width, head)
+				}
+				if got := strings.Contains(head, m.Theme().BadgeReadOnly.Render("READ ONLY")); got != c.badge {
+					t.Errorf("width %d: read-only badge = %v, want %v: %q", width, got, c.badge, head)
+				}
+			}
+		})
 	}
 }

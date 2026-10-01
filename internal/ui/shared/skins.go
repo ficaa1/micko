@@ -253,7 +253,6 @@ func (p palette) theme(name string) Theme {
 		Band:           fg(p.text).Background(lipgloss.Color(p.surface)),
 		AppName:        fg(p.accent).Bold(true),
 		BadgeReadOnly:  badge(p.succeeded),
-		BadgeActions:   badge(p.failed),
 		HintKey:        fg(p.accent).Bold(true),
 		HintDesc:       muted,
 		TabActive:      fg(p.accent).Bold(true).Underline(true),

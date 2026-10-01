@@ -182,8 +182,7 @@ func windowTop(top, cursor, h, n int) int {
 	return top
 }
 
-// criticalNote says what the ◆ rows are. A finished workflow's chain set its
-// end time; a running workflow's chain is the one its end waits on so far.
+// criticalNote describes the marked dependency chain, with its node count.
 func (m *Model) criticalNote() string {
 	n := len(m.tl.path)
 	if n == 0 {
@@ -195,17 +194,12 @@ func (m *Model) criticalNote() string {
 	}
 	nodes := plural(n, "node")
 	if m.tl.running {
-		return mark + " critical path so far: the " + nodes + " that set the pace"
+		return mark + " chain ending last so far: " + nodes
 	}
-	if n == 1 {
-		return mark + " critical path: the node that set the end time"
-	}
-	return mark + " critical path: the " + nodes + " that set the end time"
+	return mark + " chain ending last: " + nodes
 }
 
-// timelineStatusLine states what the chart shows and what it leaves out:
-// the skipped nodes it does not draw, the rows inside folds, and what the
-// critical path marker means.
+// timelineStatusLine returns row counts, cursor position and the marked chain's meaning.
 func (m *Model) timelineStatusLine() string {
 	t := m.theme
 	if !m.state.Outline.Available {

@@ -51,9 +51,8 @@ func TestEverySkinKeepsTheFrameGeometry(t *testing.T) {
 							f.Body[i] = "body row"
 						}
 						f.Hints, f.Help = "/ filter   enter open", "? help"
-						f.ActionsEnabled = armed
 						if armed {
-							f.Mode = "ACTIONS ENABLED"
+							f.Mode = ""
 						}
 						out := f.Render(th)
 						got := lines(out)
@@ -131,16 +130,16 @@ func TestFooterStylesKeysApartFromDescriptions(t *testing.T) {
 	}
 }
 
-// The safety badge style follows whether actions are enabled.
-func TestModeBadgeFollowsActionsEnabled(t *testing.T) {
+// An empty mode leaves the header without a badge.
+func TestModeBadgeIsOptional(t *testing.T) {
 	th := skinned(t, "nord")
 	f := base()
 	if head := lines(f.Render(th))[0]; !strings.Contains(head, th.BadgeReadOnly.Render(" READ ONLY ")) {
 		t.Errorf("read-only badge missing: %q", head)
 	}
-	f.Mode, f.ActionsEnabled = "ACTIONS ENABLED", true
-	if head := lines(f.Render(th))[0]; !strings.Contains(head, th.BadgeActions.Render(" ACTIONS ENABLED ")) {
-		t.Errorf("actions badge missing: %q", head)
+	f.Mode = ""
+	if head := lines(f.Render(th))[0]; strings.Contains(head, "READ ONLY") {
+		t.Errorf("empty mode has a read-only badge: %q", head)
 	}
 }
 

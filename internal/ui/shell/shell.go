@@ -1,18 +1,4 @@
-// Package shell composes the three bands every route shares: a context
-// header, a bordered content pane, and a key-hint footer. When asked, and on
-// a large enough terminal, Mićko the mascot perches on the pane's top border
-// (perch.go).
-//
-// The point of the package is stable geometry. The alternate screen has no
-// scrollback, so a frame that changes height between renders does not scroll
-// — it leaves stale rows behind or loses its footer. Render therefore always
-// produces exactly Height lines of exactly Width cells: a short body is
-// padded and a long one is clipped, but the border and the footer never move.
-// Children ask BodyHeight/BodyWidth for their budget and size themselves to
-// it, so clipping is a safety net rather than the normal path.
-//
-// The package holds no state, performs no I/O, and never reaches the network.
-// It is a pure function of a Frame and a Theme.
+// Package shell draws a context header, content pane and footer within fixed terminal dimensions.
 package shell
 
 import (
@@ -47,10 +33,7 @@ type Frame struct {
 	App       string // program name and version
 	Server    string // server identity, or the demo source
 	Namespace string
-	Mode      string // READ ONLY / ACTIONS ENABLED — the safety state
-	// ActionsEnabled draws the mode badge in the theme's armed style. The
-	// Mode words carry the meaning; the badge colour only repeats it.
-	ActionsEnabled bool
+	Mode      string // READ ONLY, or empty when actions are enabled
 
 	// Mascot asks for Mićko, the mascot, to perch on the pane (perch.go).
 	// He only perches on a terminal with room for him.
@@ -82,12 +65,7 @@ type Frame struct {
 // border needs a column count to close on.
 func (f Frame) bordered() bool { return f.Width >= minBorderWidth }
 
-// titleRows is the vertical cost of the pane heading: two for a border, one
-// for the plain title line the narrow and unsized layouts use instead.
-//
-// The narrow layout still needs the title. Dropping it left a pane with no
-// statement of what it held and no count — the geometry saving was one row
-// and the cost was the pane's identity.
+// titleRows returns the heading height, including borders when present.
 func (f Frame) titleRows() int {
 	if f.bordered() {
 		return borderRows
@@ -244,14 +222,7 @@ func (f Frame) bottomBorder(b lipgloss.Border) string {
 	return b.BottomLeft + strings.Repeat(b.Bottom, inner) + b.BottomRight
 }
 
-// headerBand names the program, where it is pointed, and the safety mode.
-// The mode is right-aligned so a reader always finds it in the same place,
-// and it is drawn as a badge: the one word on the screen that says whether a
-// key can change the cluster.
-//
-// When the theme paints the band, the band gets a one-cell margin at each
-// end so its text does not touch the screen edge. The plain theme adds
-// nothing, so a plain header is the same text as the segments joined.
+// headerBand draws the connection context and an optional read-only badge.
 func (f Frame) headerBand(t shared.Theme) string {
 	painted := shared.IsBlock(t.Band)
 	var left []span
@@ -268,9 +239,6 @@ func (f Frame) headerBand(t shared.Theme) string {
 	var right []span
 	if mode := oneLine(f.Mode); mode != "" {
 		badge := t.BadgeReadOnly
-		if f.ActionsEnabled {
-			badge = t.BadgeActions
-		}
 		if shared.IsBlock(badge) {
 			mode = " " + mode + " "
 		}

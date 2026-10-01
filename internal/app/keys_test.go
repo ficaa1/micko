@@ -165,7 +165,7 @@ func TestHelpFitsAnEightyByFortyTerminal(t *testing.T) {
 	m := resize(t, loadDemoList(t), 80, 40)
 	keys(m, "?")
 	s := screen(m)
-	for _, want := range []string{"KEYS", "Timeline", "1-9 section", "T / X / E open on the timeline / explanation / events", "Explain   why it ended", "Events    live Kubernetes events", "y confirms"} {
+	for _, want := range []string{"KEYS", "Timeline", "1-9 section", "T / X / E open on the timeline / explanation / events", "Explain   y copy report", "Events    s warnings first", "enter runs", "enter lists runs", "y confirms"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("help lacks %q:\n%s", want, s)
 		}

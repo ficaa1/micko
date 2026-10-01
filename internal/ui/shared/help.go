@@ -6,15 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// HelpOverlay is the `?` key overlay. Every route footer advertises `? help`,
-// so the overlay is the single place that documents the key contract frozen
-// in keys.go. It owns no data and performs no I/O: the root toggles it and
-// renders it inside the frame, so the surrounding header/footer geometry
-// never moves when help opens.
-//
-// While open the overlay is a dialog: it consumes navigation
-// keys so the view behind it cannot move, `q` closes it instead of quitting,
-// and only Ctrl-C still quits globally.
+// HelpOverlay documents the keys available on each route.
 type HelpOverlay struct {
 	open  bool
 	theme Theme
@@ -42,11 +34,7 @@ func (h *HelpOverlay) Open() { h.open = true }
 func (h *HelpOverlay) Close() { h.open = false }
 
 // ClampLines enforces a height budget on an assembled frame. It keeps the top
-// of the frame and always keeps the final line, because the final line is the
-// footer carrying the key hints — the part a naive truncation destroys first.
-//
-// The alternate screen has no scrollback, so anything past the last row is
-// not merely off-screen, it is gone.
+// of the frame and always keeps the final line.
 func ClampLines(lines []string, height int) []string {
 	if height < 1 {
 		return nil
@@ -62,11 +50,7 @@ func ClampLines(lines []string, height int) []string {
 	return append(out, lines[len(lines)-1])
 }
 
-// helpLines is the overlay body, most global first. Keys are written exactly
-// as tea.KeyPressMsg.String() reports them, so the text matches what a reader
-// must actually press. The whole body fits the pane of a 40-row terminal and
-// every line the pane of an 80-column one, so a common terminal shows the
-// overlay without clipping it. That pane is the one Mićko leaves on the floor.
+// helpLines is the overlay body, most global first.
 func helpLines() []string {
 	return []string{
 		"KEYS                                       ? or esc to close",
@@ -80,33 +64,32 @@ func helpLines() []string {
 		"          esc clear marks, then filter",
 		"          / filter: word  a|b  !word  /regex/  ~fuzzy  (spaces: AND)",
 		"          phase=failed  age<2h  dur>10m  tmpl=x  cron=x  label:k=v  label:!k",
-		"Command   : then a command; tab completes, enter runs, ctrl+p / n history",
+		"Command   : command  tab completes  enter runs  ctrl+p / n history",
 		"          wf  cron  tmpl  cwftmpl  aw  ns [name]  all  ctx [name]  help  q",
-		"Kinds     :cron :tmpl :cwftmpl :aw take the list keys; enter lists runs",
+		"Kinds     :cron :tmpl :cwftmpl enter lists runs; :aw enter opens run",
 		"          i info panel  v hide / reveal values  f manifest",
 		"",
 		"Detail    tab / shift+tab section  1-9 section  T / X / E jump  r refresh",
 		"          a actions  v hide / reveal values  y copy  f raw",
 		"Nodes     enter / l logs  space fold  left / right fold, parent, unfold",
 		"          i info  / find  n / N next / previous  h skipped  s sort  p phase",
-		"Timeline  ◆ critical path  ░ waited  │ now  l logs  i info  space fold",
-		"Explain   why it ended, as findings  y copy report  l failing log",
-		"Events    live Kubernetes events  s warnings first  / filter",
+		"Timeline  l logs  i info  space fold",
+		"Explain   y copy report  l failing log",
+		"Events    s warnings first  / filter",
 		"Logs      t follow  space pause  c container  G newest  esc back",
 		"          / search  n / N next / previous match  & only matching lines",
 		"          w wrap long lines  L source labels  | pipe to a program",
 		"          ctrl+t server timestamps (reopens the stream, keeps the lines)",
-		"Actions   a opens the pane (off with --read-only); lists verbs that apply",
+		"Actions   a open actions pane",
 		"          u resume  z suspend  r retry  b resubmit  s stop",
 		"          t terminate (type the name)  d delete (then only D deletes)",
-		"          y confirms; enter and esc cancel; one result goes to the footer",
+		"          y confirms; enter and esc cancel",
 		"          marked: one request per workflow, in order; results stay until esc",
 	}
 }
 
 // styleLine draws one overlay line: the title and each section's name stand
-// out, the keys and their meanings stay plain. Styling runs after clipping,
-// so a cut line never loses the reset at its end.
+// out, the keys and their meanings stay plain.
 func (h *HelpOverlay) styleLine(i int, l string) string {
 	if l == "" || strings.HasPrefix(l, " ") {
 		return l
@@ -121,10 +104,6 @@ func (h *HelpOverlay) styleLine(i int, l string) string {
 	return h.theme.Accent.Render(label) + " " + rest
 }
 
-// helpFitWidth and helpFitHeight are the body of an 80x40 terminal inside
-// the shell's border, less the four rows Mićko takes on the floor: the smallest
-// common terminal the overlay is written to fit whole. Help that clips there
-// hides keys from the reader who most needs them.
 const (
 	helpFitWidth  = 76
 	helpFitHeight = 32
@@ -132,11 +111,6 @@ const (
 
 // View renders the overlay clipped to the given box. A closed overlay renders
 // nothing, so callers can concatenate it unconditionally.
-//
-// width/height of 0 mean "unknown" and disable that axis of clipping, which
-// keeps unsized golden renders byte-stable. When the box is too short the
-// body is cut from the bottom; the title line always survives, so a very
-// short terminal still shows what the overlay is and how to leave it.
 func (h *HelpOverlay) View(width, height int) string {
 	if !h.open {
 		return ""
@@ -155,11 +129,7 @@ func (h *HelpOverlay) View(width, height int) string {
 	return strings.Join(append(styled, h.wordmark(width, height-len(lines))...), "\n")
 }
 
-// wordmark signs the overlay with Mićko and the project name, below the
-// keys and a blank line, when he is turned on and the pane has room left
-// for all of it. It is
-// never clipped: a part of the drawing is worth less than none. An unsized
-// overlay gets none, so unsized renders stay the key text alone.
+// wordmark signs the overlay with Mićko and the project name.
 func (h *HelpOverlay) wordmark(width, room int) []string {
 	art := MickoWordmark
 	if !h.mascot || width < art.Width() || room < len(art.Lines)+1 {

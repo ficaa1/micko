@@ -15,7 +15,7 @@ func TestListTOpensTheTimeline(t *testing.T) {
 		t.Fatalf("section = %q, want timeline", got)
 	}
 	s := screen(m)
-	for _, want := range []string{"[Timeline]", "critical path", "approve-production", "now"} {
+	for _, want := range []string{"[Timeline]", "chain ending last", "approve-production", "now"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("timeline screen lacks %q:\n%s", want, s)
 		}
