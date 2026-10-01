@@ -178,7 +178,14 @@ table.q td:first-child { white-space: nowrap; color: var(--ink); font-weight: 70
 .photo img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; }
 .photo figcaption { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font-size: 14px; color: var(--soft); }
 .photo .tape { top: -16px; left: 50%; margin-left: -60px; transform: rotate(-4deg); }
-@media (max-width: 900px) { .bird { grid-template-columns: 1fr; } .photo { max-width: 420px; margin: 0 auto; } }
+/* The monitor photo overlaps the first one, taped on top. */
+.photos { position: relative; padding-bottom: 30%; }
+.photos .photo:first-child { width: 66%; }
+.photos .photo:first-child figcaption { text-align: left; left: 18px; }
+.photo.front { position: absolute; right: 0; bottom: 0; width: 56%; padding-bottom: 40px; transform: rotate(4deg); }
+.photo.front img { aspect-ratio: 3 / 4; }
+.photo.front .tape { background-color: var(--violet); transform: rotate(5deg); }
+@media (max-width: 900px) { .bird { grid-template-columns: 1fr; } .photos { max-width: 460px; width: 100%; margin: 0 auto; } }
 
 /* Install */
 .ways { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px; margin-top: 40px; }
