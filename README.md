@@ -39,6 +39,14 @@ mise use -g github:ficaa1/micko
 Or `go install github.com/ficaa1/micko/cmd/micko@latest`, or download a binary
 from [the releases page](https://github.com/ficaa1/micko/releases).
 
+With [Nix](https://nixos.org/download/) and flakes enabled:
+
+```sh
+nix profile install github:ficaa1/micko/stable
+```
+
+Nix: Linux x86_64/ARM64 and macOS ARM64; Intel macOS is not supported.
+
 ## Quick start
 
 micko reads profiles, one per cluster, from `~/.config/micko/config.yaml`.

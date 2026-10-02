@@ -1,5 +1,7 @@
 # Go build and test output
 /dist/
+/result
+/result-*
 *.test
 *.out
 coverage.*
