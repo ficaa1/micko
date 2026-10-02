@@ -44,6 +44,8 @@ class StableChannel(unittest.TestCase):
                 git("add", ".")
                 git("commit", "-m", version)
                 git("tag", f"v{version}")
+                git("push", "origin", f"refs/tags/v{version}")
+                git("tag", "-d", f"v{version}")
                 return git("rev-parse", "HEAD")
 
             def promote(tag, latest):
