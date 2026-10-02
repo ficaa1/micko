@@ -48,7 +48,6 @@ type PTYProcess struct {
 	slave   *os.File
 	mu      sync.Mutex
 	buf     strings.Builder
-	scrub   strings.Builder
 	done    chan struct{}
 	errRead error
 }
@@ -155,7 +154,6 @@ func (p *PTYProcess) readLoop() {
 			chunk := string(buf[:n])
 			p.mu.Lock()
 			p.buf.WriteString(chunk)
-			p.scrub.WriteString(stripANSI(chunk))
 			p.mu.Unlock()
 		}
 		if err != nil {
@@ -199,7 +197,8 @@ func (p *PTYProcess) Resize(cols, rows int) error {
 func (p *PTYProcess) Screen() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.scrub.String()
+	// PTY reads can split escape sequences and UTF-8 anywhere.
+	return stripANSI(p.buf.String())
 }
 
 // ClearScreen discards accumulated output so far, so a later Screen()/Raw()
@@ -209,7 +208,6 @@ func (p *PTYProcess) ClearScreen() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.buf.Reset()
-	p.scrub.Reset()
 }
 
 // Raw returns the raw captured output (restore-sequence checks).
