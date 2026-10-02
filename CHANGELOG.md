@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1
 
 - Notifications. `W` on the list watches the selected or marked workflows
   and notifies on each phase change and on deletion. Watches carry across
@@ -9,6 +9,19 @@
   section picks `desktop`, `bell`, `terminal` (OSC 9) and `sound`. With
   terminal-notifier installed, banners come from micko and a click brings
   the terminal forward.
+- The list filter remembers the last 50 filters for the session. In `/`,
+  up and down step through history, down clears the filter, and tab completes
+  fields, labels and values. A picker shows longer lists of completions and
+  keeps the highlighted value visible in short panes.
+- The raw view pans across long lines with h/l or the arrow keys, and w
+  toggles wrapping. Log lines pan too, with their source labels kept fixed.
+- The summary pans and wraps long lines, and v hides or reveals masked
+  label values. Resizing or masking values keeps the scroll position within
+  the visible content.
+- Install with Nix using `nix profile install github:ficaa1/micko/stable`.
+  The stable channel follows verified releases. Supported platforms are
+  Linux x86_64 and ARM64, and macOS ARM64.
+- Release downloads include Windows x86_64 and ARM64 binaries.
 
 ## 0.8.0
 
