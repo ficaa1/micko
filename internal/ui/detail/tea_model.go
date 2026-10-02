@@ -289,8 +289,8 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		}
 		return backCmd()
 	case "v":
-		// Explicit, session-only reveal of redacted values: the resource
-		// tab and the node info panel share it.
+		// Explicit, session-only reveal of redacted values: every section
+		// that masks a value shares it.
 		m.revealResource = !m.revealResource
 		return nil
 	case "p":
@@ -724,7 +724,7 @@ func (m *Model) summaryText() string {
 		b.WriteString("message:   (none)\n")
 	}
 	if len(st.Summary.Labels) > 0 {
-		b.WriteString("labels:    " + renderLabelsSorted(st.Summary.Labels) + "\n")
+		b.WriteString("labels:    " + renderLabelsSorted(st.Summary.Labels, m.revealResource) + "\n")
 	}
 	return b.String()
 }

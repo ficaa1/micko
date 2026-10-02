@@ -169,6 +169,12 @@ func TestReveal(t *testing.T) {
 		open          func(t *testing.T, m *Model)
 		value, hidden string
 	}{
+		{"summary", func() core.Workflow {
+			wf := resourceFixture()
+			wf.Summary.Labels = map[string]string{"workflows.argoproj.io/actor": "a1b2c3d4e5f6a7b8c9d0e1f2a3"}
+			return wf
+		}, func(t *testing.T, m *Model) { m.SetSection("summary") },
+			"actor=a1b2c3d4e5f6a7b8c9d0e1f2a3", "actor=" + redactedMarker},
 		{"resource", resourceFixture, func(t *testing.T, m *Model) { m.SetSection("resource") },
 			"sk-1234567890abcdef123456", redactedMarker},
 		{"info panel", func() core.Workflow { return demoWorkflow(t, "demo-nightly-report") }, func(t *testing.T, m *Model) {
