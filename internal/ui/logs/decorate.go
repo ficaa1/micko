@@ -311,6 +311,19 @@ func renderRange(text string, from, to int, spans []span) string {
 	return b.String()
 }
 
+// cellOffset returns the byte offset at which text's cell-th cell starts. A
+// wide rune cut by the edge is skipped whole.
+func cellOffset(text string, cell int) int {
+	cells := 0
+	for i, r := range text {
+		if cells >= cell {
+			return i
+		}
+		cells += ansi.StringWidth(string(r))
+	}
+	return len(text)
+}
+
 // wrapBreaks cuts text into screen lines of at most width cells and
 // returns the byte offset each line starts at. It cuts between runes, never
 // inside one, and a rune wider than the line still gets a line of its own.

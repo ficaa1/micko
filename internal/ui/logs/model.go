@@ -12,7 +12,7 @@
 //     flowing into the bounded buffer and can never grow memory without
 //     bound; while paused, arriving lines never move the
 //     viewport (no autoscroll jump while paused).
-//   - `f` returns to follow. Search is over the retained buffer
+//   - `t` returns to follow. Search is over the retained buffer
 //     only, with the scope visible. Container default "main" is
 //     visible/editable and switching is an intent for the root.
 //   - Every untrusted string passes the shared sanitizer before render;
@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/ui/shared"
@@ -116,6 +117,9 @@ type Model struct {
 	// wrap cuts long lines into screen lines instead of letting the pane
 	// clip them (w). The scroll position stays on logical lines either way.
 	wrap bool
+	// left is how many cells of each log line are scrolled off the left
+	// edge while wrapping is off.
+	left int
 	// labels puts each line's source label in front of it (L). It starts on
 	// for workflow-wide logs, which mix pods, and off for one pod's log,
 	// where every line would carry the same label.
@@ -225,8 +229,7 @@ func (m *Model) KeepViewPrefs(prev *Model) {
 }
 
 // SetPipeCommand records the command the pipe editor prefills with. The
-// profile configures it; an empty value falls back to lnav, which is what the
-// feature was asked for.
+// profile configures it; an empty value falls back to lnav.
 func (m *Model) SetPipeCommand(cmd string) {
 	if cmd = strings.TrimSpace(cmd); cmd != "" {
 		m.pipeCmd = cmd
@@ -413,8 +416,7 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		m.jumpToTop()
 		return nil
 	case "n":
-		// vim's n/N over the search hits. Without them a search told you how
-		// many matches existed and then left you to scroll for them.
+		// vim's n/N step through the search hits.
 		m.jumpToHit(1)
 		return nil
 	case "N":
@@ -424,6 +426,19 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		// Wrapping changes how many screen lines each row takes but not
 		// which row is at the bottom, so the reader stays on their line.
 		m.wrap = !m.wrap
+		m.left = 0
+		return nil
+	case "h", "left":
+		m.pan(-m.panStep())
+		return nil
+	case "l", "right":
+		m.pan(m.panStep())
+		return nil
+	case "0":
+		m.left = 0
+		return nil
+	case "$":
+		m.pan(m.maxLeft())
 		return nil
 	case "L":
 		m.labels = !m.labels
@@ -472,6 +487,30 @@ func (m *Model) handleBrowseKey(key string) tea.Cmd {
 		// the child must not shadow global keys.
 		return nil
 	}
+}
+
+// panStep is one horizontal pan: half the text width, so a cut word stays in
+// view.
+func (m *Model) panStep() int {
+	return max(1, m.textWidth(row{kind: rowLog})/2)
+}
+
+// pan moves the left edge by delta cells, no further than the widest
+// visible line needs. Wrapped lines ignore it.
+func (m *Model) pan(delta int) {
+	m.left = min(max(m.left+delta, 0), m.maxLeft())
+}
+
+// maxLeft is the left edge that brings the end of the widest visible log
+// line to the pane's right edge.
+func (m *Model) maxLeft() int {
+	most := 0
+	for _, r := range m.window() {
+		if r.kind == rowLog {
+			most = max(most, ansi.StringWidth(r.text)-m.textWidth(r))
+		}
+	}
+	return most
 }
 
 // pageRows is the scroll step for pgup/pgdown (viewport minus one line of
