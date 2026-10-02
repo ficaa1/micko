@@ -5,7 +5,7 @@ package buildinfo
 
 import "runtime/debug"
 
-const Version = "0.8.0"
+const Version = "0.8.1"
 
 // Commit is the short revision this binary was built from. The Makefile and
 // the release workflow inject it. A build that injects nothing — `go install`,
