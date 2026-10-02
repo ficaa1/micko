@@ -22,7 +22,7 @@ A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/wor
 - **Actions**: resume, suspend, retry, resubmit, stop, terminate, delete, one at a time or in bulk, each confirmed
 - **Cron workflows, templates and the archive**, with next-run times computed locally
 - **Profiles** per cluster, with managed `kubectl port-forward`
-- **13 colour skins**, and Mićko, an optional ASCII rosella
+- **13 colour skins**, and my bird Mićko, as an optional mascot. He won't be offended if you don't turn it on :)
 
 ## Install
 
