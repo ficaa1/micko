@@ -99,7 +99,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.searchBuf = m.query
 		m.searchCur = len([]rune(m.searchBuf))
 		m.histPos = len(m.history)
-		m.picking = false
+		m.pickOpen = false
 		return nil
 	case "s":
 		m.CycleSort()
@@ -150,8 +150,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 // Tab and shift+tab cycle the completions, up and down (or ctrl+p and
 // ctrl+n) walk the history, and Home/End/Backspace/arrow-left/right edit;
 // everything else is ignored (never a command). While the completion picker
-// is open, up and down move its highlight, tab accepts and esc closes it;
-// enter still applies the filter as typed.
+// is open, up, down, tab and shift+tab move its highlight, enter accepts and
+// esc closes it. Enter applies the filter as typed when nothing matches or
+// the word already reads the highlighted value, so a filter typed out in
+// full applies on the first enter.
 func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 	if key != "tab" && key != "shift+tab" {
 		m.tabs = nil
@@ -160,16 +162,22 @@ func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 		n := len(c.values)
 		switch key {
 		case "up", "ctrl+p", "shift+tab":
-			m.pickSel = (m.pickSel - 1 + n) % n
+			if n > 0 {
+				m.pickSel = (m.pickSel%n - 1 + n) % n
+			}
 			return nil
-		case "down", "ctrl+n":
-			m.pickSel = (m.pickSel + 1) % n
+		case "down", "ctrl+n", "tab":
+			if n > 0 {
+				m.pickSel = (m.pickSel%n + 1) % n
+			}
 			return nil
-		case "tab":
-			m.accept(c, c.values[m.pickSel%n])
-			return nil
+		case "enter":
+			if n > 0 && !m.typed(c, c.values[m.pickSel%n]) {
+				m.accept(c, c.values[m.pickSel%n])
+				return nil
+			}
 		case "esc":
-			m.picking = false
+			m.pickOpen = false
 			return nil
 		}
 	}

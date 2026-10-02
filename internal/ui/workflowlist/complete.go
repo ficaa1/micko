@@ -67,7 +67,7 @@ func (m *Model) completions() completion {
 		i++
 	}
 	if i == len(word) {
-		return completion{start, end, ranked(word, fieldStarts), len(fieldStarts), false}
+		return completion{start, end, ranked(word, fieldStarts, false), len(fieldStarts), false}
 	}
 	field := strings.ToLower(word[:i])
 	op := ""
@@ -103,19 +103,20 @@ func (m *Model) completions() completion {
 			pool = m.labelKeys("=")
 		}
 	}
-	return completion{start, end, ranked(value, pool), len(pool), true}
+	return completion{start, end, ranked(value, pool, true), len(pool), true}
 }
 
-// ranked returns the values that match query, best first, leaving out the
-// one already typed in full.
-func ranked(query string, values []string) []string {
+// ranked returns the values that match query, best first. Inline, the value
+// already typed in full is left out, since tab would change nothing; the
+// picker keeps it, so the highlight can rest on what was typed.
+func ranked(query string, values []string, keepTyped bool) []string {
 	cands := make([]palette.Candidate, len(values))
 	for i, v := range values {
 		cands[i] = palette.Candidate{Terms: []string{v}}
 	}
 	var out []string
 	for _, r := range palette.Rank(query, cands) {
-		if r.Term != query {
+		if keepTyped || r.Term != query {
 			out = append(out, r.Term)
 		}
 	}
@@ -157,13 +158,28 @@ func (m *Model) labelValues(keys ...string) []string {
 }
 
 // picker returns the completions to show in the picker, and whether it is
-// open: the reader has typed since the input opened and enough values match.
+// open. Once open it stays open as the matches narrow, even to none, until
+// a value is accepted, esc closes it or the word stops completing to values.
 func (m *Model) picker() (completion, bool) {
-	if !m.picking {
+	if !m.pickOpen {
 		return completion{}, false
 	}
 	c := m.completions()
-	return c, c.pickable && len(c.values) >= pickerMin
+	return c, c.pickable
+}
+
+// syncPicker follows an edit: it opens the picker once enough values
+// complete the word being typed, closes it when the word completes to no
+// values at all, and puts the highlight back on the best match.
+func (m *Model) syncPicker() {
+	c := m.completions()
+	switch {
+	case !c.pickable:
+		m.pickOpen = false
+	case len(c.values) >= pickerMin:
+		m.pickOpen = true
+	}
+	m.pickSel = 0
 }
 
 // complete puts the next (step 1) or previous (step -1) completion in place
@@ -172,7 +188,7 @@ func (m *Model) complete(step int) {
 	if m.tabs == nil {
 		c := m.completions()
 		if c.pickable && len(c.values) >= pickerMin {
-			m.picking, m.pickSel = true, 0
+			m.pickOpen, m.pickSel = true, 0
 			return
 		}
 		if len(c.values) == 0 {
@@ -190,15 +206,28 @@ func (m *Model) complete(step int) {
 	// completes the word that value began, such as label: to a key.
 	if len(t.values) == 1 {
 		m.tabs = nil
+		m.pickOpen, m.pickSel = opensNext(t.values[0]), 0
 	}
 }
 
-// accept puts the picked value in place of the word at the cursor. A value
-// that ends in an operator, such as label: or stack=, keeps the picker open
-// on what comes after it.
+// accept puts the picked value in place of the word at the cursor, and keeps
+// the picker open on what follows a value such as label: or stack=.
 func (m *Model) accept(c completion, value string) {
 	m.replaceWord(m.searchBuf, c, value)
-	m.picking, m.pickSel = strings.ContainsAny(value[len(value)-1:], ":=<>"), 0
+	m.pickOpen, m.pickSel = opensNext(value), 0
+}
+
+// typed reports whether the word c replaces already reads value, ignoring
+// case and the operator a key or field ends in.
+func (m *Model) typed(c completion, value string) bool {
+	word := string([]rune(m.searchBuf)[c.start:c.end])
+	return strings.EqualFold(word, value) || strings.EqualFold(word, strings.TrimRight(value, ":=<>"))
+}
+
+// opensNext reports whether value ends in an operator, after which another
+// value is completed.
+func opensNext(value string) bool {
+	return value != "" && strings.ContainsAny(value[len(value)-1:], ":=<>")
 }
 
 // replaceWord sets the buffer to base with c's range replaced by value, the
@@ -249,7 +278,7 @@ func (m *Model) recall(delta int) {
 	m.histPos = pos
 	m.searchBuf = m.recalled(pos)
 	m.searchCur = len([]rune(m.searchBuf))
-	m.picking = false
+	m.pickOpen = false
 	m.applyLiveQuery()
 }
 

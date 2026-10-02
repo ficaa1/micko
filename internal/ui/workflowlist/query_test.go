@@ -147,6 +147,10 @@ func TestQueryErrors(t *testing.T) {
 			editQuery(&m, c.in)
 			before := rowIDs(m.Rows())
 			query := m.Query()
+			// An open picker would take enter as picking a value.
+			if m.pickOpen {
+				m.Update(escKey())
+			}
 			m.Update(enterKey())
 			if !m.SearchOn || !strings.Contains(body(&m), c.want) || !slices.Equal(rowIDs(m.Rows()), before) || m.Query() != query {
 				t.Fatalf("bad query committed or lost diagnostic: %q\n%s", c.in, body(&m))

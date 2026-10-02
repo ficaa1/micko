@@ -78,12 +78,12 @@ type Model struct {
 	// tabs is the completion tab is cycling through, nil once any other key
 	// is pressed.
 	tabs *tabCycle
-	// picking lets the completion picker open. Typing sets it; opening the
-	// input, recalling, accepting a value and esc clear it, so the picker
+	// pickOpen shows the completion picker. An edit opens it, and opening
+	// the input, recalling, accepting a final value and esc close it, so it
 	// never covers the list before the reader types. pickSel is the
 	// highlighted value.
-	picking bool
-	pickSel int
+	pickOpen bool
+	pickSel  int
 
 	// gPending is the armed half of vim's gg. It is cleared by the next key
 	// press whatever that key is, so it can never leak into a later command.
@@ -439,7 +439,7 @@ func (m *Model) searchInsert(r rune) {
 	m.searchBuf = string(edited)
 	m.searchCur = at + 1
 	m.histPos = len(m.history)
-	m.picking, m.pickSel = true, 0
+	m.syncPicker()
 }
 
 // searchBackspace deletes the rune before the cursor, if any.
@@ -455,7 +455,7 @@ func (m *Model) searchBackspace() {
 	m.searchBuf = string(edited)
 	m.searchCur = at - 1
 	m.histPos = len(m.history)
-	m.picking, m.pickSel = true, 0
+	m.syncPicker()
 }
 
 // searchLeft / searchRight move the cursor within the buffer bounds.

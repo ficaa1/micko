@@ -395,7 +395,7 @@ func (m *Model) searchLineView() string {
 // when they would change something.
 func (m *Model) searchHint() string {
 	if _, ok := m.picker(); ok {
-		return "  (↑↓ pick, tab accept, esc close)"
+		return "  (↑↓ or tab pick, enter accept, esc close)"
 	}
 	hint := "enter apply, esc cancel"
 	if len(m.history) > 0 && m.histPos > 0 {
@@ -418,7 +418,10 @@ func (m *Model) pickerLines() []string {
 	if !ok {
 		return nil
 	}
-	sel := m.pickSel % len(c.values)
+	sel := 0
+	if len(c.values) > 0 {
+		sel = m.pickSel % len(c.values)
+	}
 	first := max(0, sel-maxPickerRows+1)
 	out := []string{m.theme.Muted.Render("  " + strconv.Itoa(len(c.values)) + "/" + strconv.Itoa(c.total))}
 	for i := first; i < min(len(c.values), first+maxPickerRows); i++ {
