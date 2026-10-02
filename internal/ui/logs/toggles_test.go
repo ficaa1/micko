@@ -299,6 +299,32 @@ func TestTimestampsToggleMarksAndAsks(t *testing.T) {
 	}
 }
 
+// A line wider than the pane pans left and right; the label column stays put.
+func TestPanningShowsTheRestOfALongLine(t *testing.T) {
+	m := testModel(t)
+	long := strings.Repeat("0123456789", 12)
+	m.ApplyRecords([]core.LogRecord{rec("short"), rec(long)})
+	label := "pod-1" + strings.Repeat(" ", 12)
+	for _, c := range []struct {
+		key  tea.KeyPressMsg
+		left int
+	}{
+		{tea.KeyPressMsg{Code: 'l', Text: "l"}, 31},
+		{tea.KeyPressMsg{Code: tea.KeyRight}, 57},
+		{tea.KeyPressMsg{Code: tea.KeyRight}, 57},
+		{tea.KeyPressMsg{Code: 'h', Text: "h"}, 26},
+		{tea.KeyPressMsg{Code: tea.KeyLeft}, 0},
+		{tea.KeyPressMsg{Code: '$', Text: "$"}, 57},
+		{tea.KeyPressMsg{Code: '0', Text: "0"}, 0},
+	} {
+		m.Update(c.key)
+		lines := m.BodyLines()
+		if got, want := lines[len(lines)-1], label+long[c.left:]; got != want {
+			t.Fatalf("after %s the line reads %q, want %q", c.key, got, want)
+		}
+	}
+}
+
 // A new pane for another container keeps wrapping and timestamps, and
 // keeps the labels choice between workflow-wide panes.
 func TestViewPrefsCarryOver(t *testing.T) {

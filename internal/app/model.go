@@ -115,16 +115,19 @@ type Root struct {
 	connectionTarget string
 
 	// rawMode renders the active pane's whole content with no border and no
-	// bands, so a terminal mouse selection copies clean text. rawTop is its
-	// scroll anchor.
+	// bands, so a terminal mouse selection copies clean text. rawTop and
+	// rawLeft are its scroll anchors; rawWrap cuts long lines at the screen
+	// edge instead, and lasts the session.
 	rawMode bool
+	rawTop  int
+	rawLeft int
+	rawWrap bool
 
 	// tickArmed guards the single poll chain. The tick has to be re-armed
 	// on every route, or opening a workflow stops every refresh until the
 	// reader presses r. Exactly one chain may be alive: two of them double
 	// the poll rate on every route change.
 	tickArmed bool
-	rawTop    int
 	// gPending is the armed half of vim's gg while the raw view is up.
 	gPending bool
 

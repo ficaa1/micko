@@ -110,10 +110,6 @@ func filterRows(rows []row, term string, caseSensitive bool) []row {
 // hitRowIndex maps each hit, in order, to the scrollable row that carries it.
 // hitLogIdx maps scrollable-row position → log-line index; hits are indices
 // into the retained log lines.
-//
-// This replaces the old "[match N]" text prefix. That prefix edited the line
-// itself, which pushed the content right, broke a copy of the buffer and made
-// the reader count captions instead of seeing the word they searched for.
 func hitRowIndex(hits []int, hitLogIdx []int) []int {
 	if len(hits) == 0 {
 		return nil
@@ -216,9 +212,8 @@ func (m *Model) rowHeight(r row) int {
 }
 
 // clampBottomRaw clamps an absolute bottom index into [minBottom, maxBottom].
-// The floor matters: without it pgup drove bottom to 0 while the renderer
-// still drew a full pane, so the next arrow-down moved the state but not the
-// screen, and the pane looked frozen for a whole page of presses.
+// The floor keeps scroll state in step with the screen: below it the pane is
+// already at the top, and a key would move the state but not the view.
 func (m *Model) clampBottomRaw(b int) int {
 	if min := m.minBottom(); b < min {
 		return min
@@ -307,10 +302,7 @@ func (m *Model) windowAt() ([]row, int, int) {
 		return m.rows[top : bottom+1], top, skip
 	}
 	bottom := m.bottomAt()
-	// Scrolling up past the first line must not shrink the pane. Without
-	// this floor the window becomes rows[0:bottom+1], so every further press
-	// removed one more line from the BOTTOM of the screen while the top
-	// stayed put — text appeared to be eaten from below.
+	// Scrolling up past the first line must not shrink the pane.
 	if min := h - 1; bottom < min {
 		bottom = min
 	}
@@ -415,7 +407,7 @@ func (m *Model) windowLines() []string {
 		}
 		spans := m.lineSpans(r.text, top+i == cur)
 		if !m.wrap || m.width <= 0 {
-			out = append(out, prefix+renderRange(r.text, 0, len(r.text), spans))
+			out = append(out, prefix+renderRange(r.text, cellOffset(r.text, m.left), len(r.text), spans))
 			continue
 		}
 		breaks := wrapBreaks(r.text, m.textWidth(r))

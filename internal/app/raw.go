@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/ui/shared"
 	"github.com/ficaa1/micko/internal/ui/workflowlist"
@@ -28,10 +29,12 @@ const maxCopyBytes = 512 * 1024
 func (m *Root) enterRaw() {
 	m.rawMode = true
 	m.rawTop = 0
+	m.rawLeft = 0
 	m.gPending = false
 }
 
-// handleRawKey is the whole key matrix of the raw view: scroll, or leave.
+// handleRawKey is the whole key matrix of the raw view: scroll, pan, wrap,
+// copy or leave.
 func (m *Root) handleRawKey(key string) tea.Cmd {
 	if m.gPending {
 		m.gPending = false
@@ -43,7 +46,8 @@ func (m *Root) handleRawKey(key string) tea.Cmd {
 		m.gPending = true
 		return nil
 	}
-	lines := len(m.rawLines())
+	content := m.rawLines()
+	lines := len(m.rawScreenLines())
 	page := m.height - 1
 	if page < 1 {
 		page = 1
@@ -62,6 +66,18 @@ func (m *Root) handleRawKey(key string) tea.Cmd {
 		m.rawScroll(page-1, lines)
 	case "pgup", "ctrl+u":
 		m.rawScroll(-(page - 1), lines)
+	case "w":
+		m.rawWrap = !m.rawWrap
+		m.rawLeft = 0
+		m.rawScroll(0, len(m.rawScreenLines()))
+	case "h", "left":
+		m.rawPan(-m.rawStep(), content)
+	case "l", "right":
+		m.rawPan(m.rawStep(), content)
+	case "0":
+		m.rawLeft = 0
+	case "$":
+		m.rawPan(rawWidest(content), content)
 	case "home":
 		m.rawTop = 0
 	case "G", "end":
@@ -84,6 +100,77 @@ func (m *Root) rawScroll(delta, lines int) {
 	}
 }
 
+// rawStep is one horizontal pan: half the screen, so a cut word stays in view.
+func (m *Root) rawStep() int {
+	if m.width < 2 {
+		return 1
+	}
+	return m.width / 2
+}
+
+// rawPan moves the left edge, stopping where the widest line's end meets the
+// right edge of the screen.
+func (m *Root) rawPan(delta int, lines []string) {
+	if m.rawWrap {
+		return
+	}
+	max := rawWidest(lines) - m.width
+	if max < 0 {
+		max = 0
+	}
+	m.rawLeft += delta
+	if m.rawLeft > max {
+		m.rawLeft = max
+	}
+	if m.rawLeft < 0 {
+		m.rawLeft = 0
+	}
+}
+
+// rawWidest returns the display width of the widest line.
+func rawWidest(lines []string) int {
+	w := 0
+	for _, l := range lines {
+		w = max(w, ansi.StringWidth(expandTabs(l)))
+	}
+	return w
+}
+
+// expandTabs replaces each tab with the spaces up to the next 8-column stop,
+// where a terminal would put the cursor.
+func expandTabs(s string) string {
+	if !strings.Contains(s, "\t") {
+		return s
+	}
+	var b strings.Builder
+	col := 0
+	for _, part := range strings.SplitAfter(s, "\t") {
+		text, tab := strings.CutSuffix(part, "\t")
+		b.WriteString(text)
+		col += ansi.StringWidth(text)
+		if tab {
+			n := 8 - col%8
+			b.WriteString(strings.Repeat(" ", n))
+			col += n
+		}
+	}
+	return b.String()
+}
+
+// rawScreenLines is the raw content as screen rows: one per line, or with
+// wrapping on, as many as each line needs at the screen width.
+func (m *Root) rawScreenLines() []string {
+	lines := m.rawLines()
+	if !m.rawWrap || m.width < 1 {
+		return lines
+	}
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		out = append(out, strings.Split(ansi.Hardwrap(expandTabs(l), m.width, true), "\n")...)
+	}
+	return out
+}
+
 // rawLines is the whole content of the active route, unwindowed and unstyled.
 func (m *Root) rawLines() []string {
 	switch m.route {
@@ -104,10 +191,9 @@ func (m *Root) rawLines() []string {
 	return nil
 }
 
-// listRawLines renders the visible list rows as plain "name phase age" text.
-// The table's padding is what makes it readable on screen and awkward in a
-// paste, so the raw form uses single spaces. Across namespaces each line
-// starts with the row's namespace, as the table does.
+// listRawLines renders the visible list rows as tab-separated name, phase and
+// UID. Across namespaces each line starts with the row's namespace, as the
+// table does.
 func (m *Root) listRawLines() []string {
 	rows := m.listView.Rows()
 	out := make([]string, 0, len(rows))
@@ -127,7 +213,10 @@ func (m *Root) listRawLines() []string {
 // way out is never a guess. The hint is the last row, so a selection that
 // starts at the top of the screen stops before it.
 func (m *Root) rawView() tea.View {
-	lines := m.rawLines()
+	lines := m.rawScreenLines()
+	// A resize or a shorter refresh can leave the anchors past the content.
+	m.rawScroll(0, len(lines))
+	m.rawPan(0, lines)
 	h := m.height
 	if h <= 0 {
 		h = len(lines) + 1
@@ -141,11 +230,28 @@ func (m *Root) rawView() tea.View {
 	if len(body) > h-1 {
 		body = body[:h-1]
 	}
-	out := append([]string{}, body...)
+	out := make([]string, 0, h)
+	for _, l := range body {
+		// An unpanned line keeps its tabs for a mouse copy; the terminal
+		// clips it.
+		if m.rawLeft > 0 {
+			l = ansi.Cut(expandTabs(l), m.rawLeft, m.rawLeft+m.width)
+		}
+		out = append(out, l)
+	}
 	for len(out) < h-1 {
 		out = append(out, "")
 	}
 	hint := "RAW — f or esc leaves  y copy  q quit"
+	switch {
+	case m.rawWrap:
+		hint = "RAW — w unwrap  f or esc leaves  y copy  q quit"
+	case m.width > 0 && rawWidest(lines) > m.width:
+		hint = "RAW — h/l pan  w wrap  f or esc leaves  y copy  q quit"
+		if m.rawLeft > 0 {
+			hint = "col " + strconv.Itoa(m.rawLeft+1) + "  " + hint
+		}
+	}
 	if m.flash != "" {
 		hint = m.flash + "   " + hint
 	}
