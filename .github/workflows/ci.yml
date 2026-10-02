@@ -46,14 +46,18 @@ jobs:
           if os.environ["EVENT"] != "workflow_dispatch" and base and set(base) != {"0"}:
               separator = "..." if os.environ["EVENT"] == "pull_request" else ".."
               diff = base + separator + os.environ["HEAD"]
-              paths = os.fsdecode(subprocess.check_output([
-                  "git", "diff", "--no-renames", "--name-only", "-z", diff
-              ])).split("\0")
-              paths = [path for path in paths if path]
-              build = any(
-                  not (path.startswith("docs/") or ("/" not in path and path.endswith(".md")))
-                  for path in paths
-              )
+              try:
+                  paths = os.fsdecode(subprocess.check_output([
+                      "git", "diff", "--no-renames", "--name-only", "-z", diff
+                  ])).split("\0")
+              except subprocess.CalledProcessError:
+                  print("Cannot compare changed paths; build Nix package")
+              else:
+                  paths = [path for path in paths if path]
+                  build = any(
+                      not (path.startswith("docs/") or ("/" not in path and path.endswith(".md")))
+                      for path in paths
+                  )
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"build={str(build).lower()}\n")
           print("Build Nix package" if build else "Only documentation changed; skip Nix build")
