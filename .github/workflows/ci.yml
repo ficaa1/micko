@@ -28,10 +28,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check whether Nix packaging can change
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import subprocess
+
+          build = True
+          base = os.environ["BASE"]
+          if os.environ["EVENT"] != "workflow_dispatch" and base and set(base) != {"0"}:
+              separator = "..." if os.environ["EVENT"] == "pull_request" else ".."
+              diff = base + separator + os.environ["HEAD"]
+              try:
+                  paths = os.fsdecode(subprocess.check_output([
+                      "git", "diff", "--no-renames", "--name-only", "-z", diff
+                  ])).split("\0")
+              except subprocess.CalledProcessError:
+                  print("Cannot compare changed paths; build Nix package")
+              else:
+                  paths = [path for path in paths if path]
+                  build = any(
+                      not (path.startswith("docs/") or ("/" not in path and path.endswith(".md")))
+                      for path in paths
+                  )
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"build={str(build).lower()}\n")
+          print("Build Nix package" if build else "Only documentation changed; skip Nix build")
+          PY
       - uses: nixbuild/nix-quick-install-action@2c9db80fb984ceb1bcaa77cdda3fdf8cfba92035 # v34
+        if: steps.changes.outputs.build == 'true'
       - run: nix flake check --all-systems --no-update-lock-file
-      - name: Check release-channel updater
-        run: python3 scripts/test-nix-stable.py
+        if: steps.changes.outputs.build == 'true'
 
   check:
     # micko is a terminal program, and the two terminals it has to work in
@@ -61,6 +95,10 @@ jobs:
 
       - name: vet
         run: go vet ./...
+
+      - name: Check release-channel updater
+        if: runner.os == 'Linux'
+        run: python3 scripts/test-nix-stable.py
 
       # One run with the race detector: it fails on everything a plain run
       # fails on. It needs CGO and a C toolchain.
