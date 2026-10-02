@@ -31,6 +31,8 @@ jobs:
   release:
     name: build and publish
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ format('v{0}', steps.version.outputs.version) }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -224,3 +226,12 @@ jobs:
           # HEAD rather than a branch name: a tap that has never been pushed
           # to is cloned on an unborn branch with no upstream.
           git push origin HEAD
+
+  demo:
+    name: update README demo
+    needs: release
+    if: ${{ !contains(needs.release.outputs.tag, '-') }}
+    uses: ./.github/workflows/demo.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    secrets: inherit
