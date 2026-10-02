@@ -278,9 +278,8 @@ func (m *Model) toolbarView() string {
 }
 
 // wrapStatusReason word-wraps a long status reason into the remaining width
-// of the toolbar line. Short reasons (which goldens pin byte-for-byte) are
-// returned styled exactly as before; only text long enough to clip at the
-// right edge is reflowed.
+// of the toolbar line. A short reason is returned styled as it is; only text
+// long enough to clip at the right edge is reflowed.
 func (m *Model) wrapStatusReason(full string, style func(...string) string) string {
 	const shortReasonThreshold = 60
 	if m.width <= 0 || ansi.StringWidth(full) <= shortReasonThreshold {
@@ -378,14 +377,55 @@ func (m *Model) searchLineView() string {
 	} else {
 		b.WriteString("[_]") // cursor at end
 	}
-	// The error sits before the usage hint because a narrow pane clips the
-	// toolbar from the right, and the error is what explains why the rows
-	// stopped following the typing. The cross carries it without colour.
+	// The completions come first and the error before the usage hint,
+	// because a narrow pane clips the toolbar from the right: the
+	// completions are what the reader is choosing between, and the error
+	// explains why the rows stopped following the typing. The cross
+	// carries it without colour.
+	b.WriteString(m.completionView())
 	if m.queryErr != "" {
 		b.WriteString("  " + m.theme.ErrorText.Render("✗ "+sanitizeOne(m.queryErr)))
 	}
-	b.WriteString("  (enter apply, esc cancel)")
+	hint := "  (enter apply, esc cancel)"
+	if len(m.history) > 0 {
+		hint = "  (enter apply, esc cancel, ↑ history)"
+	}
+	b.WriteString(hint)
 	return b.String()
+}
+
+// maxShownCompletions bounds the completions listed in the toolbar.
+const maxShownCompletions = 5
+
+// completionView lists what tab completes to, the one tab put in last in
+// brackets, or nothing when the word at the cursor completes to nothing.
+// Label values come from the server, so they are sanitized.
+func (m *Model) completionView() string {
+	c, cur := m.completions(), -1
+	if m.tabs != nil {
+		c, cur = m.tabs.completion, m.tabs.i
+	}
+	if len(c.values) == 0 {
+		return ""
+	}
+	first := 0
+	if cur >= maxShownCompletions {
+		first = cur - maxShownCompletions + 1
+	}
+	shown := c.values[first:min(len(c.values), first+maxShownCompletions)]
+	parts := make([]string, len(shown))
+	for i, v := range shown {
+		v = sanitizeOne(v)
+		if first+i == cur {
+			v = "[" + v + "]"
+		}
+		parts[i] = v
+	}
+	out := "  tab: " + strings.Join(parts, "  ")
+	if more := len(c.values) - first - len(shown); more > 0 {
+		out += "  +" + strconv.Itoa(more)
+	}
+	return m.theme.Muted.Render(out)
 }
 
 // colKey names a table column.

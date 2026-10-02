@@ -98,6 +98,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.queryBefore = m.query
 		m.searchBuf = m.query
 		m.searchCur = len([]rune(m.searchBuf))
+		m.histPos = len(m.history)
 		return nil
 	case "s":
 		m.CycleSort()
@@ -145,10 +146,26 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 // handleSearchKey routes keys while search has focus. Text-entry isolation:
 // printable characters reach the buffer; `q` inserts a letter;
 // navigation command keys are not interpreted; enter applies; esc cancels.
-// Home/End/Backspace/arrow-left/right are the only other editing keys the
-// input recognizes; everything else is ignored (never a command).
+// Tab and shift+tab cycle the completions, up and down (or ctrl+p and
+// ctrl+n) walk the history, and Home/End/Backspace/arrow-left/right edit;
+// everything else is ignored (never a command).
 func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
+	if key != "tab" && key != "shift+tab" {
+		m.tabs = nil
+	}
 	switch key {
+	case "tab":
+		m.complete(1)
+		return nil
+	case "shift+tab":
+		m.complete(-1)
+		return nil
+	case "up", "ctrl+p":
+		m.recall(-1)
+		return nil
+	case "down", "ctrl+n":
+		m.recall(1)
+		return nil
 	case "esc":
 		// Cancel restores the filter that was applied before the input took
 		// focus. Typing filters live, so "cancel" has to undo the typing, not
@@ -168,6 +185,7 @@ func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 		}
 		m.SearchOn = false
 		m.applyLiveQuery()
+		m.remember(m.query)
 		m.searchBuf, m.searchCur = "", 0
 		m.queryBefore = ""
 		return nil

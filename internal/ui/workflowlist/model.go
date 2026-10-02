@@ -69,6 +69,15 @@ type Model struct {
 	// this, cancelling a search would silently discard the filter the user
 	// already had.
 	queryBefore string
+	// history holds the filters applied with enter this session, oldest
+	// first. histPos is the entry on screen while recalling; len(history)
+	// means the reader's own draft, which draft keeps.
+	history []string
+	histPos int
+	draft   string
+	// tabs is the completion tab is cycling through, nil once any other key
+	// is pressed.
+	tabs *tabCycle
 
 	// gPending is the armed half of vim's gg. It is cleared by the next key
 	// press whatever that key is, so it can never leak into a later command.
@@ -423,6 +432,7 @@ func (m *Model) searchInsert(r rune) {
 	edited = append(edited, runes[at:]...)
 	m.searchBuf = string(edited)
 	m.searchCur = at + 1
+	m.histPos = len(m.history)
 }
 
 // searchBackspace deletes the rune before the cursor, if any.
@@ -437,6 +447,7 @@ func (m *Model) searchBackspace() {
 	edited = append(edited, runes[at:]...)
 	m.searchBuf = string(edited)
 	m.searchCur = at - 1
+	m.histPos = len(m.history)
 }
 
 // searchLeft / searchRight move the cursor within the buffer bounds.
