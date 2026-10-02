@@ -71,9 +71,10 @@ func (m *Model) summaryLines() []string {
 // position cut off.
 func (m *Model) summaryWindow() []string {
 	all := m.summaryLines()
-	// The width, the reveal state and a refresh all change the row count
-	// under the anchor, so the anchor is clamped where the rows are drawn.
+	// The width, the reveal state and a refresh all change the rows under
+	// the anchors, so both are clamped where the rows are drawn.
 	m.summaryTop = min(m.summaryTop, max(len(all)-m.viewRows(), 0))
+	m.summaryPan(0)
 	lines := sliceLines(all, m.summaryTop, m.viewRows())
 	if m.summaryLeft > 0 {
 		for i, l := range lines {

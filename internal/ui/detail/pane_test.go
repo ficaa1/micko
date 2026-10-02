@@ -246,6 +246,19 @@ func TestSummaryPans(t *testing.T) {
 			t.Fatalf("after %s the status line %q, want a column only when panned", c.key, lines[1])
 		}
 	}
+
+	// Masking the value panned to stops the pan where the widest masked line ends.
+	secret := resourceFixture()
+	secret.Summary.Labels = map[string]string{"k": strings.Repeat("a1b2c3", 10)}
+	m = workflowModel(secret, 20, 20)
+	m.SetSection("summary")
+	press(m, "$")
+	press(m, "v")
+	lines := strings.Split(body(m), "\n")
+	uid, masked := "uid:       synthetic-uid-redact-wf", "labels:    k="+redactedMarker
+	if got, want := lines[len(lines)-1], masked[len(uid)-20:]; got != want {
+		t.Fatalf("after masking the labels row = %q, want %q\n%s", got, want, body(m))
+	}
 }
 
 // w wraps a summary line wider than the pane onto rows of the pane's width.
