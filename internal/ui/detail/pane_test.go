@@ -224,6 +224,55 @@ func TestReveal(t *testing.T) {
 	}
 }
 
+// A summary line wider than the pane pans into view.
+func TestSummaryPans(t *testing.T) {
+	m := sectionModel(t, "demo-release-gate", "summary", 40, 20)
+	const labels = "labels:    env=prod, team=platform, workflows.argoproj.io/phase=Running, workflows.argoproj.io/workflow-template=release"
+	if !strings.Contains(m.Hints(), "h/l pan") {
+		t.Fatalf("the hints must offer panning when a line is cut: %q", m.Hints())
+	}
+	for _, c := range []struct {
+		key  string
+		left int
+	}{
+		{"l", 20}, {"right", 40}, {"$", 80}, {"l", 80}, {"h", 60}, {"left", 40}, {"0", 0},
+	} {
+		press(m, c.key)
+		lines := strings.Split(body(m), "\n")
+		if got, want := lines[len(lines)-1], labels[c.left:]; got != want {
+			t.Fatalf("after %s the labels row = %q, want %q", c.key, got, want)
+		}
+		if got := strings.Contains(lines[1], "col "); got != (c.left > 0) {
+			t.Fatalf("after %s the status line %q, want a column only when panned", c.key, lines[1])
+		}
+	}
+}
+
+// w wraps a summary line wider than the pane onto rows of the pane's width.
+func TestSummaryWraps(t *testing.T) {
+	m := sectionModel(t, "demo-release-gate", "summary", 40, 20)
+	const labels = "labels:    env=prod, team=platform, workflows.argoproj.io/phase=Running, workflows.argoproj.io/workflow-template=release"
+	press(m, "l")
+	press(m, "w")
+	press(m, "l")
+	lines := strings.Split(body(m), "\n")
+	rows := lines[len(lines)-3:]
+	for i, want := range []string{labels[:40], labels[40:80], labels[80:]} {
+		if rows[i] != want {
+			t.Fatalf("wrapped row %d = %q, want %q\n%s", i, rows[i], want, body(m))
+		}
+	}
+	if !strings.Contains(m.Hints(), "w unwrap") {
+		t.Fatalf("the hints must say how to unwrap: %q", m.Hints())
+	}
+
+	press(m, "w")
+	lines = strings.Split(body(m), "\n")
+	if got := lines[len(lines)-1]; got != labels {
+		t.Fatalf("w did not unwrap: %q", got)
+	}
+}
+
 // The resource tab keeps unknown fields and explains a payload it cannot show.
 func TestResourceTab(t *testing.T) {
 	for _, c := range []struct {

@@ -94,6 +94,11 @@ type Model struct {
 	totalNodes  int
 	resourceTop int
 	summaryTop  int
+	// summaryLeft is how many cells of each summary line are panned off the
+	// left edge; summaryWrap cuts long lines at the pane edge instead, and
+	// lasts the session.
+	summaryLeft int
+	summaryWrap bool
 	// gPending is the armed half of vim's gg (see the list pane).
 	gPending bool
 
@@ -182,7 +187,7 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 	if !sameWorkflow {
 		m.nodeCursor, m.nodeTop = 0, 0
 		m.tlCursor, m.tlTop = 0, 0
-		m.resourceTop, m.summaryTop = 0, 0
+		m.resourceTop, m.summaryTop, m.summaryLeft = 0, 0, 0
 	}
 	m.loaded = true
 	m.loading = false
@@ -267,6 +272,9 @@ func (m *Model) handleKey(key string) tea.Cmd {
 
 	if id, ok := sectionForKey(key); ok {
 		m.showSection(id)
+		return nil
+	}
+	if m.tab == "summary" && m.handleSummaryKey(key) {
 		return nil
 	}
 	switch key {
@@ -424,7 +432,7 @@ func (m *Model) scrollLines() int {
 	case "resource":
 		return len(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"))
 	default:
-		return len(strings.Split(strings.TrimRight(m.summaryText(), "\n"), "\n"))
+		return len(m.summaryLines())
 	}
 }
 
@@ -548,6 +556,8 @@ func (m *Model) Hints() string {
 		h = m.explainHints()
 	case "events":
 		h = m.eventsHints()
+	case "summary":
+		h = m.summaryHints()
 	default:
 		h = "tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back"
 	}
@@ -663,7 +673,7 @@ func (m *Model) tabStatusLine() string {
 		return m.theme.Dim.Render("resource · " + reveal + " · " +
 			strconv.Itoa(m.resourceTop+1) + "/" + strconv.Itoa(m.scrollLines()))
 	default:
-		return m.theme.Dim.Render("summary · tab changes section")
+		return m.summaryStatusLine()
 	}
 }
 
@@ -684,7 +694,7 @@ func (m *Model) windowedLines() []string {
 	case "resource":
 		return sliceLines(strings.Split(strings.TrimRight(m.resolvedState().Resource, "\n"), "\n"), m.resourceTop, h)
 	default:
-		return sliceLines(strings.Split(strings.TrimRight(m.summaryText(), "\n"), "\n"), m.summaryTop, h)
+		return m.summaryWindow()
 	}
 }
 
