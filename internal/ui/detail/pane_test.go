@@ -271,6 +271,18 @@ func TestSummaryWraps(t *testing.T) {
 	if got := lines[len(lines)-1]; got != labels {
 		t.Fatalf("w did not unwrap: %q", got)
 	}
+
+	// Scrolled to the end of a short wrapped pane, widening keeps the whole summary on screen.
+	for _, size := range [][2]int{{20, 5}, {20, 7}, {30, 6}, {40, 4}} {
+		m := sectionModel(t, "demo-release-gate", "summary", size[0], size[1])
+		press(m, "w")
+		press(m, "G")
+		m.SetSize(160, 20)
+		lines := strings.Split(body(m), "\n")
+		if len(lines) < 3 || !strings.HasPrefix(lines[2], "name:") || lines[len(lines)-1] != labels {
+			t.Fatalf("%dx%d widened to 160x20 shows:\n%s", size[0], size[1], body(m))
+		}
+	}
 }
 
 // The resource tab keeps unknown fields and explains a payload it cannot show.
