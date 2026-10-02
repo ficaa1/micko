@@ -1,25 +1,29 @@
-# Records the README GIF from docs/demo.tape and commits it.
-#
-# Recording runs here rather than on a laptop because vhs needs a matching
-# ttyd and ffmpeg and, on macOS, Screen Recording permission for the terminal:
-# it takes its frames through a headless browser. This runner has a pinned
-# toolchain and no such permission to grant, so the recording is reproducible.
-#
-# It runs when the tape changes, and on demand. The tape plays the demo
-# dataset, so it needs no cluster. Every run produces new frames and therefore
-# a new commit; it commits only the GIF, so it cannot trigger itself.
+# Records a released version and opens a README GIF PR with auto-merge.
 
 name: demo
 
 on:
-  push:
-    paths:
-      - docs/demo.tape
-      - .github/workflows/demo.yml
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Stable release tag to record; empty uses the latest release"
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+    secrets:
+      DEMO_APP_PRIVATE_KEY:
+        required: true
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: demo-release
+  cancel-in-progress: false
 
 env:
   GO_VERSION: "1.25.4"
@@ -33,14 +37,54 @@ jobs:
     name: record docs/demo.gif
     runs-on: ubuntu-latest
     steps:
+      - name: Select release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          latest="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          tag="${REQUESTED_TAG:-$latest}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::expected a stable release tag, got $tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ "$tag" != "$latest" ]; then
+            echo "Keeping the demo at the newer release $latest"
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check app configuration
+        if: steps.release.outputs.current == 'true'
+        env:
+          APP_ID: ${{ vars.DEMO_APP_ID }}
+          APP_KEY: ${{ secrets.DEMO_APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APP_ID" ] || [ -z "$APP_KEY" ]; then
+            echo "::error::set DEMO_APP_ID and DEMO_APP_PRIVATE_KEY; see docs/development.md"
+            exit 1
+          fi
+
       - uses: actions/checkout@v5
+        if: steps.release.outputs.current == 'true'
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          path: source
+          persist-credentials: false
       - uses: actions/setup-go@v6
+        if: steps.release.outputs.current == 'true'
         with:
           go-version: "${{ env.GO_VERSION }}"
 
       # The tape runs ./dist/micko, which is what `make build` produces.
       - name: Build
-        run: go build -o dist/micko ./cmd/micko
+        if: steps.release.outputs.current == 'true'
+        working-directory: source
+        run: make build
 
       # The toolchain is installed by hand rather than through vhs-action,
       # because that action fetches the newest ffmpeg. vhs 0.12.0 writes no
@@ -50,6 +94,7 @@ jobs:
       # ttyd is pinned for the same reason: vhs drives the terminal through
       # it, and a newer ttyd drops the connection on the first key.
       - name: Install the recording toolchain
+        if: steps.release.outputs.current == 'true'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -73,21 +118,67 @@ jobs:
       # here. Without it vhs captures nothing, reports success and writes no
       # file — the same silent failure as a version it cannot drive.
       - name: Record
+        if: steps.release.outputs.current == 'true'
+        working-directory: source
         run: |
           set -euo pipefail
           VHS_NO_SANDBOX=true vhs docs/demo.tape
           ls -l docs/demo.gif
 
-      - name: Commit the recording
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        if: steps.release.outputs.current == 'true'
+        id: app
+        with:
+          app-id: ${{ vars.DEMO_APP_ID }}
+          private-key: ${{ secrets.DEMO_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@v5
+        if: steps.release.outputs.current == 'true'
+        with:
+          ref: main
+          path: publish
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Open demo PR and enable auto-merge
+        if: steps.release.outputs.current == 'true'
+        working-directory: publish
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
         run: |
           set -euo pipefail
+          latest="$(gh release view --json tagName --jq .tagName)"
+          if [ "$TAG" != "$latest" ]; then
+            echo "Keeping the demo at the newer release $latest"
+            exit 0
+          fi
+          cp ../source/docs/demo.gif docs/demo.gif
           test -s docs/demo.gif
           git add docs/demo.gif
           if git diff --cached --quiet; then
             echo "the recording is unchanged"
             exit 0
           fi
-          git config user.name "ficaa1"
-          git config user.email "17272851+ficaa1@users.noreply.github.com"
-          git commit -m "docs: re-record the demo GIF"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          branch="automation/demo-$TAG"
+          gh pr list --base main --json headRefName,url \
+            --jq ".[] | select(.headRefName | startswith(\"automation/demo-v\")) | select(.headRefName != \"$branch\") | .url" \
+            | while IFS= read -r old_pr; do
+                gh pr close "$old_pr"
+              done
+          git switch -c "$branch"
+          user_id="$(gh api "users/${APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git commit -m "docs: record demo for $TAG"
+          remote_sha="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
+          git push --force-with-lease="refs/heads/$branch:$remote_sha" origin "HEAD:refs/heads/$branch"
+          pr="$(gh pr list --base main --head "$branch" --json url --jq '.[0].url // empty')"
+          if [ -z "$pr" ]; then
+            pr="$(gh pr create --base main --head "$branch" \
+              --title "docs: update demo for $TAG" \
+              --body "Record $TAG using the pinned demo toolchain. Only docs/demo.gif changes.")"
+          fi
+          gh pr merge "$pr" --auto --merge --match-head-commit "$(git rev-parse HEAD)"

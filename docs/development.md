@@ -1,5 +1,33 @@
 # Development and testing
 
+## Release demo automation
+
+After a successful stable release, `release.yml` calls `demo.yml` with the
+release tag. The recorder builds that tag with `make build`, records its
+demo tape, and copies only `docs/demo.gif` onto a branch based on current
+`main`. It opens a PR and enables auto-merge after the required CI check.
+Older release reruns leave the latest release's demo alone.
+
+The repository must have auto-merge enabled. The recorder uses a GitHub App
+installation token so its PR starts CI without manual approval. Register a
+private app at <https://github.com/settings/apps/new> with the repository
+homepage, webhooks disabled, and Contents and Pull requests permissions set
+to Read & write. Install it only on `ficaa1/micko`. It needs no ruleset bypass.
+
+Save its numeric App ID as the repository variable `DEMO_APP_ID`. Generate a
+private key on the app's settings page and upload the downloaded PEM file:
+
+```sh
+gh variable set DEMO_APP_ID --repo ficaa1/micko --body APP_ID
+gh secret set DEMO_APP_PRIVATE_KEY --repo ficaa1/micko < /path/to/private-key.pem
+```
+
+To re-record the latest release without publishing again:
+
+```sh
+gh workflow run demo.yml --repo ficaa1/micko --ref main
+```
+
 ## Architecture
 
 The app uses Bubble Tea v2 and a standard-library HTTP adapter for Argo's REST
