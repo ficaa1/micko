@@ -272,15 +272,32 @@ func TestSummaryWraps(t *testing.T) {
 		t.Fatalf("w did not unwrap: %q", got)
 	}
 
-	// Scrolled to the end of a short wrapped pane, widening keeps the whole summary on screen.
-	for _, size := range [][2]int{{20, 5}, {20, 7}, {30, 6}, {40, 4}} {
-		m := sectionModel(t, "demo-release-gate", "summary", size[0], size[1])
+	// Scrolled to the end of a short wrapped pane, a change that shortens the summary keeps its end on screen.
+	widen := func(m *Model) { m.SetSize(160, 20) }
+	secret := resourceFixture()
+	secret.Summary.Labels = map[string]string{"k": strings.Repeat("0123456789abcdef", 4)[:60]}
+	for _, c := range []struct {
+		name   string
+		wf     core.Workflow
+		w, h   int
+		change func(m *Model)
+		last   string
+	}{
+		{"widen 20x5", demoWorkflow(t, "demo-release-gate"), 20, 5, widen, labels},
+		{"widen 20x7", demoWorkflow(t, "demo-release-gate"), 20, 7, widen, labels},
+		{"widen 30x6", demoWorkflow(t, "demo-release-gate"), 30, 6, widen, labels},
+		{"widen 40x4", demoWorkflow(t, "demo-release-gate"), 40, 4, widen, labels},
+		{"mask 30x4", secret, 30, 4, func(m *Model) { press(m, "v") }, "labels:    k=" + redactedMarker},
+		{"mask 20x5", secret, 20, 5, func(m *Model) { press(m, "v") }, "ED]"},
+	} {
+		m := workflowModel(c.wf, c.w, c.h)
+		m.SetSection("summary")
 		press(m, "w")
 		press(m, "G")
-		m.SetSize(160, 20)
+		c.change(m)
 		lines := strings.Split(body(m), "\n")
-		if len(lines) < 3 || !strings.HasPrefix(lines[2], "name:") || lines[len(lines)-1] != labels {
-			t.Fatalf("%dx%d widened to 160x20 shows:\n%s", size[0], size[1], body(m))
+		if len(lines) < 3 || lines[len(lines)-1] != c.last {
+			t.Fatalf("%s: the summary's end is off screen:\n%s", c.name, body(m))
 		}
 	}
 }

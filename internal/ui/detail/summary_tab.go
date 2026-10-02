@@ -70,7 +70,11 @@ func (m *Model) summaryLines() []string {
 // summaryWindow is the rows on screen, with the cells left of the pan
 // position cut off.
 func (m *Model) summaryWindow() []string {
-	lines := sliceLines(m.summaryLines(), m.summaryTop, m.viewRows())
+	all := m.summaryLines()
+	// The width, the reveal state and a refresh all change the row count
+	// under the anchor, so the anchor is clamped where the rows are drawn.
+	m.summaryTop = min(m.summaryTop, max(len(all)-m.viewRows(), 0))
+	lines := sliceLines(all, m.summaryTop, m.viewRows())
 	if m.summaryLeft > 0 {
 		for i, l := range lines {
 			lines[i] = ansi.TruncateLeft(l, m.summaryLeft, "")

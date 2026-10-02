@@ -224,8 +224,6 @@ func (m *Model) SetNotFound() {
 // SetSize implements the child view sizing contract.
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
-	// Wrapped at the new width, the summary may have fewer rows below its anchor.
-	m.summaryTop = min(m.summaryTop, max(len(m.summaryLines())-m.textRows(), 0))
 }
 
 // SetRedactByDefault applies the profile's redactValues setting. The
@@ -449,13 +447,11 @@ func (m *Model) viewRows() int {
 	case "timeline":
 		return m.timelineLayout().treeRows
 	}
-	return m.textRows()
-}
-
-// textRows is the content rows of a tab that draws text under the tab strip
-// and the status line.
-func (m *Model) textRows() int {
-	return max(m.height-detailChromeRows, 1)
+	h := m.height - detailChromeRows
+	if h < 1 {
+		return 1
+	}
+	return h
 }
 
 // detailChromeRows is the tab strip plus the one status line under it.
