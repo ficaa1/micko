@@ -23,6 +23,14 @@ refreshInterval: 5s
 # :mascot moves him from perch to floor to off.
 # mascot: true
 
+# Notifications. W on the list watches workflows for phase changes.
+# notifications:
+#   suspended: true            # also notify when any workflow becomes suspended
+#   watched: true              # notify on phase changes of watched workflows
+#   via: [desktop, terminal]   # desktop, bell, terminal (OSC 9), sound
+#   activate: org.alacritty    # app a click on a banner brings forward
+#   sound: Glass               # from /System/Library/Sounds, for via: sound
+
 profiles:
   dev:
     # Omit these four fields to connect directly to server instead.

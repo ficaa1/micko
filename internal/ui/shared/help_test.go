@@ -47,7 +47,7 @@ func TestHelpOverlayDocumentsKeys(t *testing.T) {
 	for _, want := range []string{
 		"j / k", "enter open", "l logs", "/ filter", "s sort", "r refresh", "? help", "esc back", "q quit", "ctrl+c quit", "tab / shift+tab",
 		"& only matching lines", "w wrap long lines", "L source labels", "ctrl+t server timestamps",
-		"w wide columns", "a|b", "!word", "/regex/", "~fuzzy", "phase=failed", "age<2h", "dur>10m", "label:k=v", "label:!k", "tmpl=x", "cron=x",
+		"w wide", "W watch", "a|b", "!word", "/regex/", "~fuzzy", "phase=failed", "age<2h", "dur>10m", "label:k=v", "label:!k", "tmpl=x", "cron=x",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(view, want) {

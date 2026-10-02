@@ -248,6 +248,43 @@ may read, with a NAMESPACE column, and `/` then matches `namespace/name`.
 copies through OSC52, so it depends on your terminal. `f` shows the current
 view full screen without borders.
 
+### Notifications
+
+`W` on the list watches the selected workflow, or every marked one, and
+micko notifies you on each of its phase changes, including a suspend, and
+when it is deleted. A watched row shows `◉`; `W` on it again stops watching.
+Watches last the session: they carry across namespace switches, where micko
+reads the watched workflows itself once per refresh interval, and a profile
+switch ends them. Set `notifications.suspended: true` to also hear when any
+listed workflow becomes suspended.
+
+The `notifications` section of the config picks how:
+
+| `via` | What it does |
+| --- | --- |
+| `desktop` | A Notification Center banner (macOS) |
+| `bell` | The terminal bell |
+| `terminal` | An OSC 9 notification, for terminals and multiplexers that understand it |
+| `sound` | A system sound from `/System/Library/Sounds` (macOS) |
+
+The default is `desktop` and `bell` on macOS, `bell` elsewhere. With
+[terminal-notifier](https://github.com/julienXX/terminal-notifier) installed
+(`brew install terminal-notifier`), banners come from micko, with the
+favicon of micko's site as the icon, and a click brings your terminal
+forward. micko builds that app
+from terminal-notifier on the first notification, at
+`~/Library/Application Support/micko/micko.app`, and macOS asks once whether
+micko may notify. The click goes to the app micko was started from; set
+`activate` to a bundle identifier (`osascript -e 'id of app "Alacritty"'`)
+to pick it. Without terminal-notifier, banners come from Script Editor and a
+click does nothing.
+
+Under zellij, a bell only marks the tab with `[!]`. To have Alacritty bounce
+its Dock icon, use `via: [desktop, terminal]` and set
+`host_notification_protocol "bell"` in zellij's `config.kdl`: zellij then
+rings Alacritty's bell for each notification, and Alacritty bounces while it
+is in the background.
+
 ### Skins
 
 The `default` skin uses your terminal's own 16 colours. Thirteen truecolor

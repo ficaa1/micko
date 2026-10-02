@@ -11,6 +11,7 @@ import (
 
 	"github.com/ficaa1/micko/internal/config"
 	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/notify"
 	"github.com/ficaa1/micko/internal/ui/actions"
 	"github.com/ficaa1/micko/internal/ui/archivedlist"
 	"github.com/ficaa1/micko/internal/ui/detail"
@@ -106,6 +107,19 @@ type Root struct {
 	// actionFromMarks records that the open action pane acts on the marked
 	// rows, so its finish can drop them.
 	actionFromMarks bool
+	// notify is which workflow changes notify the reader and how.
+	// notifySend delivers one notice; nil means notify.Deliver. It is a
+	// field so tests can observe deliveries instead of posting real ones.
+	// notifyWarned records that a failed delivery has been reported.
+	notify       config.Notify
+	notifySend   func(notify.Notice) error
+	notifyWarned bool
+	// watched holds the workflows watched with W, by UID, with the state
+	// last seen. It outlives namespace switches; watchedGen names the
+	// connection it belongs to, and watchedArmed that its check chain runs.
+	watched      map[string]watch
+	watchedGen   int
+	watchedArmed bool
 	// journalWarned records that a journal failure has been reported. It is
 	// reported once per session, not after every action.
 	journalWarned bool
@@ -669,6 +683,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openListActions()
 			return m, nil
 		}
+		if m.route == RouteList && key == "W" && !m.textEntryActive() {
+			return m, m.toggleWatch()
+		}
 		if key == "esc" && m.escLeavesRoute() {
 			return m, m.back()
 		}
@@ -761,6 +778,16 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case watchDoneMsg:
 		return m, m.handleWatchDone(msg)
+
+	case notifyFailedMsg:
+		m.handleNotifyFailed(msg)
+		return m, nil
+
+	case watchedTickMsg:
+		return m, m.handleWatchedTick(msg)
+
+	case watchedLoadedMsg:
+		return m, m.handleWatchedLoaded(msg)
 
 	case watchRetryMsg:
 		if !m.watchReplyCurrent(msg.genStamp) || m.watchMode != "rate limited" {
@@ -1502,6 +1529,7 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 		}
 		return m.armTick()
 	}
+	notices := m.notifySnapshot(st.items, msg.Page.Items)
 	st.items = msg.Page.Items
 	if m.connectionReady {
 		m.connectionFresh = true
@@ -1517,12 +1545,12 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	}
 	m.listView.SetStatus(status, "", 0)
 	if terminalWatchMode(m.watchMode) {
-		return nil
+		return notices
 	}
 	if m.deps.watcher != nil {
-		return tea.Batch(m.startWatch(), m.armTick())
+		return tea.Batch(notices, m.startWatch(), m.armTick())
 	}
-	return m.armTick()
+	return tea.Batch(notices, m.armTick())
 }
 
 // listErrorStatus picks how the list shows a failed collection. With rows

@@ -93,6 +93,8 @@ type File struct {
 	// its bottom corner. It is off unless set: he costs three rows perched,
 	// four on the floor.
 	Mascot string `yaml:"mascot,omitempty"`
+	// Notifications says which workflow changes notify the reader and how.
+	Notifications *notifyFile `yaml:"notifications,omitempty"`
 }
 
 // Mascot is where Mićko sits: nowhere, perched on the pane's top border, or
@@ -264,6 +266,9 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 		return Config{}, err
 	}
 	if _, err := ParseMascot(f.Mascot); err != nil {
+		return Config{}, fmt.Errorf("config: %w", err)
+	}
+	if _, err := f.Notifications.parse(); err != nil {
 		return Config{}, fmt.Errorf("config: %w", err)
 	}
 	cfg.RedactValues = opts.RedactValues || f.RedactValues

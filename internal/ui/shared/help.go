@@ -60,7 +60,7 @@ func helpLines() []string {
 		"",
 		"List      enter open  l logs  s sort  p phase  r refresh  n namespace",
 		"          0 all ns  T / X / E open on the timeline / explanation / events",
-		"          space mark  a actions (marked, or selected)  w wide columns",
+		"          space mark  W watch  a actions (marked or selected)  w wide",
 		"          esc clear marks, then filter  /: tab complete  ↑ history  ↓ clear",
 		"          / filter: word  a|b  !word  /regex/  ~fuzzy  (spaces: AND)",
 		"          phase=failed  age<2h  dur>10m  tmpl=x  cron=x  label:k=v  label:!k",

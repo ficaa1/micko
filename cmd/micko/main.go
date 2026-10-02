@@ -82,6 +82,7 @@ func run(args []string) int {
 		_, _ = root.ApplySkin(demoSkin(*skin))
 		root.SetRedactValues(*redactValues)
 		root.SetMascot(mascot.spot)
+		root.SetNotify(config.DefaultNotify())
 	} else {
 		connector, err := session.NewConnector(session.Options{
 			ConfigPath:            *configPath,
@@ -116,6 +117,7 @@ func run(args []string) int {
 		root.SetConnector(connector)
 		root.SetProfiles(connector.ProfileList())
 		root.SetMascot(connector.Mascot())
+		root.SetNotify(connector.Notify())
 		// The picker is drawn before any profile is chosen, so it takes the
 		// flag or the file's top-level skin. A profile's own skin arrives
 		// with its connection. The auto skin's background query is started
