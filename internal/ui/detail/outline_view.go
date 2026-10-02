@@ -7,8 +7,9 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// renderLabelsSorted renders label pairs sorted by key (deterministic).
-func renderLabelsSorted(labels map[string]string) string {
+// renderLabelsSorted renders label pairs sorted by key, with secret-shaped
+// values masked unless reveal is set.
+func renderLabelsSorted(labels map[string]string, reveal bool) string {
 	keys := make([]string, 0, len(labels))
 	for k := range labels {
 		keys = append(keys, k)
@@ -16,7 +17,11 @@ func renderLabelsSorted(labels map[string]string) string {
 	sort.Strings(keys)
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, shared.Sanitize(k)+"="+shared.RedactTokens(shared.Sanitize(labels[k])))
+		v := shared.Sanitize(labels[k])
+		if !reveal {
+			v = shared.RedactTokens(v)
+		}
+		parts = append(parts, shared.Sanitize(k)+"="+v)
 	}
 	return strings.Join(parts, ", ")
 }

@@ -39,7 +39,7 @@ namespace: demo
 uid:       synthetic-uid-demo-release-gate
 phase:     ● Running  (suspended: waiting for a resume)
 labels:    env=prod, team=platform, workflows.argoproj.io/phase=Running, workflows.argoproj.io/workflow-template=release
-tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
+tab section  1-9 jump  h/l pan  w wrap  v reveal  y copy  a actions  f raw  r refresh  esc back
 ● Running
 == summary, archived
 Detail demo-nightly-report (archived)
@@ -52,7 +52,7 @@ uid:       synthetic-uid-demo-nightly-report
 phase:     ✗ Failed
 message:   child 'transform' failed
 labels:    schedule=nightly, team=data
-tab section  1-9 jump  v reveal  y copy  f raw  r refresh  esc back
+tab section  1-9 jump  h/l pan  w wrap  v reveal  y copy  f raw  r refresh  esc back
 ✗ Failed
 == resource
 Detail redact-wf

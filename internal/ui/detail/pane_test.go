@@ -169,6 +169,12 @@ func TestReveal(t *testing.T) {
 		open          func(t *testing.T, m *Model)
 		value, hidden string
 	}{
+		{"summary", func() core.Workflow {
+			wf := resourceFixture()
+			wf.Summary.Labels = map[string]string{"workflows.argoproj.io/actor": "a1b2c3d4e5f6a7b8c9d0e1f2a3"}
+			return wf
+		}, func(t *testing.T, m *Model) { m.SetSection("summary") },
+			"actor=a1b2c3d4e5f6a7b8c9d0e1f2a3", "actor=" + redactedMarker},
 		{"resource", resourceFixture, func(t *testing.T, m *Model) { m.SetSection("resource") },
 			"sk-1234567890abcdef123456", redactedMarker},
 		{"info panel", func() core.Workflow { return demoWorkflow(t, "demo-nightly-report") }, func(t *testing.T, m *Model) {
@@ -215,6 +221,97 @@ func TestReveal(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A summary line wider than the pane pans into view.
+func TestSummaryPans(t *testing.T) {
+	m := sectionModel(t, "demo-release-gate", "summary", 40, 20)
+	const labels = "labels:    env=prod, team=platform, workflows.argoproj.io/phase=Running, workflows.argoproj.io/workflow-template=release"
+	if !strings.Contains(m.Hints(), "h/l pan") {
+		t.Fatalf("the hints must offer panning when a line is cut: %q", m.Hints())
+	}
+	for _, c := range []struct {
+		key  string
+		left int
+	}{
+		{"l", 20}, {"right", 40}, {"$", 80}, {"l", 80}, {"h", 60}, {"left", 40}, {"0", 0},
+	} {
+		press(m, c.key)
+		lines := strings.Split(body(m), "\n")
+		if got, want := lines[len(lines)-1], labels[c.left:]; got != want {
+			t.Fatalf("after %s the labels row = %q, want %q", c.key, got, want)
+		}
+		if got := strings.Contains(lines[1], "col "); got != (c.left > 0) {
+			t.Fatalf("after %s the status line %q, want a column only when panned", c.key, lines[1])
+		}
+	}
+
+	// Masking the value panned to stops the pan where the widest masked line ends.
+	secret := resourceFixture()
+	secret.Summary.Labels = map[string]string{"k": strings.Repeat("a1b2c3", 10)}
+	m = workflowModel(secret, 20, 20)
+	m.SetSection("summary")
+	press(m, "$")
+	press(m, "v")
+	lines := strings.Split(body(m), "\n")
+	uid, masked := "uid:       synthetic-uid-redact-wf", "labels:    k="+redactedMarker
+	if got, want := lines[len(lines)-1], masked[len(uid)-20:]; got != want {
+		t.Fatalf("after masking the labels row = %q, want %q\n%s", got, want, body(m))
+	}
+}
+
+// w wraps a summary line wider than the pane onto rows of the pane's width.
+func TestSummaryWraps(t *testing.T) {
+	m := sectionModel(t, "demo-release-gate", "summary", 40, 20)
+	const labels = "labels:    env=prod, team=platform, workflows.argoproj.io/phase=Running, workflows.argoproj.io/workflow-template=release"
+	press(m, "l")
+	press(m, "w")
+	press(m, "l")
+	lines := strings.Split(body(m), "\n")
+	rows := lines[len(lines)-3:]
+	for i, want := range []string{labels[:40], labels[40:80], labels[80:]} {
+		if rows[i] != want {
+			t.Fatalf("wrapped row %d = %q, want %q\n%s", i, rows[i], want, body(m))
+		}
+	}
+	if !strings.Contains(m.Hints(), "w unwrap") {
+		t.Fatalf("the hints must say how to unwrap: %q", m.Hints())
+	}
+
+	press(m, "w")
+	lines = strings.Split(body(m), "\n")
+	if got := lines[len(lines)-1]; got != labels {
+		t.Fatalf("w did not unwrap: %q", got)
+	}
+
+	// Scrolled to the end of a short wrapped pane, a change that shortens the summary keeps its end on screen.
+	widen := func(m *Model) { m.SetSize(160, 20) }
+	secret := resourceFixture()
+	secret.Summary.Labels = map[string]string{"k": strings.Repeat("0123456789abcdef", 4)[:60]}
+	for _, c := range []struct {
+		name   string
+		wf     core.Workflow
+		w, h   int
+		change func(m *Model)
+		last   string
+	}{
+		{"widen 20x5", demoWorkflow(t, "demo-release-gate"), 20, 5, widen, labels},
+		{"widen 20x7", demoWorkflow(t, "demo-release-gate"), 20, 7, widen, labels},
+		{"widen 30x6", demoWorkflow(t, "demo-release-gate"), 30, 6, widen, labels},
+		{"widen 40x4", demoWorkflow(t, "demo-release-gate"), 40, 4, widen, labels},
+		{"mask 30x4", secret, 30, 4, func(m *Model) { press(m, "v") }, "labels:    k=" + redactedMarker},
+		{"mask 20x5", secret, 20, 5, func(m *Model) { press(m, "v") }, "ED]"},
+	} {
+		m := workflowModel(c.wf, c.w, c.h)
+		m.SetSection("summary")
+		press(m, "w")
+		press(m, "G")
+		c.change(m)
+		lines := strings.Split(body(m), "\n")
+		if len(lines) < 3 || lines[len(lines)-1] != c.last {
+			t.Fatalf("%s: the summary's end is off screen:\n%s", c.name, body(m))
+		}
 	}
 }
 
