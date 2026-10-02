@@ -84,6 +84,28 @@ func TestRawViewPansAcrossLinesWiderThanTheScreen(t *testing.T) {
 	}
 }
 
+// w wraps a line wider than the screen onto rows of the screen's width.
+func TestRawViewWrapsLinesWiderThanTheScreen(t *testing.T) {
+	m, _ := rawRoot(t)
+	m.width = 16
+	keys(m, "f", "w", "l")
+	rows := strings.Split(screen(m), "\n")
+	want := []string{"deploy-multi-lay", "er-abc  Running ", "synthetic-uid-de", "ploy-multi-layer", "-abc"}
+	for i, w := range want {
+		if rows[i] != w {
+			t.Fatalf("wrapped row %d = %q, want %q\n%s", i, rows[i], w, screen(m))
+		}
+	}
+	if !strings.Contains(screen(m), "w unwrap") {
+		t.Fatal("the hint must say how to unwrap")
+	}
+
+	keys(m, "w")
+	if rows := strings.Split(screen(m), "\n"); !strings.HasPrefix(rows[0], "deploy-multi-layer-abc") {
+		t.Fatalf("w did not unwrap: %q", rows[0])
+	}
+}
+
 // f and ctrl+f enter the raw view from the logs too.
 func TestFEntersTheRawViewFromLogs(t *testing.T) {
 	m, wf := rawRoot(t)

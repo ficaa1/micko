@@ -33,8 +33,8 @@ func (m *Root) enterRaw() {
 	m.gPending = false
 }
 
-// handleRawKey is the whole key matrix of the raw view: scroll, pan, copy or
-// leave.
+// handleRawKey is the whole key matrix of the raw view: scroll, pan, wrap,
+// copy or leave.
 func (m *Root) handleRawKey(key string) tea.Cmd {
 	if m.gPending {
 		m.gPending = false
@@ -47,7 +47,7 @@ func (m *Root) handleRawKey(key string) tea.Cmd {
 		return nil
 	}
 	content := m.rawLines()
-	lines := len(content)
+	lines := len(m.rawScreenLines())
 	page := m.height - 1
 	if page < 1 {
 		page = 1
@@ -66,6 +66,10 @@ func (m *Root) handleRawKey(key string) tea.Cmd {
 		m.rawScroll(page-1, lines)
 	case "pgup", "ctrl+u":
 		m.rawScroll(-(page - 1), lines)
+	case "w":
+		m.rawWrap = !m.rawWrap
+		m.rawLeft = 0
+		m.rawScroll(0, len(m.rawScreenLines()))
 	case "h", "left":
 		m.rawPan(-m.rawStep(), content)
 	case "l", "right":
@@ -107,6 +111,9 @@ func (m *Root) rawStep() int {
 // rawPan moves the left edge, stopping where the widest line's end meets the
 // right edge of the screen.
 func (m *Root) rawPan(delta int, lines []string) {
+	if m.rawWrap {
+		return
+	}
 	max := rawWidest(lines) - m.width
 	if max < 0 {
 		max = 0
@@ -148,6 +155,20 @@ func expandTabs(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// rawScreenLines is the raw content as screen rows: one per line, or with
+// wrapping on, as many as each line needs at the screen width.
+func (m *Root) rawScreenLines() []string {
+	lines := m.rawLines()
+	if !m.rawWrap || m.width < 1 {
+		return lines
+	}
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		out = append(out, strings.Split(ansi.Hardwrap(expandTabs(l), m.width, true), "\n")...)
+	}
+	return out
 }
 
 // rawLines is the whole content of the active route, unwindowed and unstyled.
@@ -192,7 +213,7 @@ func (m *Root) listRawLines() []string {
 // way out is never a guess. The hint is the last row, so a selection that
 // starts at the top of the screen stops before it.
 func (m *Root) rawView() tea.View {
-	lines := m.rawLines()
+	lines := m.rawScreenLines()
 	h := m.height
 	if h <= 0 {
 		h = len(lines) + 1
@@ -219,8 +240,11 @@ func (m *Root) rawView() tea.View {
 		out = append(out, "")
 	}
 	hint := "RAW — f or esc leaves  y copy  q quit"
-	if m.width > 0 && rawWidest(lines) > m.width {
-		hint = "RAW — h/l pan  f or esc leaves  y copy  q quit"
+	switch {
+	case m.rawWrap:
+		hint = "RAW — w unwrap  f or esc leaves  y copy  q quit"
+	case m.width > 0 && rawWidest(lines) > m.width:
+		hint = "RAW — h/l pan  w wrap  f or esc leaves  y copy  q quit"
 		if m.rawLeft > 0 {
 			hint = "col " + strconv.Itoa(m.rawLeft+1) + "  " + hint
 		}
