@@ -99,6 +99,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.searchBuf = m.query
 		m.searchCur = len([]rune(m.searchBuf))
 		m.histPos = len(m.history)
+		m.picking = false
 		return nil
 	case "s":
 		m.CycleSort()
@@ -148,10 +149,29 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 // navigation command keys are not interpreted; enter applies; esc cancels.
 // Tab and shift+tab cycle the completions, up and down (or ctrl+p and
 // ctrl+n) walk the history, and Home/End/Backspace/arrow-left/right edit;
-// everything else is ignored (never a command).
+// everything else is ignored (never a command). While the completion picker
+// is open, up and down move its highlight, tab accepts and esc closes it;
+// enter still applies the filter as typed.
 func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 	if key != "tab" && key != "shift+tab" {
 		m.tabs = nil
+	}
+	if c, ok := m.picker(); ok {
+		n := len(c.values)
+		switch key {
+		case "up", "ctrl+p", "shift+tab":
+			m.pickSel = (m.pickSel - 1 + n) % n
+			return nil
+		case "down", "ctrl+n":
+			m.pickSel = (m.pickSel + 1) % n
+			return nil
+		case "tab":
+			m.accept(c, c.values[m.pickSel%n])
+			return nil
+		case "esc":
+			m.picking = false
+			return nil
+		}
 	}
 	switch key {
 	case "tab":

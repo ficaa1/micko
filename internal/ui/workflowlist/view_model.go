@@ -51,6 +51,7 @@ func (m *Model) Hints() string {
 // frameLines assembles the toolbar, column heads and visible rows.
 func (m *Model) frameLines(now time.Time) []string {
 	lines := strings.Split(m.toolbarView(), "\n")
+	lines = append(lines, m.pickerLines()...)
 
 	cols := m.columns()
 	var head strings.Builder
@@ -386,12 +387,49 @@ func (m *Model) searchLineView() string {
 	if m.queryErr != "" {
 		b.WriteString("  " + m.theme.ErrorText.Render("✗ "+sanitizeOne(m.queryErr)))
 	}
-	hint := "  (enter apply, esc cancel)"
-	if len(m.history) > 0 {
-		hint = "  (enter apply, esc cancel, ↑ history)"
-	}
-	b.WriteString(hint)
+	b.WriteString(m.searchHint())
 	return b.String()
+}
+
+// searchHint is the search line's usage hint. The arrows are offered only
+// when they would change something.
+func (m *Model) searchHint() string {
+	if _, ok := m.picker(); ok {
+		return "  (↑↓ pick, tab accept, esc close)"
+	}
+	hint := "enter apply, esc cancel"
+	if len(m.history) > 0 && m.histPos > 0 {
+		hint += ", ↑ history"
+	}
+	if m.searchBuf != "" {
+		hint += ", ↓ clear"
+	}
+	return "  (" + hint + ")"
+}
+
+// maxPickerRows bounds the values the picker shows at once.
+const maxPickerRows = 8
+
+// pickerLines renders the open picker under the search line: the number of
+// matches out of the values they were ranked from, as fzf counts, then a
+// window of the matches that keeps the highlighted one in view.
+func (m *Model) pickerLines() []string {
+	c, ok := m.picker()
+	if !ok {
+		return nil
+	}
+	sel := m.pickSel % len(c.values)
+	first := max(0, sel-maxPickerRows+1)
+	out := []string{m.theme.Muted.Render("  " + strconv.Itoa(len(c.values)) + "/" + strconv.Itoa(c.total))}
+	for i := first; i < min(len(c.values), first+maxPickerRows); i++ {
+		v := sanitizeOne(c.values[i])
+		if i == sel {
+			out = append(out, m.theme.Selected.Render("▌ "+v))
+		} else {
+			out = append(out, "  "+v)
+		}
+	}
+	return out
 }
 
 // maxShownCompletions bounds the completions listed in the toolbar.
@@ -401,6 +439,9 @@ const maxShownCompletions = 5
 // brackets, or nothing when the word at the cursor completes to nothing.
 // Label values come from the server, so they are sanitized.
 func (m *Model) completionView() string {
+	if _, ok := m.picker(); ok {
+		return ""
+	}
 	c, cur := m.completions(), -1
 	if m.tabs != nil {
 		c, cur = m.tabs.completion, m.tabs.i

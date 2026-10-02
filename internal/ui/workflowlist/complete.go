@@ -16,11 +16,19 @@ var phaseValues = []string{"suspended", "running", "pending", "succeeded", "fail
 // historyCap bounds the session's filter history.
 const historyCap = 50
 
+// pickerMin is the number of completions from which they are offered in the
+// picker rather than on the search line.
+const pickerMin = 4
+
 // completion is what tab can put in place of the word at the cursor: the
-// rune range it replaces and the ranked replacements.
+// rune range it replaces, the ranked replacements and the number of values
+// they were ranked from. Only values after an operator go to the picker: a
+// bare word may be a name search, and a picker over it would cover the list.
 type completion struct {
 	start, end int
 	values     []string
+	total      int
+	pickable   bool
 }
 
 // tabCycle is the completion tab is stepping through, kept from the first
@@ -59,7 +67,7 @@ func (m *Model) completions() completion {
 		i++
 	}
 	if i == len(word) {
-		return completion{start, end, ranked(word, fieldStarts)}
+		return completion{start, end, ranked(word, fieldStarts), len(fieldStarts), false}
 	}
 	field := strings.ToLower(word[:i])
 	op := ""
@@ -95,7 +103,7 @@ func (m *Model) completions() completion {
 			pool = m.labelKeys("=")
 		}
 	}
-	return completion{start, end, ranked(value, pool)}
+	return completion{start, end, ranked(value, pool), len(pool), true}
 }
 
 // ranked returns the values that match query, best first, leaving out the
@@ -148,11 +156,25 @@ func (m *Model) labelValues(keys ...string) []string {
 	return out
 }
 
+// picker returns the completions to show in the picker, and whether it is
+// open: the reader has typed since the input opened and enough values match.
+func (m *Model) picker() (completion, bool) {
+	if !m.picking {
+		return completion{}, false
+	}
+	c := m.completions()
+	return c, c.pickable && len(c.values) >= pickerMin
+}
+
 // complete puts the next (step 1) or previous (step -1) completion in place
-// of the word at the cursor.
+// of the word at the cursor. With enough of them it opens the picker instead.
 func (m *Model) complete(step int) {
 	if m.tabs == nil {
 		c := m.completions()
+		if c.pickable && len(c.values) >= pickerMin {
+			m.picking, m.pickSel = true, 0
+			return
+		}
 		if len(c.values) == 0 {
 			return
 		}
@@ -163,15 +185,29 @@ func (m *Model) complete(step int) {
 	}
 	t := m.tabs
 	t.i = (t.i + step + len(t.values)) % len(t.values)
-	runes := []rune(t.base)
-	value := []rune(t.values[t.i])
-	m.searchBuf = string(runes[:t.start]) + string(value) + string(runes[t.end:])
-	m.searchCur = t.start + len(value)
+	m.replaceWord(t.base, t.completion, t.values[t.i])
 	// A single value leaves nothing to cycle through, so the next tab
 	// completes the word that value began, such as label: to a key.
 	if len(t.values) == 1 {
 		m.tabs = nil
 	}
+}
+
+// accept puts the picked value in place of the word at the cursor. A value
+// that ends in an operator, such as label: or stack=, keeps the picker open
+// on what comes after it.
+func (m *Model) accept(c completion, value string) {
+	m.replaceWord(m.searchBuf, c, value)
+	m.picking, m.pickSel = strings.ContainsAny(value[len(value)-1:], ":=<>"), 0
+}
+
+// replaceWord sets the buffer to base with c's range replaced by value, the
+// cursor after it, and applies the result.
+func (m *Model) replaceWord(base string, c completion, value string) {
+	runes := []rune(base)
+	v := []rune(value)
+	m.searchBuf = string(runes[:c.start]) + value + string(runes[c.end:])
+	m.searchCur = c.start + len(v)
 	m.applyLiveQuery()
 }
 
@@ -193,22 +229,38 @@ func (m *Model) remember(q string) {
 	}
 }
 
-// recall walks the history. Walking forward past the newest entry returns the
-// text the reader was typing before they started walking.
+// recall walks the history. Past the newest entry is the text the reader
+// was typing, and past that an empty filter, so the way to clear a filter
+// is down. A step that would show the same text is skipped.
 func (m *Model) recall(delta int) {
-	pos := m.histPos + delta
-	if len(m.history) == 0 || pos < 0 || pos > len(m.history) {
-		return
-	}
 	if m.histPos == len(m.history) {
 		m.draft = m.searchBuf
 	}
-	m.histPos = pos
-	if pos == len(m.history) {
-		m.searchBuf = m.draft
-	} else {
-		m.searchBuf = m.history[pos]
+	pos, last := m.histPos, len(m.history)+1
+	for {
+		pos += delta
+		if pos < 0 || pos > last {
+			return
+		}
+		if pos == last || m.recalled(pos) != m.searchBuf {
+			break
+		}
 	}
+	m.histPos = pos
+	m.searchBuf = m.recalled(pos)
 	m.searchCur = len([]rune(m.searchBuf))
+	m.picking = false
 	m.applyLiveQuery()
+}
+
+// recalled is the text at a history position: an entry, the draft, or the
+// empty filter past it.
+func (m *Model) recalled(pos int) string {
+	switch {
+	case pos < len(m.history):
+		return m.history[pos]
+	case pos == len(m.history):
+		return m.draft
+	}
+	return ""
 }
