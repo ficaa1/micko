@@ -51,7 +51,7 @@ func (m *Model) Hints() string {
 // frameLines assembles the toolbar, column heads and visible rows.
 func (m *Model) frameLines(now time.Time) []string {
 	lines := strings.Split(m.toolbarView(), "\n")
-	lines = append(lines, m.pickerLines()...)
+	lines = append(lines, m.pickerLines(len(lines))...)
 
 	cols := m.columns()
 	var head strings.Builder
@@ -410,9 +410,11 @@ func (m *Model) searchHint() string {
 // maxPickerRows bounds the values the picker shows at once.
 const maxPickerRows = 8
 
-// pickerLines renders the open picker: the fzf-style match count, then the
-// matches around the highlighted one.
-func (m *Model) pickerLines() []string {
+// pickerLines renders the open picker under the toolbar's above lines: the
+// fzf-style match count, then the matches around the highlighted one. A
+// short pane gives it fewer rows, so the column heads and one line of the
+// list stay in view.
+func (m *Model) pickerLines(above int) []string {
 	c, ok := m.picker()
 	if !ok {
 		return nil
@@ -421,9 +423,13 @@ func (m *Model) pickerLines() []string {
 	if len(c.values) > 0 {
 		sel = m.pickSel % len(c.values)
 	}
-	first := max(0, sel-maxPickerRows+1)
+	rows := maxPickerRows
+	if m.height > 0 {
+		rows = min(rows, max(1, m.height-above-3))
+	}
+	first := max(0, sel-rows+1)
 	out := []string{m.theme.Muted.Render("  " + strconv.Itoa(len(c.values)) + "/" + strconv.Itoa(c.total))}
-	for i := first; i < min(len(c.values), first+maxPickerRows); i++ {
+	for i := first; i < min(len(c.values), first+rows); i++ {
 		v := sanitizeOne(c.values[i])
 		if i == sel {
 			out = append(out, m.theme.Selected.Render("▌ "+v))

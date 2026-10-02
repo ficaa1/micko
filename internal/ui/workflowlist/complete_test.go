@@ -2,6 +2,7 @@ package workflowlist
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,6 +80,23 @@ func TestFilterCompletion(t *testing.T) {
 		}
 		if c.shown != "" && !strings.Contains(body(&m), c.shown) {
 			t.Errorf("%q then %v: toolbar lacks %q:\n%s", c.typed, c.keys, c.shown, body(&m))
+		}
+	}
+
+	// The highlighted value, the column heads and a line of the list stay
+	// in view at every supported pane size.
+	for _, w := range []int{60, 100} {
+		for _, h := range []int{6, 8, 12, 20} {
+			m := completionList(t)
+			m.SetSize(w, h)
+			m.Update(runeKey('/'))
+			typeText(&m, "label:")
+			m.Update(up)
+			lines := m.BodyLines(testkit.FixtureEpoch)
+			head := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "NAME") })
+			if !strings.Contains(strings.Join(lines, "\n"), "▌ workflows.argoproj.io/workflow-template=") || head < 0 || head == len(lines)-1 {
+				t.Fatalf("%dx%d: the highlight, the heads or the list fell off the pane:\n%s", w, h, strings.Join(lines, "\n"))
+			}
 		}
 	}
 
