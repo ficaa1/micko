@@ -53,6 +53,37 @@ func TestRawViewDropsEveryBorderAndBand(t *testing.T) {
 	}
 }
 
+// A line wider than the screen pans into view, tabs counted to their stops.
+func TestRawViewPansAcrossLinesWiderThanTheScreen(t *testing.T) {
+	m, _ := rawRoot(t)
+	m.width = 16
+	keys(m, "f")
+	firstRow := func() string { return strings.SplitN(screen(m), "\n", 2)[0] }
+
+	if !strings.HasPrefix(firstRow(), "deploy-multi-lay") {
+		t.Fatalf("first row = %q", firstRow())
+	}
+	if !strings.Contains(screen(m), "h/l pan") {
+		t.Fatal("the hint must offer panning when a line is cut")
+	}
+	for _, c := range []struct{ key, want string }{
+		{"l", "ulti-layer-abc  "},
+		{"l", "er-abc  Running "},
+		{"h", "ulti-layer-abc  "},
+		{"$", "-multi-layer-abc"},
+		{"l", "-multi-layer-abc"},
+	} {
+		keys(m, c.key)
+		if got := firstRow(); got != c.want {
+			t.Fatalf("after %s the first row = %q, want %q", c.key, got, c.want)
+		}
+	}
+	keys(m, "0")
+	if !strings.HasPrefix(firstRow(), "deploy-multi-lay") {
+		t.Fatalf("after 0 the first row = %q", firstRow())
+	}
+}
+
 // f and ctrl+f enter the raw view from the logs too.
 func TestFEntersTheRawViewFromLogs(t *testing.T) {
 	m, wf := rawRoot(t)
