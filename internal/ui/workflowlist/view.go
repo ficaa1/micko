@@ -98,6 +98,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.queryBefore = m.query
 		m.searchBuf = m.query
 		m.searchCur = len([]rune(m.searchBuf))
+		m.histPos = len(m.history)
+		m.pickOpen = false
 		return nil
 	case "s":
 		m.CycleSort()
@@ -145,10 +147,51 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 // handleSearchKey routes keys while search has focus. Text-entry isolation:
 // printable characters reach the buffer; `q` inserts a letter;
 // navigation command keys are not interpreted; enter applies; esc cancels.
-// Home/End/Backspace/arrow-left/right are the only other editing keys the
-// input recognizes; everything else is ignored (never a command).
+// Tab completes, up and down walk the history, and Home/End/Backspace/
+// arrow-left/right edit; everything else is ignored (never a command). In
+// the picker, the arrows and tab move and enter accepts, unless the word
+// already reads the highlighted value: a filter typed in full applies on
+// the first enter.
 func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
+	if key != "tab" && key != "shift+tab" {
+		m.tabs = nil
+	}
+	if c, ok := m.picker(); ok {
+		n := len(c.values)
+		switch key {
+		case "up", "ctrl+p", "shift+tab":
+			if n > 0 {
+				m.pickSel = (m.pickSel%n - 1 + n) % n
+			}
+			return nil
+		case "down", "ctrl+n", "tab":
+			if n > 0 {
+				m.pickSel = (m.pickSel%n + 1) % n
+			}
+			return nil
+		case "enter":
+			if n > 0 && !m.typed(c, c.values[m.pickSel%n]) {
+				m.accept(c, c.values[m.pickSel%n])
+				return nil
+			}
+		case "esc":
+			m.pickOpen = false
+			return nil
+		}
+	}
 	switch key {
+	case "tab":
+		m.complete(1)
+		return nil
+	case "shift+tab":
+		m.complete(-1)
+		return nil
+	case "up", "ctrl+p":
+		m.recall(-1)
+		return nil
+	case "down", "ctrl+n":
+		m.recall(1)
+		return nil
 	case "esc":
 		// Cancel restores the filter that was applied before the input took
 		// focus. Typing filters live, so "cancel" has to undo the typing, not
@@ -168,6 +211,7 @@ func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 		}
 		m.SearchOn = false
 		m.applyLiveQuery()
+		m.remember(m.query)
 		m.searchBuf, m.searchCur = "", 0
 		m.queryBefore = ""
 		return nil

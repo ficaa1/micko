@@ -51,6 +51,7 @@ func (m *Model) Hints() string {
 // frameLines assembles the toolbar, column heads and visible rows.
 func (m *Model) frameLines(now time.Time) []string {
 	lines := strings.Split(m.toolbarView(), "\n")
+	lines = append(lines, m.pickerLines(len(lines))...)
 
 	cols := m.columns()
 	var head strings.Builder
@@ -278,9 +279,8 @@ func (m *Model) toolbarView() string {
 }
 
 // wrapStatusReason word-wraps a long status reason into the remaining width
-// of the toolbar line. Short reasons (which goldens pin byte-for-byte) are
-// returned styled exactly as before; only text long enough to clip at the
-// right edge is reflowed.
+// of the toolbar line. A short reason is returned styled as it is; only text
+// long enough to clip at the right edge is reflowed.
 func (m *Model) wrapStatusReason(full string, style func(...string) string) string {
 	const shortReasonThreshold = 60
 	if m.width <= 0 || ansi.StringWidth(full) <= shortReasonThreshold {
@@ -378,14 +378,102 @@ func (m *Model) searchLineView() string {
 	} else {
 		b.WriteString("[_]") // cursor at end
 	}
-	// The error sits before the usage hint because a narrow pane clips the
-	// toolbar from the right, and the error is what explains why the rows
-	// stopped following the typing. The cross carries it without colour.
+	// The completions come first and the error before the usage hint,
+	// because a narrow pane clips the toolbar from the right: the
+	// completions are what the reader is choosing between, and the error
+	// explains why the rows stopped following the typing. The cross
+	// carries it without colour.
+	b.WriteString(m.completionView())
 	if m.queryErr != "" {
 		b.WriteString("  " + m.theme.ErrorText.Render("✗ "+sanitizeOne(m.queryErr)))
 	}
-	b.WriteString("  (enter apply, esc cancel)")
+	b.WriteString(m.searchHint())
 	return b.String()
+}
+
+// searchHint is the search line's usage hint, naming only the keys that
+// would change something.
+func (m *Model) searchHint() string {
+	if _, ok := m.picker(); ok {
+		return "  (↑↓ or tab pick, enter accept, esc close)"
+	}
+	hint := "enter apply, esc cancel"
+	if len(m.history) > 0 && m.histPos > 0 {
+		hint += ", ↑ history"
+	}
+	if m.searchBuf != "" {
+		hint += ", ↓ clear"
+	}
+	return "  (" + hint + ")"
+}
+
+// maxPickerRows bounds the values the picker shows at once.
+const maxPickerRows = 8
+
+// pickerLines renders the open picker under the toolbar's above lines: the
+// fzf-style match count, then the matches around the highlighted one. A
+// short pane gives it fewer rows, so the column heads and one line of the
+// list stay in view.
+func (m *Model) pickerLines(above int) []string {
+	c, ok := m.picker()
+	if !ok {
+		return nil
+	}
+	sel := 0
+	if len(c.values) > 0 {
+		sel = m.pickSel % len(c.values)
+	}
+	rows := maxPickerRows
+	if m.height > 0 {
+		rows = min(rows, max(1, m.height-above-3))
+	}
+	first := max(0, sel-rows+1)
+	out := []string{m.theme.Muted.Render("  " + strconv.Itoa(len(c.values)) + "/" + strconv.Itoa(c.total))}
+	for i := first; i < min(len(c.values), first+rows); i++ {
+		v := sanitizeOne(c.values[i])
+		if i == sel {
+			out = append(out, m.theme.Selected.Render("▌ "+v))
+		} else {
+			out = append(out, "  "+v)
+		}
+	}
+	return out
+}
+
+// maxShownCompletions bounds the completions listed in the toolbar.
+const maxShownCompletions = 5
+
+// completionView lists what tab completes to inline, the current one in
+// brackets. Label values come from the server, so they are sanitized.
+func (m *Model) completionView() string {
+	if _, ok := m.picker(); ok {
+		return ""
+	}
+	c, cur := m.completions(), -1
+	if m.tabs != nil {
+		c, cur = m.tabs.completion, m.tabs.i
+	}
+	if len(c.values) == 0 {
+		return ""
+	}
+	first := 0
+	if cur >= maxShownCompletions {
+		first = cur - maxShownCompletions + 1
+	}
+	shown := c.values[first:min(len(c.values), first+maxShownCompletions)]
+	parts := make([]string, len(shown))
+	for i, v := range shown {
+		v = sanitizeOne(v)
+		if first+i == cur {
+			v = "[" + v + "]"
+		}
+		parts[i] = v
+	}
+	out := "  tab: " + strings.Join(parts, "  ")
+	if more := len(c.values) - first - len(shown); more > 0 {
+		out += "  +" + strconv.Itoa(more)
+	}
+	return m.theme.Muted.Render(out)
 }
 
 // colKey names a table column.

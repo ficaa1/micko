@@ -178,7 +178,7 @@ func (m *Model) suggestions() []suggestion {
 		for i, c := range m.commands {
 			cands[i] = Candidate{Terms: c.Terms()}
 		}
-		ranked := rank(word, cands)
+		ranked := Rank(word, cands)
 		out := make([]suggestion, 0, len(ranked))
 		for _, r := range ranked {
 			c := m.commands[r.Index]
@@ -201,7 +201,7 @@ func (m *Model) suggestions() []suggestion {
 	for i, v := range values {
 		cands[i] = Candidate{Terms: []string{v}}
 	}
-	ranked := rank(arg, cands)
+	ranked := Rank(arg, cands)
 	out := make([]suggestion, 0, len(ranked))
 	for _, r := range ranked {
 		out = append(out, suggestion{Value: word + " " + r.Term, Label: r.Term, Desc: c.Arg})
