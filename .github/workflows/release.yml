@@ -65,6 +65,15 @@ jobs:
           fi
           echo "version=$tag" >> "$GITHUB_OUTPUT"
 
+      - uses: nixbuild/nix-quick-install-action@2c9db80fb984ceb1bcaa77cdda3fdf8cfba92035 # v34
+
+      - name: Check Nix release package
+        run: |
+          nix flake check --all-systems --no-update-lock-file
+          nix build --no-update-lock-file
+          built="$(./result/bin/micko --version | awk '{print $2}')"
+          test "$built" = "${TAG#v}"
+
       - name: Build
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -126,6 +135,11 @@ jobs:
             --title "$TAG" \
             --notes-file /tmp/notes.md \
             dist/*.tar.gz dist/*.zip dist/checksums.txt
+
+      - name: Update the Nix stable channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/update-nix-stable.sh
 
       # The formula is written from the checksums this job just produced, so
       # the tap can never point at a build it did not verify. A pre-release

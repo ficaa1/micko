@@ -23,6 +23,16 @@ env:
   KUBECTL_VERSION: "v1.37.0"
 
 jobs:
+  nix:
+    name: Nix package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: nixbuild/nix-quick-install-action@2c9db80fb984ceb1bcaa77cdda3fdf8cfba92035 # v34
+      - run: nix flake check --all-systems --no-update-lock-file
+      - name: Check release-channel updater
+        run: python3 scripts/test-nix-stable.py
+
   check:
     # micko is a terminal program, and the two terminals it has to work in
     # are Linux and macOS. The macOS paths — the config directory, the PTY,
