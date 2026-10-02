@@ -147,13 +147,11 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 // handleSearchKey routes keys while search has focus. Text-entry isolation:
 // printable characters reach the buffer; `q` inserts a letter;
 // navigation command keys are not interpreted; enter applies; esc cancels.
-// Tab and shift+tab cycle the completions, up and down (or ctrl+p and
-// ctrl+n) walk the history, and Home/End/Backspace/arrow-left/right edit;
-// everything else is ignored (never a command). While the completion picker
-// is open, up, down, tab and shift+tab move its highlight, enter accepts and
-// esc closes it. Enter applies the filter as typed when nothing matches or
-// the word already reads the highlighted value, so a filter typed out in
-// full applies on the first enter.
+// Tab completes, up and down walk the history, and Home/End/Backspace/
+// arrow-left/right edit; everything else is ignored (never a command). In
+// the picker, the arrows and tab move and enter accepts, unless the word
+// already reads the highlighted value: a filter typed in full applies on
+// the first enter.
 func (m *Model) handleSearchKey(key string, _ tea.KeyPressMsg) tea.Cmd {
 	if key != "tab" && key != "shift+tab" {
 		m.tabs = nil

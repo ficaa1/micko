@@ -391,8 +391,8 @@ func (m *Model) searchLineView() string {
 	return b.String()
 }
 
-// searchHint is the search line's usage hint. The arrows are offered only
-// when they would change something.
+// searchHint is the search line's usage hint, naming only the keys that
+// would change something.
 func (m *Model) searchHint() string {
 	if _, ok := m.picker(); ok {
 		return "  (↑↓ or tab pick, enter accept, esc close)"
@@ -410,9 +410,8 @@ func (m *Model) searchHint() string {
 // maxPickerRows bounds the values the picker shows at once.
 const maxPickerRows = 8
 
-// pickerLines renders the open picker under the search line: the number of
-// matches out of the values they were ranked from, as fzf counts, then a
-// window of the matches that keeps the highlighted one in view.
+// pickerLines renders the open picker: the fzf-style match count, then the
+// matches around the highlighted one.
 func (m *Model) pickerLines() []string {
 	c, ok := m.picker()
 	if !ok {
@@ -438,9 +437,8 @@ func (m *Model) pickerLines() []string {
 // maxShownCompletions bounds the completions listed in the toolbar.
 const maxShownCompletions = 5
 
-// completionView lists what tab completes to, the one tab put in last in
-// brackets, or nothing when the word at the cursor completes to nothing.
-// Label values come from the server, so they are sanitized.
+// completionView lists what tab completes to inline, the current one in
+// brackets. Label values come from the server, so they are sanitized.
 func (m *Model) completionView() string {
 	if _, ok := m.picker(); ok {
 		return ""

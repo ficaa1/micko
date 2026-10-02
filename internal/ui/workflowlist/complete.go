@@ -16,8 +16,7 @@ var phaseValues = []string{"suspended", "running", "pending", "succeeded", "fail
 // historyCap bounds the session's filter history.
 const historyCap = 50
 
-// pickerMin is the number of completions from which they are offered in the
-// picker rather than on the search line.
+// pickerMin is the number of completions that opens the picker.
 const pickerMin = 4
 
 // completion is what tab can put in place of the word at the cursor: the
@@ -31,9 +30,7 @@ type completion struct {
 	pickable   bool
 }
 
-// tabCycle is the completion tab is stepping through, kept from the first
-// tab so that the next one moves to the following value instead of
-// completing the value just inserted.
+// tabCycle is the completion tab steps through, fixed at the first tab.
 type tabCycle struct {
 	base string
 	completion
@@ -41,9 +38,8 @@ type tabCycle struct {
 }
 
 // completions returns what the word at the cursor can complete to: a field
-// for a bare word, then a phase, template, cron workflow, label key or label
-// value from the loaded workflows. A regex, a fuzzy name or a duration
-// completes to nothing.
+// for a bare word, or a phase, template, cron workflow, label key or label
+// value from the loaded workflows.
 func (m *Model) completions() completion {
 	runes := []rune(m.searchBuf)
 	cur := min(max(m.searchCur, 0), len(runes))
@@ -106,9 +102,8 @@ func (m *Model) completions() completion {
 	return completion{start, end, ranked(value, pool, true), len(pool), true}
 }
 
-// ranked returns the values that match query, best first. Inline, the value
-// already typed in full is left out, since tab would change nothing; the
-// picker keeps it, so the highlight can rest on what was typed.
+// ranked returns the values that match query, best first. keepTyped keeps a
+// value equal to query, so the picker's highlight can rest on what was typed.
 func ranked(query string, values []string, keepTyped bool) []string {
 	cands := make([]palette.Candidate, len(values))
 	for i, v := range values {
@@ -157,9 +152,8 @@ func (m *Model) labelValues(keys ...string) []string {
 	return out
 }
 
-// picker returns the completions to show in the picker, and whether it is
-// open. Once open it stays open as the matches narrow, even to none, until
-// a value is accepted, esc closes it or the word stops completing to values.
+// picker returns the picker's completions and whether it is open. It stays
+// open as the matches narrow, even to none.
 func (m *Model) picker() (completion, bool) {
 	if !m.pickOpen {
 		return completion{}, false
@@ -168,9 +162,7 @@ func (m *Model) picker() (completion, bool) {
 	return c, c.pickable
 }
 
-// syncPicker follows an edit: it opens the picker once enough values
-// complete the word being typed, closes it when the word completes to no
-// values at all, and puts the highlight back on the best match.
+// syncPicker opens or closes the picker after an edit.
 func (m *Model) syncPicker() {
 	c := m.completions()
 	switch {
@@ -240,8 +232,8 @@ func (m *Model) replaceWord(base string, c completion, value string) {
 	m.applyLiveQuery()
 }
 
-// remember adds an applied filter to the history. A filter already there
-// moves to the newest place, so recalling steps through different filters.
+// remember adds an applied filter to the history, moving a repeat to the
+// newest place.
 func (m *Model) remember(q string) {
 	if q == "" {
 		return
@@ -258,9 +250,8 @@ func (m *Model) remember(q string) {
 	}
 }
 
-// recall walks the history. Past the newest entry is the text the reader
-// was typing, and past that an empty filter, so the way to clear a filter
-// is down. A step that would show the same text is skipped.
+// recall walks the history, then the draft, then an empty filter, skipping
+// steps that would not change the text.
 func (m *Model) recall(delta int) {
 	if m.histPos == len(m.history) {
 		m.draft = m.searchBuf

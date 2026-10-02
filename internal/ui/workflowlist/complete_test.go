@@ -34,9 +34,7 @@ var (
 	shiftTabKey = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 )
 
-// Tab completes the word at the cursor from the filter's fields and the
-// loaded workflows' values. With more than three values a picker opens and
-// stays open as they narrow: up, down and tab move, enter accepts.
+// Tab completes the word at the cursor, in a picker when more than three values match.
 func TestFilterCompletion(t *testing.T) {
 	up, down := tea.KeyPressMsg{Code: tea.KeyUp}, tea.KeyPressMsg{Code: tea.KeyDown}
 	for _, c := range []struct {
@@ -104,8 +102,7 @@ func TestFilterCompletion(t *testing.T) {
 	}
 }
 
-// Up and down in the filter walk this session's applied filters, the text
-// being typed and, past it, an empty filter.
+// Up and down walk the applied filters, the draft and, past it, an empty filter.
 func TestFilterHistory(t *testing.T) {
 	m := completionList(t)
 	for _, q := range []string{"phase=failed", "etl", "phase=failed"} {

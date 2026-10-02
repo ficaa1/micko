@@ -75,13 +75,10 @@ type Model struct {
 	history []string
 	histPos int
 	draft   string
-	// tabs is the completion tab is cycling through, nil once any other key
-	// is pressed.
+	// tabs is the completion tab is cycling through, nil after any other key.
 	tabs *tabCycle
-	// pickOpen shows the completion picker. An edit opens it, and opening
-	// the input, recalling, accepting a final value and esc close it, so it
-	// never covers the list before the reader types. pickSel is the
-	// highlighted value.
+	// pickOpen shows the completion picker; pickSel is its highlighted
+	// value. Only an edit opens it, so it never covers the list unasked.
 	pickOpen bool
 	pickSel  int
 
