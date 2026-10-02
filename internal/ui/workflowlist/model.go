@@ -111,6 +111,10 @@ type Model struct {
 	// acts on every marked workflow, not only the visible ones.
 	marks map[string]bool
 
+	// watched is the set of watched workflows, keyed by UID. It may name
+	// workflows outside the snapshot; the toolbar counts them too.
+	watched map[string]bool
+
 	// theme is injected (shared.Theme) so goldens can force no-color.
 	theme shared.Theme
 
@@ -158,6 +162,10 @@ func (m *Model) ToggleMark() {
 	}
 	m.marks[uid] = true
 }
+
+// SetWatched sets which workflows the rows flag as watched, by UID. The
+// root owns the set, so watches outlive the snapshot they were made in.
+func (m *Model) SetWatched(uids map[string]bool) { m.watched = uids }
 
 // Marked returns the marked workflows in the current sort order, hidden
 // ones included. The order is the order a bulk action runs in, so it

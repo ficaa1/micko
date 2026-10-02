@@ -45,7 +45,7 @@ func (m *Model) WindowStatus() string {
 
 // Hints are the list key contract, mirrored by the `?` overlay.
 func (m *Model) Hints() string {
-	return "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  a actions  n namespace  0 all ns  r refresh  w wide"
+	return "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  W watch  a actions  n namespace  0 all ns  r refresh  w wide"
 }
 
 // frameLines assembles the toolbar, column heads and visible rows.
@@ -144,8 +144,11 @@ func (m *Model) rowLine(r core.Summary, selected bool, now time.Time) string {
 	// channel on top of it.
 	gutter := strings.Repeat(" ", markGutter)
 	marked := m.marks[r.Ref.UID]
-	if marked {
+	switch {
+	case marked:
 		gutter = markGlyph + " "
+	case m.watched[r.Ref.UID]:
+		gutter = watchGlyph + " "
 	}
 	// plain is the row as text, for the two states that style it whole;
 	// styled is the same text with each cell in its own style.
@@ -214,6 +217,10 @@ const markGutter = 2
 // never reads as a phase.
 const markGlyph = "◆" // black diamond
 
+// watchGlyph flags a watched row in the mark gutter. A marked row shows the
+// mark instead, since the mark is what an action acts on.
+const watchGlyph = "◉" // fisheye
+
 // minUsableWidth is the width below which a resize notice replaces the list (<60 cols).
 const minUsableWidth = 60
 
@@ -235,6 +242,9 @@ func (m *Model) toolbarView() string {
 	// the right.
 	if cell := m.markCell(); cell != "" {
 		parts = append(parts, m.theme.Marked.Render(cell))
+	}
+	if n := len(m.watched); n > 0 {
+		parts = append(parts, watchGlyph+" "+strconv.Itoa(n)+" watched")
 	}
 
 	parts = append(parts, m.searchCell())

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Notifications. `W` on the list watches the selected or marked workflows
+  and notifies on each phase change and on deletion. Watches carry across
+  namespace switches. `notifications.suspended: true` adds a notification
+  whenever any workflow becomes suspended. The `notifications` config
+  section picks `desktop`, `bell`, `terminal` (OSC 9) and `sound`. With
+  terminal-notifier installed, banners come from micko and a click brings
+  the terminal forward.
+
 ## 0.8.0
 
 - Workflow actions are on by default. Resume, suspend, retry, resubmit,

@@ -143,6 +143,7 @@ func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 			break
 		}
 	}
+	var notice tea.Cmd
 	switch e.Type {
 	case core.WatchDeleted:
 		if found >= 0 {
@@ -150,6 +151,7 @@ func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 		}
 	default: // ADDED, MODIFIED, and unknown future types are displayable.
 		if found >= 0 {
+			notice = m.observe(m.listState.items[found], e.Summary)
 			m.listState.items[found] = e.Summary
 		} else if e.Summary.Ref.UID != "" {
 			// The snapshot cap bounds the collected list. A watch that adds
@@ -161,14 +163,15 @@ func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 				m.listView.SetStatus(workflowlist.StatusIncomplete, "", 0)
 				return nil
 			}
+			notice = m.observe(e.Summary, e.Summary)
 			m.listState.items = append(m.listState.items, e.Summary)
 		}
 	}
 	m.listView.SetItems(m.listState.items, m.deps.clock.Now())
 	if m.selection.UID != "" && m.selection.UID == e.Summary.Ref.UID && m.route == RouteDetail {
-		return m.startDetailFetch()
+		return tea.Batch(notice, m.startDetailFetch())
 	}
-	return nil
+	return notice
 }
 
 func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {

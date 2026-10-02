@@ -207,7 +207,7 @@ func TestResizeNotice(t *testing.T) {
 // The list advertises its full keyboard contract without repeating the shell help hint.
 func TestHints(t *testing.T) {
 	m := newList(t)
-	want := "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  a actions  n namespace  0 all ns  r refresh  w wide"
+	want := "enter open  l logs  T timeline  X explain  E events  / search  s sort  p phase  space mark  W watch  a actions  n namespace  0 all ns  r refresh  w wide"
 	if m.Hints() != want {
 		t.Fatalf("hints = %q, want %q", m.Hints(), want)
 	}

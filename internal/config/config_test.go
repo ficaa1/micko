@@ -173,6 +173,34 @@ func TestFileMascot(t *testing.T) {
 	}
 }
 
+// FileNotify keeps watched workflows on by default; Load rejects an unknown method.
+func TestFileNotify(t *testing.T) {
+	def := DefaultNotify()
+	cases := []struct {
+		name string
+		data string
+		want Notify
+	}{
+		{"no file", "", def},
+		{"section absent", "currentProfile: dev\n", def},
+		{"suspended on", "notifications:\n  suspended: true\n", Notify{Suspended: true, Watched: true, Via: def.Via, Sound: "Glass"}},
+		{"watched off, sound only", "notifications:\n  watched: false\n  via: [sound]\n  sound: Ping\n", Notify{Via: []NotifyVia{NotifySound}, Sound: "Ping"}},
+		{"terminal, clicks to Alacritty", "notifications:\n  via: [desktop, terminal]\n  activate: org.alacritty\n", Notify{Watched: true, Via: []NotifyVia{NotifyDesktop, NotifyTerminal}, Sound: "Glass", Activate: "org.alacritty"}},
+		{"unknown method", "notifications:\n  suspended: true\n  via: [pager]\n", def},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FileNotify([]byte(tc.data)); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("FileNotify = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+	data := []byte("notifications:\n  via: [pager]\ncurrentProfile: dev\nprofiles:\n  dev:\n    server: https://argo.example.com\n    namespace: ns\n    tokenEnv: MICKO_TOKEN_NOTIFY\n")
+	if _, err := Load(data, Options{}); err == nil || !strings.Contains(err.Error(), "notifications.via") {
+		t.Fatalf("Load with via: [pager] = %v, want an error naming the key", err)
+	}
+}
+
 // Profile redaction overrides the file; the flag only enables it, including in demo mode.
 func TestRedactValuesLayers(t *testing.T) {
 	const top = "redactValues: true\n"

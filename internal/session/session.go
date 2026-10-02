@@ -153,6 +153,9 @@ func (c *Connector) Mascot() config.Mascot {
 	return config.FileMascot(c.data)
 }
 
+// Notify reports the config file's notifications section.
+func (c *Connector) Notify() config.Notify { return config.FileNotify(c.data) }
+
 // JournalEnabled reports whether the config file leaves the action journal
 // on (the top-level `journal` key).
 func (c *Connector) JournalEnabled() bool { return config.JournalEnabled(c.data) }

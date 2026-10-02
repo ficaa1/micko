@@ -126,3 +126,23 @@ func TestEscapeClearsMarksBeforeFilter(t *testing.T) {
 		}
 	}
 }
+
+// Watched rows carry a glyph unless marked, and the toolbar counts every
+// watch, including ones outside the snapshot.
+func TestWatchedRows(t *testing.T) {
+	m, _ := markedModel(t)
+	m.ClearMarks()
+	m.Update(spaceKey())
+	m.SetWatched(map[string]bool{"a": true, "b": true, "elsewhere": true})
+	lines := m.BodyLines(testkit.FixtureEpoch)
+	if !strings.Contains(lines[0], "◉ 3 watched") {
+		t.Fatalf("toolbar %q lacks the watch count", lines[0])
+	}
+	var gutters []string
+	for _, l := range lines[2:5] {
+		gutters = append(gutters, string([]rune(l)[:1]))
+	}
+	if got := strings.Join(gutters, ""); got != "◉◆ " {
+		t.Fatalf("gutters %q, want the watch on b, the mark over the watch on a and nothing on c", got)
+	}
+}

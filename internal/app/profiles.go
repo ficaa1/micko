@@ -76,6 +76,7 @@ func (m *Root) Adopt(c *Connection) {
 	}
 	m.conn = c
 	m.deps.reader = c.Reader
+	m.dropWatches()
 	m.deps.watcher, _ = c.Reader.(core.Watcher)
 	m.deps.actioner, _ = c.Reader.(core.Actioner)
 	m.deps.nsLister, _ = c.Reader.(core.NamespaceLister)
