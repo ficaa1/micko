@@ -27,8 +27,17 @@ type watchedLoadedMsg struct {
 
 type watchedResult struct {
 	ref     core.Ref
+	rev     uint64
 	summary core.Summary
 	err     error
+}
+
+// watch is one watched workflow: the state last seen, and a revision every
+// observation bumps, so a read that started before the latest observation
+// is discarded instead of reporting a state the workflow has left.
+type watch struct {
+	last core.Summary
+	rev  uint64
 }
 
 // SetNotify sets which workflow changes notify the reader and how. The zero
@@ -58,10 +67,10 @@ func (m *Root) toggleWatch() tea.Cmd {
 		targets = []core.Summary{sel}
 	}
 	if m.watched == nil {
-		m.watched = map[string]core.Summary{}
+		m.watched = map[string]watch{}
 	}
 	for _, s := range targets {
-		m.watched[s.Ref.UID] = s
+		m.watched[s.Ref.UID] = watch{last: s}
 	}
 	m.listView.ClearMarks()
 	m.syncWatched()
@@ -118,29 +127,29 @@ func (m *Root) handleWatchedTick(msg watchedTickMsg) tea.Cmd {
 		return nil
 	}
 	m.watchedArmed = false
-	var refs []core.Ref
-	for uid, s := range m.watched {
+	var reads []watchedResult
+	for uid, w := range m.watched {
 		if !m.listCovers(uid) {
-			refs = append(refs, s.Ref)
+			reads = append(reads, watchedResult{ref: w.last.Ref, rev: w.rev})
 		}
 	}
-	if len(refs) == 0 || m.deps.reader == nil {
+	if len(reads) == 0 || m.deps.reader == nil {
 		return m.armWatchedCheck()
 	}
 	m.watchedArmed = true
 	reader, gen := m.deps.reader, m.watchedGen
 	return func() tea.Msg {
-		out := watchedLoadedMsg{gen: gen}
-		for _, ref := range refs {
-			wf, err := reader.Get(context.Background(), ref)
-			out.results = append(out.results, watchedResult{ref: ref, summary: wf.Summary, err: err})
+		for i := range reads {
+			wf, err := reader.Get(context.Background(), reads[i].ref)
+			reads[i].summary, reads[i].err = wf.Summary, err
 		}
-		return out
+		return watchedLoadedMsg{gen: gen, results: reads}
 	}
 }
 
 // handleWatchedLoaded notifies about the watched workflows the check read.
-// One that is gone notifies once and is no longer watched; any other error
+// A read that an observation overtook while it ran is dropped. One that
+// finds the workflow gone notifies once and ends the watch; any other error
 // leaves the watch for the next check.
 func (m *Root) handleWatchedLoaded(msg watchedLoadedMsg) tea.Cmd {
 	if msg.gen != m.watchedGen {
@@ -149,22 +158,31 @@ func (m *Root) handleWatchedLoaded(msg watchedLoadedMsg) tea.Cmd {
 	m.watchedArmed = false
 	var cmds []tea.Cmd
 	for _, r := range msg.results {
-		last, ok := m.watched[r.ref.UID]
-		if !ok {
+		w, ok := m.watched[r.ref.UID]
+		if !ok || w.rev != r.rev {
 			continue
 		}
 		if ae := core.AsAPIError(r.err); ae != nil && ae.Kind == core.ErrNotFound {
-			delete(m.watched, r.ref.UID)
-			cmds = append(cmds, m.deliver(notify.Gone(r.ref)))
+			cmds = append(cmds, m.unwatchGone(r.ref))
 			continue
 		}
 		if r.err != nil {
 			continue
 		}
-		cmds = append(cmds, m.observe(last, r.summary))
+		cmds = append(cmds, m.observe(w.last, r.summary))
 	}
-	m.syncWatched()
 	return tea.Batch(append(cmds, m.armWatchedCheck())...)
+}
+
+// unwatchGone ends the watch on a workflow that no longer exists and tells
+// the reader, once.
+func (m *Root) unwatchGone(ref core.Ref) tea.Cmd {
+	if _, ok := m.watched[ref.UID]; !ok {
+		return nil
+	}
+	delete(m.watched, ref.UID)
+	m.syncWatched()
+	return m.deliver(notify.Gone(ref))
 }
 
 // notifySnapshot notifies about each workflow whose state changed in a new
@@ -189,12 +207,16 @@ func (m *Root) notifySnapshot(before, after []core.Summary) tea.Cmd {
 }
 
 // observe records a workflow's new state and returns the command that
-// notifies the reader about the change, nil when there is nothing to say.
+// notifies the reader about the change, nil when there is nothing to say. A
+// watched workflow seen only as its archived copy has been deleted.
 func (m *Root) observe(before, after core.Summary) tea.Cmd {
-	last, watched := m.watched[after.Ref.UID]
+	w, watched := m.watched[after.Ref.UID]
 	if watched {
-		before = last
-		m.watched[after.Ref.UID] = after
+		if notify.Archived(after) {
+			return m.unwatchGone(after.Ref)
+		}
+		before = w.last
+		m.watched[after.Ref.UID] = watch{last: after, rev: w.rev + 1}
 	}
 	n, ok := notify.Change(before, after, watched, m.notify)
 	if !ok {

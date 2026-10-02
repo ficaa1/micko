@@ -146,6 +146,7 @@ func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 	var notice tea.Cmd
 	switch e.Type {
 	case core.WatchDeleted:
+		notice = m.unwatchGone(e.Summary.Ref)
 		if found >= 0 {
 			m.listState.items = append(m.listState.items[:found], m.listState.items[found+1:]...)
 		}

@@ -54,6 +54,14 @@ func Change(before, after core.Summary, watched bool, n config.Notify) (Notice, 
 	return Notice{}, false
 }
 
+// archivingStatus is the label Argo's workflow archive sets to Persisted on
+// the copy it keeps. The server answers a read of a deleted workflow from
+// the archive, so a workflow carrying it no longer exists in the cluster.
+const archivingStatus = "workflows.argoproj.io/workflow-archiving-status"
+
+// Archived reports whether s is the archive's copy of a deleted workflow.
+func Archived(s core.Summary) bool { return s.Labels[archivingStatus] == "Persisted" }
+
 // Gone is the notice for a watched workflow that no longer exists.
 func Gone(ref core.Ref) Notice { return notice(ref, "deleted; no longer watched") }
 

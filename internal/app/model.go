@@ -117,7 +117,7 @@ type Root struct {
 	// watched holds the workflows watched with W, by UID, with the state
 	// last seen. It outlives namespace switches; watchedGen names the
 	// connection it belongs to, and watchedArmed that its check chain runs.
-	watched      map[string]core.Summary
+	watched      map[string]watch
 	watchedGen   int
 	watchedArmed bool
 	// journalWarned records that a journal failure has been reported. It is
