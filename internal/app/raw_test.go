@@ -82,6 +82,12 @@ func TestRawViewPansAcrossLinesWiderThanTheScreen(t *testing.T) {
 	if !strings.HasPrefix(firstRow(), "deploy-multi-lay") {
 		t.Fatalf("after 0 the first row = %q", firstRow())
 	}
+
+	keys(m, "$")
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	if !strings.HasPrefix(firstRow(), "deploy-multi-layer-abc") {
+		t.Fatalf("after widening the first row = %q, want the line's start", firstRow())
+	}
 }
 
 // w wraps a line wider than the screen onto rows of the screen's width.
@@ -103,6 +109,24 @@ func TestRawViewWrapsLinesWiderThanTheScreen(t *testing.T) {
 	keys(m, "w")
 	if rows := strings.Split(screen(m), "\n"); !strings.HasPrefix(rows[0], "deploy-multi-layer-abc") {
 		t.Fatalf("w did not unwrap: %q", rows[0])
+	}
+
+	// G reaches the last wrapped row at any height, and widening the
+	// screen afterwards still shows the line.
+	for _, w := range []int{16, 24} {
+		for _, h := range []int{3, 4, 6} {
+			m, _ := rawRoot(t)
+			m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+			keys(m, "f", "w", "G")
+			body := strings.TrimRight(strings.Join(strings.Split(screen(m), "\n")[:h-1], "\n"), "\n")
+			if !strings.HasSuffix(body, "-abc") {
+				t.Fatalf("%dx%d: G did not reach the last wrapped row\n%s", w, h, screen(m))
+			}
+			m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+			if rows := strings.Split(screen(m), "\n"); !strings.HasPrefix(rows[0], "deploy-multi-layer-abc") {
+				t.Fatalf("%dx%d widened: first row = %q", w, h, rows[0])
+			}
+		}
 	}
 }
 

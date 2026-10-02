@@ -214,6 +214,9 @@ func (m *Root) listRawLines() []string {
 // starts at the top of the screen stops before it.
 func (m *Root) rawView() tea.View {
 	lines := m.rawScreenLines()
+	// A resize or a shorter refresh can leave the anchors past the content.
+	m.rawScroll(0, len(lines))
+	m.rawPan(0, lines)
 	h := m.height
 	if h <= 0 {
 		h = len(lines) + 1
