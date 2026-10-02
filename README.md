@@ -39,6 +39,24 @@ mise use -g github:ficaa1/micko
 Or `go install github.com/ficaa1/micko/cmd/micko@latest`, or download a binary
 from [the releases page](https://github.com/ficaa1/micko/releases).
 
+With [Nix](https://nixos.org/download/) and flakes enabled:
+
+```sh
+nix run github:ficaa1/micko -- --demo
+nix profile install github:ficaa1/micko
+```
+
+The flake builds from source with pinned dependencies for Linux on x86_64
+and ARM64, and macOS on ARM64. Its pinned Nixpkgs no longer supports Intel
+macOS. It includes `kubectl` for managed port-forwarding and
+`xdg-open` on Linux; commands already on your PATH take precedence.
+
+From a checkout, run `nix build` to build `result/bin/micko`, or
+`nix flake check` to build and run the default Go tests and version check.
+When changing Go dependencies, update `vendorHash` in `nix/package.nix`;
+set it to `lib.fakeHash`, build, then use the hash Nix reports.
+The package version is read from `internal/buildinfo/buildinfo.go`.
+
 ## Quick start
 
 micko reads profiles, one per cluster, from `~/.config/micko/config.yaml`.
