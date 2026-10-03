@@ -35,7 +35,7 @@ a { color: inherit; }
   backdrop-filter: blur(6px); border-bottom: 3px solid var(--ink); }
 .top .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
 .top .brand { font-weight: 800; font-size: 24px; text-decoration: none; letter-spacing: -.03em; }
-.top nav { margin-left: auto; display: flex; gap: 22px; font-weight: 700; font-size: 15px; }
+.top nav { margin-left: auto; display: flex; align-items: center; gap: 22px; font-weight: 700; font-size: 15px; }
 .top nav a { text-decoration: none; }
 .top nav a:hover { color: var(--red); }
 .top .gh { background: var(--ink); color: var(--cream); padding: 6px 12px; border-radius: 6px; }
