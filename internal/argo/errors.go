@@ -1,7 +1,3 @@
-// errors.go — typed, sanitized error construction for the argo transport
-// adapter. The kinds and mapping table are frozen in internal/core
-// (docs/development.md; docs/development.md). This file covers the
-// transport-specific surface: redaction guarantees and Retry-After.
 package argo
 
 import (

@@ -40,10 +40,8 @@ const confirmListMax = 8
 // the terminal height.
 const outcomeListMin = 3
 
-// render draws the pane. Every line is "label: value", a row of bracketed
-// keys or a list of targets, and the theme styles those parts without
-// changing a character, so the plain rendering is the text a test or a mono
-// terminal reads.
+// render draws the pane. The theme styles its parts without changing a
+// character, so the plain rendering reads the same.
 func render(m *Model) string {
 	t := m.theme
 	var b strings.Builder

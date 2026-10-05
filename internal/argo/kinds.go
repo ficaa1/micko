@@ -12,13 +12,8 @@ import (
 	"github.com/ficaa1/micko/internal/core"
 )
 
-// kinds.go holds what the resource kinds beside workflows share on the wire:
-// a paged list request and the parts of a workflow spec they embed.
-//
-// Cron workflows and templates are listed whole. Their list endpoints take
-// no `fields` projection (the swagger declares none for them, unlike the
-// workflow list), and an object without a node map is small, so a page of
-// them costs what a page of workflow summaries costs.
+// Cron workflows and templates are listed whole: their list endpoints take no
+// fields projection, and without a node map they are small.
 
 // kindPageSize is the page each kind list asks for.
 const kindPageSize = 100

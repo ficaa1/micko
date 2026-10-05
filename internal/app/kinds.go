@@ -12,23 +12,12 @@ import (
 	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
-// kinds.go runs the list routes of the resource kinds beside workflows —
-// cron workflows and templates — and the drill-down from one of their rows
-// to the workflows it owns.
-//
-// A kind is polled on the list's tick while its route is the active one, and
-// only then; there is no watch for these kinds. Its snapshot survives leaving
-// the route, so returning to it shows the rows and the cursor as they were
-// while a fresh collection runs.
-//
-// The drill-down is the workflow list with a server-side label selector: the
-// controller labels every workflow it starts from a cron workflow or a
-// template with the owner's name. Entering and leaving it change what the
-// list asks for, so both are a selection-generation change of the list,
-// like a namespace switch in miniature.
+// A kind's list is polled on the tick only while its route is active, and
+// its snapshot survives leaving the route. A drill-down is the workflow list
+// with the owner's label selector, so entering and leaving it bump the
+// selection generation.
 
-// kindPane is what the root needs from a kind's list view. Each kind is a
-// kindlist.Model over its own item type.
+// kindPane is what the root needs from a kind's list view.
 type kindPane interface {
 	Update(tea.Msg) tea.Cmd
 	SetSize(w, h int)
@@ -55,8 +44,8 @@ type kindState struct {
 	staleSince time.Time
 }
 
-// kindLoadedMsg carries one kind collection. items is the kind's own slice
-// type; the kind's apply function knows it.
+// kindLoadedMsg carries one kind collection; items is the kind's own slice
+// type.
 type kindLoadedMsg struct {
 	Conn      int
 	RequestID uint64
@@ -71,18 +60,16 @@ type kindDef struct {
 	pane kindPane
 	// noun is the singular the pane's count uses ("cron workflow").
 	noun string
-	// fetcher is called on the update loop and returns the call that lists
-	// the kind in a namespace ("" for every namespace). The call runs off
-	// the loop, so it captures the lister it needs here instead of reading
-	// the root later. A nil call means this connection cannot list the kind,
-	// and missing says why.
+	// fetcher returns the call that lists the kind in a namespace ("" for all).
+	// It runs on the update loop so the call captures its lister. A nil call
+	// means the connection cannot list the kind; missing says why.
 	fetcher func() (call func(ctx context.Context, namespace string) (any, error), missing string)
 	// apply installs a successful answer into the view.
 	apply func(items any, now time.Time)
 }
 
-// drillState is an active drill-down: which route it was entered from, and
-// the owner the pane title names.
+// drillState is an active drill-down: the route it came from and the owner
+// the title names.
 type drillState struct {
 	from  Route
 	title string
@@ -99,9 +86,8 @@ func (m *Root) kind(r Route) *kindDef {
 // kindPurpose names a kind's in-flight collection.
 func kindPurpose(r Route) string { return "kind:" + r.String() }
 
-// showKind makes a kind's route active from any route, the way esc leaves
-// detail and logs, and starts a collection unless one is running. A
-// drill-down in progress ends: the palette went somewhere else.
+// showKind makes a kind's route active, ends any drill-down and starts a
+// collection unless one is running.
 func (m *Root) showKind(r Route, label string) tea.Cmd {
 	m.leaveDetailAndLogs()
 	m.endDrill()
@@ -109,7 +95,7 @@ func (m *Root) showKind(r Route, label string) tea.Cmd {
 	m.flash = label
 	if st := m.kindStates[r]; st == nil || !st.loading {
 		cmd := m.startKindFetch(r)
-		// Existing rows let the reader use the pane during the fetch.
+		// Only an empty pane waits on the fetch, so only it is timed.
 		if def := m.kind(r); def != nil && def.pane.Len() == 0 {
 			m.beginSpan(r.String()+"_open", kindPurpose(r))
 		}
@@ -132,8 +118,7 @@ func (m *Root) leaveDetailAndLogs() {
 }
 
 // startKindFetch starts one collection of route r's kind in the session's
-// scope. The reply is stamped with the connection generation, so an answer
-// for a namespace or profile the reader has left is dropped.
+// scope, stamped so an answer for a scope the reader left is dropped.
 func (m *Root) startKindFetch(r Route) tea.Cmd {
 	def := m.kind(r)
 	if def == nil || !m.connected() {
@@ -179,8 +164,7 @@ func (m *Root) startKindFetch(r Route) tea.Cmd {
 }
 
 // handleKindLoaded applies one kind collection. A failure keeps the last
-// good rows and marks them stale; with no rows, a refusal is shown as the
-// refusal it is.
+// good rows and marks them stale.
 func (m *Root) handleKindLoaded(msg kindLoadedMsg) tea.Cmd {
 	purpose := kindPurpose(msg.Route)
 	m.clearInflight(purpose, msg.RequestID)
@@ -210,9 +194,8 @@ func (m *Root) handleKindLoaded(msg kindLoadedMsg) tea.Cmd {
 	return m.armTick()
 }
 
-// kindErrorStatus picks how a failed kind collection shows. With rows on
-// screen it is a stale snapshot; with none, a refusal or a missing API is
-// shown as such rather than as an empty namespace.
+// kindErrorStatus picks how a failed collection shows: stale rows, or with
+// none a refusal or missing API rather than an empty namespace.
 func (m *Root) kindErrorStatus(def *kindDef, ae *core.APIError) kindlist.Status {
 	if def.pane.Len() > 0 {
 		return kindlist.StatusStale
@@ -263,9 +246,7 @@ func (m *Root) kindSummary(r Route, noun string) string {
 	}
 }
 
-// resetKinds drops every kind's snapshot after a change of scope. Rows from
-// the old namespace or profile under the new header would be wrong until the
-// first answer lands.
+// resetKinds drops every kind's snapshot after a change of scope.
 func (m *Root) resetKinds() {
 	for r, def := range m.kindDefs {
 		m.cancelInflight(kindPurpose(r))
@@ -287,10 +268,9 @@ func (m *Root) handleDrill(msg kindlist.DrillMsg) tea.Cmd {
 	return m.restartWorkflowList()
 }
 
-// endDrill leaves a drill-down, if one is active, and returns the workflow
-// list to the session's scope. It does not change the route. The list is
-// dropped rather than refetched: the caller is moving to another route, and
-// the list starts again when it is shown.
+// endDrill leaves an active drill-down and returns the workflow list to the
+// session's scope. It drops the list rather than refetching it and does not
+// change the route.
 func (m *Root) endDrill() {
 	if m.drill == nil {
 		return
@@ -302,8 +282,7 @@ func (m *Root) endDrill() {
 	m.listState.loading = false
 }
 
-// leaveDrill is esc on a drilled list: back to the kind's route, where the
-// cursor still sits on the row that was opened.
+// leaveDrill returns from a drilled list to the kind's route.
 func (m *Root) leaveDrill() tea.Cmd {
 	from := m.drill.from
 	m.endDrill()
@@ -321,9 +300,8 @@ func (m *Root) restartWorkflowList() tea.Cmd {
 	return m.startListGeneration()
 }
 
-// resetWorkflowList drops the workflow list's snapshot and every request
-// that belongs to it. The selection generation goes up, so a reply for the
-// old scope that is already on its way is discarded.
+// resetWorkflowList drops the workflow list's snapshot and requests, and
+// bumps the selection generation so replies for the old scope are dropped.
 func (m *Root) resetWorkflowList() {
 	m.cancelInflight("list")
 	m.cancelInflight("watch")
@@ -337,8 +315,7 @@ func (m *Root) resetWorkflowList() {
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)
 }
 
-// listAcrossNamespaces reports whether the workflow list spans namespaces:
-// the all-namespaces view outside a drill-down, which asks for one owner's
+// listAcrossNamespaces reports whether the workflow list spans every
 // namespace.
 func (m *Root) listAcrossNamespaces() bool { return m.deps.listNamespace() == "" }
 

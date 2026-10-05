@@ -10,11 +10,8 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// bar.go draws the glyph bars of the nodes tab: the per-row timing bar, which
-// places a node on the workflow's clock, and the progress bar in the header.
-// Both are built as segments of a kind (done, live, track) and only styled at
-// the end, so the geometry is tested as text and every skin colours it from
-// the same three tokens.
+// The nodes tab's timing and progress bars are built as done, live and track
+// segments and styled last, so tests read the geometry as text.
 
 // timeSpan is the stretch of time the timing bars are drawn across.
 type timeSpan struct {

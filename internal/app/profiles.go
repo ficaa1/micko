@@ -10,19 +10,7 @@ import (
 	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
-// profiles.go owns the capital P key: which cluster this session talks to.
-//
-// The profile was fixed at startup by --profile or by currentProfile, so a
-// second cluster meant a second run of the program. Switching is the widest
-// generation change there is: the server, the credentials and the port-forward
-// all change, so every in-flight request is canceled, the snapshot is dropped,
-// the old transport is closed, and the list starts again from nothing.
-//
-// The key is capital P because p is the phase filter on the list and on the
-// nodes tab, and n is already the namespace picker.
-
-// ProfileList is what the entrypoint read out of the config file. The root
-// only renders it; it never opens the file itself.
+// ProfileList is the config file's profiles, as read by the entrypoint.
 type ProfileList struct {
 	Items []profiles.Item
 	// ConfigPath is the file the items came from, or where one should be
@@ -38,17 +26,15 @@ type ProfileList struct {
 
 // profileConnectedMsg carries the result of one reconnection.
 type profileConnectedMsg struct {
-	// Conn is the generation the switch was started for. A reply from an
-	// older generation belongs to a profile the reader has already left.
+	// Conn is the generation the switch was started for; an older one is stale.
 	Conn       int
 	Profile    string
 	Connection *Connection
 	Err        error
 }
 
-// SetConnector installs the thing that builds connections. Without one the P
-// key still opens the picker, but choosing a profile can do nothing, so the
-// entrypoint always sets it for a real run.
+// SetConnector installs what builds connections; without it, choosing a
+// profile does nothing.
 func (m *Root) SetConnector(c Connector) { m.connector = c }
 
 // SetProfiles loads the config file's profiles into the picker.
@@ -63,13 +49,8 @@ func (m *Root) SetProfiles(l ProfileList) {
 	}
 }
 
-// Adopt installs a connection as the live one: every request from here on goes
-// through its reader, and the panes show its profile.
-//
-// The caller has already canceled whatever belonged to the previous
-// connection. Adopt does not cancel, and it does not close the connection it
-// replaces, because the switch path closes the old transport before it opens
-// the new one.
+// Adopt makes c the live connection. The caller has already canceled the old
+// connection's work and closed its transport.
 func (m *Root) Adopt(c *Connection) {
 	if c == nil {
 		return
@@ -86,9 +67,7 @@ func (m *Root) Adopt(c *Connection) {
 	m.deps.clusterTemplateLister, _ = c.Reader.(core.ClusterTemplateLister)
 	m.deps.archive, _ = c.Reader.(core.ArchiveReader)
 	m.deps.namespace = c.Namespace
-	// A new connection starts in its profile's namespace. Carrying the
-	// all-namespaces view across would send the next cluster a cluster-wide
-	// list the reader never asked it for.
+	// A new connection starts in its profile's namespace, not all namespaces.
 	m.deps.allNamespaces = false
 	m.listView.SetAllNamespaces(false)
 	m.nsDiscovered = nil
@@ -98,9 +77,7 @@ func (m *Root) Adopt(c *Connection) {
 	m.webURL = c.WebURL
 	m.pipeCommand = c.PipeCommand
 	if c.Skin != "" {
-		// The name was checked when the config file was read. Should it
-		// still be unknown, the session keeps the skin it has rather than
-		// refusing a connection over a colour.
+		// The name was validated on load; an unknown skin keeps the current one.
 		_, _ = m.ApplySkin(c.Skin)
 	}
 	m.SetRedactValues(c.Redact)
@@ -108,27 +85,21 @@ func (m *Root) Adopt(c *Connection) {
 	m.actionOpts.Server = c.Server
 	m.actionOpts.Profile = c.Profile
 	m.profileCurrent = c.Profile
-	// A connection with a port-forward reports its own readiness. One without
-	// has no transport to lose, so it starts ready rather than waiting for a
-	// lifecycle event that never arrives.
+	// Without a port-forward there is no lifecycle event, so it starts ready.
 	m.connectionReady = true
 	m.connectionFresh = c.States == nil
 	m.connectionTarget = ""
 }
 
-// connected reports whether a reader is installed. Before the first profile is
-// chosen there is none, and every route has nothing to show.
+// connected reports whether a reader is installed.
 func (m *Root) connected() bool { return m.deps.reader != nil }
 
-// openProfilePicker shows the dialog. There is nothing to fetch: the profiles
-// come from the config file the entrypoint already read.
+// openProfilePicker shows the dialog over the profiles the entrypoint read.
 func (m *Root) openProfilePicker() tea.Cmd {
 	if m.profView == nil {
 		return nil
 	}
-	// Without a connector nothing could be connected to, so the dialog would
-	// open on an empty list and invite the reader to write a config file that
-	// this session would not read. The demo is the case that reaches here.
+	// Without a connector, as in the demo, there is nothing to connect to.
 	if m.connector == nil {
 		m.flash = "this session has no profiles to switch between"
 		return nil
@@ -141,18 +112,14 @@ func (m *Root) openProfilePicker() tea.Cmd {
 	return nil
 }
 
-// switchProfile moves the whole session to another cluster.
-//
-// The dialog stays open for the wait. A port-forward takes seconds to bind,
-// and the alternative — closing onto an empty list — looks exactly like a
-// session that lost its server.
+// switchProfile moves the session to another cluster. The dialog stays open
+// while the port-forward binds, so the wait does not look like a lost server.
 func (m *Root) switchProfile(name string) tea.Cmd {
 	if name == "" || m.connector == nil {
 		return nil
 	}
-	// Everything in flight was requested from the old server, with the old
-	// credentials. The generation bump is what makes the update loop discard
-	// a reply that arrives after the switch.
+	// Everything in flight belongs to the old server; the generation bump drops
+	// late replies.
 	m.cancelAll()
 	m.connGen++
 	m.selGen++
@@ -170,8 +137,7 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	gen := m.connGen
 	connector := m.connector
 	return func() tea.Msg {
-		// The old forward is closed before the new one starts, so two
-		// forwards to two clusters are never alive at the same time.
+		// Close the old forward first, so two clusters are never forwarded at once.
 		if old != nil && old.Close != nil {
 			old.Close()
 		}
@@ -180,13 +146,11 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	}
 }
 
-// handleProfileConnected installs a finished reconnection, or reports why it
-// failed. A failure leaves the dialog open with no connection: there is
-// nothing to fall back to, and the reader has to choose again.
+// handleProfileConnected installs a finished reconnection, or reports its
+// failure in the dialog, which stays open with no connection.
 func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 	if msg.Conn != m.connGen {
-		// A newer switch has replaced this one. The connection this reply
-		// carries is live and nothing points at it, so it must be released.
+		// A newer switch replaced this one, so release the connection it opened.
 		if msg.Connection != nil && msg.Connection.Close != nil {
 			msg.Connection.Close()
 		}
@@ -211,9 +175,8 @@ func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 	return tea.Batch(list, m.waitConnStates(), m.backgroundQuery())
 }
 
-// resetRoutes drops everything the previous connection produced and returns
-// the session to a loading list. Keeping any of it would show one cluster's
-// workflows under another cluster's name.
+// resetRoutes drops everything the previous connection produced, so one
+// cluster's workflows never show under another's name.
 func (m *Root) resetRoutes() {
 	m.route = RouteList
 	m.selection = core.Ref{}
@@ -228,8 +191,7 @@ func (m *Root) resetRoutes() {
 	m.deps.drillNamespace, m.deps.labelSelector = "", ""
 	m.resetKinds()
 	m.listView.SetAllNamespaces(m.listAcrossNamespaces())
-	// Marks name workflows of the scope being left; a bulk action must never
-	// reach across a switch.
+	// Marks belong to the old scope; a bulk action must not cross a switch.
 	m.listView.ClearMarks()
 	m.listView.SetItems(nil, m.deps.clock.Now())
 	m.listView.SetStatus(workflowlist.StatusLoading, "", 0)
@@ -238,12 +200,8 @@ func (m *Root) resetRoutes() {
 // profileDialogOpen reports whether the picker owns the keyboard.
 func (m *Root) profileDialogOpen() bool { return m.profView != nil && m.profView.IsOpen() }
 
-// waitConnStates delivers the live connection's next transport lifecycle
-// event into the update loop, stamped with the generation it belongs to.
-//
-// The forwarding manager runs on its own goroutine and must never touch model
-// state. Each event re-arms the wait; when the connection is closed the
-// channel closes and the chain ends with no message.
+// waitConnStates delivers the connection's next lifecycle event, stamped
+// with its generation. Each event re-arms the wait; a closed channel ends it.
 func (m *Root) waitConnStates() tea.Cmd {
 	if m.conn == nil || m.conn.States == nil {
 		return nil

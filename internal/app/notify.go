@@ -32,9 +32,8 @@ type watchedResult struct {
 	err     error
 }
 
-// watch is one watched workflow: the state last seen, and a revision every
-// observation bumps, so a read that started before the latest observation
-// is discarded instead of reporting a state the workflow has left.
+// watch is one watched workflow: its last seen state, and a revision each
+// observation bumps so a read that started earlier is discarded.
 type watch struct {
 	last core.Summary
 	rev  uint64
@@ -91,8 +90,7 @@ func (m *Root) syncWatched() {
 	m.listView.SetWatched(uids)
 }
 
-// dropWatches forgets every watch. UIDs belong to one cluster, so a
-// profile switch ends them, and any check in flight for them is discarded.
+// dropWatches forgets every watch; UIDs belong to one cluster.
 func (m *Root) dropWatches() {
 	m.watched = nil
 	m.watchedGen++
@@ -101,7 +99,7 @@ func (m *Root) dropWatches() {
 }
 
 // armWatchedCheck starts the chain that checks watched workflows outside the
-// list, unless one runs. One check runs per refresh interval.
+// list, once per refresh interval, unless one runs.
 func (m *Root) armWatchedCheck() tea.Cmd {
 	if m.watchedArmed || len(m.watched) == 0 {
 		return nil
@@ -147,10 +145,9 @@ func (m *Root) handleWatchedTick(msg watchedTickMsg) tea.Cmd {
 	}
 }
 
-// handleWatchedLoaded notifies about the watched workflows the check read.
-// A read that an observation overtook while it ran is dropped. One that
-// finds the workflow gone notifies once and ends the watch; any other error
-// leaves the watch for the next check.
+// handleWatchedLoaded notifies about the watched workflows the check read. A
+// read overtaken by an observation is dropped; a workflow found gone ends its
+// watch.
 func (m *Root) handleWatchedLoaded(msg watchedLoadedMsg) tea.Cmd {
 	if msg.gen != m.watchedGen {
 		return nil
@@ -186,9 +183,7 @@ func (m *Root) unwatchGone(ref core.Ref) tea.Cmd {
 }
 
 // notifySnapshot notifies about each workflow whose state changed in a new
-// snapshot. A watched workflow is compared with its last seen state, wherever
-// that was seen; any other with its row in the snapshot before. A workflow
-// that appears says nothing, or the first list and every namespace switch
+// snapshot. A workflow that just appears says nothing, or every list load
 // would announce every row.
 func (m *Root) notifySnapshot(before, after []core.Summary) tea.Cmd {
 	prev := make(map[string]core.Summary, len(before))
@@ -206,9 +201,8 @@ func (m *Root) notifySnapshot(before, after []core.Summary) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// observe records a workflow's new state and returns the command that
-// notifies the reader about the change, nil when there is nothing to say. A
-// watched workflow seen only as its archived copy has been deleted.
+// observe records a workflow's new state and returns the notice command, or
+// nil. A watched workflow seen only as its archived copy was deleted.
 func (m *Root) observe(before, after core.Summary) tea.Cmd {
 	w, watched := m.watched[after.Ref.UID]
 	if watched {
@@ -248,8 +242,7 @@ func (m *Root) deliver(n notify.Notice) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// handleNotifyFailed reports the first failed delivery of the session; one
-// broken notifier would otherwise take the footer on every change.
+// handleNotifyFailed reports only the session's first failed delivery.
 func (m *Root) handleNotifyFailed(msg notifyFailedMsg) {
 	if m.notifyWarned {
 		return

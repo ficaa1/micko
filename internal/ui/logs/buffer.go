@@ -23,7 +23,6 @@ import (
 // buffer is unexported: the model talks to it through
 // Push/PushMarker/Counts/Entries/Lines.
 
-// Frozen caps (docs/development.md).
 const (
 	// MaxLines caps the number of retained entries (lines + markers).
 	MaxLines = 10_000
@@ -56,9 +55,7 @@ type buffer struct {
 	mu sync.Mutex
 }
 
-// NewBuffer creates a ring bounded by both caps. Passing 0 for a cap means
-// "no cap" — that mode exists for tests/demo only; production constructors
-// always set both (NewModel uses MaxLines/MaxBytes).
+// NewBuffer creates a ring bounded by both caps; 0 means no cap.
 func NewBuffer(maxLines, maxBytes int) *buffer {
 	return &buffer{maxLines: maxLines, maxBytes: maxBytes}
 }

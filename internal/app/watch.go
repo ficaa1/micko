@@ -26,8 +26,8 @@ type watchDoneMsg struct {
 }
 type watchRetryMsg struct{ genStamp }
 
-// startWatch opens one bounded watch. The coordinator, not the transport,
-// owns reconnect/relist policy; polling remains active as reconciliation.
+// startWatch opens one bounded watch. The root owns reconnects, and polling
+// continues as reconciliation.
 func (m *Root) startWatch() tea.Cmd {
 	if m.deps.watcher == nil {
 		return nil
@@ -39,10 +39,8 @@ func (m *Root) startWatch() tea.Cmd {
 	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.watchAttempt}
 	m.setInflight("watch", uint64(m.watchAttempt), cancel)
 	ch := make(chan any, watchQueueCap)
-	// The request is built here, on the update loop, not inside the
-	// goroutine. A namespace switch writes both fields from the loop, so
-	// reading them in the goroutine is a data race and can open the watch
-	// against the namespace the reader just left.
+	// Build the request on the update loop: a namespace switch writes these
+	// fields there, so reading them in the goroutine would race.
 	req := core.WatchRequest{
 		Namespace:       m.deps.listNamespace(),
 		LabelSelector:   m.deps.labelSelector,
@@ -64,8 +62,7 @@ func (m *Root) startWatch() tea.Cmd {
 		case ch <- watchDoneMsg{genStamp: g, Err: err}:
 		case <-ctx.Done():
 		default:
-			// The bounded queue is full after an overflow. Closing lets the
-			// consumer fall back to polling instead of leaking the goroutine.
+			// Closing the full queue makes the consumer fall back to polling.
 		}
 		close(ch)
 	}()
@@ -103,7 +100,8 @@ func (m *Root) watchReplyCurrent(g genStamp) bool {
 	return g.Conn == m.connGen && g.Attempt == m.watchAttempt
 }
 
-// Reconciliation polls catch changes a live watch can miss.
+// watchReconcileInterval spaces the polls that catch what a live watch
+// misses.
 const watchReconcileInterval = time.Minute
 
 func (m *Root) watchLive() bool {
@@ -155,10 +153,8 @@ func (m *Root) applyWatchEvent(msg watchEventMsg) tea.Cmd {
 			notice = m.observe(m.listState.items[found], e.Summary)
 			m.listState.items[found] = e.Summary
 		} else if e.Summary.Ref.UID != "" {
-			// The snapshot cap bounds the collected list. A watch that adds
-			// past it would grow the snapshot without limit while the view
-			// still claimed to hold the whole namespace, so the addition is
-			// dropped and the snapshot says it is incomplete instead.
+			// A watch must not grow the snapshot past its cap, so the addition is
+			// dropped and the snapshot marked incomplete.
 			if cap := m.deps.snapshotCap; cap > 0 && len(m.listState.items) >= cap {
 				m.listState.incomplete = true
 				m.listView.SetStatus(workflowlist.StatusIncomplete, "", 0)
@@ -206,8 +202,7 @@ func (m *Root) handleWatchDone(msg watchDoneMsg) tea.Cmd {
 	}
 	m.watchMode = "polling fallback"
 	m.watchRetries = 0
-	// A closed/expired stream must not make the viewer unusable. Relist now;
-	// the normal tick continues periodic reconciliation after this completes.
+	// Relist after a closed or expired stream; the tick resumes reconciliation.
 	return m.startListGeneration()
 }
 

@@ -32,8 +32,6 @@ type ArchiveReader interface {
 	GetArchivedWorkflow(ctx context.Context, uid string) (Workflow, error)
 }
 
-// ArchiveDisabledMessage is how an unconfigured archive is reported. A
-// server with no archive answers its detail route with an internal error
-// ("getting archived workflows not supported") or has no route at all, and
-// either is shown as this sentence rather than as the error it arrived as.
+// ArchiveDisabledMessage replaces the error a server without an archive
+// returns for an archived workflow.
 const ArchiveDisabledMessage = "the workflow archive is not enabled on this server"

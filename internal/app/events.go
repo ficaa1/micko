@@ -12,28 +12,9 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// events.go streams the Kubernetes events of the workflow on screen into the
-// detail pane's Events section, while the section is open.
-//
-// Two streams run side by side. Kubernetes accepts only equality terms
-// joined by AND in an event field selector, so no one selector names a
-// workflow and each of its pods, and events carry no labels to select the
-// pods by. One stream per pod would open a connection for every pod of a
-// fan-out and would need opening again as pods appear. So one stream asks
-// for the workflow's own events (involvedObject.kind=Workflow and its
-// name), and one for the namespace's pod events (involvedObject.kind=Pod),
-// which the pane matches to the workflow's pods by the pod names in its
-// node map.
-//
-// Each stream follows the workflow watch's rules: it resumes from the last
-// resource version it delivered after the connection ends, backs off
-// between attempts (watchRetryDelay, at most maxWatchRetries in a row
-// without an event between them), starts over when the cursor has expired,
-// and stops for good on a permission error or a server with no event
-// stream. Replies carry the connection and selection generations and the
-// stream's attempt, so a stream that was replaced changes nothing.
-
-// eventStreams are the two streams, by index.
+// eventStreams are the two streams, by index. A field selector cannot name a
+// workflow and its pods together, so one stream reads the workflow's events
+// and one the namespace's pod events, matched to its pods by name.
 const (
 	eventStreamWorkflow = iota
 	eventStreamPods
@@ -43,13 +24,12 @@ const (
 // eventPurposes are the inflight keys of the two streams.
 var eventPurposes = [eventStreamCount]string{"events-workflow", "events-pods"}
 
-// eventQueueCap bounds the events queued between the stream and the update
-// loop. A stream that outruns the loop past it is restarted rather than
-// allowed to grow the queue.
+// eventQueueCap bounds events queued for the update loop. A stream that
+// overflows it is restarted.
 const eventQueueCap = 512
 
-// eventBatchCap bounds the events per delivered message, so the replay of
-// an hour of events renders a few times, not once per event.
+// eventBatchCap bounds events per message, so a long replay renders a few
+// times.
 const eventBatchCap = 128
 
 // eventStreamState is how one stream is doing.
@@ -67,8 +47,8 @@ type eventStream struct {
 	state eventStreamState
 	// attempt numbers the stream's starts; a reply for another is stale.
 	attempt uint64
-	// rv is the resource version of the last event delivered, where a
-	// reconnect resumes.
+	// rv is the resource version of the last event delivered; a reconnect
+	// resumes there.
 	rv      string
 	retries int
 	// reason is why a stopped stream stopped, or when a retrying one
@@ -102,7 +82,8 @@ type eventsRetryMsg struct {
 	Stream int
 }
 
-// Section changes retain cursors because the pane retains the workflow's events.
+// syncEvents runs the streams while the Events section is on screen. Leaving
+// the section pauses them and keeps their cursors; leaving detail stops them.
 func (m *Root) syncEvents() tea.Cmd {
 	if m.route != RouteDetail || m.detailView == nil {
 		m.stopEvents()
@@ -149,7 +130,8 @@ func (m *Root) stopEvents() {
 	m.events = eventsSession{}
 }
 
-// pauseEvents retains cursors for the workflow's next visit to Events.
+// pauseEvents cancels both streams and keeps their cursors for the next
+// visit to Events.
 func (m *Root) pauseEvents() {
 	if !m.events.active {
 		return
@@ -194,8 +176,7 @@ func (m *Root) startEventStream(i int) tea.Cmd {
 		case ch <- eventsDoneMsg{genStamp: g, Stream: i, Err: err}:
 		case <-ctx.Done():
 		default:
-			// The queue is full after an overflow; closing it ends the
-			// drain, which reports the stream done.
+			// Closing the full queue ends the drain, which reports the stream done.
 		}
 		close(ch)
 	}()
@@ -299,9 +280,8 @@ func (m *Root) handleEventsDone(msg eventsDoneMsg) tea.Cmd {
 		st.reason = "this Argo server does not stream events"
 		return nil
 	case errors.As(msg.Err, &we) && we.Kind == core.WatchExpired:
-		// The cursor is too old to resume from: start over with the
-		// events that exist now. The pane keeps what it has and replaces
-		// events the replay sends again.
+		// The cursor has expired, so start over. The pane replaces events the
+		// replay sends again.
 		st.rv = ""
 		return m.startEventStream(i)
 	}
@@ -335,8 +315,7 @@ func (m *Root) handleEventsRetry(msg eventsRetryMsg) tea.Cmd {
 	return cmd
 }
 
-// restartEvents starts both streams over, for r on the section: a stream
-// that stopped gets another chance.
+// restartEvents starts both streams over, so r revives a stopped one.
 func (m *Root) restartEvents() tea.Cmd {
 	m.stopEvents()
 	return m.syncEvents()

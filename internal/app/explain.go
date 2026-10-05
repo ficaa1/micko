@@ -12,20 +12,15 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// explain.go reads the log evidence for the detail pane's Explain section:
-// the end of the first failing pod's log. The read is bounded (a fixed
-// number of lines, no follow, a time limit), runs only while the section is
-// on screen, and is canceled when the reader leaves the section or the
-// workflow. Its reply carries the generations and the request ID, so a
-// reply for a workflow or a pod the pane has moved on from changes nothing.
+// The Explain section's log evidence is the end of the first failing pod's
+// log, read with a bound on lines and time while the section is on screen.
 
-// explainLogTimeout bounds one read. A server that never ends the response
-// would otherwise leave the section saying it is reading for good.
+// explainLogTimeout bounds one read, so a server that never ends the
+// response cannot leave the section reading.
 const explainLogTimeout = 20 * time.Second
 
-// explainLineBytes bounds one kept line. The rules show a few hundred
-// characters of a line at most, and a pod that prints megabyte lines must not
-// hold a megabyte per line here.
+// explainLineBytes caps one kept line; the rules show a few hundred
+// characters at most.
 const explainLineBytes = 4096
 
 // explainLogMsg is a finished read of log evidence.
@@ -33,16 +28,13 @@ type explainLogMsg struct {
 	genStamp
 	RequestID uint64
 	Lines     []string
-	// Canceled marks a read the root canceled; its section has already
-	// forgotten it.
+	// Canceled marks a read the root canceled.
 	Canceled bool
 	Err      error
 }
 
-// syncExplainLog starts the read the Explain section wants, and cancels a
-// read the reader has left the section behind. It runs after every change
-// that can move either: a key in the detail pane, a loaded workflow, a
-// workflow opened on a section.
+// syncExplainLog starts the read the Explain section wants and cancels one
+// the reader has left.
 func (m *Root) syncExplainLog() tea.Cmd {
 	if m.route != RouteDetail || m.detailView == nil || m.detailView.Section() != shared.SectionExplain {
 		m.stopExplainLog()
@@ -65,9 +57,8 @@ func (m *Root) syncExplainLog() tea.Cmd {
 	return m.deps.explainLogCmd(ctx, genStamp{Conn: m.connGen, Sel: m.selGen}, id, req)
 }
 
-// syncSections starts and stops the work the detail pane's sections do in
-// the background: the Explain section's log read and the Events section's
-// streams.
+// syncSections starts and stops the detail sections' background work: the
+// Explain log read and the Events streams.
 func (m *Root) syncSections() tea.Cmd {
 	return tea.Batch(m.syncExplainLog(), m.syncEvents())
 }
@@ -84,9 +75,7 @@ func (m *Root) stopExplainLog() {
 	}
 }
 
-// handleExplainLog applies a finished read to the section, unless it is
-// stale: canceled, or stamped with a workflow or a request the pane has
-// moved on from.
+// handleExplainLog applies a finished read to the section unless it is stale.
 func (m *Root) handleExplainLog(msg explainLogMsg) tea.Cmd {
 	m.clearInflight("explain", msg.RequestID)
 	if msg.Canceled || msg.Conn != m.connGen || msg.Sel != m.selGen || m.detailView == nil {
@@ -100,8 +89,8 @@ func (m *Root) handleExplainLog(msg explainLogMsg) tea.Cmd {
 	return nil
 }
 
-// explainLogError is a failed read's reason, safe to show, and whether the
-// server said the pod or its log no longer exists.
+// explainLogError returns a failed read's displayable reason and whether the
+// pod or its log is gone.
 func explainLogError(err error) (string, bool) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "the read timed out after " + explainLogTimeout.String(), false
@@ -116,8 +105,7 @@ func explainLogError(err error) (string, bool) {
 }
 
 // explainLogCmd reads the end of one pod's log and keeps its last
-// req.TailLines lines. It keeps only that many whatever the server sends, so
-// a server that ignores the tail parameter costs time, not memory.
+// req.TailLines lines, even if the server ignores the tail parameter.
 func (d deps) explainLogCmd(ctx context.Context, g genStamp, id uint64, req core.LogRequest) tea.Cmd {
 	return func() tea.Msg {
 		tail := newLineTail(int(req.TailLines))
@@ -161,7 +149,7 @@ func (t *lineTail) add(s string) {
 	}
 }
 
-// lines is what the tail holds, oldest first.
+// lines returns the kept lines, oldest first.
 func (t *lineTail) lines() []string {
 	if !t.full {
 		return append([]string(nil), t.buf[:t.next]...)

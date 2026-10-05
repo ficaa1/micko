@@ -15,9 +15,8 @@ import (
 	"time"
 )
 
-// icon is the PNG of micko's notification icon: the site's favicon (see
-// site/index.html), a cream rounded square with a red bar, on its 32-unit
-// grid scaled to 512 pixels, the largest size sips writes as icns.
+// icon is the PNG of the site's favicon at 512 pixels, the largest size sips
+// writes as icns.
 func icon() []byte {
 	const size, unit = 512, 32
 	cream := color.RGBA{0xef, 0xe4, 0xcf, 0xff}

@@ -1,8 +1,5 @@
 package testkit
 
-// Fixtures are explicitly synthetic reference datasets shared by tests. They
-// are generated, never captured; names,
-// UIDs and labels are fabricated (see package doc).
 import (
 	"time"
 
@@ -33,11 +30,8 @@ func FixtureWorkflowList(ns string, n int) []core.Workflow {
 	return out
 }
 
-// FixtureDAGWorkflow builds a synthetic workflow exercising DAG semantics
-// from docs/development.md: a DAG boundary with task children, a retry
-// node, a skipped node, and a suspend node. Children/boundary/outbound
-// fields follow pinned semantics (children are boundary grouping, NOT
-// dependency edges; outboundNodes connect templates to the next step).
+// FixtureDAGWorkflow builds a synthetic DAG workflow with task children, a
+// retry node, a skipped node and a suspend node.
 func FixtureDAGWorkflow(ns, name string) core.Workflow {
 	wf := SyntheticWorkflow(ns, name, "Failed", FixtureEpoch.Add(-30*time.Minute))
 	wf.Summary.StartedAt = ptrTime(FixtureEpoch.Add(-30 * time.Minute))

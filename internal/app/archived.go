@@ -13,19 +13,8 @@ import (
 	"github.com/ficaa1/micko/internal/ui/kindlist"
 )
 
-// archived.go registers the workflow archive as a kind: a list of archived
-// runs, each opened in the detail route from the archive by its UID.
-//
-// An archived run may be gone from the cluster. Its detail is read from the
-// archive, not the live workflow route; it is fixed, so it is not refetched
-// on the tick; actions are refused, since there is no live object to act on;
-// and its logs are often gone with its pods, which the log pane says instead
-// of showing an empty stream.
-
-// archivePageSize and archiveCap bound one collection of the archive. An
-// archive holds every run the controller ever copied, which is far more than
-// a list is read for, so the list asks for the newest pages only and says
-// that it did.
+// archivePageSize and archiveCap bound one collection of the archive: the
+// list reads the newest pages only and says so.
 const (
 	archivePageSize = 100
 	archiveCap      = 300
@@ -85,8 +74,8 @@ func (m *Root) newArchivedKind() *kindDef {
 // showArchived is the archived workflows kind's show.
 func (m *Root) showArchived() tea.Cmd { return m.showKind(RouteArchived, "archived workflows") }
 
-// openArchived opens an archived run in the detail route. The detail is
-// read from the archive by UID, and esc returns to the archive list.
+// openArchived opens an archived run in the detail route; esc returns to the
+// archive list.
 func (m *Root) openArchived(ref core.Ref) tea.Cmd {
 	if m.route == RouteDetail && m.selection == ref && m.detailState.archived {
 		return nil
@@ -101,8 +90,8 @@ func (m *Root) openArchived(ref core.Ref) tea.Cmd {
 	return m.startDetailFetch()
 }
 
-// archivedDetailCmd reads one archived workflow. It answers with the same
-// message as a live fetch, so staleness and UID checks are shared.
+// archivedDetailCmd reads one archived workflow. Its reply is the live
+// fetch's message, so the staleness and UID checks are shared.
 func (d deps) archivedDetailCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref) func() tea.Msg {
 	archive := d.archive
 	return func() tea.Msg {
@@ -125,17 +114,12 @@ func (d deps) archivedDetailCmd(ctx context.Context, g genStamp, id uint64, ref 
 	}
 }
 
-// archivedLogNote explains a log stream of an archived run that ended with
-// nothing, or failed. The pods of an archived run are usually deleted with
-// it, and only a workflow that archived its logs keeps them.
+// archivedLogNote explains an empty or failed log stream of an archived run.
 const archivedLogNote = "this workflow is archived: its pods are usually gone, and its logs remain only if the workflow archived them (archiveLogs)"
 
-// archivedLogOutcome sets what the log pane says when a stream of an
-// archived run ends. A failure is reported with the reason it most likely
-// has, and it reports true so the caller does not overwrite it. A clean end
-// leaves a notice the pane shows only if no line arrived: the last records
-// and the end of the stream are delivered separately, so whether any
-// arrived is known when the pane is drawn, not here.
+// archivedLogOutcome sets what the log pane says when an archived run's
+// stream ends. It reports true for a failure, which the caller must not
+// overwrite. A clean end leaves a notice shown only if no line arrived.
 func (m *Root) archivedLogOutcome(err error) bool {
 	if !m.logState.archived || m.logsView == nil {
 		return false

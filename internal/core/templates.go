@@ -6,13 +6,9 @@ import (
 	"time"
 )
 
-// WorkflowTemplate is the read projection of an Argo WorkflowTemplate or
-// ClusterWorkflowTemplate: what submitting it would run. The two kinds share
-// one schema; a cluster template has no namespace.
-//
-// A template has no status. The controller records nothing on it about the
-// workflows it started, so when it last ran can only be read from those
-// workflows, through the label the controller puts on each of them.
+// WorkflowTemplate is the read projection of a WorkflowTemplate or
+// ClusterWorkflowTemplate; a cluster template has no namespace. A template
+// has no status: its runs are found by the label the controller puts on them.
 type WorkflowTemplate struct {
 	// Namespace is empty for a ClusterWorkflowTemplate.
 	Namespace string

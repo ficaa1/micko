@@ -8,7 +8,6 @@ type span struct {
 	start time.Time
 }
 
-// A new wait replaces any earlier span with the same name.
 func (m *Root) beginSpan(name, purpose string) {
 	if m.conn == nil || m.conn.Diagnostics == nil {
 		return
@@ -25,7 +24,7 @@ func (m *Root) beginSpan(name, purpose string) {
 	m.spans[name] = span{id: op.id, start: m.deps.clock.Now()}
 }
 
-// Only the request that started a span can end it.
+// endSpan ends a span; only the request that started it can.
 func (m *Root) endSpan(name string, id uint64, failed bool) {
 	s, ok := m.spans[name]
 	if !ok || s.id != id {

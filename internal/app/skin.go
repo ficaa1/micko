@@ -6,18 +6,6 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// skin.go owns the palette every pane is drawn in.
-//
-// The root holds one theme and hands a copy to every child, so a skin change
-// has to reach each of them at once: a pane left on the old theme would draw
-// its rows in one palette inside a frame drawn in another. SetTheme is that
-// single path, and every child the root builds later is built from m.theme.
-//
-// The auto skin needs a fact only the terminal knows, the background colour.
-// The root asks for it when auto is chosen and applies the dark or light
-// variant when the answer arrives. Until then, and on a terminal that never
-// answers, auto draws as the default skin, which suits either background.
-
 // SetTheme re-themes the shell and every child view.
 func (m *Root) SetTheme(t shared.Theme) {
 	m.theme = t
@@ -49,16 +37,12 @@ func (m *Root) SetTheme(t shared.Theme) {
 // Theme is the theme the frame is drawn in.
 func (m *Root) Theme() shared.Theme { return m.theme }
 
-// Skin is the skin last asked for by name. It reads "auto" while auto is
-// in effect, whichever variant the terminal's background chose.
+// Skin is the skin last asked for; "auto" while auto is in effect.
 func (m *Root) Skin() string { return m.skin }
 
-// ApplySkin switches to a skin by name. An unknown name changes nothing and
-// returns an error that lists the valid names.
-//
-// The command it returns asks the terminal for its background colour. It is
-// non-nil only for auto before the terminal has answered; the caller must
-// run it, or auto stays on its fallback.
+// ApplySkin switches to a skin by name; an unknown name changes nothing. The
+// returned command, non-nil only for auto before the terminal has answered,
+// asks for the background colour and must be run.
 func (m *Root) ApplySkin(name string) (tea.Cmd, error) {
 	s, ok := shared.LookupSkin(name)
 	if !ok {
@@ -83,10 +67,8 @@ func (m *Root) resolveSkin() shared.Skin {
 	return s
 }
 
-// backgroundQuery asks the terminal for its background colour when auto is
-// waiting on it. Every other skin already knows its colours, so it asks
-// nothing: the query is an escape sequence some terminals print instead of
-// answering.
+// backgroundQuery asks the terminal for its background colour while auto
+// waits on it. Some terminals print the query, so nothing else asks.
 func (m *Root) backgroundQuery() tea.Cmd {
 	if m.skin != shared.SkinAuto || m.bgKnown {
 		return nil

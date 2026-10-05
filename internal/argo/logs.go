@@ -1,20 +1,11 @@
-// logs.go — the log streaming transport (GET /api/v1/workflows/{ns}/{name}/log,
-// docs/development.md).
+// The log stream parser accepts JSON lines and server-sent events:
 //
-// Framing: the parser accepts BOTH candidate framings behind one choke
-// point (docs/development.md resolution):
+//	(a) JSON lines: {"result": {...}}\n
+//	(b) SSE:        data: {"result": {...}}\n\n
 //
-//	(a) bare JSON-lines: {"result": {...}}\n   (gateway v1.16.0 source)
-//	(b) SSE: "data: {"result": {...}}\n\n"     (client + e2e expectations)
-//
-// Each line is dispatched to the same record decoder; SSE `data: ` prefixes
-// are stripped and keepalive comment lines ignored.
-//
-// Edge cases covered (docs/development.md): chunk boundaries not aligned
-// to records, records coalesced/split per read, final line without trailing
-// newline, in-band {"error": …} final chunk, single-record size bounds
-// (server caps lines at 1 MiB; client cap 2 MiB), malformed UTF-8 inside
-// content (Go JSON decoding replaces with U+FFFD).
+// Both framings use the same decoder. SSE data prefixes are stripped and
+// keepalive comments are ignored.
+
 package argo
 
 import (
@@ -33,37 +24,31 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// maxLogRecordBytes bounds one decoded record (LogEntry.content) delivered
-// to the consumer. The server pipeline force-flushes single lines at
-// 1 MiB (maxTokenLength, docs/development.md); a misbehaving proxy could
-// deliver more — anything past this cap is dropped with a visible marker
-// instead of growing memory unboundedly.
+// maxLogRecordBytes bounds one record. The server flushes lines at 1 MiB, so
+// only a misbehaving proxy exceeds it; larger records are dropped with a
+// visible marker.
 const maxLogRecordBytes = 2 * 1024 * 1024
 
 // oversizeRecordMarker is the Content delivered instead of an oversized
 // record — a visible truncation marker.
 const oversizeRecordMarker = "[log record dropped: exceeds client size cap]"
 
-// logStreamEnvelope is one stream chunk: either {"result": <LogEntry>} or a
-// final {"error": {...}} (docs/development.md).
+// logStreamEnvelope is one stream chunk: {"result": <LogEntry>} or a final
+// {"error": {...}}.
 type logStreamEnvelope struct {
 	Result *logEntry   `json:"result"`
 	Error  *errorChunk `json:"error"`
 }
 
-// logEntry pins LogEntry exactly: content + podName, nothing else
-// (docs/development.md — no timestamp, no container field).
+// logEntry is the server's LogEntry: content and podName, with no timestamp
+// or container.
 type logEntry struct {
 	Content string `json:"content"`
 	PodName string `json:"podName"`
 }
 
-// errorChunk mirrors grpc-gateway v1.16.0 StreamError (field names
-// verified in pinned source internal/errors.pb.go) plus the plain
-// {"code":N,"message":"..."} shape the gateway emits for in-band stream
-// errors (docs/development.md: json.Marshal of map[string]any{"error":
-// status.FromContextError(...)} — bare gRPC code). camelCase variants are
-// tolerated because deployments may marshal differently.
+// errorChunk is an in-band stream error: grpc-gateway's StreamError, or the
+// plain {"code":N,"message":"..."} shape. camelCase variants are tolerated.
 type errorChunk struct {
 	Code        int32  `json:"code"` // bare gRPC code (gateway in-band shape)
 	GrpcCode    int32  `json:"grpc_code"`
@@ -79,8 +64,7 @@ type errorChunk struct {
 // error wrapping context.Canceled/DeadlineExceeded when cancellation ends
 // the stream (distinguishable from network failure).
 func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(core.LogRecord) error) error {
-	// Workflow-wide or pod-scoped route per request.PodName; empty podName
-	// uses the non-deprecated WorkflowLogs route (docs/development.md).
+	// An empty PodName uses the workflow-wide route.
 	var path string
 	if req.PodName == "" {
 		path = "/api/v1/workflows/" + url.PathEscape(req.Ref.Namespace) + "/" +
@@ -112,16 +96,12 @@ func (c *Client) StreamLogs(ctx context.Context, req core.LogRequest, cb func(co
 	defer drainAndClose(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		// Stream error before any chunk ⇒ unary-style HTTP error (gateway
-		// handler.go: wroteHeader=false path — docs/development.md).
+		// An error before any chunk arrives as a plain HTTP error.
 		return mapHTTPError(resp, http.MethodGet, path, readBody(resp.Body), nil, c.now)
 	}
 
-	// Headers arrive well before the first payload (server flushes early,
-	// docs/development.md keepalive note). SSO/reverse-proxy interception
-	// with HTTP 200 is caught inside the parser: the first
-	// unparseable line that looks like HTML surfaces the login-page
-	// guidance instead of protocol-error noise.
+	// A login page served with 200 by an SSO proxy is caught inside the parser,
+	// which reports it as such rather than as a protocol error.
 	return consumeLogStream(ctx, resp.Body, req, headerGet(resp, "Content-Type"), c.now, cb)
 }
 
@@ -163,11 +143,8 @@ func consumeLogStream(
 			}
 		}
 		if errors.Is(readErr, io.EOF) {
-			// Whole-frame parse must be forced at EOF: a final record may
-			// lack the trailing newline (docs/development.md). The
-			// parser's line buffer holds a partial record; if it is
-			// complete JSON it is dispatched now, otherwise it is a
-			// protocol error surface.
+			// The final record may lack its trailing newline, so parse what is left at
+			// EOF; anything incomplete is a protocol error.
 			if err := parser.flushEOF(req, contentType, now, cb); err != nil {
 				return err
 			}
@@ -263,8 +240,7 @@ func (p *logChunkParser) consume(line []byte, req core.LogRequest, contentType s
 	}
 	p.buf = append(p.buf, line...)
 	env := logStreamEnvelope{}
-	// Tolerant decode: json.Unmarshal replaces malformed UTF-8 bytes with
-	// U+FFFD (Go semantics accepted per docs/development.md).
+	// json.Unmarshal replaces malformed UTF-8 with U+FFFD.
 	if err := json.Unmarshal(p.buf, &env); err != nil {
 		// Not complete JSON. Could be a split frame segment (keep
 		// buffering until the next line arrives) — or HTML interception:
@@ -296,10 +272,8 @@ func (p *logChunkParser) resetAfterOversize() {
 	p.byteOverflow = false
 }
 
-// flushEnd-of-stream fragments: last chunk without trailing newline.
-// Complete JSON ⇒ final in-band error (error envelopes may end the stream
-// without a newline when the proxy truncates mid-flush); incomplete JSON ⇒
-// dropped with a protocol surface, per docs/development.md
+// flushEOF handles the fragment left at end of stream. Complete JSON is
+// dispatched, often a final in-band error; anything else is a protocol error.
 func (p *logChunkParser) flushEOF(req core.LogRequest, contentType string, now func() time.Time, cb func(core.LogRecord) error) error {
 	if len(p.buf) == 0 {
 		return nil
@@ -320,9 +294,6 @@ func (p *logChunkParser) flushEOF(req core.LogRequest, contentType string, now f
 						sanitizeLine(contentType)+
 						"); this endpoint expects interactive browser login — configure a server/service-account token; do not retry automatically")
 			}
-			// Parse the partial line only if it is complete JSON;
-			// otherwise it is a protocol-error surface (dropped as
-			// incomplete, docs/development.md).
 			return core.ErrProtocalf("log stream: truncated final record dropped (stream cut mid-frame)")
 		}
 		switch {
@@ -335,8 +306,8 @@ func (p *logChunkParser) flushEOF(req core.LogRequest, contentType string, now f
 	return nil
 }
 
-// inBandError converts a stream error envelope into a typed APIError with no
-// HTTP status (none applies — docs/development.md).
+// inBandError converts a stream error envelope into an APIError with no HTTP
+// status.
 func inBandError(ec *errorChunk) error {
 	code := int(ec.Code)
 	if code == 0 {

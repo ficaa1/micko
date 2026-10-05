@@ -12,10 +12,6 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// failures.go holds the rules about failure: which nodes failed first and
-// on their own, what stopped them, what did not run because of them, and
-// how the exit handler fared.
-
 // unit is one root failure. A failing pod is its own unit; the attempts of
 // a Retry node are one unit, the Retry, because they are one step failing
 // again and again.

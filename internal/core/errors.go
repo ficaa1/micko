@@ -8,8 +8,7 @@ import (
 	"time"
 )
 
-// ErrorKind classifies a server/transport failure for UI state selection
-// (mapping table in docs/development.md).
+// ErrorKind classifies a server or transport failure for UI state selection.
 type ErrorKind string
 
 const (
@@ -19,23 +18,20 @@ const (
 	// ErrForbidden: HTTP 403, authoritative; action availability is only
 	// advisory.
 	ErrForbidden ErrorKind = "forbidden"
-	// ErrNotFound: live miss + archive miss (docs/development.md).
+	// ErrNotFound: the resource is absent from both live and archived data.
 	ErrNotFound ErrorKind = "not_found"
 	// ErrConflict: HTTP 409 (AlreadyExists); not expected on reads.
 	ErrConflict ErrorKind = "conflict"
-	// ErrRateLimited: HTTP 429. Also the watch EOF→429 quirk
-	// (docs/development.md) — context-dependent.
+	// ErrRateLimited: HTTP 429 or a watch ending with a rate-limit response.
 	ErrRateLimited ErrorKind = "rate_limited"
 	// ErrUnavailable: 503/504/408 or network-level failure; transient,
 	// bounded backoff ok.
 	ErrUnavailable ErrorKind = "unavailable"
-	// ErrInvalid: HTTP 400, includes bad grep regex / bad timestamps
-	// (docs/development.md).
+	// ErrInvalid: HTTP 400, including invalid selectors or timestamps.
 	ErrInvalid ErrorKind = "invalid"
 	// ErrUnsupported: HTTP 501, feature disabled server-side.
 	ErrUnsupported ErrorKind = "unsupported"
-	// ErrProtocol: malformed/unparseable wire data on an otherwise-200
-	// response (docs/development.md).
+	// ErrProtocol: malformed wire data in an otherwise successful response.
 	ErrProtocol ErrorKind = "protocol"
 )
 
@@ -47,8 +43,7 @@ const (
 type APIError struct {
 	Kind    ErrorKind
 	Message string
-	// Status is the HTTP status when one applied; 0 for in-band stream
-	// errors and pure transport failures (docs/development.md).
+	// Status is the HTTP status when one applied; 0 for stream and transport errors.
 	Status int
 	// RetryAfter is the server-requested delay from a Retry-After header
 	// (seconds form or HTTP-date form); nil when absent.
@@ -80,8 +75,7 @@ func WrapAPIError(kind ErrorKind, status int, message string, cause error) *APIE
 	return &APIError{Kind: kind, Status: status, Message: message, Err: cause}
 }
 
-// KindOf maps an HTTP status to the frozen ErrorKind table
-// (docs/development.md; gateway round-trip is identity for our cases).
+// KindOf maps an HTTP status to its ErrorKind.
 func KindOf(status int) ErrorKind {
 	switch status {
 	case http.StatusUnauthorized:
@@ -132,9 +126,6 @@ func ParseRetryAfter(v string, now time.Time) *time.Duration {
 	}
 	return nil
 }
-
-// Convenience constructors used by transport and fake implementations so
-// kinds stay consistent across the codebase.
 
 func ErrUnauthenticatedf(format string, args ...any) *APIError {
 	return NewAPIError(ErrUnauthenticated, http.StatusUnauthorized, fmt.Sprintf(format, args...))

@@ -1,5 +1,5 @@
 // Package palette is the `:` command palette: a one-line input that moves the
-// session around by name, the way k9s does.
+// session around by name.
 //
 // The reader types a command, the palette ranks the registered commands
 // against it and shows the best few with their aliases and a one-line

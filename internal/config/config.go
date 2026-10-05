@@ -19,7 +19,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Default values applied last.
 const (
 	DefaultRefreshInterval = 5 * time.Second
 	// MinRefreshInterval is the sensible lower bound for polling.
@@ -107,8 +106,7 @@ const (
 	MascotFloor Mascot = "floor"
 )
 
-// ParseMascot reads the mascot key or the --mascot flag. true is perch, as
-// it was before he had a floor to sit on.
+// ParseMascot reads the mascot key or the --mascot flag; true means perch.
 func ParseMascot(s string) (Mascot, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "", "false", "off":

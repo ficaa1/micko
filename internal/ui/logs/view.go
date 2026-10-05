@@ -7,22 +7,9 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// view.go — renders the retained buffer into terminal-safe text (the only
-// path any untrusted content takes before reaching the terminal).
-//
-// Rules:
-//   - every untrusted string passes shared.Sanitize before it is placed
-//     in a row (log content is sanitized at Push time; marker context at
-//     PushMarker time; the header re-sanitizes defensively)
-//   - markers render as full-width dash annotations with pinned wording
-//   - truncated lines keep the visible markerTruncated suffix
-//   - search scope is stated: "search scope: retained buffer only"
-//   - the viewport never scrolls on its own while paused; following pins
-//     to the tail
-//   - the only styling is the theme's: stream markers and the retention
-//     count are muted so the log lines read first, and search hits are
-//     highlighted; text accompanies every state so color is never the only
-//     carrier
+// Rendering is the only path untrusted content takes to the terminal. Every
+// string passes shared.Sanitize, and every state has text, so colour never
+// carries meaning alone.
 
 // rowKind distinguishes rendered row provenance.
 type rowKind int

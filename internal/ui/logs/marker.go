@@ -2,10 +2,8 @@ package logs
 
 import "strconv"
 
-// marker.go — stream-context annotations mixed into the retained buffer
-// (stream open, dropped lines, timestamp reopen).
-// Markers are UI authoring, not data: they never count toward the byte
-// cap, and their wording is pinned by tests.
+// Markers are stream annotations kept in the buffer beside log lines. They
+// never count toward the byte cap.
 
 // markerKind enumerates annotation rows stored alongside log lines.
 type markerKind int
@@ -21,8 +19,7 @@ const (
 	markTimestampsOff
 )
 
-// entry is one retained item: a log line (kind == markOpen? no — kind ==
-// markOpen is a marker; a log line is entry{kind: logEntry}) or a marker.
+// entry is one retained item: a log line or a marker.
 type entry struct {
 	kind    markerKind
 	line    logLine // valid only when kind == logEntry
@@ -45,11 +42,8 @@ type logLine struct {
 	Truncated bool // per-line allowance cut it; view shows the marker
 }
 
-// markerText returns the visible body of a marker row. Wordings are pinned
-// by tests: "new stream; overlap/gap possible", and oversize handling is
-// stated, never silent. The open marker carries
-// the stream context plus a live line count (supplied by the buffer at
-// render time).
+// markerText returns the visible body of a marker row. The open marker's
+// live line count is added by the buffer at render time.
 func markerText(kind markerKind, podName, container string) string {
 	switch kind {
 	case markOpen:
