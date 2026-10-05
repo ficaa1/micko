@@ -1,7 +1,7 @@
 {
   description = "Keyboard-first terminal UI for Argo Workflows";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/a2d49f1dac820d179dec5ca7b04ad715fd7d4c9a";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
     { self, nixpkgs }:
