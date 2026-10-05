@@ -12,8 +12,9 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// The Explain section's log evidence is the end of the first failing pod's
-// log, read with a bound on lines and time while the section is on screen.
+// The Explain section's log evidence is the end of each failing pod's log,
+// read one pod at a time with a bound on lines and time while the section is
+// on screen.
 
 // explainLogTimeout bounds one read, so a server that never ends the
 // response cannot leave the section reading.
@@ -75,7 +76,8 @@ func (m *Root) stopExplainLog() {
 	}
 }
 
-// handleExplainLog applies a finished read to the section unless it is stale.
+// handleExplainLog applies a finished read unless it is stale, then starts
+// the next read the section wants.
 func (m *Root) handleExplainLog(msg explainLogMsg) tea.Cmd {
 	m.clearInflight("explain", msg.RequestID)
 	if msg.Canceled || msg.Conn != m.connGen || msg.Sel != m.selGen || m.detailView == nil {
@@ -86,7 +88,7 @@ func (m *Root) handleExplainLog(msg explainLogMsg) tea.Cmd {
 		errText, gone = explainLogError(msg.Err)
 	}
 	m.detailView.SetExplainLog(msg.RequestID, msg.Lines, errText, gone)
-	return nil
+	return m.syncExplainLog()
 }
 
 // explainLogError returns a failed read's displayable reason and whether the

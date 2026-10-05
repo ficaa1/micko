@@ -7,13 +7,13 @@ Press `?` in micko for the same list on screen. Keys are case-sensitive:
 | --- | --- |
 | Navigation | `j`/`k` or arrows; `pgup`/`pgdn`; `gg`/`G` or `home`/`end` |
 | Workflow list | `enter` open, `T` timeline, `X` explain, `E` events, `l` logs, `/` filter, `s` sort, `p` phase, `r` refresh, `n` namespace, `0` all namespaces, `space` mark, `W` watch for notifications, `a` actions, `w` wide columns, `esc` clear marks then filter |
-| Cron workflows, templates, archive | `enter` its workflows (a run, on the archive), `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
+| Cron workflows, templates, archive | `enter` its workflows, `i` info panel, `v` hide or reveal values, `/` search, `s` sort, `n` namespace, `0` all namespaces, `f` manifest |
 | Detail | `tab`/`shift+tab` switch Summary, Nodes, Timeline, Explain, Events and Resource; `1`–`9` jump to a section; `T`, `X`, `E` jump; `r` refresh; `a` actions; `v` reveal values |
-| Nodes and Timeline | `enter`/`l` logs, `space` fold, `left`/`right` fold or climb/unfold, `i` node info; on Nodes also `/` find, `n`/`N` matches, `h` skipped nodes, `s` sort, `p` phase |
-| Explain | `y` copy the report, `l` the failing pod's full log |
+| Nodes and Timeline | `enter`/`l` logs, `space` fold, `left`/`right` fold/unfold, `i` node info, `/` find, `n`/`N` matches, `h` skipped nodes, `s` sort, `p` phase |
+| Explain | `y` copy the report, `l` open failing pod's log, `n`/`N` pick failure |
 | Events | `s` warnings first, `/` filter, `y` copy, `r` restart the stream |
 | Logs | `t` follow, `G` newest, `space` pause, `c` container, `/` search, `n`/`N` matches, `&` only matching, `w` wrap, `L` labels, `ctrl+t` server timestamps, `\|` pipe |
-| Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `y` confirms, `D` finishes a delete |
+| Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `D` finishes a delete |
 | Anywhere | `:` palette, `P` profile, `f` full screen, `y` copy, `o` open in Argo UI, `?` help, `esc` back, `q` quit outside text entry, `ctrl+c` quit |
 
 ## Palette commands

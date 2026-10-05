@@ -74,7 +74,7 @@ func helpLines() []string {
 		"Nodes     enter / l logs  space fold  left / right fold, parent, unfold",
 		"          i info  / find  n / N next / previous  h skipped  s sort  p phase",
 		"Timeline  l logs  i info  space fold",
-		"Explain   y copy report  l failing log",
+		"Explain   y copy report  l failing log  n / N pick the failure l opens",
 		"Events    s warnings first  / filter",
 		"Logs      t follow  space pause  c container  G newest  esc back",
 		"          / search  n / N next / previous match  & only matching lines",

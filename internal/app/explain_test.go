@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -81,6 +83,40 @@ func TestListXOpensTheExplanation(t *testing.T) {
 	settle(m, keys(m, "r"))
 	if n := len(reqs()); n != 1 {
 		t.Errorf("a refresh read the log again: %d requests", n)
+	}
+}
+
+// With several failures, X reads each failure card's pod log in turn, once.
+func TestListXReadsEveryFailingLog(t *testing.T) {
+	m := resize(t, loadDemoList(t), 140, 40)
+	f, reqs := recordStreams(m)
+	var want []string
+	for ref, wf := range f.Workflows {
+		if ref.Name != "demo-deploy-multi-layer" {
+			continue
+		}
+		wf.Summary.Phase = "Failed"
+		for id, n := range wf.Nodes {
+			if n.DisplayName == "apply-eu-west" && n.Inputs.Parameters[0].Value != "edge" {
+				n.Phase, n.ExitCode = "Failed", "1"
+				wf.Nodes[id] = n
+				want = append(want, n.PodName)
+			}
+		}
+		f.Workflows[ref] = wf
+	}
+	m = openOnExplain(t, m, "demo-deploy-multi-layer")
+	var got []string
+	for _, r := range reqs() {
+		got = append(got, r.PodName)
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if len(want) != 3 || !reflect.DeepEqual(got, want) {
+		t.Fatalf("read pods %v, want %v", got, want)
+	}
+	if s := screen(m); strings.Contains(s, "reading the last") || m.hasInflight("explain") {
+		t.Errorf("a read is still under way:\n%s", s)
 	}
 }
 

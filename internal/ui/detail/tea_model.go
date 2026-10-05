@@ -360,6 +360,8 @@ func (m *Model) handleKey(key string) tea.Cmd {
 			m.handleTimelineKey(key)
 		case "events":
 			m.handleEventsKey(key)
+		case "explain":
+			m.handleExplainKey(key)
 		}
 		return nil
 	}

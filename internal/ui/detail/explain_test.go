@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/diagnose"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/shared"
@@ -184,6 +185,81 @@ func TestExplainStatusScrollAndHints(t *testing.T) {
 		t.Fatal("l does not open the failing pod's log")
 	} else if intent, ok := cmd().(NodeLogsIntent); !ok || intent.Name != "transform(2)" || intent.PodName == "" {
 		t.Errorf("l opens %+v", intent)
+	}
+}
+
+// failedDeploy is demo-deploy-multi-layer with the eu-west pod of three layers failed on its own.
+func failedDeploy(t *testing.T) core.Workflow {
+	t.Helper()
+	wf := copyWorkflow(demoWorkflow(t, "demo-deploy-multi-layer"))
+	wf.Summary.Phase = "Failed"
+	for id, n := range wf.Nodes {
+		if n.DisplayName != "apply-eu-west" {
+			continue
+		}
+		for _, p := range n.Inputs.Parameters {
+			if p.Name == "layer" && p.Value != "edge" {
+				n.Phase, n.ExitCode, n.Message = "Failed", "1", "Error (exit code 1)"
+				wf.Nodes[id] = n
+			}
+		}
+	}
+	return wf
+}
+
+// Every failure card quotes its own pod's log, and n and N pick the card whose log l opens.
+func TestExplainPicksAFailure(t *testing.T) {
+	for _, h := range []int{12, 24, 60} {
+		t.Run(strconv.Itoa(h), func(t *testing.T) {
+			m := workflowModel(failedDeploy(t), 136, h)
+			m.SetSection("explain")
+			var pods []string
+			for id := uint64(1); ; id++ {
+				in, ok := m.ExplainLogWanted()
+				if !ok {
+					break
+				}
+				m.StartExplainLog(id, in)
+				m.SetExplainLog(id, []string{"ERROR in " + in.PodName}, "", false)
+				pods = append(pods, in.PodName)
+			}
+			if len(pods) != 3 {
+				t.Fatalf("read %d logs, want 3: %v", len(pods), pods)
+			}
+			all := strings.Join(m.explainLines(), "\n")
+			for _, p := range pods {
+				if !strings.Contains(all, "> 1  ERROR in "+p) {
+					t.Errorf("no card quotes the log of %s:\n%s", p, all)
+				}
+			}
+			if h := m.Hints(); !strings.Contains(h, "n/N pick failure") || !strings.Contains(h, "l its log") {
+				t.Errorf("hints %q", h)
+			}
+
+			opens := func() string {
+				t.Helper()
+				intent, _ := press(m, "l")().(NodeLogsIntent)
+				return intent.PodName
+			}
+			for i, key := range []string{"", "n", "n", "n", "N"} {
+				if key != "" {
+					press(m, key)
+				}
+				want := pods[[]int{0, 1, 2, 0, 2}[i]]
+				if got := opens(); got != want {
+					t.Fatalf("after %q l opens %s, want %s", key, got, want)
+				}
+				picked := ""
+				for _, l := range m.BodyLines() {
+					if strings.HasPrefix(l, "┃ pod") {
+						picked = l
+					}
+				}
+				if !strings.Contains(picked, want) {
+					t.Fatalf("after %q the marked card on screen is %q, want the one for %s:\n%s", key, picked, want, body(m))
+				}
+			}
+		})
 	}
 }
 
