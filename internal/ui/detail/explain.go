@@ -78,10 +78,12 @@ type explainRenderer struct {
 	// severity's colour on the pane, spaces in the plain report.
 	gutter string
 	labelW int
+	// picked is the finding whose card l opens, or -1.
+	picked int
 }
 
 func newExplainRenderer(r diagnose.Report, theme shared.Theme, width int, reveal, raw bool) explainRenderer {
-	er := explainRenderer{theme: theme, width: width, reveal: reveal, gutter: "│ "}
+	er := explainRenderer{theme: theme, width: width, reveal: reveal, gutter: "│ ", picked: -1}
 	if raw {
 		er.gutter = "  "
 	}
@@ -143,16 +145,22 @@ func (er explainRenderer) finish(p pieces) string {
 	return p.trimRight().render()
 }
 
-// cards renders every finding, a blank line between cards.
-func (er explainRenderer) cards(r diagnose.Report) []string {
+// cards renders every finding and returns the line each card starts on.
+func (er explainRenderer) cards(r diagnose.Report) ([]string, []int) {
 	var out []string
+	starts := make([]int, 0, len(r.Findings))
 	for i, f := range r.Findings {
 		if i > 0 {
 			out = append(out, "")
 		}
-		out = append(out, er.card(f)...)
+		starts = append(starts, len(out))
+		c := er
+		if i == er.picked {
+			c.gutter = "┃ "
+		}
+		out = append(out, c.card(f)...)
 	}
-	return out
+	return out, starts
 }
 
 // card renders one finding: the severity and headline, the evidence under a
@@ -286,5 +294,6 @@ func explainReportLines(wf core.Workflow, r diagnose.Report, reveal bool, now ti
 	}
 	out := []string{head, explainCounts(r), ""}
 	er := newExplainRenderer(r, shared.NewTheme(true), 0, reveal, true)
-	return append(out, er.cards(r)...)
+	cards, _ := er.cards(r)
+	return append(out, cards...)
 }

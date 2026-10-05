@@ -143,10 +143,12 @@ spec the controller rejected; nodes that never ran; the exit handler; a gate
 waiting for a person; a run past its estimate; and, for a run that succeeded,
 steps that needed a retry.
 
-For a failed pod it reads the last 200 lines of the `main` container's log
-and quotes up to eight: error lines, whole tracebacks and the line before
-each. `y` copies the report as plain text for an incident channel, and `l`
-opens the failing pod's full log.
+For each failed pod with a card of its own (the first three failures) it
+reads the last 200 lines of the `main` container's log and quotes up to
+eight: error lines, whole tracebacks and the line before each. `y` copies the
+report as plain text for an incident channel, and `l` opens the failing pod's
+full log. With more than one failure, `n`/`N` pick the card `l` opens; the
+picked card's rule is drawn heavy (`┃`).
 
 ### Logs
 

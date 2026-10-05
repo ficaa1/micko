@@ -75,7 +75,7 @@ func TestExplainLogSelection(t *testing.T) {
 			b := newWF("Failed")
 			b.task("job", "Failed", ran(0, 30), exit("1"), pod())
 			in := b.input()
-			in.Log = &Log{NodeID: "job", PodName: "wf-job", State: LogRead, Tail: 200, Lines: c.lines}
+			in.Logs = []Log{{NodeID: "job", PodName: "wf-job", State: LogRead, Tail: 200, Lines: c.lines}}
 			f := findRule(t, Explain(in), RuleRootFailure)
 			var got *Evidence
 			for i := range f.Evidence {

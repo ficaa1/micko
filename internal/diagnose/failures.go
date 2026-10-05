@@ -421,26 +421,26 @@ func (x *index) whenLine(id string) string {
 }
 
 // logTarget is the pod whose log explains a failure: the last failing pod
-// of the unit, which for a Retry is its final attempt. node is set and pod
-// empty when that node runs a pod whose name the server did not give.
-func (x *index) logTarget(u unit) (node, pod string) {
+// of the unit, which for a Retry is its final attempt.
+func (x *index) logTarget(u unit) LogTarget {
+	var t LogTarget
 	for i := len(u.leaves) - 1; i >= 0; i-- {
 		n := x.nodes[u.leaves[i]]
 		if n.PodName != "" {
-			return n.ID, n.PodName
+			return LogTarget{NodeID: n.ID, PodName: n.PodName}
 		}
-		if n.Type == "Pod" && node == "" {
-			node = n.ID
+		if n.Type == "Pod" && t.NodeID == "" {
+			t.NodeID = n.ID
 		}
 	}
-	return node, ""
+	return t
 }
 
-// withLog adds the log evidence to the first failure's card: the picked
-// lines once they are read, or what the read is doing.
-func (x *index) withLog(f Finding, node, pod string) Finding {
-	l := x.in.Log
-	if l == nil || node == "" {
+// withLog adds a failure card's log evidence, or what its read is doing.
+func (x *index) withLog(f Finding, t LogTarget) Finding {
+	f.LogTarget = t
+	node, pod := t.NodeID, t.PodName
+	if x.in.Logs == nil || node == "" {
 		return f
 	}
 	if pod == "" {
@@ -449,9 +449,14 @@ func (x *index) withLog(f Finding, node, pod string) Finding {
 		return f
 	}
 	who := x.name(node)
-	if l.PodName != pod || l.State == LogLoading {
+	l := x.in.logFor(pod)
+	if l == nil || l.State == LogLoading {
+		tail := LogTail
+		if l != nil {
+			tail = max(l.Tail, 1)
+		}
 		f.Evidence = append(f.Evidence, Evidence{Label: "log",
-			Text: "reading the last " + strconv.Itoa(max(l.Tail, 1)) + " lines of " + who + "'s log…"})
+			Text: "reading the last " + strconv.Itoa(tail) + " lines of " + who + "'s log…"})
 		return f
 	}
 	switch {
@@ -472,9 +477,10 @@ func (x *index) withLog(f Finding, node, pod string) Finding {
 
 // logFinding reports a log that could not be read or came back empty. A
 // missing log is evidence too: it usually means the pod is gone.
-func (x *index) logFinding(node, pod string) (Finding, bool) {
-	l := x.in.Log
-	if l == nil || pod == "" || l.PodName != pod || l.State == LogLoading {
+func (x *index) logFinding(t LogTarget) (Finding, bool) {
+	node, pod := t.NodeID, t.PodName
+	l := x.in.logFor(pod)
+	if l == nil || pod == "" || l.State == LogLoading {
 		return Finding{}, false
 	}
 	who := x.name(node)

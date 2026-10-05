@@ -96,6 +96,14 @@ type Finding struct {
 	NodeID   string
 	Evidence []Evidence
 	Next     string
+	// LogTarget is the pod whose log the card quotes, if any.
+	LogTarget LogTarget
+}
+
+// LogTarget names a failing pod; PodName is empty when the server did not
+// give it.
+type LogTarget struct {
+	NodeID, PodName string
 }
 
 // Evidence is one labelled fact. Text is the fact as a sentence or a list;
@@ -120,10 +128,19 @@ type Input struct {
 	Start time.Time
 	// Now is the clock the waiting and running times are measured to.
 	Now time.Time
-	// Log is the log read for the first failing pod. nil means no log is
-	// read at all, as in a static render; a Log for another pod, or one
-	// still loading, says the log is on its way.
-	Log *Log
+	// Logs holds one read per failing pod. nil means no log is read at all;
+	// a pod missing here or still loading shows its log as on its way.
+	Logs []Log
+}
+
+// logFor returns the log read for pod, or nil.
+func (in Input) logFor(pod string) *Log {
+	for i := range in.Logs {
+		if in.Logs[i].PodName == pod {
+			return &in.Logs[i]
+		}
+	}
+	return nil
 }
 
 // Branch is one node of the tree and what it waited for.
@@ -173,10 +190,17 @@ type Log struct {
 // Report is Explain's answer.
 type Report struct {
 	Findings []Finding
-	// LogNode and LogPod name the pod whose log the findings want as
-	// evidence: the first failing pod. Both are empty when no pod failed or
-	// its name is not known.
-	LogNode, LogPod string
+}
+
+// LogTargets returns the failure cards' log pods in card order.
+func (r Report) LogTargets() []LogTarget {
+	var out []LogTarget
+	for _, f := range r.Findings {
+		if f.LogTarget.NodeID != "" {
+			out = append(out, f.LogTarget)
+		}
+	}
+	return out
 }
 
 // Counts is how many findings of each severity a report holds.
@@ -223,11 +247,7 @@ func Explain(in Input) Report {
 				break
 			}
 			f := x.failureFinding(u, i == 0, len(roots) > 1)
-			if i == 0 {
-				r.LogNode, r.LogPod = x.logTarget(u)
-				f = x.withLog(f, r.LogNode, r.LogPod)
-			}
-			add(f)
+			add(x.withLog(f, x.logTarget(u)))
 		}
 		if len(roots) == 0 && failedPhase(wf.Summary.Phase) {
 			add(workflowFailed(x))
@@ -251,8 +271,10 @@ func Explain(in Input) Report {
 		if f, ok := x.succeeded(); ok {
 			add(f)
 		}
-		if f, ok := x.logFinding(r.LogNode, r.LogPod); ok {
-			add(f)
+		for _, t := range r.LogTargets() {
+			if f, ok := x.logFinding(t); ok {
+				add(f)
+			}
 		}
 	}
 	if f, ok := x.workflowSuspended(); ok {

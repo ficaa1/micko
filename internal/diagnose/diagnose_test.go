@@ -89,8 +89,8 @@ func TestExplainValidation(t *testing.T) {
 			b.wf.Summary.Message = c.message
 			r := explainOne(b)
 			f := findRule(t, r, RuleValidation)
-			if !strings.Contains(f.Headline, c.headline) || !strings.Contains(evidence(f), c.evidence) || !strings.Contains(f.Next, "argo lint") || r.LogNode != "" || r.LogPod != "" {
-				t.Fatalf("validation = %+v, log target %q/%q, want headline containing %q and evidence containing %q", f, r.LogNode, r.LogPod, c.headline, c.evidence)
+			if !strings.Contains(f.Headline, c.headline) || !strings.Contains(evidence(f), c.evidence) || !strings.Contains(f.Next, "argo lint") || len(r.LogTargets()) != 0 {
+				t.Fatalf("validation = %+v, log targets %+v, want headline containing %q and evidence containing %q", f, r.LogTargets(), c.headline, c.evidence)
 			}
 			if c.message != "" && !strings.Contains(evidence(f), "message: invalid spec: …") {
 				t.Fatalf("validation lacks first message line:\n%s", evidence(f))
@@ -153,7 +153,7 @@ func TestExplainFailureCauses(t *testing.T) {
 	}
 }
 
-// Root failures exclude parents and fallout, order by finish time and cap individual cards at three.
+// Root failures exclude parents and fallout, order by finish time, cap individual cards at three and quote each card's own log.
 func TestExplainRootFailures(t *testing.T) {
 	for _, c := range []struct {
 		name            string
@@ -177,7 +177,7 @@ func TestExplainRootFailures(t *testing.T) {
 			build: func() *wfBuilder {
 				b := newWF("Failed")
 				for i, n := range []string{"s1", "s2", "s3", "s4", "s5"} {
-					b.task(n, "Failed", ran(0, float64(10+i)), exit("1"))
+					b.task(n, "Failed", ran(0, float64(10+i)), exit("1"), pod())
 				}
 				return b
 			},
@@ -185,11 +185,24 @@ func TestExplainRootFailures(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			r := explainOne(c.build())
+			in := c.build().input()
+			in.Logs = []Log{}
+			for id, n := range in.Workflow.Nodes {
+				if n.PodName != "" {
+					in.Logs = append(in.Logs, Log{NodeID: id, PodName: n.PodName, State: LogRead, Lines: []string{"ERROR in " + id}})
+				}
+			}
+			r := Explain(in)
 			var roots []string
 			for _, f := range r.Findings {
-				if f.Rule == RuleRootFailure {
-					roots = append(roots, f.NodeID)
+				if f.Rule != RuleRootFailure {
+					continue
+				}
+				roots = append(roots, f.NodeID)
+				if pod := in.Workflow.Nodes[f.NodeID].PodName; pod != "" {
+					if f.LogTarget.PodName != pod || !strings.Contains(evidence(f), "  ERROR in "+f.NodeID+"\n") {
+						t.Fatalf("%s card quotes %+v:\n%s", f.NodeID, f.LogTarget, evidence(f))
+					}
 				}
 			}
 			if !reflect.DeepEqual(roots, c.roots) {
@@ -253,8 +266,12 @@ func TestExplainRetries(t *testing.T) {
 			if !strings.Contains(f.Headline, c.headline) || !strings.Contains(evidence(f), c.evidence) || !strings.Contains(f.Next, c.next) {
 				t.Fatalf("retry = %+v, want headline %q, evidence %q and next %q", f, c.headline, c.evidence, c.next)
 			}
-			if r.LogNode != c.logNode || r.LogPod != c.logPod {
-				t.Fatalf("log target = %q/%q, want %q/%q", r.LogNode, r.LogPod, c.logNode, c.logPod)
+			var want []LogTarget
+			if c.logNode != "" {
+				want = []LogTarget{{NodeID: c.logNode, PodName: c.logPod}}
+			}
+			if got := r.LogTargets(); !reflect.DeepEqual(got, want) {
+				t.Fatalf("log targets = %+v, want %+v", got, want)
 			}
 			if c.retryPhase == "Succeeded" {
 				if got := findRule(t, r, RuleSucceeded).Headline; !strings.Contains(got, "with 1 retried step") {
@@ -529,7 +546,7 @@ func TestExplainLogStates(t *testing.T) {
 		severity          Severity
 	}{
 		{"static", true, nil, "", "", Info},
-		{"loading", true, &Log{State: LogLoading, Tail: 200}, "reading the last 200 lines of job's log…", "", Info},
+		{"loading", true, &Log{NodeID: "job", PodName: "wf-job", State: LogLoading, Tail: 200}, "reading the last 200 lines of job's log…", "", Info},
 		{"read", true, &Log{NodeID: "job", PodName: "wf-job", State: LogRead, Tail: 200, Lines: []string{"start", "fatal: password authentication failed", "bye"}}, "picked from the last 3 lines of job's log (container main)", "", Info},
 		{"gone", true, &Log{NodeID: "job", PodName: "wf-job", State: LogFailed, Err: `pods "wf-job" not found`, Gone: true}, "could not be read (see below)", "The log of job is gone", Warning},
 		{"failed", true, &Log{NodeID: "job", PodName: "wf-job", State: LogFailed, Err: "connection reset"}, "could not be read (see below)", "The log of job could not be read", Warning},
@@ -545,14 +562,16 @@ func TestExplainLogStates(t *testing.T) {
 			}
 			b.task("job", "Failed", opts...)
 			in := b.input()
-			in.Log = c.log
+			if c.log != nil {
+				in.Logs = []Log{*c.log}
+			}
 			r := Explain(in)
 			wantPod := ""
 			if c.pod {
 				wantPod = "wf-job"
 			}
-			if r.LogNode != "job" || r.LogPod != wantPod {
-				t.Fatalf("log target = %q/%q, want job/%q", r.LogNode, r.LogPod, wantPod)
+			if got := r.LogTargets(); !reflect.DeepEqual(got, []LogTarget{{NodeID: "job", PodName: wantPod}}) {
+				t.Fatalf("log targets = %+v, want job/%q", got, wantPod)
 			}
 			f := findRule(t, r, RuleRootFailure)
 			text := ""
