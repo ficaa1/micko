@@ -264,11 +264,11 @@ func (m *Model) explainLogsCmd() tea.Cmd {
 // explainHints is the footer for the Explain section.
 func (m *Model) explainHints() string {
 	h := []string{"tab section", "1-9 jump", "j/k scroll", "y copy report"}
-	switch picks := m.explainPicks(); {
-	case len(picks) > 1:
-		h = append(h, "n/N pick failure", "l its log")
-	case len(picks) == 1:
+	if picks := m.explainPicks(); len(picks) > 0 {
 		h = append(h, "l failing log")
+		if len(picks) > 1 {
+			h = append(h, "n/N pick failure")
+		}
 	}
 	h = append(h, "v reveal", "a actions", "r refresh", "f raw", "esc back")
 	return strings.Join(h, "  ")

@@ -106,7 +106,7 @@ func TestMickoRenderRowOnlyStyles(t *testing.T) {
 func TestHelpWordmarkOnlyWhenItFitsWhole(t *testing.T) {
 	var h HelpOverlay
 	h.Toggle()
-	room := 38
+	room := 37
 	if strings.Contains(h.View(100, room), "_ __ ___") {
 		t.Error("wordmark drawn with Mićko off")
 	}

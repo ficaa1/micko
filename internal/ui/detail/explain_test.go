@@ -232,7 +232,7 @@ func TestExplainPicksAFailure(t *testing.T) {
 					t.Errorf("no card quotes the log of %s:\n%s", p, all)
 				}
 			}
-			if h := m.Hints(); !strings.Contains(h, "n/N pick failure") || !strings.Contains(h, "l its log") {
+			if h := m.Hints(); !strings.Contains(h, "l failing log  n/N pick failure") {
 				t.Errorf("hints %q", h)
 			}
 

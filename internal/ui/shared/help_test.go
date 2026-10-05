@@ -75,9 +75,9 @@ func TestHelpOverlayGeometry(t *testing.T) {
 			}
 		}
 	}
-	view := h.View(76, 32)
-	if got := len(strings.Split(view, "\n")); got != 32 {
-		t.Errorf("common body: %d rows, want 32", got)
+	view := h.View(76, 31)
+	if got := len(strings.Split(view, "\n")); got != 31 {
+		t.Errorf("common body: %d rows, want 31", got)
 	}
 	if strings.Contains(view, "…") || !strings.Contains(view, "results stay until esc") {
 		t.Errorf("common body clips keys:\n%s", view)
