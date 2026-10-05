@@ -10,35 +10,14 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// palette.go owns the `:` key: the command registry and what each command
-// does to the session.
-//
-// The palette package draws the input and ranks the suggestions; it knows
-// commands only by name. This file is the other half: the registry the palette
-// is loaded from, and the conversion of its RunMsg into an effect. A command
-// never reaches the network itself. It calls the same root methods as the key
-// that does the same thing, so `:ns x` and choosing x in the picker are one
-// code path with one set of generation rules.
-//
-// Two tables feed the registry:
-//
-//   - listKinds: every resource kind the list pane can show. Each kind is its
-//     own route; registering a kind registers the palette command that
-//     switches to it, and makes the route a list route for the `n` and `0`
-//     keys.
-//   - builtinCommands: the commands that move the session without changing
-//     what kind of thing it lists.
-
 // command is one registry entry: what the palette shows and completes, and
 // what running it does.
 type command struct {
 	palette.Command
-	// args supplies the values the argument completes from. Nil for a command
-	// whose argument has no known values, or that takes none.
+	// args returns the argument's completions; nil when there are none.
 	args func(m *Root) []string
-	// run executes the command. arg is the trimmed text after the command
-	// word, empty when none was typed; run is only called with a non-empty
-	// arg for a command whose Arg is set.
+	// run executes the command with the trimmed argument, empty when none was
+	// typed. It gets a non-empty arg only when Arg is set.
 	run func(m *Root, arg string) tea.Cmd
 }
 
@@ -50,13 +29,11 @@ type listKind struct {
 	desc    string
 	// route is the kind's own list route.
 	route Route
-	// show makes the route active and starts whatever it needs to load. It
-	// runs on the update loop like every other root method.
+	// show makes the route active and starts its load.
 	show func(m *Root) tea.Cmd
 }
 
-// listKinds is every kind the palette can switch to, in the order the empty
-// palette lists them. Adding a kind is one entry here plus its route.
+// listKinds is every kind the palette can switch to, in palette order.
 func listKinds() []listKind {
 	return []listKind{
 		{
@@ -119,8 +96,7 @@ func builtinCommands() []command {
 	}
 }
 
-// newRegistry builds the palette registry: the kinds first, since switching
-// what the pane lists is what the palette is used for most, then the rest.
+// newRegistry builds the palette registry, kinds first.
 func newRegistry() []command {
 	var out []command
 	for _, k := range listKinds() {
@@ -142,8 +118,8 @@ func paletteSpecs(reg []command) []palette.Command {
 	return out
 }
 
-// isListRoute reports whether r is the route of a registered kind. The keys
-// that act on "the list" — `n`, `0` — are bound on every such route.
+// isListRoute reports whether r is a registered kind's route, where n and 0
+// apply.
 func isListRoute(r Route) bool {
 	for _, k := range listKinds() {
 		if k.route == r {
@@ -156,9 +132,8 @@ func isListRoute(r Route) bool {
 // paletteOpen reports whether the palette owns the keyboard.
 func (m *Root) paletteOpen() bool { return m.palView != nil && m.palView.IsOpen() }
 
-// openPalette shows the palette. The namespace names are fetched in the
-// background the first time, so `ns` completes from what the server reports
-// and not only from the configured list.
+// openPalette shows the palette and, the first time, fetches namespace names
+// so ns completes from the server's list.
 func (m *Root) openPalette() tea.Cmd {
 	if m.palView == nil {
 		return nil
@@ -180,9 +155,8 @@ func (m *Root) paletteArgs(name string) []string {
 	return nil
 }
 
-// runCommand turns the palette's RunMsg into an effect. The palette only emits
-// names it found in the registry, so a miss here means the registry changed
-// under it; it is reported like any unknown command rather than ignored.
+// runCommand turns the palette's RunMsg into an effect. A name missing from
+// the registry is reported as unknown.
 func (m *Root) runCommand(msg palette.RunMsg) tea.Cmd {
 	for _, c := range m.registry {
 		if c.Name != msg.Name {
@@ -202,17 +176,14 @@ func (m *Root) runCommand(msg palette.RunMsg) tea.Cmd {
 	return nil
 }
 
-// unknownCommand reports a line that names no command. The palette never
-// guesses a near match, so the footer says what was typed and how to find
-// what exists.
+// unknownCommand reports a line that names no command.
 func (m *Root) unknownCommand(msg palette.UnknownMsg) {
 	word, _, _ := palette.Parse(msg.Input)
 	m.flash = "unknown command: " + shared.Sanitize(word) + " — : lists every command"
 }
 
-// showWorkflows is the workflows kind's show: the workflow list, from any
-// route. It leaves detail and logs the way esc does, so their requests stop,
-// and it is the plain list: a drill-down in progress ends.
+// showWorkflows shows the plain workflow list from any route, leaving detail
+// and logs as esc does and ending any drill-down.
 func (m *Root) showWorkflows() tea.Cmd {
 	m.leaveDetailAndLogs()
 	m.endDrill()
@@ -240,13 +211,9 @@ func (m *Root) runNamespace(arg string) tea.Cmd {
 	return m.switchNamespace(arg)
 }
 
-// runProfile is `profile`/`ctx`: the picker with no argument, a switch with a
-// configured profile's name. A name the config file does not hold is refused:
-// it names no server, so there is nothing to connect to.
-//
-// A switch opens the picker first. The picker is where a reconnection shows
-// its progress and its failure; without it a failed `:ctx x` would leave the
-// session disconnected with nothing on screen saying why.
+// runProfile is profile/ctx: the picker with no argument, a switch with a
+// configured profile's name. The switch shows in the picker, so a failed
+// connection says why.
 func (m *Root) runProfile(arg string) tea.Cmd {
 	if arg == "" {
 		return m.openProfilePicker()
@@ -274,9 +241,7 @@ func (m *Root) runProfile(arg string) tea.Cmd {
 	return m.switchProfile(arg)
 }
 
-// namespaceCandidates is what `ns` completes from: the configured namespaces,
-// the ones the server reported, the ones in the collected snapshot, and the
-// current one, de-duplicated and sorted.
+// namespaceCandidates is what ns completes from, de-duplicated and sorted.
 func (m *Root) namespaceCandidates() []string {
 	seen := map[string]bool{}
 	var out []string

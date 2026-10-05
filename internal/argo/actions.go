@@ -15,8 +15,7 @@ import (
 
 var _ core.Actioner = (*Client)(nil)
 
-// actionEndpoint is the method, path and body of one action, as Argo's
-// OpenAPI spec defines it:
+// actionEndpoint is the method, path and body of one action:
 //
 //   - resume, suspend, retry, resubmit, stop, terminate: PUT
 //     /api/v1/workflows/{namespace}/{name}/{action} with a JSON body naming

@@ -10,18 +10,9 @@ import (
 	"github.com/ficaa1/micko/internal/ui/logs"
 )
 
-// pipe.go hands the retained log lines to another program.
-//
-// micko is a reader, not a pager: lnav, grep, less and jq are better at
-// what they do than any pane this program could grow. The pipe is how the
-// buffer leaves without a copy-paste round trip.
-//
-// Two rules keep it safe. The command is never assembled from server data —
-// the reader types it and the lines only ever arrive on standard input, so
-// nothing in a log line can become part of a command. And the lines go to a
-// private temporary file rather than an inherited pipe, so the child reads a
-// real file and micko never has to keep a writer goroutine alive across
-// the screen handover.
+// Piping writes the retained log lines to a temporary file and runs the
+// reader's command with that file as standard input. Log data never forms
+// part of the command.
 
 // pipeDoneMsg reports the finished run back into the update loop.
 type pipeDoneMsg struct {
@@ -31,13 +22,11 @@ type pipeDoneMsg struct {
 	err     error
 }
 
-// pipeShell is the interpreter the command is given to. It is a variable so a
-// test can substitute something that does not need a real shell.
+// pipeShell runs the command; tests replace it.
 var pipeShell = "/bin/sh"
 
-// startPipe writes the retained lines to a temporary file and runs the
-// command with that file as its standard input, giving it the whole terminal
-// until it exits.
+// startPipe runs the command with the retained lines as standard input and
+// hands it the terminal until it exits.
 func (m *Root) startPipe(intent logs.PipeIntent) tea.Cmd {
 	if m.logsView == nil {
 		return nil
@@ -68,9 +57,8 @@ func (m *Root) startPipe(intent logs.PipeIntent) tea.Cmd {
 	})
 }
 
-// writeLinesToTemp puts the lines in a private temporary file and returns its
-// path. The file is the child's standard input, so the child reads a real
-// file and micko keeps no writer alive across the screen handover.
+// writeLinesToTemp writes lines to a private temporary file and returns its
+// path.
 func writeLinesToTemp(lines []string) (string, error) {
 	f, err := os.CreateTemp("", "micko-logs-*.log")
 	if err != nil {
@@ -90,9 +78,8 @@ func writeLinesToTemp(lines []string) (string, error) {
 	return name, nil
 }
 
-// handlePipeDone cleans up the temporary file and reports what happened. A
-// failed command must say so: the screen has just come back from another
-// program, and a silent return looks like the key did nothing.
+// handlePipeDone removes the temporary file and reports the result; a failed
+// command must say so.
 func (m *Root) handlePipeDone(msg pipeDoneMsg) tea.Cmd {
 	if msg.tmp != "" {
 		os.Remove(msg.tmp)

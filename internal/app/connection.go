@@ -8,39 +8,27 @@ import (
 	"github.com/ficaa1/micko/internal/diagnostics"
 )
 
-// connection.go is the boundary between the root model and the transport.
-//
-// The root switches profiles, and a profile carries a server, a credential
-// source and often a port-forward target. Building those is the entrypoint's
-// work, not the model's, so the model holds a Connector and knows nothing
-// about kubectl, TLS or ports.
+// The root holds a Connector and knows nothing about kubectl, TLS or ports:
+// building a profile's transport is the entrypoint's work.
 
-// Connection is one live connection to one Argo server: the reader every
-// request goes through, the profile values the panes display, and the handle
-// that releases the transport again.
+// Connection is one live connection to an Argo server.
 type Connection struct {
 	Reader core.Reader
-	// Profile, Server, Namespace and the two optional addresses below are
-	// display and behaviour values the root copies into its own state. They
-	// belong to this profile and are replaced wholesale on a switch.
+	// The profile's display values, replaced wholesale on a switch.
 	Profile     string
 	Server      string
 	Namespace   string
 	WebURL      string
 	PipeCommand string
-	// Skin is the palette this profile is drawn in, already resolved from
-	// the flag, the profile and the file. Empty leaves the current skin.
+	// Skin is the profile's resolved palette; empty keeps the current one.
 	Skin string
-	// Redact starts every workflow with its values hidden, as the profile
-	// or the --redact-values flag asks.
+	// Redact starts every workflow with its values hidden.
 	Redact bool
-	// Namespaces are the namespaces the profile names, offered by the `n`
-	// picker alongside whatever the server reports.
+	// Namespaces are the profile's namespaces, offered by the n picker.
 	Namespaces []string
 	Interval   time.Duration
-	// States carries transport lifecycle changes for this connection. It is
-	// closed when the connection is closed, and nil when the profile needs no
-	// port-forward and so has no lifecycle to report.
+	// States carries the port-forward's lifecycle changes and is closed with the
+	// connection. Nil without a port-forward.
 	States <-chan ConnectionStateMsg
 	// Close releases the transport. Nil when there is nothing to release.
 	Close func()
@@ -48,11 +36,8 @@ type Connection struct {
 	Diagnostics *diagnostics.Sink
 }
 
-// Connector opens a connection by profile name.
-//
-// The root holds one and calls it for every profile switch. Connect blocks:
-// starting a port-forward and waiting for it to bind a port takes seconds, so
-// the root always calls it from a command and never from the update loop.
+// Connector opens a connection by profile name. Connect can take seconds to
+// start a port-forward, so the root calls it from a command.
 type Connector interface {
 	Connect(ctx context.Context, profile string) (*Connection, error)
 }

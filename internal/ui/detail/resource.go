@@ -116,9 +116,7 @@ func redactValue(v any, reveal bool, sensitiveCtx bool) any {
 	}
 }
 
-// jsonToYAML renders decoded JSON as normalized YAML using the pinned
-// yaml.v3 dependency (go.mod: gopkg.in/yaml.v3, used by config too —
-// no new module requirements).
+// jsonToYAML renders decoded JSON as normalized YAML.
 func jsonToYAML(v any) (string, error) {
 	return yamlMarshalJSONShaped(v)
 }

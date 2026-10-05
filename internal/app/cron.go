@@ -11,9 +11,6 @@ import (
 	"github.com/ficaa1/micko/internal/ui/kindlist"
 )
 
-// cron.go registers the cron workflow kind: its view, and the call that
-// lists it through the connection's core.CronLister.
-
 // newCronKind builds the cron kind's definition for m.
 func (m *Root) newCronKind() *kindDef {
 	m.cronView = kindlist.New(cronlist.Spec(), m.theme)

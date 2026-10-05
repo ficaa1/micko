@@ -8,10 +8,8 @@ import (
 	"strconv"
 )
 
-// Action is one whole-workflow mutation. Each request addresses exactly one
-// workflow; a bulk action is a sequence of these, one per target, so every
-// rule below holds per workflow. Node-specific, parameter-editing and
-// workflow-submission operations are deliberately not part of this contract.
+// Action is one whole-workflow mutation of exactly one workflow; a bulk
+// action is a sequence of them.
 type Action string
 
 const (
@@ -91,16 +89,11 @@ type Confirmation struct {
 	// TypedName is the workflow name the operator typed for a single
 	// terminate.
 	TypedName string
-	// BulkSize and TypedCount stand in for TypedName when one terminate
-	// covers several workflows: the operator types the number of targets,
-	// and BulkSize is the number the confirmation showed. Typing the count
-	// proves the operator read how many workflows the request reaches,
-	// which is the mistake a bulk terminate invites.
+	// BulkSize and TypedCount replace TypedName for a bulk terminate: the
+	// operator types the target count shown as BulkSize.
 	BulkSize   int
 	TypedCount string
-	// Final is the second, separate confirmation a delete needs. Only the
-	// final delete screen sets it, so a confirmation that stopped at the
-	// first step can never delete.
+	// Final is the delete's second confirmation, set only by its final screen.
 	Final bool
 }
 
@@ -135,11 +128,9 @@ func (e *UIDMismatchError) Error() string {
 	return fmt.Sprintf("workflow UID mismatch: expected %q, got %q", e.Expected.UID, e.Actual.UID)
 }
 
-// ActionRequest combines the selected identity, safe action options, and
-// confirmation. Ref.UID is for preflight validation only and is never sent:
-// Argo's action endpoints address a workflow by name, and its delete
-// endpoint builds its own delete options, so a UID precondition sent with
-// the request would never reach Kubernetes.
+// ActionRequest combines the selected identity, safe action options and
+// confirmation. Ref.UID is checked in preflight and never sent: Argo's
+// action endpoints address a workflow by name.
 type ActionRequest struct {
 	Ref               Ref
 	Action            Action
@@ -247,17 +238,13 @@ const (
 	// ActionConfirmed means the server accepted the request and a read-back
 	// observed the expected resulting state.
 	ActionConfirmed ActionOutcome = "confirmed"
-	// ActionAccepted means the server returned success, so the mutation was
-	// definitely applied, but the expected end state was not observed within
-	// the observation budget. A graceful Stop that is still running exit
-	// handlers lands here. It is certain, unlike ActionUnknown, and must
-	// never be resent either: the request has already taken effect.
+	// ActionAccepted means the server applied the mutation but the end state
+	// was not observed in time, as with a Stop still running exit handlers. It
+	// must never be resent.
 	ActionAccepted ActionOutcome = "accepted"
 	// ActionUnknown means it is not known whether the request was applied.
 	ActionUnknown ActionOutcome = "unknown"
-	// ActionRefused means no request was ever sent: it failed a check on
-	// this side. Nothing changed on the server, so there is nothing to
-	// inspect and the action can be corrected and repeated.
+	// ActionRefused means no request was sent, so nothing changed on the server.
 	ActionRefused ActionOutcome = "refused"
 )
 

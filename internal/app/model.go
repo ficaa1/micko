@@ -25,26 +25,23 @@ import (
 	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
-// Root is the top-level Tea model: it owns routing, generations,
-// cancellation and the update loop that alone mutates UI state.
+// Root is the top-level Tea model. Only its update loop changes UI state.
 type Root struct {
 	deps deps
 
 	// route is the active top-level route.
 	route Route
 
-	// connGen bumps on namespace/profile switch; selGen bumps on selected
-	// workflow change; responses carry the generation they were requested under.
+	// connGen bumps on a namespace or profile switch, selGen on a new selection.
+	// Replies carry the generations they were requested under.
 	connGen, selGen int
 
-	// selection is the currently selected workflow (detail/logs scope).
+	// selection is the selected workflow, the scope of detail and logs.
 	selection core.Ref
 
-	// inflight holds the cancel function of the running command for each
-	// purpose, tagged with the request it belongs to. The tag is what makes
-	// a late reply harmless: a handler clears the entry only when the entry
-	// is still its own, so a reply that lost the race can never retire the
-	// request that replaced it.
+	// inflight holds the cancel function of each purpose's running command,
+	// tagged with its request. A handler clears only its own entry, so a late
+	// reply cannot retire the request that replaced it.
 	mu       sync.Mutex
 	inflight map[string]inflightOp
 	spans    map[string]span
@@ -58,17 +55,13 @@ type Root struct {
 	// logState is the retained log state for the logs route.
 	logState logState
 
-	// events is the Kubernetes event streaming for the detail pane's
-	// Events section.
+	// events streams Kubernetes events for the Events section.
 	events eventsSession
 
-	// logsFrom records the route the logs pane was opened from (list via
-	// the 'l' key, or detail), so a single Esc returns to that route
-	// instead of dumping the user onto a never-loaded/stale detail pane.
-	// Zero value beats RouteList, which is the common origin.
+	// logsFrom is the route the logs pane was opened from, which esc returns to.
 	logsFrom Route
 
-	// size is the last known terminal size.
+	// width and height are the last known terminal size.
 	width, height int
 
 	// quitting marks the exit path.
@@ -76,8 +69,8 @@ type Root struct {
 
 	ids requestIDProvider
 
-	// help is the global `?` overlay. Every route footer advertises it, so
-	// it is owned by the root rather than by any one child.
+	// help is the global ? overlay, owned by the root because every footer
+	// offers it.
 	help shared.HelpOverlay
 
 	// theme styles the shell chrome. The children keep their own copies for
@@ -107,10 +100,9 @@ type Root struct {
 	// actionFromMarks records that the open action pane acts on the marked
 	// rows, so its finish can drop them.
 	actionFromMarks bool
-	// notify is which workflow changes notify the reader and how.
-	// notifySend delivers one notice; nil means notify.Deliver. It is a
-	// field so tests can observe deliveries instead of posting real ones.
-	// notifyWarned records that a failed delivery has been reported.
+	// notify chooses which workflow changes notify the reader and how.
+	// notifySend delivers one notice (nil means notify.Deliver); tests replace
+	// it. notifyWarned records that a failed delivery was reported.
 	notify       config.Notify
 	notifySend   func(notify.Notice) error
 	notifyWarned bool
@@ -120,10 +112,10 @@ type Root struct {
 	watched      map[string]watch
 	watchedGen   int
 	watchedArmed bool
-	// journalWarned records that a journal failure has been reported. It is
-	// reported once per session, not after every action.
+	// journalWarned records that a journal failure has been reported this
+	// session.
 	journalWarned bool
-	// connectionReady gates mutations. Data remains rendered while false.
+	// connectionReady gates mutations; data stays on screen while it is false.
 	connectionReady  bool
 	connectionFresh  bool
 	connectionTarget string
@@ -137,25 +129,19 @@ type Root struct {
 	rawLeft int
 	rawWrap bool
 
-	// tickArmed guards the single poll chain. The tick has to be re-armed
-	// on every route, or opening a workflow stops every refresh until the
-	// reader presses r. Exactly one chain may be alive: two of them double
-	// the poll rate on every route change.
+	// tickArmed guards the single poll chain, which every route re-arms. Two
+	// live chains would double the poll rate.
 	tickArmed bool
 	// gPending is the armed half of vim's gg while the raw view is up.
 	gPending bool
 
-	// flash is a one-line result of the last explicit command (a copy, a
-	// browser open). It is shown in the footer and cleared by the next key,
-	// so an action never looks like it did nothing.
+	// flash is the footer report of the last explicit command, cleared by the
+	// next key.
 	flash string
 
-	// webURL is the Argo UI address for this profile, used to build a link
-	// for the open and copy keys. Empty means the profile configured none.
 	webURL string
 
-	// openURL launches a browser. It is a field so tests can observe the
-	// call instead of opening a real window.
+	// openURL launches a browser; tests replace it.
 	openURL func(string) error
 
 	// pipeCommand prefills the log pane's pipe editor.
@@ -163,18 +149,15 @@ type Root struct {
 
 	// mascot is where Mićko sits on the pane when the terminal has room.
 	mascot config.Mascot
-	// mascotBeat is his place in his routine there (mascotBeats). mascotGen names the
-	// running beat chain; turning him off or on again starts a new one, and
-	// beats of an older chain are dropped, so there is never more than one.
+	// mascotBeat is his place in mascotBeats. mascotGen names the running beat
+	// chain; beats of an older chain are dropped.
 	mascotBeat int
 	mascotGen  int
-	// mascotSleep holds a pose for its beat. Nil means time.Sleep; tests
-	// replace it so a beat arrives at once.
+	// mascotSleep holds a pose for its beat; nil means time.Sleep.
 	mascotSleep func(time.Duration)
 
-	// redact is the profile's redactValues setting. The detail view is
-	// rebuilt on every namespace and profile switch, so the root holds it
-	// and hands it to each new one.
+	// redact is the profile's redactValues setting, handed to each new detail
+	// view.
 	redact bool
 
 	// nsView is the namespace picker dialog; nsSeed is the namespace list the
@@ -190,9 +173,8 @@ type Root struct {
 	palView  *palette.Model
 	registry []command
 
-	// profView is the profile picker dialog (the P key). conn is the live
-	// connection behind it, held so a switch can close the old transport and
-	// so the lifecycle channel can be re-armed; connector builds the next one.
+	// profView is the P profile picker. conn is the live connection, closed on a
+	// switch; connector builds the next one.
 	profView  *profiles.Model
 	conn      *Connection
 	connector Connector
@@ -216,23 +198,19 @@ type Root struct {
 	// owns; nil outside one.
 	drill *drillState
 
-	// detailFrom is the route the detail pane was opened from, which esc
-	// returns to: the workflow list, or the archive list for an archived
-	// run.
+	// detailFrom is the route esc returns to from detail: the workflow list or
+	// the archive list.
 	detailFrom Route
 }
 
 // SetWebURL records the Argo UI address links are built from.
 func (m *Root) SetWebURL(u string) { m.webURL = u }
 
-// SetPipeCommand records the command the log pipe editor prefills with. The
-// log pane is rebuilt on every open, so the root holds it.
+// SetPipeCommand records the command the log pipe editor prefills.
 func (m *Root) SetPipeCommand(cmd string) { m.pipeCommand = cmd }
 
-// SetMascot puts the mascot on his perch, on the floor of the pane, or
-// nowhere, and signs the help overlay with his wordmark while he is about.
-// He starts in his resting pose; Init, or the command that moved him,
-// starts his routine.
+// SetMascot places the mascot on his perch, on the pane's floor, or nowhere.
+// Init, or the command that moved him, starts his routine.
 func (m *Root) SetMascot(spot config.Mascot) {
 	m.mascot = spot
 	m.help.SetMascot(spot != config.MascotOff)
@@ -240,9 +218,8 @@ func (m *Root) SetMascot(spot config.Mascot) {
 	m.mascotGen++
 }
 
-// cycleMascot moves the mascot on, from off to his perch to the floor and
-// off again, and says what happened, including when the terminal is too
-// small for him to show.
+// cycleMascot moves the mascot from off to perch to floor and off again, and
+// says so, including when the terminal is too small to show him.
 func (m *Root) cycleMascot() tea.Cmd {
 	next := map[config.Mascot]config.Mascot{
 		config.MascotOff:   config.MascotPerch,
@@ -301,24 +278,23 @@ func (m *Root) SetRedactValues(redact bool) {
 	}
 }
 
-// listState is the list route's data + status.
+// listState is the list route's data and status.
 type listState struct {
-	// items is the last complete (or capped/incomplete) snapshot.
+	// items is the last snapshot, possibly capped.
 	items []core.Summary
 	// loading is true while a snapshot collection runs for this generation.
 	loading bool
-	// incomplete marks a capped collection (visible incomplete state).
+	// incomplete marks a capped collection.
 	incomplete bool
-	// staleSince is when the last successful snapshot finished; errors keep
-	// last good data and show stale age.
+	// staleSince is when the last successful snapshot finished.
 	staleSince time.Time
-	// lastErr is the last error for the list (kept with last good data).
+	// lastErr is the list's last error; the last good data stays.
 	lastErr *core.APIError
 	// polledAt is when the last collection started.
 	polledAt time.Time
 }
 
-// detailState is the detail route's data + status.
+// detailState is the detail route's data and status.
 type detailState struct {
 	ref      core.Ref
 	workflow core.Workflow
@@ -332,14 +308,12 @@ type detailState struct {
 	polledAt time.Time
 }
 
-// logState is the logs route's data + status.
+// logState is the logs route's data and status.
 type logState struct {
 	ref       core.Ref
 	container string
-	// received counts the records this stream has delivered. The lines
-	// themselves live in the logs view, which bounds them by line count and
-	// by bytes; keeping a second unbounded copy here would grow the heap
-	// for as long as a chatty pod is followed, and nothing reads it.
+	// received counts the records this stream delivered. The lines live in the
+	// logs view, which bounds them.
 	received int
 	running  bool
 	lastErr  error
@@ -347,14 +321,14 @@ type logState struct {
 	// archived marks a stream of an archived run's logs, whose pods are
 	// often gone; an empty or failed stream then says so.
 	archived bool
-	// streamID is the request ID of the stream the pane is reading.
-	// Reopening the stream for timestamps keeps the pane and the
-	// generations, so only this tells the old stream's late batches and
-	// its cancellation apart from the new stream's.
+	// streamID is the request ID of the stream the pane reads. Reopening for
+	// timestamps keeps the generations, so only this tells the old stream's
+	// replies from the new one's.
 	streamID uint64
 }
 
-// NewRoot builds the root model; the reader's optional interfaces enable their features.
+// NewRoot builds the root model. The reader's optional interfaces enable
+// their features.
 func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duration, opts actions.Options) *Root {
 	var watcher core.Watcher
 	if w, ok := r.(core.Watcher); ok {
@@ -425,8 +399,7 @@ func NewRoot(r core.Reader, clock Clock, namespace string, interval time.Duratio
 	return m
 }
 
-// newDetailView builds the detail pane with the root's theme, so node rows
-// are styled from the same palette as every other pane.
+// newDetailView builds the detail pane with the root's theme.
 func (m *Root) newDetailView() *detail.Model {
 	d := detail.New()
 	d.SetTheme(m.theme)
@@ -441,22 +414,20 @@ func (m *Root) newActionView(ref core.Ref) *actions.Model {
 	return a
 }
 
-// ConnectionStateMsg carries transport lifecycle changes into the update loop.
-// The forwarding manager runs on its own goroutine, so it must never call
-// SetConnectionState directly; it sends this message through the program
-// instead and the single-threaded update loop applies it.
+// ConnectionStateMsg carries transport lifecycle changes into the update
+// loop. The forwarder runs on its own goroutine, so it sends this message
+// instead of calling SetConnectionState.
 type ConnectionStateMsg struct {
-	// Conn is the connection generation the event belongs to. A profile
-	// switch bumps the generation, so an event from the forward that was just
-	// closed cannot mark the new connection lost.
+	// Conn is the connection generation the event belongs to, so an event from
+	// a closed forward cannot mark the new connection lost.
 	Conn   int
 	Ready  bool
 	Target string
 }
 
-// SetConnectionState is used by the transport lifecycle bridge. A lost
-// forward keeps the last-good snapshot visible but makes actions unavailable
-// until a fresh snapshot is accepted.
+// SetConnectionState applies a transport lifecycle change. A lost forward
+// keeps the last snapshot on screen but blocks actions until a fresh one
+// arrives.
 func (m *Root) SetConnectionState(ready bool, target string) {
 	m.connectionReady = ready
 	if !ready {
@@ -470,13 +441,10 @@ func (m *Root) SetConnectionState(ready bool, target string) {
 	}
 }
 
-// compile-time interface checks.
 var _ tea.Model = (*Root)(nil)
 
-// Init implements tea.Model. It starts the first list collection, or opens
-// the profile picker when no profile was chosen on the command line: with no
-// connection there is nothing to collect, and the first question a session
-// with a config file of several clusters has to answer is which one.
+// Init starts the first list collection, or opens the profile picker when
+// the command line chose no profile.
 func (m *Root) Init() tea.Cmd {
 	if !m.connected() {
 		return tea.Batch(m.openProfilePicker(), m.backgroundQuery(), m.nextMascotBeat())
@@ -486,8 +454,8 @@ func (m *Root) Init() tea.Cmd {
 	return tea.Batch(list, m.waitConnStates(), m.backgroundQuery(), m.nextMascotBeat())
 }
 
-// armTick schedules the next poll unless one is already scheduled. Every
-// caller goes through it so the chain can never fork.
+// armTick schedules the next poll unless one is pending, so the chain never
+// forks.
 func (m *Root) armTick() tea.Cmd {
 	if m.tickArmed {
 		return nil
@@ -496,9 +464,8 @@ func (m *Root) armTick() tea.Cmd {
 	return m.deps.tickCmd()
 }
 
-// escLeavesRoute reports whether esc goes back from the active route. A
-// child that is using esc itself, to close its own input or clear its own
-// search, keeps it.
+// escLeavesRoute reports whether esc goes back from the active route rather
+// than closing the child's own input or search.
 func (m *Root) escLeavesRoute() bool {
 	switch m.route {
 	case RouteDetail:
@@ -527,8 +494,8 @@ func (m *Root) textEntryActive() bool {
 	}
 }
 
-// Update implements tea.Model. All state mutation happens here; async
-// commands only produce messages.
+// Update is the only place state changes; async commands only produce
+// messages.
 func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -553,39 +520,30 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 			had := m.actionView.State()
 			_, cmd := m.actionView.Update(msg)
-			// Closing a finished action returns to the route it was started
-			// from, and refetches it: the workflows the reader is looking at
-			// have just changed, and showing their pre-action state would be
-			// the most misleading moment to be stale.
+			// Closing a finished action returns to its route and refetches it.
 			if had == actions.StateOutcome && m.actionView.State() == actions.StateIdle {
 				return m, tea.Batch(cmd, m.afterActionPane())
 			}
 			return m, cmd
 		}
-		// The command palette is a dialog that owns printable keys: q and ?
-		// are letters of a command being typed.
+		// The palette owns printable keys, so q and ? are typed into it.
 		if m.paletteOpen() {
 			return m, m.palView.Update(msg)
 		}
-		// The namespace picker is a dialog too, and it owns printable keys:
-		// typing narrows the list. It therefore has to be tested before the
-		// global q and ? below, or neither letter could ever be typed.
+		// The namespace picker owns printable keys, so it is checked before the
+		// global q and ?.
 		if m.namespaceDialogOpen() {
 			return m, m.nsView.Update(msg)
 		}
-		// The profile picker is the same kind of dialog, and it too owns
-		// printable keys. Esc closes it — except before the first connection,
-		// where there is no session behind it to return to, so esc quits.
+		// The profile picker owns printable keys too. Before the first connection
+		// there is no session to return to, so esc quits.
 		if m.profileDialogOpen() {
 			if key == "esc" && !m.connected() && !m.profView.Connecting() {
 				return m, m.quit()
 			}
 			return m, m.profView.Update(msg)
 		}
-		// The help overlay is a dialog: while it is
-		// open it owns every remaining key, so the view behind it cannot
-		// move. q closes it instead of quitting; only Ctrl-C, handled
-		// above, still quits globally.
+		// The help overlay owns every remaining key; q closes it.
 		if m.help.IsOpen() {
 			switch key {
 			case "?", "esc", "q":
@@ -593,20 +551,16 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// ? opens help everywhere except inside text entry, where it is an
-		// ordinary printable character (text entry isolates its keys).
+		// ? opens help except inside text entry.
 		if key == "?" && !m.textEntryActive() {
 			m.help.Toggle()
 			return m, nil
 		}
-		// q quits globally on every route, except while the active child
-		// owns printable text entry.
+		// q quits except inside text entry.
 		if key == "q" && !m.textEntryActive() {
 			return m, m.quit()
 		}
-		// Every explicit command below reports its result in the footer, so
-		// the previous report is cleared first: a stale "copied" line beside
-		// a new screen would be a lie.
+		// Clear the last command's report before running the next.
 		m.flash = ""
 		if m.rawMode {
 			return m, m.handleRawKey(key)
@@ -614,15 +568,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.textEntryActive() {
 			switch key {
 			case ":":
-				// The palette opens on every route. It is not offered in the
-				// raw view above, whose only job is to be copied from.
+				// The palette opens on every route except the raw view.
 				return m, m.openPalette()
 			case "f", "ctrl+f":
-				// The bordered pane wraps every line, so a mouse selection
-				// picks up the border columns too. The raw view drops all
-				// chrome for exactly that reason. `f` is full screen on
-				// every route, logs included; there `t` (tail) follows.
-				// ctrl+f stays as a second way in.
+				// f or ctrl+f opens the raw view, whose mouse selection skips the border.
+				// In the logs pane t (tail) follows instead of f.
 				m.enterRaw()
 				return m, nil
 			case "y":
@@ -632,35 +582,27 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.openInBrowser()
 			}
 		}
-		// A cluster-scoped kind belongs to no namespace, so the namespace
-		// keys have nothing to change there. They say so rather than switch
-		// a scope the pane does not show.
+		// A cluster-scoped kind has no namespace, so the namespace keys say so.
 		if m.clusterScopedRoute() && (key == "n" || key == "0") && !m.textEntryActive() {
 			m.flash = "cluster workflow templates belong to no namespace: n and 0 do not apply here"
 			return m, nil
 		}
-		// `n` switches namespace. It is bound on the list because that is the
-		// route the namespace describes; in the logs pane `n` is the next
-		// search match, which is the vim meaning a reader expects there.
+		// n switches namespace on the list routes; in the logs pane it is the next
+		// match.
 		if isListRoute(m.route) && key == "n" && !m.textEntryActive() {
 			return m, m.openNamespacePicker()
 		}
-		// `0` toggles the all-namespaces view, bound where `n` is: on the list
-		// routes, whose scope the namespace sets. The detail and logs panes
-		// show one workflow, which lives in one namespace either way.
+		// 0 toggles all namespaces on the list routes; detail and logs show one
+		// workflow.
 		if isListRoute(m.route) && key == "0" && !m.textEntryActive() {
 			return m, m.toggleAllNamespaces()
 		}
-		// P switches profile. Capital, because p is the phase filter on the
-		// list and on the nodes tab. It is bound on every route: a reader who
-		// has drilled into a workflow can still change cluster, and the switch
-		// returns them to the list anyway.
+		// P switches profile on every route; p is the phase filter.
 		if key == "P" && !m.textEntryActive() {
 			return m, m.openProfilePicker()
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
-			// On the Events section r also starts the streams over, which
-			// is the way back from a stream that stopped.
+			// On the Events section r also restarts the streams.
 			if m.detailView.Section() == shared.SectionEvents {
 				return m, tea.Batch(m.startDetailFetch(), m.restartEvents())
 			}
@@ -668,9 +610,8 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.route == RouteDetail && key == "a" && !m.textEntryActive() {
 			if m.detailState.archived {
-				// The archive holds a record, not a workflow: every action
-				// endpoint addresses the live object, which may be gone or
-				// may be another run of the same name.
+				// Actions address the live object, which may be gone or be another run of
+				// the same name.
 				m.actionView = m.newActionView(m.selection)
 				m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, m.detailState.workflow.Summary.Phase)
 				m.actionView.OpenUnavailable("this workflow is archived: actions apply to live workflows only")
@@ -689,24 +630,17 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key == "esc" && m.escLeavesRoute() {
 			return m, m.back()
 		}
-		// In a drill-down, esc returns to the kind's list once the workflow
-		// list has nothing of its own left to back out of: a filter clears
-		// first, as it does on the plain list.
+		// In a drill-down, esc returns to the kind's list once the filter is clear.
 		if key == "esc" && m.route == RouteList && m.drill != nil && !m.listView.SearchOn && m.listView.Query() == "" {
 			return m, m.leaveDrill()
 		}
-		// List route: route the keyboard into the list child (j/k/arrows/Enter/
-		// l//s/r and printable search text). The child emits intents (open,
-		// logs, refresh); the root converts them to effects below. Global
-		// keys (q, ctrl+c) stay at the root, and text-entry isolation means
-		// printable letters — including q and r — reach the search buffer
-		// while the search input is focused.
+		// The list child takes the remaining keys and emits intents, which the root
+		// turns into effects below.
 		if m.route == RouteList {
 			return m, m.updateChild(msg)
 		}
-		// Detail/logs routes: the active child consumes non-global keys. A
-		// key in the detail pane can open or leave the Explain section,
-		// which starts or cancels its log read.
+		// The detail and logs children take the remaining keys. A detail key can
+		// start or cancel the Explain read.
 		cmd := m.updateChild(msg)
 		if m.route == RouteDetail {
 			return m, tea.Batch(cmd, m.syncSections())
@@ -722,13 +656,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		// Only restart a poll when one is not already in flight for this
-		// generation (exactly one list op per generation).
 		m.tickArmed = false
-		// A kind's route polls its own list on the same tick. The workflow
-		// list's watch state does not stop it: a token refused workflows
-		// may still read cron workflows, and the kind reports its own
-		// refusal.
+		// A kind's route polls its own list on the tick, whatever the workflow
+		// watch's state: a token refused workflows may still read the kind.
 		if m.kind(m.route) != nil {
 			var cmds []tea.Cmd
 			if !m.kindStates[m.route].loading {
@@ -749,22 +679,16 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The poll re-arms the tick when it completes.
 			return m, m.startListGeneration()
 		}
-		// Off the list route the tick still has to be re-armed, or the
-		// refresh stops for the rest of the session. The detail route also
-		// refetches, so an open workflow tracks its own phase.
+		// Off the list route the tick is re-armed too, and the detail route
+		// refetches its workflow.
 		var cmds []tea.Cmd
-		// An archived run is fixed, so its detail is read once and not
-		// polled.
+		// An archived run is fixed, so its detail is not polled.
 		if m.route == RouteDetail && !m.detailState.loading && m.selection.UID != "" && !m.detailState.archived &&
 			m.pollDue(m.detailState.polledAt, m.watchLive() && m.inSnapshot(m.selection.UID)) {
 			cmds = append(cmds, m.startDetailFetch())
 		}
-		// A stale snapshot blocks every mutation, and only an accepted list
-		// clears it. The list poll runs on the list route alone, so without
-		// this a reader who lost the snapshot while reading a workflow stays
-		// blocked for as long as they stay on it. The collection runs only
-		// while the block is up, so a healthy session off the list route
-		// keeps polling nothing but its own workflow.
+		// Only an accepted list clears a stale snapshot, so poll the list off its
+		// route while the block is up.
 		if m.connectionReady && !m.connectionFresh && !m.listState.loading {
 			cmds = append(cmds, m.startListGeneration())
 		}
@@ -796,8 +720,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startWatch()
 
 	case ConnectionStateMsg:
-		// An event stamped with an older generation belongs to a forward that
-		// has already been closed by a profile switch.
+		// An older generation's event comes from a forward a switch already closed.
 		if msg.Conn != m.connGen {
 			return m, nil
 		}
@@ -814,10 +737,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleLogRecord(msg)
 
 	case workflowlist.RefreshListMsg:
-		// Manual refresh intent from the list child (r): an explicit
-		// operator refresh clears terminal watch state (the escape hatch
-		// from rate-limited/unauthorized states) and starts a fresh
-		// collection of this generation.
+		// r clears terminal watch state and starts a fresh collection.
 		m.watchMode = ""
 		m.watchRetries = 0
 		m.cancelInflight("watch")
@@ -903,9 +823,8 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.back()
 
 	case detail.NodeLogsIntent:
-		// A node with no resolved pod would send the server a pod name that
-		// may not exist, so the request stays workflow-wide and the pane
-		// says which node the reader asked about.
+		// A node with no resolved pod opens the workflow-wide logs, and the pane
+		// names the node asked about.
 		return m, m.openLogs(OpenLogsMsg{Ref: m.selection, PodName: msg.PodName, Container: "main"})
 
 	case BackMsg:
@@ -937,12 +856,10 @@ func terminalWatchMode(mode string) bool {
 	return mode == "authentication/permission required" || mode == "rate limited; refresh required"
 }
 
-// View implements tea.Model. Every route renders through the same shell:
-// a context band, a bordered pane, and a key-hint band. The shell fixes the
-// geometry, so the bands stay put while routes and connection states change.
+// View renders every route through the same shell: context band, bordered
+// pane and key-hint band.
 func (m *Root) View() tea.View {
-	// The raw view is deliberately outside the shell: its whole purpose is to
-	// put nothing but content on the screen.
+	// The raw view skips the shell: it shows nothing but content.
 	if m.rawMode {
 		return m.rawView()
 	}
@@ -960,8 +877,8 @@ func (m *Root) View() tea.View {
 		MascotPose:  m.mascotBeats()[m.mascotBeat].Pose,
 	}
 
-	// An action modal is a dialog: it takes the pane so the route behind it
-	// cannot be mistaken for the thing being confirmed.
+	// An action modal replaces the pane, so the route behind it cannot be
+	// mistaken for the target.
 	if m.actionView != nil && m.actionView.State() != actions.StateIdle {
 		f.Title = "Confirm action"
 		if m.actionView.Bulk() {
@@ -1003,9 +920,7 @@ func (m *Root) View() tea.View {
 		return m.finishView(f)
 	}
 
-	// The palette sits at the top of the active pane rather than replacing
-	// it: the reader is choosing where to go from what they are looking at.
-	// The pane below is sized to what the palette leaves.
+	// The palette sits on top of the active pane, which gets the rows left.
 	bodyH := f.BodyHeight()
 	var pal []string
 	if m.paletteOpen() {
@@ -1069,9 +984,8 @@ func (m *Root) View() tea.View {
 	return m.finishView(f)
 }
 
-// paletteRows is how many suggestions the palette may show in a pane of
-// bodyH lines: at most palette.MaxRows, and never more than about half the
-// pane, so the view underneath keeps its column heads and a few rows.
+// paletteRows is how many suggestions fit in a pane of bodyH lines: at most
+// palette.MaxRows and about half the pane.
 func paletteRows(bodyH int) int {
 	rows := palette.MaxRows
 	if bodyH <= 0 {
@@ -1107,8 +1021,7 @@ func (m *Root) actionsEnabled() bool {
 	return m.actionOpts.AllowActions && !m.actionOpts.ReadOnly && !m.actionOpts.Demo
 }
 
-// serverLabel names where the data comes from. The demo must never claim a
-// server it does not have.
+// serverLabel names where the data comes from; the demo claims no server.
 func (m *Root) serverLabel() string {
 	if m.actionOpts.Demo {
 		return "synthetic demo"
@@ -1141,22 +1054,15 @@ func (m *Root) detailPaneTitle() string {
 	return m.detailView.PaneTitle()
 }
 
-// SetVersion records the build version for the context band. main owns the
-// version string; the root only displays it.
+// SetVersion records the build version for the context band.
 func (m *Root) SetVersion(v string) { m.version = v }
 
-// finishView renders the frame and marks it as a full-window alternate-screen
-// view.
-//
-// The alternate screen has no scrollback: a frame taller than the terminal
-// does not scroll, it loses its bottom rows outright, and the bottom row is
-// the footer with the key hints. shell.Render already produces exactly the
-// terminal size, so the clamp here is a safety net for an unsized frame.
+// finishView renders the frame as a full-window alternate-screen view. The
+// alternate screen drops rows past the terminal height, where the footer
+// is, so the frame is clamped.
 func (m *Root) finishView(f shell.Frame) tea.View {
 	if m.flash != "" {
-		// The result of the last explicit command replaces the route hints
-		// for one screen: it answers the key the reader just pressed, and it
-		// disappears on their next key.
+		// The last command's report replaces the hints until the next key.
 		f.Notice = m.flash
 	}
 	content := f.Render(m.theme)
@@ -1165,9 +1071,7 @@ func (m *Root) finishView(f shell.Frame) tea.View {
 		content = strings.Join(shared.ClampLines(lines, m.height), "\n")
 	}
 	v := tea.NewView(content)
-	// Full-window alternate screen: the layout is stable in the alternate
-	// buffer, and bubbletea restores the terminal on every exit/error path
-	// (q, Ctrl-C, and any program teardown).
+	// Bubble Tea restores the terminal on every exit path.
 	v.AltScreen = true
 	return v
 }
@@ -1194,17 +1098,14 @@ func (m *Root) listSummary() string {
 	st := m.listState
 	switch {
 	case !m.connected():
-		// The picker is on top of this pane. An "empty" list behind it would
-		// read as a cluster with no workflows.
+		// An empty list behind the picker would read as a cluster with no workflows.
 		return "list: no profile connected"
 	case st.loading && len(st.items) == 0:
 		return "list: loading..."
 	case st.lastErr != nil && len(st.items) == 0:
 		return "list: error: " + shortReason(st.lastErr.Message)
 	case st.lastErr != nil:
-		// The stale warning must survive the border's width budget, so the
-		// reason is capped: an operator needs to see "stale" far more than to
-		// read a full transport error on the border.
+		// The reason is capped so "STALE" survives the border's width.
 		return "list: STALE (last good " + lenItems(st.items) + "): " + shortReason(st.lastErr.Message)
 	case len(st.items) == 0:
 		return "list: empty"
@@ -1276,8 +1177,6 @@ func (m *Root) logSummary() string {
 	}
 }
 
-// key handling ---------------------------------------------------------------
-
 func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	if key == "ctrl+c" {
@@ -1291,10 +1190,8 @@ func (m *Root) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// back implements Esc semantics: logs -> (origin) -> list. The logs pane
-// returns to the route it was opened from — the list when 'l' was pressed
-// on the list, or the loaded detail when logs were entered from detail —
-// so a single Esc never lands on a never-loaded or stale detail pane.
+// back is esc: it returns from logs to the route they were opened from, and
+// from detail to the list it was opened from.
 func (m *Root) back() tea.Cmd {
 	switch m.route {
 	case RouteLogs:
@@ -1302,15 +1199,13 @@ func (m *Root) back() tea.Cmd {
 		m.cancelInflight("logs")
 		m.cancelInflight("logsources")
 		m.logState.running = false
-		// logsFrom is set by openLogs; a zero value (RouteList) is the
-		// safe fallback for a log view reached with no explicit origin.
+		// The zero value, RouteList, covers logs opened with no recorded origin.
 		target := m.logsFrom
 		if target != RouteDetail && target != RouteList {
 			target = RouteList
 		}
 		m.route = target
-		// Opening the log canceled an explain read and the event streams;
-		// back on the section they start again.
+		// Opening logs canceled the Explain read and the event streams; restart them.
 		return m.syncSections()
 	case RouteDetail:
 		m.cancelInflight("detail")
@@ -1318,15 +1213,12 @@ func (m *Root) back() tea.Cmd {
 		m.stopEvents()
 		m.detailState.loading = false
 		if m.kind(m.detailFrom) != nil {
-			// An archived run returns to the archive list, which keeps its
-			// rows and cursor; nothing it shows changed.
+			// The archive list keeps its rows and cursor; nothing it shows changed.
 			m.route = m.detailFrom
 			return nil
 		}
 		m.route = RouteList
-		// A Resume or a Stop changes the row the reader is about to look
-		// at. Waiting for the next poll shows the old phase first, which
-		// reads as "the action did nothing".
+		// Refetch now so the row the reader returns to shows the action's effect.
 		if !m.listState.loading && !terminalWatchMode(m.watchMode) {
 			return m.startListGeneration()
 		}
@@ -1336,9 +1228,9 @@ func (m *Root) back() tea.Cmd {
 	}
 }
 
-// openWorkflow handles the list→detail intent.
+// openWorkflow opens a workflow's detail.
 func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
-	// Same workflow re-selected: no generation bump.
+	// Reselecting the same workflow keeps the generation.
 	if m.route == RouteDetail && m.selection == ref && !m.detailState.archived {
 		return nil
 	}
@@ -1360,15 +1252,13 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 	return cmd
 }
 
-// openLogs handles the logs intent. It records the route the logs pane is
-// opened from (unless it is itself already the logs route — a pod/container
-// context switch keeps the original origin), so a later single Esc returns
-// to where the user came from rather than a never-loaded/stale detail pane.
+// openLogs opens the logs pane and records the route it was opened from. A
+// pod or container switch inside logs keeps the original origin.
 func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if msg.Container == "" {
 		msg.Container = "main"
 	}
-	// Re-opening logs for the same ref+container while running: ignore.
+	// Reopening the running stream's workflow and container does nothing.
 	if m.route == RouteLogs && m.logState.running && m.logState.ref == msg.Ref && m.logState.container == msg.Container {
 		return nil
 	}
@@ -1395,11 +1285,9 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	return tea.Batch(stream, m.startLogSources(msg))
 }
 
-// startLogSources gives a workflow-wide log pane the node each pod belongs
-// to, so its lines are labelled by step name rather than by pod name. The
-// loaded detail answers when it is the same workflow; otherwise the
-// workflow is read once. A pane on one pod needs no map, and a failed read
-// only leaves the labels on pod names.
+// startLogSources gives a workflow-wide log pane the step each pod ran, so
+// lines are labelled by step. The loaded detail answers for the same
+// workflow; otherwise the workflow is read once.
 func (m *Root) startLogSources(msg OpenLogsMsg) tea.Cmd {
 	if msg.PodName != "" {
 		return nil
@@ -1415,10 +1303,9 @@ func (m *Root) startLogSources(msg OpenLogsMsg) tea.Cmd {
 	return m.deps.logSourcesCmd(ctx, g, id, msg.Ref)
 }
 
-// reopenLogs restarts the stream with server timestamps switched as the
-// pane asked, keeping the pane and its retained lines. The pane has marked
-// the switch point already. The old stream is canceled first; its late
-// replies carry the old request ID and are ignored.
+// reopenLogs restarts the stream with timestamps switched as the pane asked,
+// keeping the pane and its lines. The old stream's late replies carry the
+// old request ID and are ignored.
 func (m *Root) reopenLogs(msg logs.TimestampsIntent) tea.Cmd {
 	if m.route != RouteLogs || m.logsView == nil || m.logsView.Ref() != msg.Ref {
 		return nil
@@ -1430,11 +1317,9 @@ func (m *Root) reopenLogs(msg logs.TimestampsIntent) tea.Cmd {
 	return m.startLogStream(OpenLogsMsg{Ref: msg.Ref, PodName: pod, Container: container})
 }
 
-// startListGeneration cancels any prior list, bumps nothing (list runs per
-// connection generation), and starts a fresh single-flight collection.
+// startListGeneration cancels any running list and starts a fresh collection.
 func (m *Root) startListGeneration() tea.Cmd {
-	// Before a profile is chosen there is no reader to collect from. The
-	// picker is on screen; the list waits for it.
+	// Before a profile is chosen there is no reader to collect from.
 	if !m.connected() {
 		return nil
 	}
@@ -1457,9 +1342,8 @@ func (m *Root) startDetailFetch() tea.Cmd {
 	g := genStamp{Conn: m.connGen, Sel: m.selGen}
 	id := m.ids.newID()
 	m.setInflight("detail", id, cancel)
-	// loading is what the poll tick reads to decide whether a refetch is
-	// due. Setting it here keeps it true for exactly as long as a fetch is
-	// running, whichever key or timer started it.
+	// The tick reads loading to decide whether a refetch is due, so every fetch
+	// sets it, whatever started it.
 	m.detailState.loading = true
 	if m.detailState.archived {
 		return m.deps.archivedDetailCmd(ctx, g, id, m.selection)
@@ -1479,25 +1363,20 @@ func (m *Root) startLogStream(msg OpenLogsMsg) tea.Cmd {
 		Ref:       msg.Ref,
 		PodName:   msg.PodName,
 		Container: msg.Container,
-		// Follow keeps the stream open so a running workflow keeps
-		// delivering. Without it the server closes at the current end of
-		// the log and the reader has to leave and re-enter the view. The
-		// server ends the stream itself once the pod finishes, and back()
-		// cancels it on exit.
+		// Follow keeps the stream open while the pod runs; the server ends it when
+		// the pod finishes, and back() cancels it.
 		Follow: true,
-		// The pane owns the timestamps choice (ctrl+t) and keeps it across
-		// a container switch.
+		// The pane owns the timestamps choice and keeps it across a container switch.
 		Timestamps: m.logsView != nil && m.logsView.Timestamps(),
 	}
 	return m.deps.streamLogsCmd(ctx, g, id, req)
 }
 
-// handleListLoaded applies a list result honoring generation/request
-// staleness (ignore stale completions even after cancellation).
+// handleListLoaded applies a list result unless it is stale.
 func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	m.clearInflight("list", msg.RequestID)
 	if msg.Canceled {
-		// Canceled collections are always stale by construction.
+		// A canceled collection is always stale.
 		return nil
 	}
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
@@ -1508,10 +1387,8 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	st := &m.listState
 	st.loading = false
 	if msg.Err != nil {
-		// Keep last good data; record error + stale age. The
-		// snapshot is now stale, so mutations stay blocked until a fresh
-		// list is accepted, even if the transport itself never reported a
-		// loss (a server-side failure is just as stale as a dead forward).
+		// Keep the last good data. The snapshot is stale now, so mutations stay
+		// blocked until a fresh list is accepted, even if the transport is fine.
 		m.connectionFresh = false
 		m.cancelInflight("action")
 		st.lastErr = msg.Err
@@ -1553,11 +1430,9 @@ func (m *Root) handleListLoaded(msg listLoadedMsg) tea.Cmd {
 	return tea.Batch(notices, m.armTick())
 }
 
-// listErrorStatus picks how the list shows a failed collection. With rows
-// still on screen the failure is a stale snapshot. With none, a refusal is
-// shown as the refusal it is: an empty table under a small "stale" note
-// reads as a namespace with no workflows, which is the one wrong conclusion
-// the reader must not draw.
+// listErrorStatus picks how the list shows a failed collection: stale rows,
+// or with none the refusal itself, since an empty table would read as a
+// namespace with no workflows.
 func (m *Root) listErrorStatus(ae *core.APIError) workflowlist.Status {
 	if len(m.listState.items) > 0 {
 		return workflowlist.StatusStale
@@ -1573,9 +1448,8 @@ func (m *Root) listErrorStatus(ae *core.APIError) workflowlist.Status {
 }
 
 // listErrorText is the reason the list shows for a failed collection. In the
-// all-namespaces view it says which request failed and how to leave it: a
-// token that may read one namespace is routinely refused the cluster-wide
-// list, and the fix is the key that returns to that namespace.
+// all-namespaces view it also names the key back to one namespace, since a
+// token is often refused the cluster-wide list.
 func (m *Root) listErrorText(ae *core.APIError) string {
 	if !m.listAcrossNamespaces() {
 		return ae.Message
@@ -1583,8 +1457,8 @@ func (m *Root) listErrorText(ae *core.APIError) string {
 	return "all namespaces: " + ae.Message + " — press 0 to return to " + m.deps.namespace
 }
 
-// handleDetailLoaded applies a detail result honoring staleness + UID
-// validation (same-name replacement is a different workflow).
+// handleDetailLoaded applies a detail result unless it is stale or its UID
+// differs from the selection.
 func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	m.clearInflight("detail", msg.RequestID)
 	st := &m.detailState
@@ -1610,7 +1484,7 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 		m.detailView.SetError(msg.Err.Message)
 		return nil
 	}
-	// UID check: response must match the selection that requested it.
+	// A same-name replacement has a new UID and is a different workflow.
 	if msg.Workflow.Summary.Ref.UID != msg.Ref.UID {
 		st.lastErr = core.NewAPIError(core.ErrNotFound, 404,
 			"workflow changed: selected UID no longer matches (workflow replaced?)")
@@ -1625,15 +1499,14 @@ func (m *Root) handleDetailLoaded(msg detailLoadedMsg) tea.Cmd {
 	return m.syncSections()
 }
 
-// handleLogRecord applies one batched delivery honoring staleness.
+// handleLogRecord applies one batch of log records unless it is stale.
 func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen {
 		return msg.Next // stale: drained and dropped
 	}
 	if msg.RequestID != m.logState.streamID {
-		// A stream replaced by a reopen on the same pane: its batches would
-		// duplicate lines, and its cancellation would mark the live stream
-		// canceled.
+		// A stream replaced by a reopen: its lines are duplicates, and its
+		// cancellation must not mark the live stream canceled.
 		return msg.Next
 	}
 	if !msg.Canceled && (len(msg.Records) > 0 || msg.Done) {
@@ -1665,8 +1538,6 @@ func (m *Root) handleLogRecord(msg logRecordMsg) tea.Cmd {
 	return msg.Next
 }
 
-// inflight bookkeeping --------------------------------------------------------
-
 func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
 	switch m.route {
 	case RouteList:
@@ -1686,10 +1557,7 @@ func (m *Root) updateChild(msg tea.Msg) tea.Cmd {
 	}
 }
 
-// resizeChildren propagates a terminal resize to every child view model so
-// the active route and the ones the user can switch to all re-lay out. The
-// Tea event loop re-renders View after every Update, so mutating child sizes
-// here is sufficient to trigger a responsive redraw.
+// resizeChildren passes a terminal resize to every child view.
 func (m *Root) resizeChildren(msg tea.WindowSizeMsg) {
 	m.listView.Update(msg)
 	if m.detailView != nil {
@@ -1703,14 +1571,11 @@ func (m *Root) resizeChildren(msg tea.WindowSizeMsg) {
 	}
 }
 
-// quit performs the shared teardown for every exit path (q, ctrl+c): cancel
-// all inflight work, mark quitting and return the Quit command so the
-// renderer restores the terminal (alternate screen) on the way out.
+// quit cancels all in-flight work and returns the Quit command, which
+// restores the terminal.
 func (m *Root) quit() tea.Cmd {
 	m.cancelAll()
-	// The transport outlives the update loop unless it is released here: a
-	// kubectl port-forward is a child process, and quitting without closing it
-	// leaves it running against a terminal that is gone.
+	// A kubectl port-forward is a child process, so it must be closed on quit.
 	if m.conn != nil && m.conn.Close != nil {
 		m.conn.Close()
 	}
@@ -1744,9 +1609,8 @@ func (m *Root) cancelInflight(purpose string) {
 	}
 }
 
-// clearInflight retires the entry for purpose only when it still belongs to
-// request id. A reply from a request that has already been replaced leaves
-// the newer entry alone, which keeps the newer request cancelable.
+// clearInflight retires purpose's entry only if it still belongs to request
+// id, so a replaced request's reply leaves the newer one cancelable.
 func (m *Root) clearInflight(purpose string, id uint64) {
 	m.mu.Lock()
 	if op, ok := m.inflight[purpose]; ok && op.id == id {

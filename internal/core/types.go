@@ -2,13 +2,8 @@
 // micko. These types are consumed by the UI packages and implemented by the
 // transport adapter (internal/argo) and the fake backend (internal/testkit).
 //
-// Freezing rules:
-//   - Exact field/type names are recorded in docs/development.md; a change
-//     to one is a change to a contract every consumer depends on.
-//   - DTOs carry only consumed fields; unknown server fields stay in
-//     Workflow.Resource as raw JSON (docs/development.md).
-//   - Resource versions and continuation tokens are opaque strings: compare
-//     by equality only, never parse or construct.
+// DTOs carry consumed fields; unknown server fields stay in Workflow.Resource.
+// Resource versions and continuation tokens are opaque and must not be parsed.
 package core
 
 import (
@@ -30,10 +25,8 @@ type Ref struct {
 type Query struct {
 	Namespace     string
 	LabelSelector string
-	// Continue is an opaque continuation token returned by a previous
-	// Page. It is passed back verbatim, never parsed or constructed
-	// (docs/development.md — v4.1.2 uses integer-string offsets, but the
-	// client must not rely on that).
+	// Continue is an opaque token returned by a previous page and passed back
+	// verbatim.
 	Continue string
 	// Limit is the page size; 0 means server default.
 	Limit int64
@@ -58,7 +51,7 @@ type Summary struct {
 	// leaves). These are the two conditions Argo's own resume clears. The
 	// node half is derived from the node map the server sent with this
 	// summary; when the server sends no node data that half stays false and
-	// the list says nothing rather than guessing (docs/development.md).
+	// the list reports no suspended state rather than guessing.
 	Suspended bool
 	// Progress is the server's "done/total" count of the workflow's pod
 	// nodes, verbatim (for example "3/7"). Empty means the server sent none;
@@ -81,7 +74,7 @@ type Page struct {
 }
 
 // Node is one workflow node. Not every node is a pod; children and
-// outboundNodes have distinct semantics (docs/development.md).
+// outboundNodes have distinct semantics.
 type Node struct {
 	ID          string
 	Name        string
@@ -94,8 +87,7 @@ type Node struct {
 	// dependency edges.
 	Children []string
 	// OutboundNodes are the last nodes before a template is considered
-	// complete. They are NOT interchangeable with Children
-	// (docs/development.md).
+	// complete. They are NOT interchangeable with Children.
 	OutboundNodes []string
 	StartedAt     *time.Time
 	FinishedAt    *time.Time
@@ -104,8 +96,8 @@ type Node struct {
 	// set; both feed the version-aware pod-name resolution below.
 	TemplateName        string
 	TemplateRefTemplate string
-	// PodName is populated only from verified version-aware resolution
-	// (docs/development.md); a pod name is never guessed.
+	// PodName is populated only from verified version-aware resolution.
+	// A pod name is never guessed.
 	PodName string
 
 	// Progress is the server's "done/total" count below this node, verbatim.
@@ -171,7 +163,7 @@ type Workflow struct {
 	NodesAvailable         bool
 	NodesUnavailableReason string
 	// Resource is the raw server-returned workflow JSON, preserved
-	// verbatim for the resource view (docs/development.md). It is
+	// verbatim for the resource view. It is
 	// structured-parsed and redacted before rendering, never echoed raw.
 	Resource json.RawMessage
 	// PodNameVersion is the pod naming scheme the server recorded on this
@@ -197,8 +189,7 @@ type LogRequest struct {
 
 // LogRecord is one log line delivered by a stream. ReceivedAt is the local
 // receipt time (fake clock or wall clock); source timestamps, when
-// requested, are textual content — LogRecord never fabricates metadata
-// (docs/development.md: LogEntry carries only content and podName).
+// requested, are textual content — LogRecord never fabricates metadata.
 type LogRecord struct {
 	PodName    string
 	Container  string

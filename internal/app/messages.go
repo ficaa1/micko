@@ -1,10 +1,6 @@
-// Package app holds the root Bubble Tea model: routing, async command
-// orchestration, cancellation and generation-based stale-message discard
-// (only the root Tea update loop mutates UI state).
-//
-// Child view models are child Tea models that accept core values,
-// never HTTP clients; intents (Open/Back/Action) live in this contract and
-// the root alone converts them to network effects.
+// Package app holds the root Bubble Tea model. Only its update loop changes
+// UI state: child views emit intents, and the root turns them into requests
+// and drops stale replies by generation.
 package app
 
 import (
@@ -18,9 +14,9 @@ import (
 type Route int
 
 const (
-	// RouteList is the workflow list (home).
+	// RouteList is the workflow list, the home route.
 	RouteList Route = iota
-	// RouteDetail is the selected workflow detail.
+	// RouteDetail is the selected workflow's detail.
 	RouteDetail
 	// RouteLogs is the log view for the selected workflow.
 	RouteLogs
@@ -54,21 +50,18 @@ func (r Route) String() string {
 	}
 }
 
-// OpenWorkflowMsg is an intent from the list view to open a workflow
-// detail. The root converts it to a fetch effect; the child never starts
-// goroutines.
+// OpenWorkflowMsg asks the root to open a workflow's detail.
 type OpenWorkflowMsg = shared.OpenWorkflowMsg
 
-// OpenLogsMsg is an intent to open logs. PodName empty means workflow-wide
-// logs; Container is always explicit (default "main" visible in the UI).
+// OpenLogsMsg asks the root to open logs. An empty PodName means the whole
+// workflow.
 type OpenLogsMsg = shared.OpenLogsMsg
 
 // BackMsg is an intent to go back one route (Esc).
 type BackMsg struct{}
 
-// genStamp carries the two generation counters every response message must
-// include: the connection generation, the selection generation and the
-// request ID.
+// genStamp carries the generations and attempt a request was made under, so
+// its reply can be checked for staleness.
 type genStamp struct {
 	Conn    int
 	Sel     int
@@ -80,11 +73,11 @@ type listLoadedMsg struct {
 	genStamp
 	RequestID uint64
 	Page      core.Page
-	// Done: no continuation token, snapshot collection finished.
+	// Done means the snapshot is complete.
 	Done bool
-	// Capped: the snapshot cap was reached; result is explicitly incomplete.
+	// Capped means the snapshot cap was reached and the result is incomplete.
 	Capped bool
-	// Canceled: the operation was superseded/canceled (root discards).
+	// Canceled means the request was superseded.
 	Canceled bool
 	Err      *core.APIError
 }
@@ -99,15 +92,14 @@ type detailLoadedMsg struct {
 	Err       *core.APIError
 }
 
-// logRecordMsg is one drained batch of log records (root batches delivery
-// instead of one full render per line).
+// logRecordMsg is one batch of log records.
 type logRecordMsg struct {
 	genStamp
 	RequestID uint64
 	Records   []core.LogRecord
-	// Done: stream finished (clean EOF or error below).
+	// Done means the stream ended, cleanly or with Err.
 	Done bool
-	// Canceled distinguishes cancellation from network failure.
+	// Canceled tells cancellation apart from a network failure.
 	Canceled bool
 	Err      error
 	// Next runs as a separate command to avoid nesting drains.
@@ -123,6 +115,5 @@ type logSourcesMsg struct {
 	Sources   map[string]string
 }
 
-// tickMsg schedules the next poll only after the previous collection
-// completes (never concurrent ticker launches).
+// tickMsg triggers the next poll.
 type tickMsg struct{}

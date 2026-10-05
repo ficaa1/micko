@@ -13,29 +13,12 @@ import (
 
 var _ core.NamespaceLister = (*Client)(nil)
 
-// namespaces.go answers "which namespaces can I look at?".
-//
-// Argo Workflows has no endpoint that lists namespaces, so there is nothing to
-// call directly and nothing to guess from. Two facts the server will state are
-// combined instead:
-//
-//  1. GET /api/v1/info returns managedNamespace when the server was started
-//     for one namespace. Then that is the only answer there can be, and no
-//     further request is worth making.
-//
-//  2. Otherwise the workflow list is requested with no namespace in the path.
-//     The server answers with the workflows this token may read across the
-//     cluster, and their own metadata.namespace is the list. It needs no
-//     permission beyond the one micko already uses to show workflows.
-//
-// The second path is honest but partial: a namespace with no workflows in the
-// returned page cannot appear in it. The note says so, and the picker always
-// accepts a typed name, so a quiet namespace is never unreachable.
+// Argo has no namespace-list endpoint. The client uses managedNamespace when
+// set, otherwise the namespaces of a bounded workflow list, which misses
+// namespaces with no workflows.
 
-// namespaceScanLimit bounds the list used to derive namespaces. It is a
-// single page: this runs when the reader opens the picker and must answer in
-// the time it takes them to read the pane, not walk every workflow on the
-// cluster.
+// namespaceScanLimit bounds the single page read to derive namespaces, so
+// the picker answers quickly.
 const namespaceScanLimit = 500
 
 // infoResponse is the consumed part of GET /api/v1/info.

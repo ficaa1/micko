@@ -1,22 +1,11 @@
 // Package logs is the log viewer component: a bounded, keyboard-driven
 // log surface over injected core values.
 //
-// Contract rules pinned here:
-//   - It is a child Tea model (New/Update/View/SetSize) accepting core
-//     values, never HTTP clients; it never starts goroutines and never
-//     owns transport (the root batches deliveries via ApplyRecords).
-//   - Retention is bounded two ways: MaxLines entries and MaxBytes of
-//     text, whichever hits first; oversize is truncated or dropped with
-//     visible markers, never silently clipped.
-//   - Pause (Space) freezes autoscroll only; incoming records keep
-//     flowing into the bounded buffer and can never grow memory without
-//     bound; while paused, arriving lines never move the
-//     viewport (no autoscroll jump while paused).
-//   - `t` returns to follow. Search is over the retained buffer
-//     only, with the scope visible. Container default "main" is
-//     visible/editable and switching is an intent for the root.
-//   - Every untrusted string passes the shared sanitizer before render;
-//     duplicates are legitimate output and never deduped.
+// The model never starts goroutines or touches the transport; the root
+// delivers records through ApplyRecords. Retention is bounded by MaxLines and
+// MaxBytes, and oversize lines are truncated or dropped with a visible
+// marker. Pausing stops autoscroll only. Every untrusted string is sanitized
+// before render.
 package logs
 
 import (
@@ -145,8 +134,8 @@ type Model struct {
 	// nothing. The next key clears it.
 	note string
 
-	mu sync.Mutex // guards Apply*/Clear for test/bench callers; the Tea
-	// update loop itself is serial.
+	// mu guards Apply* and Clear for callers outside the update loop.
+	mu sync.Mutex
 }
 
 // NewModel builds a log viewer for ref with explicit context. podName ""

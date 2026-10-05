@@ -5,8 +5,6 @@ import (
 	"strings"
 )
 
-// logs.go picks the lines of a log tail that explain a failure.
-
 // LogTail is how many lines at the end of a failing pod's log are read for
 // evidence. The cause of a failure is almost always printed last, and a
 // bounded read keeps a chatty pod from filling memory.

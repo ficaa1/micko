@@ -6,11 +6,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// yamlMarshalJSONShaped converts decoded JSON values (map[string]any,
-// []any, string, float64, bool, nil) into YAML text using the pinned
-// yaml.v3 module. Keys are emitted in the structural order yaml.v3 uses
-// for maps (it sorts map keys), which keeps the output deterministic for
-// equal inputs — the determinism the resource view requires.
+// yamlMarshalJSONShaped renders decoded JSON values as YAML. yaml.v3 sorts
+// map keys, so equal inputs give equal output.
 func yamlMarshalJSONShaped(v any) (string, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

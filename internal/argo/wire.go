@@ -1,7 +1,3 @@
-// wire.go — JSON decoding of the pinned v4.1.2 wire shapes
-// (docs/development.md). Unknown server fields are dropped from
-// typed DTOs but preserved verbatim in Workflow.Resource (the raw bytes are
-// captured before typed decoding).
 package argo
 
 import (
@@ -14,23 +10,20 @@ import (
 	"github.com/ficaa1/micko/internal/core"
 )
 
-// listEnvelope mirrors GET /api/v1/workflows/{namespace}. metadata.continue
-// and metadata.resourceVersion are opaque strings — decoded verbatim, never
-// parsed (docs/development.md).
+// listEnvelope is the GET /api/v1/workflows/{namespace} response.
+// metadata.continue and metadata.resourceVersion are opaque.
 type listEnvelope struct {
 	Metadata struct {
 		Continue        string `json:"continue"`
 		ResourceVersion string `json:"resourceVersion"`
-		// RemainingItemCount present only with the opt-in label selector;
-		// decoded but unused (docs/development.md).
+		// RemainingItemCount is decoded but unused.
 		RemainingItemCount *int64 `json:"remainingItemCount"`
 	} `json:"metadata"`
 	Items []json.RawMessage `json:"items"`
 }
 
-// workflowLongEnvelope captures the one-level wrapper sometimes produced by
-// deployments that marshal through proto3 JSON: result wraps Workflow
-// (docs/development.md).
+// workflowLongEnvelope is the result wrapper some proto3 JSON deployments
+// add.
 type workflowLongEnvelope struct {
 	Result *rawWorkflow `json:"result"`
 }
@@ -130,9 +123,8 @@ func decodeSuspendedUIDs(body []byte) (map[string]bool, error) {
 	return out, nil
 }
 
-// decodeWorkflowDetail decodes a detail response, preserving the entire raw
-// body verbatim in Workflow.Resource (docs/development.md: raw bytes for
-// the resource view, never typed-drop).
+// decodeWorkflowDetail decodes a detail response and keeps the raw body in
+// Workflow.Resource.
 func decodeWorkflowDetail(body []byte) (core.Workflow, error) {
 	wf, err := decodeWorkflowBody(body, body)
 	if err != nil {
@@ -173,8 +165,7 @@ func wfFromRaw(raw json.RawMessage, rawForDetail []byte) (core.Workflow, error) 
 	}
 	startedAt := w.Status.StartedAt
 	finishedAt := w.Status.FinishedAt
-	// Absent timestamps stay nil (docs/development.md: absent ⇒ not yet
-	// started, never fabricated zero-times).
+	// Absent timestamps stay nil, never zero times.
 	wf := core.Workflow{
 		Summary: core.Summary{
 			Ref: core.Ref{
@@ -257,11 +248,9 @@ func specSuspended(suspend *bool, phase string) bool {
 	return suspend != nil && *suspend && !core.FinishedPhase(phase)
 }
 
-// resolvePodNames fills Node.PodName for pod-backed nodes, using the naming
-// scheme the SERVER recorded on the workflow. With no annotation nothing is
-// derived: a guessed pod name would send log requests to a pod that may
-// belong to another workflow, so the UI would rather offer no node-scoped
-// logs at all (docs/development.md).
+// resolvePodNames fills Node.PodName for pod-backed nodes using the naming
+// scheme the server recorded. Without it nothing is derived: a guessed name
+// could stream another workflow's pod.
 func resolvePodNames(wf *core.Workflow) {
 	if wf.PodNameVersion == "" || len(wf.Nodes) == 0 {
 		return
@@ -279,8 +268,7 @@ func resolvePodNames(wf *core.Workflow) {
 	}
 }
 
-// podBackedNodeType mirrors the pinned log-capable node list
-// (docs/development.md). Only these nodes ever own a pod.
+// podBackedNodeType reports whether nodes of type t own a pod.
 func podBackedNodeType(t string) bool {
 	switch t {
 	case "Pod", "ContainerSet", "HTTP", "Plugin":
@@ -349,9 +337,8 @@ func tsOrZero(t *time.Time) time.Time {
 	return *t
 }
 
-// nodeEnvelope projects NodeStatus fields (json names pinned in
-// docs/development.md). Unknown node fields are dropped from the typed DTO
-// but the workflow detail's Resource retains them.
+// rawNode is the decoded NodeStatus. Unknown fields stay in the detail's
+// Resource.
 type rawNode struct {
 	Name          string     `json:"name"`
 	DisplayName   string     `json:"displayName"`
@@ -368,11 +355,7 @@ type rawNode struct {
 		Name     string `json:"name"`
 		Template string `json:"template"`
 	} `json:"templateRef"`
-	// Pod-capable node types may carry a pod name in outputs/inputs, but
-	// PodName on the DTO is only ever populated from verified resolution
-	// (docs/development.md rule). The adapter never guesses one from the
-	// node ID: a wrong guess would stream another pod's logs.
-
+	// There is no pod name field: Node.PodName comes only from resolvePodNames.
 	Progress          string           `json:"progress"`
 	EstimatedDuration int64            `json:"estimatedDuration"`
 	ResourcesDuration map[string]int64 `json:"resourcesDuration"`

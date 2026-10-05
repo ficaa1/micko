@@ -18,14 +18,12 @@ type actionResultMsg struct {
 	genStamp
 	Result core.ActionResult
 	Err    error
-	// JournalErr is a failed journal append. It is reported, never acted
-	// on: the action it describes is already finished.
+	// JournalErr is a failed journal append, reported but never acted on.
 	JournalErr error
 }
 
-// bulkStepMsg is the result of one request of a bulk action. Index is the
-// position of the request in the run, so a reply can only ever retire the
-// request it belongs to.
+// bulkStepMsg is the result of one bulk request; Index ties it to that
+// request.
 type bulkStepMsg struct {
 	genStamp
 	Index      int
@@ -34,31 +32,25 @@ type bulkStepMsg struct {
 	JournalErr error
 }
 
-// bulkRun is the state of a bulk action in progress: the confirmed
-// requests, the results so far, and the index of the next request. The
-// index only moves forward, which is what guarantees no request is ever
-// sent twice.
+// bulkRun is a bulk action in progress. next only moves forward, so no
+// request is sent twice.
 type bulkRun struct {
 	reqs  []core.ActionRequest
 	items []actions.BulkItem
 	next  int
 }
 
-// SetJournal installs the action journal. Nil turns it off. The demo never
-// gets one: it cannot write, so it has nothing to record.
+// SetJournal installs the action journal; nil turns it off.
 func (m *Root) SetJournal(j *journal.Journal) { m.deps.journal = j }
 
-// actionsPermitted reports whether a mutation may start right now: the
-// session opted in, is not read-only or the demo, has an actioner, and
-// holds fresh data from a live connection.
+// actionsPermitted reports whether a mutation may start now.
 func (m *Root) actionsPermitted() bool {
 	return m.actionOpts.AllowActions && !m.actionOpts.ReadOnly && !m.actionOpts.Demo &&
 		m.deps.actioner != nil && m.connectionReady && m.connectionFresh
 }
 
-// actionExec is what one request needs off the update loop. It is copied
-// out of the root before the command starts, so the command never reads
-// model state from another goroutine.
+// actionExec is copied out of the root before a command starts, so the
+// command never reads model state from another goroutine.
 type actionExec struct {
 	reader   core.Reader
 	actioner core.Actioner
@@ -79,8 +71,7 @@ func (m *Root) actionExec() actionExec {
 	}
 }
 
-// startAction performs the safety-critical sequence in one cancelable command:
-// preflight identity, exactly one mutation, then authoritative read-back.
+// startAction runs one action as a cancelable command.
 func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 	if !m.actionsPermitted() {
 		return nil
@@ -94,8 +85,6 @@ func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.actionAttempt++
 	g := genStamp{Conn: m.connGen, Sel: m.selGen, Attempt: m.actionAttempt}
-	// The entry is tagged with the attempt the reply will carry, so a late
-	// reply from an earlier attempt cannot retire this one.
 	m.setInflight("action", uint64(m.actionAttempt), cancel)
 	exec := m.actionExec()
 	return func() tea.Msg {
@@ -104,13 +93,10 @@ func (m *Root) startAction(req core.ActionRequest) tea.Cmd {
 	}
 }
 
-// run sends one request: preflight identity and applicability, exactly one
-// mutation, then read-back. It is the whole of a single action and one step
-// of a bulk one.
+// run preflights one request, sends it exactly once and reads it back. It is
+// a whole single action and one step of a bulk one.
 func (x actionExec) run(ctx context.Context, req core.ActionRequest) (core.ActionResult, error) {
-	// Every check runs before anything is sent. A failure here changed
-	// nothing on the server, so the outcome is refused rather than unknown:
-	// there is nothing to go and inspect.
+	// A failure before the send changed nothing, so the outcome is refused.
 	actual, err := x.reader.Get(ctx, req.Ref)
 	if err != nil {
 		return refusedAction(req), err
@@ -123,8 +109,8 @@ func (x actionExec) run(ctx context.Context, req core.ActionRequest) (core.Actio
 	}
 	result, err := x.actioner.Execute(ctx, req) // exactly one call
 	if err != nil || result.Outcome == core.ActionUnknown {
-		// An ambiguous send is never repeated. Best-effort inspection is
-		// allowed, but the UI remains UNKNOWN regardless of what it finds.
+		// An ambiguous send is never repeated. The outcome stays UNKNOWN whatever
+		// this read finds.
 		if inspected, inspectErr := x.reader.Get(ctx, req.Ref); inspectErr == nil {
 			result.Workflow = &inspected
 		}
@@ -135,10 +121,8 @@ func (x actionExec) run(ctx context.Context, req core.ActionRequest) (core.Actio
 		}
 		return result, err
 	}
-	// The server returned success, so the mutation is applied. From here
-	// on the outcome is at worst ACCEPTED; it never degrades to UNKNOWN,
-	// because a failed observation says nothing about a request the
-	// server already acknowledged.
+	// The server accepted the mutation, so a failed read-back cannot make the
+	// outcome worse than ACCEPTED.
 	ref := req.Ref
 	if result.Affected != nil {
 		ref = *result.Affected
@@ -148,9 +132,8 @@ func (x actionExec) run(ctx context.Context, req core.ActionRequest) (core.Actio
 		result.Outcome = core.ActionAccepted
 		return result, readErr
 	}
-	// A deleted workflow has nothing left to show. Whatever a read found
-	// under its name is an archived copy, and its phase would read as the
-	// state of a workflow that is gone.
+	// A read after a delete finds at most the archived copy, whose phase would
+	// mislead.
 	if req.Action != core.ActionDelete {
 		result.Workflow = &wf
 	}
@@ -162,8 +145,8 @@ func (x actionExec) run(ctx context.Context, req core.ActionRequest) (core.Actio
 	return result, nil
 }
 
-// record appends one journal line for a finished attempt. The outcome is
-// settled first, so the journal says what the pane says.
+// record appends the journal line for a finished attempt, with its settled
+// outcome.
 func (x actionExec) record(req core.ActionRequest, result core.ActionResult, err error) error {
 	if x.journal == nil {
 		return nil
@@ -186,10 +169,8 @@ func (x actionExec) record(req core.ActionRequest, result core.ActionResult, err
 	return x.journal.Record(e)
 }
 
-// settledOutcome is the outcome a result is reported with. An error
-// alongside an accepted result describes a failed observation, not a failed
-// mutation, so the accepted outcome stands. Only a result that is neither
-// confirmed nor accepted degrades to unknown.
+// settledOutcome is the outcome a result is reported with: an error turns
+// anything but ACCEPTED or REFUSED into UNKNOWN.
 func settledOutcome(o core.ActionOutcome, err error) core.ActionOutcome {
 	if err != nil && o != core.ActionAccepted && o != core.ActionUnknown && o != core.ActionRefused {
 		return core.ActionUnknown
@@ -203,33 +184,21 @@ func refusedAction(req core.ActionRequest) core.ActionResult {
 }
 
 // stopObservationInterval and stopObservationAttempts bound how long an
-// accepted Stop, Terminate or Delete is watched for its end state. A
-// graceful Stop runs the workflow's exit handler first, so the phase can lag
-// the accepted request by many seconds.
-//
-// The budget is short on purpose. The action pane is modal, so every second
-// spent here is a second the reader stares at "waiting for the server" with
-// no way forward. Five seconds separates a quick stop from a slow one; past
-// that the outcome is reported as ACCEPTED and the detail pane, which
-// refetches on the same poll, shows the phase settle in place. A bulk
-// action spends the budget per target, which is one more reason to keep it
-// short.
-//
-// They are variables, not constants, so a test can shorten the budget without
-// waiting out a real exit handler.
+// accepted Stop, Terminate or Delete is watched for its end state. The action
+// pane is modal while it waits, so the budget is short; past it the outcome is
+// ACCEPTED and the detail pane shows the phase settle. Tests shorten it.
 var (
 	stopObservationInterval = time.Second
 	stopObservationAttempts = 5
 )
 
-// readBack observes the state that follows an accepted mutation. settled
-// reports whether the expected end state was seen inside the budget; false
-// means the mutation is applied but still in progress, never that it failed.
+// readBack observes the state after an accepted mutation. settled is false
+// when the end state was not seen inside the budget: the mutation is applied
+// but still in progress.
 //
 // The end state of each action:
 //   - resume: the workflow no longer waits for a person.
-//   - suspend: the workflow reports itself suspended (spec.suspend is set
-//     in the server's answer at once; the phase stays Running).
+//   - suspend: the workflow reports itself suspended; the phase stays Running.
 //   - retry: the workflow has left its terminal phase.
 //   - stop, terminate: the workflow has reached a terminal phase.
 //   - resubmit: the new workflow exists.
@@ -252,19 +221,14 @@ func readBack(ctx context.Context, reader core.Reader, ref core.Ref, action core
 	case core.ActionRetry:
 		return wf, !terminalPhase(wf.Summary.Phase), nil
 	default:
-		// Resubmit is read back under the new name, so the workflow
-		// existing is the observation.
+		// Resubmit reads back the new workflow, so finding it is the end state.
 		return wf, true, nil
 	}
 }
 
-// observeUntil polls ref inside the observation budget. With a first read
-// in hand it waits for a terminal phase; without one it is watching a
-// delete, and waits for a read that answers not found.
-//
-// A server with the workflow archive enabled answers a read of a deleted
-// workflow from the archive. Such a delete never reads as gone, and
-// reaches ACCEPTED when the budget runs out: the server did apply it.
+// observeUntil polls ref inside the observation budget: for a terminal phase
+// when first is set, otherwise for a delete to read as not found. With the
+// archive enabled a deleted workflow still reads, so the delete ends ACCEPTED.
 func observeUntil(ctx context.Context, reader core.Reader, ref core.Ref, first *core.Workflow) (core.Workflow, bool, error) {
 	deleting := first == nil
 	done := func(wf core.Workflow) bool { return terminalPhase(wf.Summary.Phase) }
@@ -287,8 +251,7 @@ func observeUntil(ctx context.Context, reader core.Reader, ref core.Ref, first *
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			// Cancellation is not evidence about the workflow. Report the
-			// last observed state as still in progress.
+			// Cancellation says nothing about the workflow.
 			return wf, false, nil
 		case <-timer.C:
 		}
@@ -304,8 +267,7 @@ func observeUntil(ctx context.Context, reader core.Reader, ref core.Ref, first *
 	return wf, done(wf), nil
 }
 
-// isNotFound reports whether err is the server saying the workflow does not
-// exist.
+// isNotFound reports whether the server said the workflow does not exist.
 func isNotFound(err error) bool {
 	if err == nil {
 		return false
@@ -334,20 +296,15 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 	}
 	msg.Result.Outcome = settledOutcome(msg.Result.Outcome, msg.Err)
 	m.actionView.SetOutcome(msg.Result)
-	// A finished action hands the screen back by itself. Waiting for an Esc
-	// left the reader one press away from the workflow they had just changed.
-	// The one-line report moves to the footer of the route behind it.
-	//
-	// UNKNOWN is the exception: nobody knows whether the server applied it,
-	// and that is precisely the state a reader must see rather than dismiss.
+	// A finished action closes its pane and reports in the footer of the route
+	// behind it. UNKNOWN stays on screen: the reader must see it.
 	if msg.Result.Outcome == core.ActionUnknown {
 		m.flash = warning
 		return nil
 	}
 	m.flash = joinFlash(m.actionView.OutcomeLine(), warning)
 	m.actionView.Close()
-	// A deleted workflow has no detail left to show, so the reader goes
-	// back to the list, which back() refreshes.
+	// A deleted workflow has no detail left, so the reader returns to the list.
 	if msg.Result.Action == core.ActionDelete && m.route == RouteDetail {
 		m.actionFromMarks = false
 		return m.back()
@@ -355,11 +312,9 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 	return m.afterActionPane()
 }
 
-// startBulk begins a confirmed bulk action. Its requests run one at a time,
-// each through the same preflight, send and read-back as a single action.
-// One runs at a time for two reasons: every result must be attributable to
-// exactly one request, and a stale snapshot or lost connection discovered
-// halfway must stop the rest before they are sent.
+// startBulk begins a confirmed bulk action. Requests run one at a time, so
+// each result belongs to one request and a lost connection stops the rest
+// before they are sent.
 func (m *Root) startBulk(reqs []core.ActionRequest) tea.Cmd {
 	if !m.actionsPermitted() || len(reqs) == 0 || m.bulk != nil || m.hasInflight("action") {
 		return nil
@@ -389,12 +344,8 @@ func (m *Root) bulkStep() tea.Cmd {
 }
 
 // handleBulkStep records one finished request and starts the next, or
-// reports the whole run.
-//
-// Before each further request the gates are checked again. A connection
-// that dropped, a snapshot that went stale, or the reader asking to stop
-// ends the run there: the requests not yet sent are reported REFUSED, which
-// is exactly true of them.
+// reports the run. A lost connection, a stale snapshot or a stop ends the
+// run; the requests not yet sent are reported REFUSED.
 func (m *Root) handleBulkStep(msg bulkStepMsg) tea.Cmd {
 	if msg.Conn != m.connGen || msg.Sel != m.selGen || msg.Attempt != m.actionAttempt ||
 		m.bulk == nil || msg.Index != m.bulk.next {
@@ -434,10 +385,8 @@ func (m *Root) handleBulkStep(msg bulkStepMsg) tea.Cmd {
 	return nil
 }
 
-// afterActionPane runs when a finished action's pane closes: the marks it
-// acted on are dropped, so a second press of a cannot resend the same set
-// by accident, and the route behind it is refetched, because the workflows
-// the reader is looking at have just changed.
+// afterActionPane drops the marks the action used, so a second a cannot
+// resend them, and refetches the route behind the pane.
 func (m *Root) afterActionPane() tea.Cmd {
 	if m.actionFromMarks {
 		m.listView.ClearMarks()
@@ -456,10 +405,8 @@ func (m *Root) afterActionPane() tea.Cmd {
 	return nil
 }
 
-// journalWarning turns the first journal failure of the session into a
-// footer line, and every later one into nothing. The journal is a record,
-// not a gate: repeating the warning after every action would bury the
-// outcome it sits beside.
+// journalWarning returns a footer line for the session's first journal
+// failure and nothing for later ones.
 func (m *Root) journalWarning(err error) string {
 	if err == nil || m.journalWarned {
 		return ""
@@ -488,10 +435,8 @@ func errText(err error) string {
 	return err.Error()
 }
 
-// openDetailActions opens the action pane for the workflow the detail route
-// shows. Its availability is judged from the loaded workflow, or from the
-// workflow's list row while the detail is still loading; with neither, the
-// menu offers every action rather than guess at a phase.
+// openDetailActions opens the action pane for the detail route's workflow.
+// Without a loaded workflow or list row, the menu offers every action.
 func (m *Root) openDetailActions() {
 	var targets []core.Summary
 	if s, ok := m.knownSummary(m.selection); ok {
@@ -515,10 +460,8 @@ func (m *Root) openListActions() {
 	m.openActions(sel.Ref, []core.Summary{sel}, false)
 }
 
-// openActions builds the action pane for targets and opens its menu, or its
-// blocked state when the data behind it is stale. The freshness gate is the
-// same on every route: an action chosen from a stale list is exactly as
-// dangerous as one chosen from a stale detail pane.
+// openActions opens the action pane for targets, or its blocked state when
+// the data behind it is stale.
 func (m *Root) openActions(ref core.Ref, targets []core.Summary, fromMarks bool) {
 	m.actionView = m.newActionView(ref)
 	if len(targets) > 0 {
@@ -555,9 +498,8 @@ func (m *Root) knownSummary(ref core.Ref) (core.Summary, bool) {
 	return core.Summary{}, false
 }
 
-// bulkIntentMatches reports whether every request of a bulk intent targets
-// a workflow of the open bulk pane. Only the active, confirmed pane may
-// reach the executor.
+// bulkIntentMatches reports whether every request targets a workflow of the
+// open bulk pane.
 func (m *Root) bulkIntentMatches(reqs []core.ActionRequest) bool {
 	if m.actionView == nil || !m.actionView.Bulk() || m.actionView.State() != actions.StateSubmitting || len(reqs) == 0 {
 		return false

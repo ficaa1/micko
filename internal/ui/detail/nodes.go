@@ -1,19 +1,15 @@
-// Package detail implements the workflow detail view: summary, the node tree
-// (no geometric DAG renderer) and the redacted resource viewer.
+// Package detail implements the workflow detail view: summary, node tree and
+// the redacted resource viewer.
 //
-// The node tree is drawn the way a reader thinks about a pipeline, not the
-// way the controller records it. Rules baked into this package:
-//   - children lists are the controller's bookkeeping: they chain a steps
-//     template's groups and point each DAG task at its dependents. They are
-//     not the tree. A node is drawn under the node that owns it, which is
-//     its Retry node for a retry attempt, its TaskGroup for a loop item,
-//     its container set for a container, and its boundary otherwise.
-//     outboundNodes are never tree edges.
-//   - StepGroup nodes are not drawn. Their steps are drawn under the Steps
-//     node in group order, the way `argo get` shows them.
-//   - Every other node in the map appears exactly once in the tree or in an
-//     explicit ungrouped section; cycles are cut; traversal is
-//     linear apart from sorting, never exponential.
+// The node tree is drawn the way a reader thinks about a pipeline:
+//   - A node is drawn under the node that owns it: its Retry node for a retry
+//     attempt, its TaskGroup for a loop item, its container set for a
+//     container, and its boundary otherwise. Children and outboundNodes are
+//     never tree edges.
+//   - StepGroup nodes are not drawn; their steps sit under the Steps node in
+//     group order, as `argo get` shows them.
+//   - Every other node appears exactly once, in the tree or an ungrouped
+//     section; cycles are cut.
 //   - Node IDs are never assumed to be pod names.
 package detail
 
@@ -34,9 +30,8 @@ type OutlineRow struct {
 	Type        string
 	Phase       string
 	Message     string
-	// HasPod reports pod/log potential per the pinned node-type list
-	// (docs/development.md: Pod/ContainerSet/HTTP/Plugin plus container-set
-	// children). It does NOT imply a known pod name.
+	// HasPod reports that the node type can have a pod and logs, not that its
+	// pod name is known.
 	HasPod bool
 	// PodName is the pod backing this node. It is filled in only when the
 	// server stated its pod-naming scheme on the workflow; empty means
@@ -101,8 +96,6 @@ type Outline struct {
 // OutlineOptions tunes the outline build. The zero value is the default
 // deterministic outline.
 type OutlineOptions struct {
-	// Noop placeholder for future view-level toggles; the deterministic
-	// build itself takes no options today.
 	_ bool
 }
 
@@ -776,10 +769,8 @@ func naturalCompare(a, b string) int {
 
 func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 
-// outlineRowOf maps a core.Node to an OutlineRow. HasPod follows the pinned
-// node-type list. PodName is carried through exactly as the adapter resolved
-// it: empty unless the server declared the workflow's pod-name format, so a
-// node ID is still never treated as a pod name.
+// outlineRowOf maps a core.Node to an OutlineRow. PodName is the adapter's
+// resolved name, empty when the pod-name format is unknown.
 func outlineRowOf(n core.Node) OutlineRow {
 	name := n.Name
 	if name == "" {
@@ -825,9 +816,7 @@ func nodeRole(n core.Node) string {
 	}
 }
 
-// nodeTypeHasPod encodes the pinned log-capable node types
-// (docs/development.md): Pod, ContainerSet, HTTP, Plugin and container-set
-// children. Everything else renders structurally.
+// nodeTypeHasPod reports whether a node type can own a pod and logs.
 func nodeTypeHasPod(t string) bool {
 	switch t {
 	case "Pod", "ContainerSet", "HTTP", "Plugin":

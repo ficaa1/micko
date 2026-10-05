@@ -61,9 +61,7 @@ func Open() *Journal {
 }
 
 // DefaultPath is $XDG_STATE_HOME/micko/actions.jsonl, or
-// ~/.local/state/micko/actions.jsonl when XDG_STATE_HOME is unset. The
-// XDG spec defines the state directory as the place for exactly this kind
-// of history: kept across runs, not configuration, not cache.
+// ~/.local/state/micko/actions.jsonl when XDG_STATE_HOME is unset.
 func DefaultPath() (string, error) {
 	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" && filepath.IsAbs(dir) {
 		return filepath.Join(dir, "micko", "actions.jsonl"), nil

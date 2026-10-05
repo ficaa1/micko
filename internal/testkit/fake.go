@@ -1,11 +1,8 @@
-// Package testkit provides the independent fake core.Reader, a fake clock
-// and explicitly synthetic fixtures for deterministic tests (docs/development.md
-// describes the test environments).
+// Package testkit provides a fake core.Reader, a fake clock and synthetic
+// fixtures for deterministic tests.
 //
-// Fixture policy: everything here is SYNTHETIC and named as such. Nothing in
-// this package is a captured production payload, and nothing may be
-// presented as one (fixtures are explicitly synthetic, never mislabeled
-// captures).
+// Every fixture is synthetic: none is a captured production payload, and
+// none may be presented as one.
 package testkit
 
 import (
@@ -28,7 +25,7 @@ type FakeClock struct {
 // NewFakeClock returns a clock pinned at t.
 func NewFakeClock(t time.Time) *FakeClock { return &FakeClock{now: t} }
 
-// Now implements a monotonic-ish wall clock read.
+// Now returns the fake clock's current time.
 func (c *FakeClock) Now() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -9,38 +9,23 @@ import (
 	"github.com/ficaa1/micko/internal/ui/namespaces"
 )
 
-// namespaces.go owns the `n` key: the namespace the session is looking at.
-//
-// It was a config value fixed at startup, so a second namespace meant a second
-// run of the program. Switching is a connection-generation change, exactly
-// like reconnecting: every in-flight request belongs to the old namespace and
-// is canceled, every cached snapshot is dropped, and the list starts again.
-//
-// It also owns the `0` key, the all-namespaces view: the same list with an
-// empty namespace, which Argo answers with every workflow the token may read.
-// Entering and leaving it is the same generation change as a switch.
-
 // namespacesLoadedMsg carries the candidate names into the update loop.
 type namespacesLoadedMsg struct {
 	Conn int
-	// RequestID names the fetch this reply belongs to, so a reply that lost
-	// the race cannot retire the fetch that replaced it.
+	// RequestID ties the reply to its fetch, so a stale reply cannot retire a
+	// newer one.
 	RequestID uint64
 	Names     []string
 	Note      string
 	Err       error
 }
 
-// SetNamespaceSeed records the namespaces the profile names. They are offered
-// even when the server's own answer does not mention them: a namespace with no
-// workflows right now is still a namespace the reader configured.
+// SetNamespaceSeed records the namespaces the profile names. They are
+// offered even when the server does not report them.
 func (m *Root) SetNamespaceSeed(names []string) { m.nsSeed = names }
 
-// openNamespacePicker shows the dialog and starts the fetch behind it.
-//
-// In the all-namespaces view no single namespace is current, so the dialog
-// marks none, and choosing the namespace the session had before is a switch
-// back to it rather than a no-op.
+// openNamespacePicker shows the dialog and starts the fetch behind it. In the
+// all-namespaces view the dialog marks no namespace current.
 func (m *Root) openNamespacePicker() tea.Cmd {
 	if m.nsView == nil {
 		return nil
@@ -50,8 +35,7 @@ func (m *Root) openNamespacePicker() tea.Cmd {
 		current = ""
 	}
 	m.nsView.Open(current)
-	// With no lister there is nothing to ask, so the dialog opens straight
-	// onto the configured names and the typed entry.
+	// With no lister the dialog offers the configured names and typed entry.
 	if m.deps.nsLister == nil {
 		m.nsView.SetNames(nil, "no namespace list from this server; type one", m.nsSeed)
 		return nil
@@ -60,8 +44,8 @@ func (m *Root) openNamespacePicker() tea.Cmd {
 	return m.fetchNamespaces()
 }
 
-// fetchNamespaces asks the server for the namespace names. The picker and the
-// palette's `ns` completion share the answer.
+// fetchNamespaces asks the server for namespace names, for the picker and
+// the palette's ns completion.
 func (m *Root) fetchNamespaces() tea.Cmd {
 	if m.deps.nsLister == nil {
 		return nil
@@ -78,9 +62,8 @@ func (m *Root) fetchNamespaces() tea.Cmd {
 	}
 }
 
-// handleNamespacesLoaded applies a fetch result. A failure is reported inside
-// the dialog rather than closing it: the typed entry still works, and closing
-// the dialog would look like the key had failed.
+// handleNamespacesLoaded applies a fetch result. A failure is shown inside
+// the dialog, whose typed entry still works.
 func (m *Root) handleNamespacesLoaded(msg namespacesLoadedMsg) tea.Cmd {
 	m.clearInflight("namespaces", msg.RequestID)
 	if msg.Conn != m.connGen || m.nsView == nil {
@@ -101,8 +84,7 @@ func (m *Root) handleNamespacesLoaded(msg namespacesLoadedMsg) tea.Cmd {
 }
 
 // switchNamespace moves the whole session to another namespace. From the
-// all-namespaces view, the session's own namespace is a valid target: it
-// leaves the cluster-wide list.
+// all-namespaces view the session's own namespace is a valid target.
 func (m *Root) switchNamespace(ns string) tea.Cmd {
 	if ns == "" || (ns == m.deps.namespace && !m.deps.allNamespaces) {
 		return nil
@@ -113,12 +95,7 @@ func (m *Root) switchNamespace(ns string) tea.Cmd {
 }
 
 // toggleAllNamespaces switches between the session's namespace and every
-// namespace the token may read (the `0` key and `:all`).
-//
-// Argo lists across namespaces when the namespace segment of the path is
-// empty, so the list and the watch keep their shape and only their scope
-// changes. The namespace the session had is kept, and toggling back returns
-// to it.
+// namespace the token may read; toggling back returns to the one it had.
 func (m *Root) toggleAllNamespaces() tea.Cmd {
 	if !m.connected() {
 		m.flash = "no profile connected"
@@ -133,16 +110,9 @@ func (m *Root) toggleAllNamespaces() tea.Cmd {
 	return m.restartList("namespace: " + m.deps.namespace)
 }
 
-// restartList starts a connection generation on the list after the scope of
-// the list changed.
-//
-// Everything in flight was requested for the old scope. A late reply carries
-// the old workflows, and the generation bump is what makes the update loop
-// discard it. The snapshot is dropped for the same reason: rows from the old
-// scope under the new header would be a lie until the first list lands.
-//
-// A kind's route stays where it is and collects its own list in the new
-// scope; a drill-down ends, since its owner belongs to the old scope.
+// restartList starts a new connection generation on the list after its scope
+// changed, so late replies for the old scope are dropped, and clears the
+// snapshot. A kind's route collects in the new scope; a drill-down ends.
 func (m *Root) restartList(flash string) tea.Cmd {
 	from := m.route
 	m.cancelAll()
@@ -158,12 +128,8 @@ func (m *Root) restartList(flash string) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// namespaceLabel is the namespace the header shows: the session's, or "all"
-// in the all-namespaces view. A drill-down shows the owner's namespace, which
-// is the one its list asks for.
-//
-// A cluster-scoped kind's route shows that instead: its list ignores the
-// namespace.
+// namespaceLabel is the namespace the header shows: "(cluster-scoped)" on a
+// cluster-scoped kind, a drill-down owner's, "all", or the session's.
 func (m *Root) namespaceLabel() string {
 	if m.clusterScopedRoute() {
 		return "(cluster-scoped)"

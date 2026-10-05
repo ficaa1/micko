@@ -7,9 +7,6 @@ import (
 	"github.com/ficaa1/micko/internal/ui/shared"
 )
 
-// state.go holds the rules about a run that has not failed: waiting at a
-// gate, running (within its estimate or past it), not started, or done.
-
 // longWait is how long a wait at a gate, or for the controller to start a
 // workflow, may last before the finding becomes a warning.
 const (

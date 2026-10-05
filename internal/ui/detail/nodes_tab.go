@@ -178,11 +178,9 @@ func (m *Model) indexOf(id string) int {
 	return -1
 }
 
-// applyDefaultFolds folds each finished retry attempt that is not the last,
-// when it has a subtree to fold. The last attempt is the one that decided
-// the outcome; the earlier ones are history a reader opens on purpose. Each
-// node is folded by default once only, so a reader who opens it keeps it
-// open through every refresh.
+// applyDefaultFolds folds each finished retry attempt but the last, when it
+// has a subtree. A node is default-folded once only, so one the reader opens
+// stays open.
 func (m *Model) applyDefaultFolds() {
 	var walk func(rows []OutlineRow)
 	walk = func(rows []OutlineRow) {

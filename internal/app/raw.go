@@ -13,16 +13,11 @@ import (
 	"github.com/ficaa1/micko/internal/ui/workflowlist"
 )
 
-// raw.go holds the three commands that take content OUT of the program: the
-// borderless full-screen view, the clipboard copy, and the browser link.
-//
-// None of them mutates anything on the server. The browser link is the only
-// one that leaves the process, and it opens a page the user already has
-// access to — micko never sends a request to the web address itself.
+// The raw view, the clipboard copy and the browser link take content out of
+// the program. None of them writes to the server.
 
-// maxCopyBytes bounds one clipboard write. The copy travels to the terminal
-// as an escape sequence, and terminals refuse or truncate very large ones, so
-// the cut is made here where it can be reported.
+// maxCopyBytes bounds one clipboard write. Terminals refuse or truncate large
+// escape sequences, so the cut is made here, where it can be reported.
 const maxCopyBytes = 512 * 1024
 
 // enterRaw switches to the borderless full-screen view, starting at the top.
@@ -33,8 +28,7 @@ func (m *Root) enterRaw() {
 	m.gPending = false
 }
 
-// handleRawKey is the whole key matrix of the raw view: scroll, pan, wrap,
-// copy or leave.
+// handleRawKey handles the raw view's keys: scroll, pan, wrap, copy or leave.
 func (m *Root) handleRawKey(key string) tea.Cmd {
 	if m.gPending {
 		m.gPending = false
@@ -136,8 +130,7 @@ func rawWidest(lines []string) int {
 	return w
 }
 
-// expandTabs replaces each tab with the spaces up to the next 8-column stop,
-// where a terminal would put the cursor.
+// expandTabs replaces each tab with spaces to the next 8-column stop.
 func expandTabs(s string) string {
 	if !strings.Contains(s, "\t") {
 		return s
@@ -157,8 +150,8 @@ func expandTabs(s string) string {
 	return b.String()
 }
 
-// rawScreenLines is the raw content as screen rows: one per line, or with
-// wrapping on, as many as each line needs at the screen width.
+// rawScreenLines returns the raw content as screen rows, wrapped when
+// wrapping is on.
 func (m *Root) rawScreenLines() []string {
 	lines := m.rawLines()
 	if !m.rawWrap || m.width < 1 {
@@ -191,9 +184,8 @@ func (m *Root) rawLines() []string {
 	return nil
 }
 
-// listRawLines renders the visible list rows as tab-separated name, phase and
-// UID. Across namespaces each line starts with the row's namespace, as the
-// table does.
+// listRawLines returns the visible list rows as tab-separated name, phase
+// and UID, led by the namespace across namespaces.
 func (m *Root) listRawLines() []string {
 	rows := m.listView.Rows()
 	out := make([]string, 0, len(rows))
@@ -209,9 +201,8 @@ func (m *Root) listRawLines() []string {
 	return out
 }
 
-// rawView renders the borderless screen: content, then one hint line so the
-// way out is never a guess. The hint is the last row, so a selection that
-// starts at the top of the screen stops before it.
+// rawView renders the content and a last hint line, so a selection from the
+// top stops before the hint.
 func (m *Root) rawView() tea.View {
 	lines := m.rawScreenLines()
 	// A resize or a shorter refresh can leave the anchors past the content.
@@ -232,8 +223,7 @@ func (m *Root) rawView() tea.View {
 	}
 	out := make([]string, 0, h)
 	for _, l := range body {
-		// An unpanned line keeps its tabs for a mouse copy; the terminal
-		// clips it.
+		// An unpanned line keeps its tabs for a mouse copy.
 		if m.rawLeft > 0 {
 			l = ansi.Cut(expandTabs(l), m.rawLeft, m.rawLeft+m.width)
 		}
@@ -261,8 +251,7 @@ func (m *Root) rawView() tea.View {
 	return v
 }
 
-// copyText is what the y key puts on the clipboard, chosen by what the reader
-// is looking at.
+// copyText is what y copies, chosen by what the reader is looking at.
 func (m *Root) copyText() string {
 	var s string
 	switch {
@@ -292,8 +281,7 @@ func (m *Root) copyText() string {
 	return s
 }
 
-// copyLabel is the footer report for the copy, including the truncation when
-// one happened. A silent partial copy is the failure this line prevents.
+// copyLabel is the footer report for the copy, including any truncation.
 func (m *Root) copyLabel() string {
 	text := m.copyText()
 	if text == "" {
@@ -307,8 +295,7 @@ func (m *Root) copyLabel() string {
 	return label + " — if nothing pasted, your terminal blocks clipboard writes"
 }
 
-// workflowURL builds the Argo UI address of the selected workflow. It returns
-// an empty string when the profile has no web address or nothing is selected.
+// workflowURL is the selected workflow's Argo UI address, or "".
 func (m *Root) workflowURL() string {
 	if m.webURL == "" {
 		return ""
@@ -323,8 +310,7 @@ func (m *Root) workflowURL() string {
 	if ref.Name == "" || ref.Namespace == "" {
 		return ""
 	}
-	// An archived run's page in the Argo UI is keyed by its UID: the name
-	// may belong to another run by now, or to none.
+	// An archived run's page is keyed by UID; its name may belong to another run.
 	if m.detailState.archived && ref == m.detailState.ref && ref.UID != "" {
 		return strings.TrimSuffix(m.webURL, "/") + "/archived-workflows/" + ref.Namespace + "/" + ref.UID
 	}
@@ -332,7 +318,7 @@ func (m *Root) workflowURL() string {
 }
 
 // openInBrowser opens the selected workflow in the Argo UI and copies the
-// link as well, so the reader keeps the address even if no browser opened.
+// link.
 func (m *Root) openInBrowser() tea.Cmd {
 	url := m.workflowURL()
 	if url == "" {
@@ -355,9 +341,8 @@ func (m *Root) openInBrowser() tea.Cmd {
 	return tea.SetClipboard(url)
 }
 
-// openInDefaultBrowser hands the address to the desktop. The command is fixed
-// per platform and the address is a separate argument, so nothing in a
-// workflow name can become part of the command line.
+// openInDefaultBrowser passes the address as its own argument to a fixed
+// per-platform command.
 func openInDefaultBrowser(url string) error {
 	switch runtime.GOOS {
 	case "darwin":

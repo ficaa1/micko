@@ -1,9 +1,5 @@
 // Package namespaces is the namespace picker: the dialog behind the `n` key.
 //
-// The namespace was fixed at startup by the config file, so looking at another
-// one meant quitting micko and starting it again. That is the wrong shape
-// for a tool people leave open all day.
-//
 // The picker is a dialog: while it is open it owns every
 // key except Ctrl-C. It holds no client and starts nothing. The root loads the
 // names into it and converts its one intent into a reconnection.

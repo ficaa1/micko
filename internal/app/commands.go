@@ -11,39 +11,35 @@ import (
 	"github.com/ficaa1/micko/internal/journal"
 )
 
-// Clock abstracts time for deterministic tests (fake clock injection).
+// Clock is the time source; tests and the demo inject a fake one.
 type Clock interface {
 	Now() time.Time
 }
 
-// SystemClock reads the wall clock. Every relative time on screen — a
-// workflow's age, how long a snapshot has been stale — is measured from
-// Now, so a clock that does not move freezes all of them at start.
+// SystemClock reads the wall clock, so on-screen ages keep moving.
 type SystemClock struct{}
 
 // Now returns the current UTC time.
 func (SystemClock) Now() time.Time { return time.Now().UTC() }
 
-// deps carries the root model's injected collaborators. The Reader is the
-// frozen core contract; the root model never knows about transport.
+// deps carries the root model's injected collaborators. The root never sees
+// the transport.
 type deps struct {
 	reader   core.Reader
 	watcher  core.Watcher
 	actioner core.Actioner
-	// nsLister answers the namespace picker. It is optional: a Reader that
-	// cannot list namespaces simply does not implement it.
+	// nsLister answers the namespace picker; nil when the Reader cannot list
+	// namespaces.
 	nsLister core.NamespaceLister
-	// eventWatcher streams Kubernetes events for the Events section. It is
-	// optional too: without it the section says the backend has none.
+	// eventWatcher feeds the Events section; nil when the backend has none.
 	eventWatcher core.EventWatcher
-	// cronLister lists cron workflows. Optional like nsLister: without it the
-	// cron route says the connection cannot list them.
+	// cronLister lists cron workflows; nil when the connection cannot.
 	cronLister core.CronLister
-	// templateLister and clusterTemplateLister list the two template kinds,
-	// optional in the same way.
+	// templateLister and clusterTemplateLister list the two template kinds; nil
+	// when the connection cannot.
 	templateLister        core.TemplateLister
 	clusterTemplateLister core.ClusterTemplateLister
-	// archive reads the workflow archive, optional in the same way.
+	// archive reads the workflow archive; nil when the connection cannot.
 	archive core.ArchiveReader
 	// journal records every write attempt. Nil records nothing.
 	journal  *journal.Journal
@@ -52,31 +48,21 @@ type deps struct {
 	// namespace is the active namespace; switching it bumps the connection
 	// generation.
 	namespace string
-	// allNamespaces widens the list and the watch to every namespace the
-	// token may read. namespace keeps the session's own namespace, which the
-	// toggle returns to.
+	// allNamespaces widens the list and the watch to every namespace. namespace
+	// keeps the one the toggle returns to.
 	allNamespaces bool
-	// drillNamespace and labelSelector narrow the workflow list to the runs
-	// one object owns (a cron workflow's, a template's). drillNamespace is
-	// that object's namespace, which the list asks for instead of the
-	// session's; empty keeps the session's scope. Both are empty outside a
-	// drill-down.
+	// drillNamespace and labelSelector narrow the workflow list to the runs one
+	// object owns. Both are empty outside a drill-down.
 	drillNamespace string
 	labelSelector  string
-	// snapshotCap bounds collected summaries per generation
-	// (snapshot cap 5,000; tests/demo may lower it).
+	// snapshotCap bounds the summaries collected per generation.
 	snapshotCap int
-	// pageSize is the requested page size (default 100).
+	// pageSize is the requested list page size.
 	pageSize int64
 }
 
-// listNamespace is the namespace the list and the watch ask for. Empty is
-// Argo's "every namespace": the path becomes /api/v1/workflows/ with the
-// trailing slash, which the server's route matches with an empty namespace.
-//
-// In a drill-down the owner's namespace wins: a cron workflow's runs live in
-// its own namespace, so the list asks there even when the session is looking
-// at every namespace.
+// listNamespace is the namespace the list and the watch ask for; empty means
+// every namespace. A drill-down asks in its owner's namespace.
 func (d deps) listNamespace() string {
 	if d.drillNamespace != "" {
 		return d.drillNamespace
@@ -101,14 +87,10 @@ func (p *requestIDProvider) newID() uint64 {
 	return p.next
 }
 
-// command constructors -------------------------------------------------------
-//
-// Each async command receives a context that the root cancels on generation
-// bump/route change, plus the generations and request ID to stamp on the
-// result message. The root discards stale results (model_test.go pins it).
+// Each async command gets a context the root cancels on a generation bump or
+// route change, and stamps its reply so the root can drop stale results.
 
-// listCmd collects one full snapshot page-by-page. One list operation per
-// generation; the next timer starts after completion, not concurrently.
+// listCmd collects one full snapshot page by page.
 func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg {
 	return func() tea.Msg {
 		msg := listLoadedMsg{genStamp: g, RequestID: id}
@@ -154,8 +136,7 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 			if page.Continue == "" {
 				break
 			}
-			// Follow continuation even when a page contains zero items
-			// — but bound repeated tokens.
+			// Follow the token even past an empty page, but stop on a repeated one.
 			cont = page.Continue
 			pages++
 			if maxPages > 0 && pages > maxPages {
@@ -169,9 +150,8 @@ func (d deps) listCmd(ctx context.Context, g genStamp, id uint64) func() tea.Msg
 	}
 }
 
-// detailCmd fetches one workflow detail. The request carries the UID so the
-// server can fall back to the archive for same-name replacements
-// (docs/development.md; micko always passes UID on detail GET).
+// detailCmd fetches one workflow detail. The UID keeps a same-name replacement
+// from being mistaken for the selected workflow.
 func (d deps) detailCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref) func() tea.Msg {
 	return func() tea.Msg {
 		wf, err := d.reader.Get(ctx, ref)
@@ -189,10 +169,8 @@ func (d deps) detailCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref
 	}
 }
 
-// logSourcesCmd reads one workflow for its node map and answers with the
-// pod-to-step map the log pane labels its lines with. It reports nothing
-// on failure: the labels then stay on pod names, which is what they show
-// before the answer arrives anyway.
+// logSourcesCmd reads one workflow and answers with its pod-to-step map. On
+// failure it reports nothing and the log pane keeps pod names.
 func (d deps) logSourcesCmd(ctx context.Context, g genStamp, id uint64, ref core.Ref) func() tea.Msg {
 	return func() tea.Msg {
 		wf, err := d.reader.Get(ctx, ref)
@@ -215,23 +193,14 @@ func podSources(nodes map[string]core.Node) map[string]string {
 	return out
 }
 
-// Log stream plumbing --------------------------------------------------------
-//
-// The pump runs StreamLogs and feeds one in-order queue whose items are
-// either records or a single terminal sentinel. A sentinel (instead of a
-// side channel) keeps end-after-records ordering: records queued before the
-// stream ends are always delivered first (the earlier side-channel design
-// could drop tail records when both were ready simultaneously).
-//
-// Backpressure: the queue is bounded; sends select on ctx.Done so a slow
-// consumer cannot grow it unboundedly.
+// The pump feeds records and a terminal sentinel through one in-order queue,
+// so the end cannot overtake records already queued.
 
-// streamQueueCap bounds queued records between consumer reads; a full queue
-// blocks the StreamLogs callback, not the UI.
+// streamQueueCap bounds queued records; a full queue blocks the stream
+// callback, not the UI.
 const streamQueueCap = 256
 
-// emitBatchCap bounds records per delivered message (root batches delivery
-// instead of one full render per line).
+// emitBatchCap bounds the records delivered per message.
 const emitBatchCap = 64
 
 type streamItem struct {
@@ -256,7 +225,7 @@ func (d deps) streamLogsCmd(ctx context.Context, g genStamp, id uint64, req core
 		if err == nil && ctx.Err() != nil {
 			err = ctx.Err()
 		}
-		// Terminal sentinel goes through the same queue, preserving order.
+		// The sentinel shares the queue, so it arrives after every record.
 		select {
 		case ch <- streamItem{end: true, err: err}:
 		case <-ctx.Done():
@@ -266,13 +235,10 @@ func (d deps) streamLogsCmd(ctx context.Context, g genStamp, id uint64, req core
 	return d.drainCmd(ctx, g, id, ch)
 }
 
-// drainCmd emits one batched message and chains itself until the stream
-// ends. Clean finite EOF yields Done with nil Err; context cancellation is
-// distinguishable from network failure via Canceled.
+// drainCmd delivers one batch and chains itself until the stream ends.
 func (d deps) drainCmd(ctx context.Context, g genStamp, id uint64, ch chan streamItem) func() tea.Msg {
 	return func() tea.Msg {
 		var batch []core.LogRecord
-		// Block for the first item or cancellation.
 		select {
 		case <-ctx.Done():
 			return logRecordMsg{genStamp: g, RequestID: id, Done: true, Canceled: true}
@@ -285,7 +251,6 @@ func (d deps) drainCmd(ctx context.Context, g genStamp, id uint64, ch chan strea
 			}
 			batch = append(batch, item.rec)
 		}
-		// Opportunistically drain more without blocking.
 		for len(batch) < emitBatchCap {
 			select {
 			case item, ok := <-ch:
@@ -311,15 +276,15 @@ func terminalLogMsg(g genStamp, id uint64, err error, canceled bool) logRecordMs
 	return msg
 }
 
-// batchThenEnd returns records and their terminal status together so the end cannot overtake them.
+// batchThenEnd delivers records and the end in one message, so the end
+// cannot overtake them.
 func batchThenEnd(g genStamp, id uint64, batch []core.LogRecord, err error) logRecordMsg {
 	msg := terminalLogMsg(g, id, err, false)
 	msg.Records = batch
 	return msg
 }
 
-// tickCmd schedules the next poll after completion (the next
-// timer starts after completion).
+// tickCmd schedules the next poll.
 func (d deps) tickCmd() func() tea.Msg {
 	return func() tea.Msg {
 		time.Sleep(d.interval)

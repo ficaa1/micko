@@ -42,8 +42,7 @@ func run(args []string) int {
 	refresh := fs.Duration("refresh-interval", 0, "poll interval")
 	insecure := fs.Bool("insecure-skip-tls-verify", false, "disable TLS verification (unsafe)")
 	readOnly := fs.Bool("read-only", false, "turn off workflow actions (resume, suspend, retry, resubmit, stop, terminate, delete)")
-	// --allow-actions has no effect; it is accepted so scripts that pass it
-	// keep working.
+	// Accepted so scripts that still pass --allow-actions keep working.
 	_ = fs.Bool("allow-actions", false, "no effect: actions are on unless --read-only")
 	debug := fs.Bool("debug", false, "enable sanitized lifecycle diagnostics")
 	skin := fs.String("skin", "", "colour skin, overriding the config file: "+strings.Join(shared.SkinNames(), ", "))
@@ -51,7 +50,7 @@ func run(args []string) int {
 	var mascot mascotFlag
 	fs.Var(&mascot, "mascot", "perch Mićko on the pane, or --mascot=floor to sit him in its bottom corner (terminals of 80x40 and larger)")
 	if err := fs.Parse(args); err != nil {
-		// flag already printed usage/error to stderr
+		// The flag package already printed the usage error.
 		return 2
 	}
 	if *versionFlag {
@@ -118,10 +117,8 @@ func run(args []string) int {
 		root.SetProfiles(connector.ProfileList())
 		root.SetMascot(connector.Mascot())
 		root.SetNotify(connector.Notify())
-		// The picker is drawn before any profile is chosen, so it takes the
-		// flag or the file's top-level skin. A profile's own skin arrives
-		// with its connection. The auto skin's background query is started
-		// by the root's Init, so the command returned here is not needed.
+		// Before a profile is chosen the picker uses the flag or the file's
+		// top-level skin. Init starts the auto skin's background query.
 		if _, err := root.ApplySkin(connector.Skin()); err != nil {
 			fmt.Fprintln(os.Stderr, "micko:", err)
 			return 1
@@ -149,9 +146,8 @@ func run(args []string) int {
 	return 0
 }
 
-// directConnect reports whether the command line already names what to connect
-// to. --namespace and the TLS or token flags alone do not: they change how a
-// profile is used, not which one, so they still open the picker.
+// directConnect reports whether the command line names what to connect to.
+// --namespace and the TLS or token flags alone still open the picker.
 func directConnect(profile, server string) bool {
 	return profile != "" || server != ""
 }
@@ -164,14 +160,8 @@ func demoSkin(flag string) string {
 	return config.DefaultSkin
 }
 
-// newClock picks the clock for this run. Every relative time on screen is
-// measured against it: a workflow's age, and how long the snapshot has been
-// stale. A real run therefore reads the wall clock, or all of them freeze at
-// the moment the program started.
-//
-// The demo is the one exception. Its dataset is generated from the same
-// clock, so a frozen clock is what keeps its sample ages put. The second
-// return value is that clock, and is nil for a real run.
+// newClock returns the wall clock for live sessions and the dataset clock for
+// the demo. The second result is nil for live sessions.
 func newClock(demo bool) (app.Clock, *testkit.FakeClock) {
 	if demo {
 		c := testkit.NewFakeClock(time.Now().UTC())
@@ -195,8 +185,7 @@ func (f *mascotFlag) Set(s string) (err error) {
 // IsBoolFlag lets --mascot stand alone, as a bool flag does.
 func (f *mascotFlag) IsBoolFlag() bool { return true }
 
-// actionOptions is what a session may do: act, unless --read-only turns
-// actions off or it is the demo, which never writes.
+// actionOptions turns actions off for --read-only and for the demo.
 func actionOptions(readOnly, demo bool) actions.Options {
 	return actions.Options{
 		AllowActions: !readOnly && !demo,

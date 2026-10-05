@@ -11,10 +11,6 @@ import (
 	"github.com/ficaa1/micko/internal/ui/templatelist"
 )
 
-// templates.go registers the two template kinds: WorkflowTemplates, listed in
-// the session's namespace like every other kind, and ClusterWorkflowTemplates,
-// which belong to no namespace.
-
 // newTemplateKind builds the WorkflowTemplate kind's definition for m.
 func (m *Root) newTemplateKind() *kindDef {
 	m.tmplView = kindlist.New(templatelist.Spec(), m.theme)
@@ -37,8 +33,8 @@ func (m *Root) newTemplateKind() *kindDef {
 	}
 }
 
-// newClusterTemplateKind builds the ClusterWorkflowTemplate kind's definition
-// for m. The namespace its fetch is given is always empty and not used.
+// newClusterTemplateKind builds the ClusterWorkflowTemplate kind's
+// definition for m. Its fetch ignores the namespace.
 func (m *Root) newClusterTemplateKind() *kindDef {
 	m.ctmplView = kindlist.New(templatelist.ClusterSpec(), m.theme)
 	return &kindDef{
@@ -70,9 +66,8 @@ func (m *Root) showClusterTemplates() tea.Cmd {
 	return m.showKind(RouteClusterTemplates, "cluster workflow templates")
 }
 
-// clusterScopedRoute reports whether the active route lists a kind that
-// belongs to no namespace. The namespace keys do not apply there, and the
-// header says so instead of naming a namespace the list ignores.
+// clusterScopedRoute reports whether the active route lists a kind with no
+// namespace, where the namespace keys do not apply.
 func (m *Root) clusterScopedRoute() bool {
 	def := m.kind(m.route)
 	return def != nil && !def.pane.Namespaced()

@@ -10,12 +10,9 @@ import (
 // its policy, what the controller last did with it, and the workflow it
 // starts.
 //
-// Two generations of the schema are folded into one shape. Argo v3.5 writes
-// a single spec.schedule; v3.6 adds the spec.schedules list and v4 drops the
-// single field. Schedules holds whichever the object carries, both merged
-// when an object carries both. The v3.6 status counters and phase are
-// pointers or empty strings when the server predates them, so "not reported"
-// never reads as zero.
+// CronWorkflow folds both schedule schemas into Schedules: v3.5's single
+// spec.schedule and the spec.schedules list that replaced it. Status fields
+// an older server does not report are nil or empty, never zero.
 type CronWorkflow struct {
 	Namespace string
 	Name      string

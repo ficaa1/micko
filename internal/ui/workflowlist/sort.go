@@ -146,9 +146,7 @@ func Sort(items []core.Summary, key SortKey) []core.Summary {
 	return items
 }
 
-// NewestFirst is the age-column presentation rule shared with tests: start
-// time if present, else created time; zero values sort last and a name
-// tiebreak keeps the order total (missing timestamps stay sensible).
+// ageKey is the age column's sort key: start time, else created time.
 func ageKey(s core.Summary) time.Time {
 	if s.StartedAt != nil && !s.StartedAt.IsZero() {
 		return *s.StartedAt

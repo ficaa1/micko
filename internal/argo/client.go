@@ -1,17 +1,12 @@
-// Package argo implements the core.Reader transport adapter against Argo
-// Server's REST API, pinned to the v4.1.2 wire facts in docs/development.md.
+// Package argo implements core.Reader against the Argo Server v4.1.2 REST
+// API.
 //
-// Scope and safety rules:
-//   - Standard-library HTTP/JSON only; no official client and no Kubernetes
-//     client.
-//   - The package never retries a request; the app layer owns backoff.
-//     Execute is the only method that writes (a workflow action), and a
-//     retried write could act twice.
-//   - Tokens never appear in URLs, error messages or logs; the Authorization
-//     header is rebuilt per request from the injected credential source to
-//     support rotation.
-//   - Redirects are rejected (credentials must never reach another origin),
-//     TLS verification is on by default with opt-in custom CA.
+//   - It uses the standard library only, with no Argo or Kubernetes client.
+//   - It never retries: Execute writes, and a retried write could act twice.
+//   - Tokens never appear in URLs, errors or logs; the Authorization header
+//     is rebuilt per request so credentials can rotate.
+//   - Redirects are rejected so credentials never reach another origin, and
+//     TLS verification is on unless disabled.
 package argo
 
 import (
@@ -36,8 +31,8 @@ import (
 
 // Client is the production core.Reader. It is safe for concurrent use.
 type Client struct {
-	// base is the full server base URL (scheme://host[/prefix]); endpoint
-	// paths are appended verbatim (docs/development.md base path rule).
+	// base is the server base URL, scheme://host[/prefix]; endpoint paths are
+	// appended verbatim.
 	base *url.URL
 	// tokenFn reloads credential material per request (rotation support).
 	// Never stored, never logged.
@@ -238,8 +233,6 @@ func isLoopback(host string) bool {
 		(len(host) > 8 && strings.HasPrefix(host, "127."))
 }
 
-// --- request plumbing -----------------------------------------------------------
-
 // baseURL returns the base URL to use for the next request. It preserves the
 // configured scheme, path prefix and userinfo-free contract: only host and
 // port are adopted from the resolver, and only when they parse and pass the
@@ -307,9 +300,7 @@ func (c *Client) newRequest(ctx context.Context, path string, query url.Values) 
 	}
 	setAuthorization(req, token)
 	req.Header.Set("User-Agent", c.userAgent)
-	// Deliberately NO Accept header at all: no SSE hint (docs/development.md
-	// records the policy) and no content-negotiation surprises. The gateway
-	// marshaler ignores Accept.
+	// No Accept header: it would hint at SSE, and the gateway ignores it.
 	return req, nil
 }
 
@@ -376,11 +367,8 @@ func isTLSFailure(msg string) bool {
 	return false
 }
 
-// --- error mapping --------------------------------------------------------------
-
-// errorEnvelope mirrors the gateway unary error shape
-// ({"code":N,"message":"..."} — docs/development.md; "error"/"details"
-// tolerated).
+// errorEnvelope is the gateway's unary error, {"code":N,"message":"..."};
+// "error" and "details" are tolerated too.
 type errorEnvelope struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -388,9 +376,8 @@ type errorEnvelope struct {
 	Details any    `json:"details"`
 }
 
-// grpcHTTPStatus reconstructs the HTTP status the gateway would map a gRPC
-// code to (round-trip table pinned in docs/development.md). Used for
-// in-band stream errors where no HTTP status applies.
+// grpcHTTPStatus is the HTTP status the gateway maps a gRPC code to, for
+// in-band stream errors that carry no HTTP status.
 func grpcHTTPStatus(code int) int {
 	// Subset covering the codes the streams may emit (gateway v1.16.0
 	// runtime.HTTPStatusFromCode).
@@ -430,11 +417,9 @@ func classifyInBand(code int) (core.ErrorKind, int) {
 	return core.KindOf(st), st
 }
 
-// mapHTTPError builds a typed APIError from a non-200 response. The server
-// body's message passes through (it may name the workflow/namespace — fine,
-// docs/development.md); no credential material is ever added by us, and
-// Retry-After is typed for 429s. `now` injects the
-// clock for HTTP-date Retry-After parsing (nil ⇒ time.Now).
+// mapHTTPError builds a typed APIError from a non-200 response. The server's
+// message passes through and nothing secret is added. now parses an HTTP-date
+// Retry-After; nil means time.Now.
 func mapHTTPError(resp *http.Response, method, path string, body []byte, rawErr error, now func() time.Time) *core.APIError {
 	if now == nil {
 		now = time.Now
@@ -538,8 +523,6 @@ func drainAndClose(body io.ReadCloser) {
 	_ = body.Close()
 }
 
-// --- Reader.List ----------------------------------------------------------------
-
 // listFields is the projection the list request asks the server for.
 //
 // A workflow object carries its whole definition: spec, storedTemplates,
@@ -606,8 +589,7 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	path := "/api/v1/workflows/" + url.PathEscape(q.Namespace)
 	query := url.Values{}
 	if q.Limit > 0 {
-		// v4.1.2 listOptions.limit is string-encoded integer on the wire
-		// (docs/development.md).
+		// listOptions.limit is a string-encoded integer on the wire.
 		query.Set("listOptions.limit", fmt.Sprintf("%d", q.Limit))
 	}
 	if q.Continue != "" {
@@ -752,16 +734,13 @@ func (c *Client) withUnaryDeadline(ctx context.Context) (context.Context, contex
 	return context.WithTimeout(ctx, d)
 }
 
-// --- Reader.Get -----------------------------------------------------------------
-
 func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	ctx, cancel := c.withUnaryDeadline(ctx)
 	defer cancel()
 	path := "/api/v1/workflows/" + url.PathEscape(ref.Namespace) + "/" + url.PathEscape(ref.Name)
 	query := url.Values{}
 	if ref.UID != "" {
-		// Always pass UID so the server can fall back to the archive for
-		// same-name workflows (docs/development.md).
+		// The UID lets the server fall back to the archive for a same-name workflow.
 		query.Set("uid", ref.UID)
 	}
 	req, err := c.newRequest(ctx, path, query)
@@ -802,8 +781,6 @@ func (c *Client) Get(ctx context.Context, ref core.Ref) (core.Workflow, error) {
 	}
 	return wf, nil
 }
-
-// --- shared helpers ---------------------------------------------------------------
 
 // sanitizeLine strips control characters from text embedded into error
 // messages so server-provided strings cannot inject terminal sequences or
