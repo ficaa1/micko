@@ -122,6 +122,16 @@ func (m *Model) SetExplainLog(id uint64, lines []string, errText string, gone bo
 	if l == nil || id != m.ex.logReq {
 		return false
 	}
+	// Anchor the viewport to its card, not an absolute line: an earlier
+	// card can grow when its loading placeholder becomes log evidence.
+	_, starts := m.explainCards()
+	anchor, offset := -1, 0
+	for i, start := range starts {
+		if start <= m.ex.top {
+			anchor, offset = i, m.ex.top-start
+		}
+	}
+	old := m.explainReport()
 	l.Lines = lines
 	if errText != "" {
 		l.State, l.Err, l.Gone = diagnose.LogFailed, errText, gone
@@ -129,6 +139,19 @@ func (m *Model) SetExplainLog(id uint64, lines []string, errText string, gone bo
 		l.State = diagnose.LogRead
 	}
 	m.ex.stale = true
+	if m.tab == "explain" && anchor >= 0 {
+		lines, starts := m.explainCards()
+		for i, f := range m.explainReport().Findings {
+			if f.Rule == old.Findings[anchor].Rule && f.NodeID == old.Findings[anchor].NodeID {
+				end := len(lines)
+				if i+1 < len(starts) {
+					end = starts[i+1]
+				}
+				m.jumpTo(starts[i] + min(offset, end-starts[i]-1))
+				break
+			}
+		}
+	}
 	return true
 }
 

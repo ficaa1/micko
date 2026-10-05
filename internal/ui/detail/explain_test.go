@@ -263,6 +263,40 @@ func TestExplainPicksAFailure(t *testing.T) {
 	}
 }
 
+// A preceding log's asynchronous completion must not move the card being read.
+func TestExplainPreservesViewportWhenEarlierLogCompletes(t *testing.T) {
+	for _, scroll := range []int{0, 2} {
+		t.Run(strconv.Itoa(scroll), func(t *testing.T) {
+			m := workflowModel(failedDeploy(t), 80, 8)
+			m.SetSection("explain")
+			in, ok := m.ExplainLogWanted()
+			if !ok {
+				t.Fatal("no first log requested")
+			}
+			m.StartExplainLog(1, in)
+			press(m, "n")
+			for i := 0; i < scroll; i++ {
+				press(m, "j")
+			}
+			selected := press(m, "l")().(NodeLogsIntent).PodName
+			before := m.BodyLines()[2]
+			lines := make([]string, 8)
+			for i := range lines {
+				lines[i] = "ERROR " + strings.Repeat("long evidence ", 12)
+			}
+			if !m.SetExplainLog(1, lines, "", false) {
+				t.Fatal("dropped log completion")
+			}
+			if after := m.BodyLines()[2]; after != before {
+				t.Fatalf("viewport moved from %q to %q:\n%s", before, after, body(m))
+			}
+			if got := press(m, "l")().(NodeLogsIntent).PodName; got != selected {
+				t.Fatalf("l changed from %s to %s", selected, got)
+			}
+		})
+	}
+}
+
 // The Explain section at 140 and 80 columns, with the log read.
 func TestExplainGolden(t *testing.T) {
 	for _, width := range []int{140, 80} {
