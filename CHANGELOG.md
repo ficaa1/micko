@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.2
+
+- Resubmit can override parameters, like the Argo UI. On an open workflow,
+  the resubmit confirmation lists its parameters: up and down pick one, `e`
+  edits its value and `m` turns on memoized. Only edited parameters are
+  sent. Hidden values show as `[REDACTED]` and an edit starts empty.
+- A confirmed resubmit opens the workflow it started.
+- The list filter searches parameters: `param:name=text` (substring),
+  `param:name~pattern` (fuzzy), `param:~pattern` (any parameter) and
+  `param:name` (has it). Tab completes parameter names and, unless values
+  are hidden, their values.
+- Explain gives each of the first three failed pods a card with its quoted
+  log. With more than one failure, `n`/`N` pick the card `l` opens.
+- Explain keeps its scroll position when a log finishes loading.
+
 ## 0.8.1
 
 - Notifications. `W` on the list watches the selected or marked workflows
