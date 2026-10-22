@@ -309,6 +309,11 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 		m.actionFromMarks = false
 		return m.back()
 	}
+	// A resubmit opens the workflow it started.
+	if next := msg.Result.Affected; msg.Result.Action == core.ActionResubmit && next != nil && next.UID != "" && *next != msg.Result.Target {
+		m.actionFromMarks = false
+		return m.openWorkflow(*next)
+	}
 	return m.afterActionPane()
 }
 
@@ -470,6 +475,10 @@ func (m *Root) openActions(ref core.Ref, targets []core.Summary, fromMarks bool)
 	phase := ""
 	if len(targets) == 1 {
 		phase = targets[0].Phase
+	}
+	// Only a loaded detail holds the arguments a resubmit can override.
+	if wf := m.detailState.workflow; !fromMarks && ref.UID != "" && wf.Summary.Ref == ref {
+		m.actionView.SetParameters(wf.Summary.Arguments, !m.detailView.ValuesRevealed())
 	}
 	m.actionView.SetContext(m.actionOpts.Server, m.actionOpts.Profile, phase)
 	m.actionView.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})

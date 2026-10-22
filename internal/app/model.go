@@ -273,6 +273,7 @@ func (m *Root) nextMascotBeat() tea.Cmd {
 func (m *Root) SetRedactValues(redact bool) {
 	m.redact = redact
 	m.detailView.SetRedactByDefault(redact)
+	m.listView.SetRedact(redact)
 	for _, def := range m.kindDefs {
 		def.pane.SetRedact(redact)
 	}

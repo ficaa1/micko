@@ -45,7 +45,8 @@ type rawWorkflow struct {
 		// Suspend is set by the suspend action and cleared by resume. The
 		// workflow keeps its Running phase while it is set, so this field is
 		// the only thing that tells a suspended workflow from a running one.
-		Suspend *bool `json:"suspend"`
+		Suspend   *bool            `json:"suspend"`
+		Arguments rawSpecArguments `json:"arguments"`
 	} `json:"spec"`
 	Status struct {
 		Phase                    string                     `json:"phase"`
@@ -183,6 +184,7 @@ func wfFromRaw(raw json.RawMessage, rawForDetail []byte) (core.Workflow, error) 
 			Progress:        w.Status.Progress,
 			// estimatedDuration is whole seconds on the wire.
 			EstimatedDuration: time.Duration(w.Status.EstimatedDuration) * time.Second,
+			Arguments:         arguments(w.Spec.Arguments.Parameters),
 		},
 	}
 	if rawForDetail != nil {

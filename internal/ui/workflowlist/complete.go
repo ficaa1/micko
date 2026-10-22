@@ -8,7 +8,7 @@ import (
 )
 
 // fieldStarts are the field-and-operator openings a bare word completes to.
-var fieldStarts = []string{"phase=", "phase!=", "age<", "age>", "dur<", "dur>", "label:", "tmpl=", "tmpl!=", "cron=", "cron!="}
+var fieldStarts = []string{"phase=", "phase!=", "age<", "age>", "dur<", "dur>", "label:", "param:", "tmpl=", "tmpl!=", "cron=", "cron!="}
 
 // phaseValues are the phases phase= completes to, in the list's own order.
 var phaseValues = []string{"suspended", "running", "pending", "succeeded", "failed", "error"}
@@ -38,8 +38,8 @@ type tabCycle struct {
 }
 
 // completions returns what the word at the cursor can complete to: a field
-// for a bare word, or a phase, template, cron workflow, label key or label
-// value from the loaded workflows.
+// for a bare word, or a phase, template, cron workflow, label or parameter
+// name, or label or parameter value from the loaded workflows.
 func (m *Model) completions() completion {
 	runes := []rune(m.searchBuf)
 	cur := min(max(m.searchCur, 0), len(runes))
@@ -98,6 +98,13 @@ func (m *Model) completions() completion {
 		default:
 			pool = m.labelKeys("=")
 		}
+	case "param":
+		if name, partial, hasValue := strings.Cut(value, "="); hasValue {
+			value, start = partial, start+len([]rune(name))+1
+			pool = m.paramValues(name)
+		} else {
+			pool = m.paramNames()
+		}
 	}
 	return completion{start, end, ranked(value, pool, true), len(pool), true}
 }
@@ -142,6 +149,46 @@ func (m *Model) labelValues(keys ...string) []string {
 	for _, it := range m.items {
 		if v := firstLabel(it, keys...); v != "" {
 			seen[v] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for v := range seen {
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// paramNames returns every parameter name in the snapshot, sorted, each
+// followed by "=".
+func (m *Model) paramNames() []string {
+	seen := map[string]bool{}
+	for _, it := range m.items {
+		for _, a := range it.Arguments {
+			seen[a.Name] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for n := range seen {
+		out = append(out, n+"=")
+	}
+	sort.Strings(out)
+	return out
+}
+
+// paramValues returns the values the snapshot holds for parameter name,
+// sorted, or none while values are redacted. A value with a space or |
+// cannot be typed as one term, so it is left out.
+func (m *Model) paramValues(name string) []string {
+	if m.redact {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, it := range m.items {
+		for _, a := range it.Arguments {
+			if a.Name == name && a.Value != "" && !strings.ContainsAny(a.Value, " |") {
+				seen[a.Value] = true
+			}
 		}
 	}
 	out := make([]string, 0, len(seen))

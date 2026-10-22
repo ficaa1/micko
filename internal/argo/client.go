@@ -548,6 +548,7 @@ var listFields = strings.Join([]string{
 	"items.metadata.annotations",
 	"items.metadata.creationTimestamp",
 	"items.spec.suspend",
+	"items.spec.arguments.parameters",
 	"items.status.phase",
 	"items.status.message",
 	"items.status.startedAt",

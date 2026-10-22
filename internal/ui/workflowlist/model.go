@@ -39,6 +39,8 @@ type Model struct {
 	phase  PhaseFilter    // local phase filter bucket
 	query  string         // applied filter text (snapshot-scoped); always parses
 	sort   SortKey        // current sort
+	// redact keeps parameter values out of filter completion.
+	redact bool
 	// match is query parsed. It is rebuilt only when the query changes, so
 	// a snapshot refresh re-filters without re-parsing.
 	match Matcher
@@ -166,6 +168,10 @@ func (m *Model) ToggleMark() {
 // SetWatched sets which workflows the rows flag as watched, by UID. The
 // root owns the set, so watches outlive the snapshot they were made in.
 func (m *Model) SetWatched(uids map[string]bool) { m.watched = uids }
+
+// SetRedact applies the profile's redactValues setting: filter completion
+// offers parameter names but never their values.
+func (m *Model) SetRedact(redact bool) { m.redact = redact }
 
 // Marked returns the marked workflows in the current sort order, hidden
 // ones included. The order is the order a bulk action runs in, so it

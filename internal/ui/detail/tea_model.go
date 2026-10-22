@@ -234,6 +234,9 @@ func (m *Model) SetRedactByDefault(redact bool) {
 	m.revealResource = !redact
 }
 
+// ValuesRevealed reports whether parameter values are shown.
+func (m *Model) ValuesRevealed() bool { return m.revealResource }
+
 // Update handles a key or a resize and returns the intent it emits, if any.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {

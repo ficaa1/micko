@@ -23,12 +23,19 @@ func getWorkflow(t *testing.T, body string) core.Workflow {
 	return wf
 }
 
-// Get decodes the summary and every node, keeps a child reference to a node
-// missing from the map, and keeps the raw object with its unknown fields.
+// Get decodes the summary, the arguments and every node, keeps a child
+// reference to a node missing from the map, and keeps the raw object with
+// its unknown fields.
 func TestGetDecodesTheWorkflow(t *testing.T) {
 	wf := getWorkflow(t, string(loadFixture(t, "workflow_detail.json")))
 	if wf.Summary.Ref.UID != "wf-uid-111" || wf.Summary.Phase != "Running" || wf.Summary.Message != "progress 1/2" || wf.Summary.StartedAt == nil {
 		t.Errorf("summary = %+v", wf.Summary)
+	}
+	if got := fmt.Sprint(wf.Summary.Arguments); got != fmt.Sprint([]core.Argument{
+		{Name: "revision", Value: "427c333", HasValue: true},
+		{Name: "layers", Value: `["monitoring-infra"]`, HasValue: true},
+	}) {
+		t.Errorf("arguments = %s", got)
 	}
 	if !wf.NodesAvailable || len(wf.Nodes) != 4 {
 		t.Fatalf("nodes = %d available %v", len(wf.Nodes), wf.NodesAvailable)

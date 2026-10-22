@@ -67,7 +67,7 @@ func render(m *Model) string {
 		line("reason", shared.Sanitize(m.reason), plain)
 	case StateMenu:
 		renderMenu(&b, m)
-	case StateConfirm:
+	case StateConfirm, StateEditParam:
 		line("action", actionLabel(m.action), t.Accent)
 		if m.bulk {
 			line("consequence", consequence(m.action)+", on each of "+plural(len(m.applies), "workflow")+":", plain)
@@ -76,6 +76,20 @@ func render(m *Model) string {
 			b.WriteString("Requests are sent one at a time; none is ever resent.\n")
 		} else {
 			line("consequence", consequence(m.action)+" on "+target(m.ref), plain)
+		}
+		if m.editsParams() {
+			renderParams(&b, m)
+		}
+		if m.state == StateEditParam {
+			b.WriteString(keys(t, "[enter] Keep the value  [esc] Discard the edit") + "\n")
+			break
+		}
+		if m.editsParams() {
+			row := "[m] Memoized"
+			if len(m.params) > 0 {
+				row = "[↑/↓] Choose  [e] Edit the value  " + row
+			}
+			b.WriteString(keys(t, row) + "\n")
 		}
 		if m.action == core.ActionDelete {
 			b.WriteString(t.Warning.Render("Delete has a second, final confirmation after this one.") + "\n")
@@ -148,6 +162,73 @@ func render(m *Model) string {
 		line("status", "idle", plain)
 	}
 	return b.String()
+}
+
+// hiddenValue stands in for a parameter value the reader has not revealed.
+const hiddenValue = "[REDACTED]"
+
+// paramClip bounds a value on one row of the parameter list.
+const paramClip = 60
+
+// renderParams lists what a resubmit sends: each parameter's current value,
+// and the new value where it is overridden.
+func renderParams(b *strings.Builder, m *Model) {
+	t := m.theme
+	switch {
+	case !m.paramsKnown:
+		b.WriteString(t.Muted.Render("parameters: not loaded; open the workflow to override them") + "\n")
+	case len(m.params) == 0:
+		b.WriteString(t.Muted.Render("parameters: none") + "\n")
+	default:
+		b.WriteString(t.Muted.Render("parameters (the ones not edited keep their values):") + "\n")
+		width := 0
+		for _, p := range m.params {
+			width = max(width, len([]rune(shared.Sanitize(p.Name))))
+		}
+		for i, p := range m.params {
+			mark := "  "
+			if i == m.cursor {
+				mark = "> "
+			}
+			current := hiddenValue
+			if !m.hideValues {
+				current = clipRight(shared.Sanitize(p.Value), paramClip)
+			}
+			row := fmt.Sprintf("%s%-*s  %s", mark, width, shared.Sanitize(p.Name), current)
+			style := t.Text
+			if m.state == StateEditParam && i == m.cursor {
+				row += " → " + clipLeft(shared.Sanitize(m.editBuf), paramClip) + "_"
+				style = t.Accent
+			} else if v, ok := m.edits[i]; ok {
+				row += " → " + clipRight(shared.Sanitize(v), paramClip)
+				style = t.Accent
+			}
+			b.WriteString(style.Render(row) + "\n")
+		}
+	}
+	memo := "no"
+	if m.memoized {
+		memo = "yes"
+	}
+	b.WriteString(t.Muted.Render("memoized:") + " " + memo + "\n")
+}
+
+// clipRight keeps the first n runes of s, marking a cut with an ellipsis.
+func clipRight(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
+}
+
+// clipLeft keeps the last n runes of s, so the end being typed stays in view.
+func clipLeft(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return "…" + string(r[len(r)-n+1:])
 }
 
 // keys styles each bracketed key in a row of choices, such as "[y] Yes",
