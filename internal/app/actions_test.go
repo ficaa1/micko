@@ -30,6 +30,11 @@ func (b *betaReader) Execute(_ context.Context, req core.ActionRequest) (core.Ac
 		b.Workflows[req.Ref] = wf
 	}
 	ref := req.Ref
+	// A resubmit starts a new workflow, as the server does.
+	if req.Action == core.ActionResubmit {
+		ref = core.Ref{Namespace: ref.Namespace, Name: ref.Name + "-again", UID: ref.UID + "-again"}
+		b.Workflows[ref] = core.Workflow{Summary: core.Summary{Ref: ref, Phase: "Running"}}
+	}
 	return core.ActionResult{Action: req.Action, Target: req.Ref, Affected: &ref, Outcome: core.ActionConfirmed}, nil
 }
 
@@ -204,37 +209,63 @@ func TestOnlyAnUnknownOutcomeKeepsThePaneOpen(t *testing.T) {
 	}
 }
 
+// An action chosen by key on the detail reaches the executor once, with the
+// loaded workflow's parameters as the resubmit form edits them, and the
+// detail then shows the workflow the action leaves: a resubmit's new one.
 func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
-	wf := workflowFixture("wf")
-	wf.Summary.Suspended = true
-	b := &betaReader{FakeReader: fixtureReader(wf)}
-	m := armedRoot(b, actions.Options{})
-	m.route = RouteDetail
-	m.selection = wf.Summary.Ref
-	m.detailState = detailState{ref: wf.Summary.Ref, workflow: wf}
+	for _, c := range []struct {
+		name   string
+		keys   []string
+		params []string
+		flash  string
+		shown  string
+	}{
+		{"resume", []string{"a", "u"}, nil, "resume confirmed", "wf"},
+		{"resubmit with an override", []string{"a", "b", "e", "x", "enter"}, []string{"revision=427c333x"}, "resubmit confirmed", "wf-again"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			wf := workflowFixture("wf")
+			wf.Summary.Suspended = c.keys[1] == "u"
+			if c.keys[1] == "b" {
+				wf.Summary.Phase = "Failed"
+				wf.Summary.Arguments = []core.Argument{{Name: "revision", Value: "427c333", HasValue: true}}
+			}
+			b := &betaReader{FakeReader: fixtureReader(wf)}
+			m := armedRoot(b, actions.Options{})
+			m.route = RouteDetail
+			m.selection = wf.Summary.Ref
+			m.detailState = detailState{ref: wf.Summary.Ref, workflow: wf}
 
-	keys(m, "a", "u") // resume
-	cmd := keys(m, "y")
-	if cmd == nil {
-		t.Fatal("the confirmation emitted nothing")
-	}
-	intent := cmd()
-	if _, ok := intent.(actions.ActionIntentMsg); !ok {
-		t.Fatalf("intent = %T", intent)
-	}
-	_, cmd = m.Update(intent)
-	if cmd == nil {
-		t.Fatal("the root did not start the action")
-	}
-	m.Update(cmd())
-	if b.execCalls != 1 {
-		t.Fatalf("execute calls = %d, want 1", b.execCalls)
-	}
-	if m.actionView.State() != actions.StateIdle || m.route != RouteDetail {
-		t.Fatalf("pane %v on route %v, want the detail back", m.actionView.State(), m.route)
-	}
-	if !strings.Contains(screen(m), "resume confirmed") {
-		t.Fatalf("the outcome is not on screen:\n%s", screen(m))
+			keys(m, c.keys...)
+			cmd := keys(m, "y")
+			if cmd == nil {
+				t.Fatal("the confirmation emitted nothing")
+			}
+			intent, ok := cmd().(actions.ActionIntentMsg)
+			if !ok {
+				t.Fatalf("intent = %T", intent)
+			}
+			if strings.Join(intent.Request.Parameters, "|") != strings.Join(c.params, "|") {
+				t.Fatalf("parameters = %q, want %q", intent.Request.Parameters, c.params)
+			}
+			_, cmd = m.Update(intent)
+			if cmd == nil {
+				t.Fatal("the root did not start the action")
+			}
+			m.Update(cmd())
+			if b.execCalls != 1 {
+				t.Fatalf("execute calls = %d, want 1", b.execCalls)
+			}
+			if m.actionView.State() != actions.StateIdle || m.route != RouteDetail {
+				t.Fatalf("pane %v on route %v, want the detail back", m.actionView.State(), m.route)
+			}
+			if !strings.Contains(screen(m), c.flash) {
+				t.Fatalf("the outcome is not on screen:\n%s", screen(m))
+			}
+			if m.selection.Name != c.shown {
+				t.Fatalf("detail shows %q, want %q", m.selection.Name, c.shown)
+			}
+		})
 	}
 }
 

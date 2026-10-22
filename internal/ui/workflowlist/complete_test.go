@@ -27,6 +27,8 @@ func completionList(t *testing.T) Model {
 		labelled("api", map[string]string{"stack": "search-api", "team": "web", "workflows.argoproj.io/workflow-template": "nightly-build"}),
 		labelled("etl", map[string]string{"team": "data-eng", "workflows.argoproj.io/cron-workflow": "etl-hourly"}),
 	}, testkit.FixtureEpoch)
+	m.items[0].Arguments = []core.Argument{{Name: "layers", Value: `["monitoring-infra"]`}, {Name: "revision", Value: "427c333"}}
+	m.items[2].Arguments = []core.Argument{{Name: "layers", Value: `["dex"]`}}
 	return m
 }
 
@@ -66,6 +68,9 @@ func TestFilterCompletion(t *testing.T) {
 		{"label:stack=rep", []tea.KeyPressMsg{escKey(), shiftTabKey}, "label:stack=reporting-analytics", ""},
 		{"etl !tmpl=ni", []tea.KeyPressMsg{tabKey}, "etl !tmpl=nightly-build", ""},
 		{"cron=", []tea.KeyPressMsg{tabKey}, "cron=etl-hourly", ""},
+		{"para", []tea.KeyPressMsg{tabKey}, "param:", ""},
+		{"param:la", []tea.KeyPressMsg{tabKey}, "param:layers=", ""},
+		{"param:layers=mon", []tea.KeyPressMsg{tabKey}, `param:layers=["monitoring-infra"]`, ""},
 		{"/lab/", []tea.KeyPressMsg{tabKey}, "/lab/", ""},
 		{"lab phase=failed", []tea.KeyPressMsg{{Code: tea.KeyHome}, {Code: tea.KeyRight}, {Code: tea.KeyRight}, {Code: tea.KeyRight}, tabKey}, "label: phase=failed", ""},
 	} {
@@ -100,8 +105,25 @@ func TestFilterCompletion(t *testing.T) {
 		}
 	}
 
-	// Enter picks, then applies once the word reads the picked value.
+	// Redacted values are never offered, while names still are.
 	m := completionList(t)
+	m.SetRedact(true)
+	m.Update(runeKey('/'))
+	typeText(&m, "param:layers=mon")
+	m.Update(tabKey)
+	if m.searchBuf != "param:layers=mon" {
+		t.Fatalf("a redacted value completed: %q", m.searchBuf)
+	}
+	m.Update(escKey())
+	m.Update(runeKey('/'))
+	typeText(&m, "param:la")
+	m.Update(tabKey)
+	if m.searchBuf != "param:layers=" {
+		t.Fatalf("a parameter name did not complete while redacted: %q", m.searchBuf)
+	}
+
+	// Enter picks, then applies once the word reads the picked value.
+	m = completionList(t)
 	m.Update(runeKey('/'))
 	typeText(&m, "label:stack=sup")
 	m.Update(enterKey())

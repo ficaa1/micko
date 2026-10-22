@@ -9,6 +9,7 @@
   },
   "spec": {
     "entrypoint": "main",
+    "arguments": {"parameters": [{"name": "revision", "value": "427c333"}, {"name": "layers", "value": "[\"monitoring-infra\"]"}]},
     "templates": [{"name": "main", "dag": {"tasks": [{"name": "echo", "template": "echo"}]}}],
     "x-custom-extension": "preserve-me-42"
   },

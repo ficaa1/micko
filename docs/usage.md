@@ -85,6 +85,9 @@ names:
 | `age<2h`, `age>1d` | time since it started, or was created if it has not |
 | `dur>10m` | run time; a running workflow counts until now |
 | `label:team=data`, `label:team`, `label:!team` | a label's value, presence or absence |
+| `param:layers=infra` | parameter `layers` contains `infra`, case-insensitive |
+| `param:layers~mntinf`, `param:~mon` | a fuzzy match on one parameter's value, or on any parameter's |
+| `param:layers` | has parameter `layers` |
 | `tmpl=nightly` | started from this WorkflowTemplate or ClusterWorkflowTemplate |
 | `cron=etl-hourly` | started by this CronWorkflow |
 
@@ -219,6 +222,13 @@ session and the header says `READ ONLY`. Press `a` on the list or in a run:
 Only `y` confirms; `enter` and `esc` cancel. Terminate asks you to type the
 workflow's name. Delete asks twice: after `y`, only `D` (shift+d) deletes.
 
+Resubmit opened on a loaded workflow lists its parameters. `↑`/`↓` choose
+one, `e` edits its value (`enter` keeps the edit, `esc` drops it) and `m`
+turns on memoized. Only edited parameters are sent; the rest keep their
+values. With values hidden, an edit starts empty. From the list, open the
+workflow first to edit its parameters. A confirmed resubmit opens the new
+workflow.
+
 Before sending, micko reads the workflow again and refuses if its identity
 changed or the verb no longer applies. It sends one request and never retries
 a write. The outcome is `CONFIRMED` when the end state was observed,
@@ -342,8 +352,8 @@ the floor.
 - Parameter and output values are shown. Set `redactValues: true` in the
   config or on a profile, or pass `--redact-values`, to hide them until `v`.
   Logs, copied text and pipe output can still contain sensitive data.
-- micko cannot submit workflows, edit parameters, or suspend, resume or
-  submit cron workflows and templates.
+- micko cannot submit workflows, edit parameters other than a resubmit's,
+  or suspend, resume or submit cron workflows and templates.
 - Argo's action endpoints address workflows by name, so a same-name
   replacement between micko's identity check and the write is possible.
 - Tested live against Argo Workflows v4.1.2 on macOS arm64, through

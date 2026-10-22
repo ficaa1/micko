@@ -88,7 +88,7 @@ func TestListMarksSuspendedWorkflows(t *testing.T) {
 	summaryFields := []string{
 		"metadata.continue", "metadata.resourceVersion",
 		"items.metadata.name", "items.metadata.namespace", "items.metadata.uid", "items.metadata.creationTimestamp",
-		"items.spec.suspend", "items.status.phase", "items.status.startedAt", "items.status.finishedAt",
+		"items.spec.suspend", "items.spec.arguments.parameters", "items.status.phase", "items.status.startedAt", "items.status.finishedAt",
 		"items.status.progress", "items.status.estimatedDuration",
 	}
 	cases := []struct {

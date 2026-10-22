@@ -61,6 +61,9 @@ type Summary struct {
 	// EstimatedDuration is the controller's estimate of the whole run, taken
 	// from previous runs of the same template. Zero means no estimate.
 	EstimatedDuration time.Duration
+	// Arguments are spec.arguments.parameters: what the list filters on,
+	// and the values a resubmit reuses unless they are overridden.
+	Arguments []Argument
 }
 
 // Page is one result page plus list metadata.

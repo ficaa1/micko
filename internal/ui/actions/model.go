@@ -28,7 +28,14 @@ const (
 	// and only a capital D leaves it towards a request; every other key
 	// cancels.
 	StateFinal
+	// StateEditParam edits one parameter of a resubmit. It returns to
+	// StateConfirm and never sends anything itself.
+	StateEditParam
 )
+
+// maxParamLength bounds a typed parameter value. Values hold JSON lists and
+// commit SHAs, so the bound is wider than a workflow name's.
+const maxParamLength = 4096
 
 // finalDeleteKey is the one key that confirms a delete on its final screen.
 // It is a capital letter so that neither the key that opened the delete
@@ -92,6 +99,17 @@ type Model struct {
 	stopRequested bool
 	// items is the bulk outcome, one per applicable target.
 	items []BulkItem
+
+	// params are the arguments a single resubmit can override, in spec
+	// order; paramsKnown separates "none" from "not loaded". edits holds the
+	// overriding values by index, and only they are sent.
+	params      []core.Argument
+	paramsKnown bool
+	hideValues  bool
+	edits       map[int]string
+	cursor      int
+	editBuf     string
+	memoized    bool
 }
 
 var _ tea.Model = (*Model)(nil)
@@ -125,6 +143,30 @@ func (m *Model) SetTargets(targets []core.Summary) {
 	if len(m.targets) == 1 {
 		m.ref = m.targets[0].Ref
 	}
+}
+
+// SetParameters records the workflow's arguments for a resubmit to
+// override. hidden shows the current values as redacted.
+func (m *Model) SetParameters(args []core.Argument, hidden bool) {
+	m.params = append([]core.Argument(nil), args...)
+	m.paramsKnown = true
+	m.hideValues = hidden
+}
+
+// editsParams reports whether the confirmation offers parameter edits.
+func (m *Model) editsParams() bool {
+	return m.action == core.ActionResubmit && !m.bulk
+}
+
+// overrides returns the edited parameters as Argo's name=value pairs.
+func (m *Model) overrides() []string {
+	var out []string
+	for i, p := range m.params {
+		if v, ok := m.edits[i]; ok {
+			out = append(out, p.Name+"="+v)
+		}
+	}
+	return out
 }
 
 // Bulk reports whether the action reaches more than one workflow.
@@ -189,6 +231,7 @@ func (m *Model) Open(action core.Action) {
 	m.action = action
 	m.outcome = nil
 	m.typedName = ""
+	m.edits, m.cursor, m.editBuf, m.memoized = nil, 0, "", false
 	if !m.allowActions || m.readOnly || m.demo {
 		m.state = StateUnavailable
 		if !m.allowActions {
@@ -267,7 +310,7 @@ func (m *Model) OutcomeLine() string {
 }
 
 func (m *Model) Cancel() {
-	if m.state == StateMenu || m.state == StateConfirm || m.state == StateTypedName || m.state == StateFinal {
+	if m.state == StateMenu || m.state == StateConfirm || m.state == StateTypedName || m.state == StateFinal || m.state == StateEditParam {
 		m.state = StateIdle
 		m.typedName = ""
 	}
@@ -357,6 +400,9 @@ func (m *Model) submitConfirmed(typed string) bool {
 		return true
 	}
 	req := core.ActionRequest{Ref: m.ref, Action: m.action, Confirmation: core.Confirmation{Confirmed: true, TypedName: typed, Final: final}}
+	if m.editsParams() {
+		req.Parameters, req.Memoized = m.overrides(), m.memoized
+	}
 	m.intent = &req
 	m.state = StateSubmitting
 	return true
@@ -397,7 +443,15 @@ func (m *Model) Hints() string {
 	case StateMenu:
 		return "letter choose  esc cancel"
 	case StateConfirm:
+		if m.editsParams() && len(m.params) > 0 {
+			return "y confirm  ↑/↓ choose  e edit  m memoized  n/enter/esc cancel"
+		}
+		if m.editsParams() {
+			return "y confirm  m memoized  n/enter/esc cancel"
+		}
 		return "y confirm  n/enter/esc cancel"
+	case StateEditParam:
+		return "type the value  enter keep  esc discard"
 	case StateTypedName:
 		return "type to confirm  enter submit  esc cancel"
 	case StateFinal:
@@ -419,6 +473,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateTypedName(key)
 		case StateFinal:
 			m.updateFinal(key)
+		case StateEditParam:
+			m.updateEditParam(key)
 		default:
 			m.updateNonInput(key)
 		}
@@ -468,8 +524,79 @@ func (m *Model) updateTypedName(key tea.KeyPressMsg) {
 	}
 }
 
+// updateEditParam handles the value input. Enter keeps the value; the
+// current value, or nothing typed over a hidden one, is no override. Esc
+// leaves the parameter as it was.
+func (m *Model) updateEditParam(key tea.KeyPressMsg) {
+	switch key.Code {
+	case tea.KeyEscape:
+		m.state = StateConfirm
+	case tea.KeyBackspace:
+		if m.editBuf != "" {
+			r := []rune(m.editBuf)
+			m.editBuf = string(r[:len(r)-1])
+		}
+	case tea.KeyEnter:
+		if m.editBuf == m.params[m.cursor].Value || (m.hideValues && m.editBuf == "") {
+			delete(m.edits, m.cursor)
+		} else {
+			if m.edits == nil {
+				m.edits = map[int]string{}
+			}
+			m.edits[m.cursor] = m.editBuf
+		}
+		m.state = StateConfirm
+	default:
+		m.editBuf = appendLimited(m.editBuf, key.Text, maxParamLength)
+	}
+}
+
+// updateParamKeys handles the resubmit confirmation's parameter keys and
+// reports whether key was one of them.
+func (m *Model) updateParamKeys(k string) bool {
+	if m.state != StateConfirm || !m.editsParams() {
+		return false
+	}
+	switch k {
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.params)-1 {
+			m.cursor++
+		}
+	case "e":
+		if len(m.params) == 0 {
+			return true
+		}
+		m.editBuf = m.paramValue(m.cursor)
+		m.state = StateEditParam
+	case "m":
+		m.memoized = !m.memoized
+	default:
+		return false
+	}
+	return true
+}
+
+// paramValue is the value parameter i is sent with, or the start of its
+// edit. A hidden value starts empty, so editing never reveals it.
+func (m *Model) paramValue(i int) string {
+	if v, ok := m.edits[i]; ok {
+		return v
+	}
+	if m.hideValues {
+		return ""
+	}
+	return m.params[i].Value
+}
+
 func (m *Model) updateNonInput(key tea.KeyPressMsg) {
 	k := strings.ToLower(key.String())
+	if m.updateParamKeys(k) {
+		return
+	}
 	if m.state == StateMenu {
 		if action, ok := menuKeys[k]; ok {
 			// A verb that applies to no target is not offered, and its key
@@ -533,9 +660,14 @@ func menuKey(action core.Action) string {
 }
 
 func appendInput(current, input string) string {
+	return appendLimited(current, input, maxTypedNameLength)
+}
+
+// appendLimited appends input's printable runes to current, up to limit runes.
+func appendLimited(current, input string, limit int) string {
 	runes := []rune(current)
 	for _, r := range input {
-		if unicode.IsControl(r) || len(runes) >= maxTypedNameLength {
+		if unicode.IsControl(r) || len(runes) >= limit {
 			continue
 		}
 		runes = append(runes, r)

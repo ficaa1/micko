@@ -26,6 +26,9 @@ import (
 //	label:team=data     label team is "data"; label:team has it; label:!team lacks it
 //	tmpl=nightly        started from this WorkflowTemplate or ClusterWorkflowTemplate
 //	cron=etl-hourly     started by this CronWorkflow
+//	param:layers=infra  parameter layers contains "infra" (case-insensitive);
+//	                    param:layers~mntinf fuzzy, param:~mon any parameter,
+//	                    param:layers has it
 //
 // Spaces separate terms, and every term must match; a lone `&` between terms
 // is accepted and means the same. Within a term, `|`
@@ -273,6 +276,7 @@ var fieldOps = map[string][]string{
 	"age":   {"<", ">"},
 	"dur":   {"<", ">"},
 	"label": {":"},
+	"param": {":"},
 }
 
 // parseWord reads a word that is not a regular expression: a fuzzy
@@ -302,7 +306,7 @@ func parseWord(w string) (predicate, error) {
 	}
 	ops, known := fieldOps[field]
 	if !known {
-		return nil, fmt.Errorf("unknown field %q (phase age dur label tmpl cron)", field)
+		return nil, fmt.Errorf("unknown field %q (phase age dur label param tmpl cron)", field)
 	}
 	rest := w[i:]
 	op := ""
@@ -319,9 +323,10 @@ func parseWord(w string) (predicate, error) {
 	if value == "" {
 		return nil, fmt.Errorf("%s%s needs a value", field, op)
 	}
-	// No phase, name, duration or label value holds an operator
-	// character, so one here is a missing space between two terms.
-	if field != "label" {
+	// No phase, name or duration holds an operator character, so one here
+	// is a missing space between two terms. Labels and parameters read
+	// their own.
+	if field != "label" && field != "param" {
 		if i := strings.IndexAny(value, ":=<>!"); i >= 0 {
 			return nil, fmt.Errorf("unexpected %q in %s (a space between terms?)", string(value[i]), w)
 		}
@@ -339,9 +344,29 @@ func parseWord(w string) (predicate, error) {
 			return nil, err
 		}
 		return timeSpan{field: field, less: op == "<", d: d}, nil
+	case "param":
+		return parseParam(value)
 	default: // label
 		return parseLabel(value)
 	}
+}
+
+// parseParam reads what follows `param:`: `name=text`, `name~pattern`,
+// `~pattern` or `name`. A value is free text, since parameters hold JSON
+// lists and other operator characters.
+func parseParam(v string) (predicate, error) {
+	i := strings.IndexAny(v, "=~")
+	if i < 0 {
+		return paramMatch{name: v}, nil
+	}
+	name, op, value := v[:i], v[i:i+1], v[i+1:]
+	if name == "" && op == "=" {
+		return nil, errors.New("param:= needs a name; param:~text searches every parameter")
+	}
+	if value == "" {
+		return nil, fmt.Errorf("param:%s%s needs a value", name, op)
+	}
+	return paramMatch{name: name, value: strings.ToLower(value), fuzzy: op == "~"}, nil
 }
 
 // parseLabel reads what follows `label:`: `key=value`, `key` or `!key`.
@@ -467,9 +492,14 @@ func (p nameRegex) String() string                         { return "/" + string
 type nameFuzzy struct{ pat string }
 
 func (p nameFuzzy) match(s core.Summary, _ time.Time) bool {
-	want := []rune(p.pat)
+	return fuzzyMatch(strings.ToLower(s.Ref.Name), p.pat)
+}
+
+// fuzzyMatch reports whether pat's runes appear in s in order.
+func fuzzyMatch(s, pat string) bool {
+	want := []rune(pat)
 	i := 0
-	for _, r := range strings.ToLower(s.Ref.Name) {
+	for _, r := range s {
 		if i < len(want) && r == want[i] {
 			i++
 		}
@@ -609,6 +639,41 @@ func (p labelNamed) String() string {
 		op = "!="
 	}
 	return p.field + op + p.want
+}
+
+// paramMatch matches a parameter by name, value or both. The value is a
+// case-insensitive substring, or a fuzzy pattern; an empty name matches
+// any parameter and an empty value only checks that the name is there.
+type paramMatch struct {
+	name, value string
+	fuzzy       bool
+}
+
+func (p paramMatch) match(s core.Summary, _ time.Time) bool {
+	for _, a := range s.Arguments {
+		if p.name != "" && a.Name != p.name {
+			continue
+		}
+		v := strings.ToLower(a.Value)
+		switch {
+		case p.value == "":
+			return true
+		case p.fuzzy && fuzzyMatch(v, p.value), !p.fuzzy && strings.Contains(v, p.value):
+			return true
+		}
+	}
+	return false
+}
+
+func (p paramMatch) String() string {
+	switch {
+	case p.value == "":
+		return "param:" + p.name
+	case p.fuzzy:
+		return "param:" + p.name + "~" + p.value
+	default:
+		return "param:" + p.name + "=" + p.value
+	}
 }
 
 // firstLabel returns the value of the first key s carries, or "".

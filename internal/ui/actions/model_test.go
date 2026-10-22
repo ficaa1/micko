@@ -216,3 +216,61 @@ func TestRenderedActionTextSanitizesTargetAndStatesConsequences(t *testing.T) {
 		})
 	}
 }
+
+// A resubmit sends only the parameters edited on its confirmation, and never
+// shows a hidden value.
+func TestResubmitParameterOverrides(t *testing.T) {
+	args := []core.Argument{{Name: "revision", Value: "427c333"}, {Name: "layers", Value: `["monitoring-infra"]`}}
+	clear := func(n int) []string {
+		keys := []string{"e"}
+		for range n {
+			keys = append(keys, "\b")
+		}
+		return keys
+	}
+	edit := func(n int, value string) []string { return append(append(clear(n), value), "enter") }
+	for _, c := range []struct {
+		name     string
+		hidden   bool
+		keys     []string
+		params   []string
+		memoized bool
+	}{
+		{"untouched", false, nil, nil, false},
+		{"one edit", false, edit(7, "main"), []string{"revision=main"}, false},
+		{"second row", false, append([]string{"j"}, edit(20, `["dex"]`)...), []string{`layers=["dex"]`}, false},
+		{"same value", false, []string{"e", "enter"}, nil, false},
+		{"esc discards", false, append(clear(7), "main", "esc"), nil, false},
+		{"memoized", false, []string{"m"}, nil, true},
+		{"hidden kept", true, []string{"e", "enter"}, nil, false},
+		{"hidden replaced", true, []string{"e", "main", "enter"}, []string{"revision=main"}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := NewWithOptions(core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}, Options{AllowActions: true})
+			m.SetParameters(args, c.hidden)
+			m.Open(core.ActionResubmit)
+			for _, k := range c.keys {
+				if k == "\b" {
+					m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+					continue
+				}
+				if k != "enter" && k != "esc" && len([]rune(k)) > 1 {
+					m.Update(tea.KeyPressMsg{Text: k})
+					continue
+				}
+				press(m, k)
+			}
+			if c.hidden && strings.Contains(m.View().Content, "427c333") {
+				t.Fatalf("hidden value shown:\n%s", m.View().Content)
+			}
+			cmd := press(m, "y")
+			if cmd == nil {
+				t.Fatalf("state=%v, want a request:\n%s", m.State(), m.View().Content)
+			}
+			req := cmd().(ActionIntentMsg).Request
+			if strings.Join(req.Parameters, "|") != strings.Join(c.params, "|") || req.Memoized != c.memoized {
+				t.Fatalf("parameters=%q memoized=%v, want %q %v", req.Parameters, req.Memoized, c.params, c.memoized)
+			}
+		})
+	}
+}

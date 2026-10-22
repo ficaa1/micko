@@ -71,6 +71,11 @@ func TestQueryCanonicalForms(t *testing.T) {
 		{"tmpl=nightly-report", "tmpl=nightly-report"},
 		{"tmpl!=deploy", "tmpl!=deploy"},
 		{"cron=demo-etl-hourly", "cron=demo-etl-hourly"},
+		{"param:layers=Infra", "param:layers=infra"},
+		{`param:layers=["x"]`, `param:layers=["x"]`},
+		{"param:layers~MI", "param:layers~mi"},
+		{"param:~mon", "param:~mon"},
+		{"param:layers", "param:layers"},
 		{"!phase=failed|~etl age<1d", "!phase=Failed|~etl & age<1d"},
 		{"a & b", "a & b"},
 		{"& a &", "a"},
@@ -125,6 +130,10 @@ func TestQueryErrors(t *testing.T) {
 		{"label:!k=v", "label:! takes a key alone"},
 		{"label:k=v=w", "is not key, key=value or !key"},
 		{"tmpl=", "tmpl= needs a value"},
+		{"param:", "param: needs a value"},
+		{"param:=x", "param:= needs a name"},
+		{"param:layers=", "param:layers= needs a value"},
+		{"param:~", "param:~ needs a value"},
 		{"phase=failed<2h", `unexpected "<"`},
 		{"/a(/", "bad regex /a(/: missing closing )"},
 		{"/abc", "unterminated regex /abc"},
@@ -185,7 +194,7 @@ func TestQueryErrors(t *testing.T) {
 	})
 }
 
-// Query operators select exact workflow sets with strict time bounds and case-sensitive label values.
+// Query operators select exact workflow sets with strict time bounds, case-sensitive label values and case-insensitive parameter values.
 func TestQueryMatches(t *testing.T) {
 	now := testkit.FixtureEpoch
 	start := now.Add(-time.Hour)
@@ -201,6 +210,8 @@ func TestQueryMatches(t *testing.T) {
 	items[1].Labels = map[string]string{clusterWorkflowTemplateLabel: "cluster"}
 	items[2].CreatedAt = start
 	items[2].Labels = map[string]string{cronLabel: "hourly"}
+	items[0].Arguments = []core.Argument{{Name: "layers", Value: `["monitoring-infra"]`}, {Name: "revision", Value: "427c333"}}
+	items[1].Arguments = []core.Argument{{Name: "layers", Value: `["dex"]`}}
 	for _, c := range []struct {
 		q    string
 		want []string
@@ -241,6 +252,16 @@ func TestQueryMatches(t *testing.T) {
 		{"label:team=Data", nil},
 		{"label:env", []string{"ab"}},
 		{"label:!team", []string{"a", "b", "c"}},
+		{"param:layers=monitoring", []string{"ab"}},
+		{"param:layers=MONITORING", []string{"ab"}},
+		{`param:layers=["dex"]`, []string{"a"}},
+		{"param:layers~mntinf", []string{"ab"}},
+		{"param:layers~fnim", nil},
+		{"param:~427", []string{"ab"}},
+		{"param:~dx", []string{"a"}},
+		{"param:revision=dex", nil},
+		{"param:layers", []string{"a", "ab"}},
+		{"!param:layers", []string{"b", "c"}},
 	} {
 		t.Run(c.q, func(t *testing.T) {
 			if got := matching(t, c.q, items, now); !slices.Equal(got, c.want) {
