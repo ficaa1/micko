@@ -480,6 +480,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		if m.state == StateEditParam {
+			m.editBuf = appendLimited(m.editBuf, msg.Content, maxParamLength)
+		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	}
@@ -528,6 +532,10 @@ func (m *Model) updateTypedName(key tea.KeyPressMsg) {
 // current value, or nothing typed over a hidden one, is no override. Esc
 // leaves the parameter as it was.
 func (m *Model) updateEditParam(key tea.KeyPressMsg) {
+	if clearsField(key) {
+		m.editBuf = ""
+		return
+	}
 	switch key.Code {
 	case tea.KeyEscape:
 		m.state = StateConfirm
@@ -549,6 +557,19 @@ func (m *Model) updateEditParam(key tea.KeyPressMsg) {
 	default:
 		m.editBuf = appendLimited(m.editBuf, key.Text, maxParamLength)
 	}
+}
+
+// clearsField reports whether key empties a text field: ctrl or cmd with
+// backspace, which a terminal without key reporting sends as ctrl+h or ctrl+u.
+func clearsField(key tea.KeyPressMsg) bool {
+	if key.Code == tea.KeyBackspace && key.Mod&(tea.ModCtrl|tea.ModSuper) != 0 {
+		return true
+	}
+	switch key.String() {
+	case "ctrl+h", "ctrl+u":
+		return true
+	}
+	return false
 }
 
 // updateParamKeys handles the resubmit confirmation's parameter keys and

@@ -511,6 +511,13 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mascotBeat = (m.mascotBeat + 1) % len(m.mascotBeats())
 		return m, m.nextMascotBeat()
 
+	case tea.PasteMsg:
+		if m.actionView != nil && m.actionView.State() != actions.StateIdle {
+			_, cmd := m.actionView.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		key := msg.String()
 		// Ctrl-C quits globally, including while a child modal owns input.

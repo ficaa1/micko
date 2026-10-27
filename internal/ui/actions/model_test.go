@@ -244,21 +244,32 @@ func TestResubmitParameterOverrides(t *testing.T) {
 		{"memoized", false, []string{"m"}, nil, true},
 		{"hidden kept", true, []string{"e", "enter"}, nil, false},
 		{"hidden replaced", true, []string{"e", "main", "enter"}, []string{"revision=main"}, false},
+		{"paste", false, []string{"e", "ctrl+u", "paste:sha-29137b6\n", "enter"}, []string{"revision=sha-29137b6"}, false},
+		{"ctrl+backspace clears", false, []string{"e", "ctrl+backspace", "main", "enter"}, []string{"revision=main"}, false},
+		{"cmd+backspace clears", false, []string{"e", "super+backspace", "main", "enter"}, []string{"revision=main"}, false},
+		{"legacy ctrl+backspace clears", false, []string{"e", "ctrl+h", "main", "enter"}, []string{"revision=main"}, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			m := NewWithOptions(core.Ref{Namespace: "ns", Name: "wf", UID: "uid"}, Options{AllowActions: true})
 			m.SetParameters(args, c.hidden)
 			m.Open(core.ActionResubmit)
 			for _, k := range c.keys {
-				if k == "\b" {
+				switch {
+				case k == "\b":
 					m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-					continue
-				}
-				if k != "enter" && k != "esc" && len([]rune(k)) > 1 {
+				case k == "ctrl+backspace":
+					m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModCtrl})
+				case k == "super+backspace":
+					m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModSuper})
+				case k == "ctrl+h" || k == "ctrl+u":
+					m.Update(tea.KeyPressMsg{Code: rune(k[5]), Mod: tea.ModCtrl})
+				case strings.HasPrefix(k, "paste:"):
+					m.Update(tea.PasteMsg{Content: strings.TrimPrefix(k, "paste:")})
+				case k != "enter" && k != "esc" && len([]rune(k)) > 1:
 					m.Update(tea.KeyPressMsg{Text: k})
-					continue
+				default:
+					press(m, k)
 				}
-				press(m, k)
 			}
 			if c.hidden && strings.Contains(m.View().Content, "427c333") {
 				t.Fatalf("hidden value shown:\n%s", m.View().Content)

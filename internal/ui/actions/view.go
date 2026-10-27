@@ -81,7 +81,7 @@ func render(m *Model) string {
 			renderParams(&b, m)
 		}
 		if m.state == StateEditParam {
-			b.WriteString(keys(t, "[enter] Keep the value  [esc] Discard the edit") + "\n")
+			b.WriteString(keys(t, "[enter] Keep the value  [ctrl+⌫] Clear  [esc] Discard the edit") + "\n")
 			break
 		}
 		if m.editsParams() {

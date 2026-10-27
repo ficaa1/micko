@@ -224,7 +224,8 @@ workflow's name. Delete asks twice: after `y`, only `D` (shift+d) deletes.
 
 Resubmit opened on a loaded workflow lists its parameters. `↑`/`↓` choose
 one, `e` edits its value (`enter` keeps the edit, `esc` drops it) and `m`
-turns on memoized. Only edited parameters are sent; the rest keep their
+turns on memoized. While editing, a paste is typed in and `ctrl+backspace`
+or `cmd+backspace` clears the value. Only edited parameters are sent; the rest keep their
 values. With values hidden, an edit starts empty. From the list, open the
 workflow first to edit its parameters. A confirmed resubmit opens the new
 workflow.
