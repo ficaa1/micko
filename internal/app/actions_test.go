@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/actions"
@@ -222,6 +224,7 @@ func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 	}{
 		{"resume", []string{"a", "u"}, nil, "resume confirmed", "wf"},
 		{"resubmit with an override", []string{"a", "b", "e", "x", "enter"}, []string{"revision=427c333x"}, "resubmit confirmed", "wf-again"},
+		{"resubmit with a pasted override", []string{"a", "b", "e", "paste:-29137b6", "enter"}, []string{"revision=427c333-29137b6"}, "resubmit confirmed", "wf-again"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			wf := workflowFixture("wf")
@@ -236,7 +239,13 @@ func TestRootKeyboardActionReachesExecutorAndRendersOutcome(t *testing.T) {
 			m.selection = wf.Summary.Ref
 			m.detailState = detailState{ref: wf.Summary.Ref, workflow: wf}
 
-			keys(m, c.keys...)
+			for _, k := range c.keys {
+				if pasted, ok := strings.CutPrefix(k, "paste:"); ok {
+					m.Update(tea.PasteMsg{Content: pasted})
+					continue
+				}
+				keys(m, k)
+			}
 			cmd := keys(m, "y")
 			if cmd == nil {
 				t.Fatal("the confirmation emitted nothing")
