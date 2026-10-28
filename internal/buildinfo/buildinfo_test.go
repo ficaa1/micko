@@ -8,8 +8,8 @@ import (
 
 // The version is the number the release tag is checked against.
 func TestVersionIsAReleaseNumber(t *testing.T) {
-	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
-		t.Errorf("Version = %q, want major.minor.patch", Version)
+	if !regexp.MustCompile(`^\d+\.\d+\.\d+(-rc\.\d+)?$`).MatchString(Version) {
+		t.Errorf("Version = %q, want major.minor.patch with an optional -rc.N", Version)
 	}
 }
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.0-rc.1
+
+- `micko --setup` guides creating a profile, for a direct endpoint or a
+  managed `kubectl port-forward`. It asks only for token variable names or
+  file paths, never token values, and keeps the rest of the config file.
+- `micko --check --profile NAME` checks workflow read access and exits. It
+  reports which stage failed: config, forwarding, TLS, authentication,
+  permission, API or endpoint. `--check-timeout` bounds it.
+- `authMode: server` (or `--auth-mode server`) connects to an Argo Server in
+  server auth mode with no token.
+- Explain adds cards for Kubernetes warning events matched to the workflow's
+  pods, and says how much event history it could see.
+- Compare (`C`, `:compare` or section `7`) sets an open run beside the
+  previous successful run of the same cron workflow or template: phase,
+  duration, changed parameters and each step's status, retries and
+  duration.
+- Saved views keep a profile, namespace, filter, phase and sort under a
+  name: `:view-save NAME`, `:views`, `:view NAME` and `:view-delete NAME`.
+- On template and cron lists, `a` or `:actions` opens actions: `g` submits a
+  template or runs a cron workflow now, with parameter edits; `z` suspends
+  and `u` resumes a cron workflow. Writes are confirmed, checked against the
+  resource's identity and recorded in the action journal.
+- Built with Go 1.27.3.
+
 ## 0.8.2
 
 - Resubmit can override parameters, like the Argo UI. On an open workflow,
