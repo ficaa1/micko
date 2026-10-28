@@ -252,9 +252,9 @@ checking ownership labels or UID. Use an isolated, disposable namespace with no
 existing workflows; fixtures under `tests/e2e/testdata` are synthetic.
 
 CI runs format, vet (including integration, E2E and compatibility tags),
-unused-code staticcheck, unit, integration, race and build checks. The pinned
-staticcheck v0.8.2 tool selects Go 1.26 automatically for its own build; the
-application continues to target the version in go.mod. External E2E
+unused-code staticcheck, unit, integration, race and build checks.
+Staticcheck is pinned to v0.7.0, the newest release that builds with the Go
+version in go.mod. External E2E
 requires the manual `external_e2e` dispatch input and `E2E_ALLOWLIST_B64`;
 requesting it without a secret fails. The allowlisted endpoint must already
 be reachable. It remains separate from the self-provisioning deployment job.

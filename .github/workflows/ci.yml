@@ -105,7 +105,7 @@ jobs:
 
       - name: Unused production code
         if: runner.os == 'Linux'
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 -checks U1000 -tags integration,e2e,compat ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 -checks U1000 -tags integration,e2e,compat ./...
 
       - name: Compatibility runner syntax and cleanup
         if: runner.os == 'Linux'
