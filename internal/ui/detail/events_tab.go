@@ -47,7 +47,7 @@ type EventsIntent struct {
 // EventsWanted reports the stream the Events section wants, and false when
 // it wants none: another section is on screen or no workflow is loaded.
 func (m *Model) EventsWanted() (EventsIntent, bool) {
-	if m.tab != "events" || !m.loaded || m.loading || m.notFound || m.lastErr != "" {
+	if (m.tab != "events" && m.tab != "explain") || !m.loaded || m.loading || m.notFound || m.lastErr != "" {
 		return EventsIntent{}, false
 	}
 	return EventsIntent{Ref: m.state.Summary.Ref}, true
@@ -64,7 +64,7 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 	name := m.state.Summary.Ref.Name
 	changed := false
 	for _, e := range evs {
-		if !candidateEvent(e, name) {
+		if (e.Namespace != "" && e.Namespace != m.state.Summary.Ref.Namespace) || !candidateEvent(e, name) {
 			continue
 		}
 		changed = true
@@ -76,6 +76,9 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 			delete(m.ev.byUID, key)
 			continue
 		}
+		if len(e.Message) > 4096 {
+			e.Message = strings.ToValidUTF8(e.Message[:4096], "") + "…"
+		}
 		m.ev.byUID[key] = e
 	}
 	if over := len(m.ev.byUID) - eventsCap; over > 0 {
@@ -84,7 +87,11 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 			keys = append(keys, k)
 		}
 		sort.Slice(keys, func(i, j int) bool {
-			return m.ev.byUID[keys[i]].LastSeen.Before(m.ev.byUID[keys[j]].LastSeen)
+			a, b := m.ev.byUID[keys[i]], m.ev.byUID[keys[j]]
+			if a.LastSeen.Equal(b.LastSeen) {
+				return keys[i] < keys[j]
+			}
+			return a.LastSeen.Before(b.LastSeen)
 		})
 		for _, k := range keys[:over] {
 			delete(m.ev.byUID, k)
@@ -92,6 +99,7 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 	}
 	if changed {
 		m.ev.stale = true
+		m.explainChanged()
 	}
 }
 
@@ -99,6 +107,7 @@ func (m *Model) ApplyEvents(evs []core.Event) {
 // the reader must act on or wait for: a stopped or reconnecting stream.
 func (m *Model) SetEventsStatus(status string, problem bool) {
 	m.ev.status, m.ev.problem = status, problem
+	m.explainChanged()
 }
 
 // eventRows is the table, built again when the events, the node map, the

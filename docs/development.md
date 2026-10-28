@@ -197,3 +197,9 @@ CI runs format, vet, unit, integration, race and build checks. E2E runs only on
 manual workflow dispatch with `E2E_ALLOWLIST_B64` configured. Installing kind
 and kubectl in that job does not provision a cluster; the allowlisted endpoint
 must already be reachable from the runner.
+
+Explain and Events share one pair of cancelable event streams per selected
+workflow. `diagnose.Input` accepts event snapshots and collection status; its
+warning cards require workflow UID identity or a unique verified pod name plus
+a creation-time bound. Event order, replay replacement and eviction ties are
+deterministic. Event coverage is additive to workflow and log rules.

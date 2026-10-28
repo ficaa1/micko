@@ -611,7 +611,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
 			// On the Events section r also restarts the streams.
-			if m.detailView.Section() == shared.SectionEvents {
+			if m.detailView.Section() == shared.SectionEvents || m.detailView.Section() == shared.SectionExplain {
 				return m, tea.Batch(m.startDetailFetch(), m.restartEvents())
 			}
 			return m, m.startDetailFetch()

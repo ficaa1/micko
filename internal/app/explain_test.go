@@ -70,7 +70,7 @@ func TestListXOpensTheExplanation(t *testing.T) {
 		t.Errorf("request = %+v, want pod %s, main, 200 lines, no follow", r, pod)
 	}
 	s := screen(m)
-	for _, want := range []string{"[Explain]", "✗ ERROR  transform failed all 3 attempts", "SchemaViolation: revenue_eur", "explain · 1 error · 2 info"} {
+	for _, want := range []string{"[Explain]", "✗ ERROR  transform failed all 3 attempts", "SchemaViolation: revenue_eur", "explain · 1 error · 3 info"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen lacks %q:\n%s", want, s)
 		}
@@ -224,7 +224,7 @@ func TestExplainCopiesTheReport(t *testing.T) {
 	m := resize(t, loadDemoList(t), 140, 40)
 	m = openOnExplain(t, m, "demo-oom-backfill")
 	got := m.copyText()
-	if !strings.HasPrefix(got, "Explain demo-oom-backfill in demo: Failed after 17m00s\n1 error\n") ||
+	if !strings.HasPrefix(got, "Explain demo-oom-backfill in demo: Failed after 17m00s\n1 error · 1 info\n") ||
 		!strings.Contains(got, "✗ ERROR  backfill-2026-q2 failed: out of memory") || strings.Contains(got, "\x1b") {
 		t.Fatalf("copied:\n%s", got)
 	}

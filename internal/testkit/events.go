@@ -167,12 +167,16 @@ func demoEvents(wf core.Workflow) []core.Event {
 	seq := 0
 	add := func(kind, name, typ, reason, message, source string, first time.Time, last time.Time, count int) {
 		seq++
+		uid := ""
+		if kind == "Workflow" {
+			uid = wf.Summary.Ref.UID
+		}
 		out = append(out, core.Event{
 			UID:             fmt.Sprintf("demo-ev-%d", fnv32(wf.Summary.Ref.Name+"/"+name+"/"+reason+"/"+first.String())),
 			ResourceVersion: fmt.Sprint(1000 + seq),
 			Namespace:       wf.Summary.Ref.Namespace,
 			Type:            typ, Reason: reason, Message: message,
-			ObjectKind: kind, ObjectName: name, Count: count,
+			ObjectKind: kind, ObjectName: name, ObjectUID: uid, Count: count,
 			FirstSeen: first, LastSeen: last, Source: source,
 		})
 	}

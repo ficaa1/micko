@@ -416,3 +416,17 @@ the floor.
   `kubectl port-forward` to an Argo Server in server auth mode without TLS.
   A direct connection with a bearer token is untested. The Windows release
   is untested, and log piping needs `/bin/sh`.
+
+### Event evidence in Explain
+
+Opening `X` also opens the same bounded event streams used by `E`; switching
+between them shares collection. Explain quotes up to 20 warning events with
+UTC times, reason, message and count, alongside the workflow and log findings.
+Workflow events require the involved object's UID to match. Pod events require
+a unique verified pod name and an event time after the run's creation; node
+status does not provide a pod UID, and each pod card states this limit.
+A warning is an observation at its timestamp, not proof a condition persists.
+The report's coverage card includes connection/permission status and omitted
+warnings. Collection retains at most 2,000 candidate events; expired, absent or
+unverified events never establish that no problem occurred. `r` restarts stopped
+streams and `y` copies this evidence and its limits with the existing report.
