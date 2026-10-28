@@ -174,6 +174,7 @@ const paramClip = 60
 // and the new value where it is overridden.
 func renderParams(b *strings.Builder, m *Model) {
 	t := m.theme
+	start, end := 0, len(m.params)
 	switch {
 	case !m.paramsKnown:
 		b.WriteString(t.Muted.Render("parameters: not loaded; open the workflow to override them") + "\n")
@@ -185,7 +186,17 @@ func renderParams(b *strings.Builder, m *Model) {
 		for _, p := range m.params {
 			width = max(width, len([]rune(shared.Sanitize(p.Name))))
 		}
-		for i, p := range m.params {
+		if m.resource != nil {
+			limit := max(1, m.height-17)
+			start = max(0, m.cursor-limit/2)
+			end = min(len(m.params), start+limit)
+			start = max(0, end-limit)
+			if start > 0 {
+				b.WriteString(fmt.Sprintf("  … %d above\n", start))
+			}
+		}
+		for i := start; i < end; i++ {
+			p := m.params[i]
 			mark := "  "
 			if i == m.cursor {
 				mark = "> "
@@ -193,18 +204,42 @@ func renderParams(b *strings.Builder, m *Model) {
 			current := hiddenValue
 			if !m.hideValues {
 				current = clipRight(shared.Sanitize(p.Value), paramClip)
+				if !p.HasValue && m.resource != nil {
+					switch {
+					case p.HasDefault || p.Default != "":
+						current = clipRight(shared.Sanitize(p.Default), paramClip) + " (default)"
+					case p.ValueFrom != "":
+						current = "from resource"
+					default:
+						current = "REQUIRED"
+					}
+				}
 			}
 			row := fmt.Sprintf("%s%-*s  %s", mark, width, shared.Sanitize(p.Name), current)
 			style := t.Text
 			if m.state == StateEditParam && i == m.cursor {
-				row += " → " + clipLeft(shared.Sanitize(m.editBuf), paramClip) + "_"
+				if m.hideValues && m.resource != nil {
+					row += " → " + hiddenValue + "_"
+				} else {
+					row += " → " + clipLeft(shared.Sanitize(m.editBuf), paramClip) + "_"
+				}
 				style = t.Accent
 			} else if v, ok := m.edits[i]; ok {
-				row += " → " + clipRight(shared.Sanitize(v), paramClip)
+				if m.hideValues && m.resource != nil {
+					row += " → " + hiddenValue
+				} else {
+					row += " → " + clipRight(shared.Sanitize(v), paramClip)
+				}
 				style = t.Accent
 			}
 			b.WriteString(style.Render(row) + "\n")
 		}
+	}
+	if m.resource != nil {
+		if end < len(m.params) {
+			b.WriteString(fmt.Sprintf("  … %d below (↑/↓)\n", len(m.params)-end))
+		}
+		return
 	}
 	memo := "no"
 	if m.memoized {

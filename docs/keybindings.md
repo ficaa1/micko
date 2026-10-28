@@ -50,3 +50,8 @@ for a custom file, then `micko --check --profile NAME` to check read access.
 Saved workflow views: `:view-save NAME` saves or replaces a view, `:views`
 lists names, `:view NAME` restores one, and `:view-delete NAME` deletes it.
 Names can contain spaces; tab completes saved names.
+
+On template and cron lists and their info panels, `a` or `:actions` opens
+the action menu. `g` submits a template or runs cron now; `z` suspends cron
+and `u` resumes cron. `y` confirms; `enter` or `esc` cancels. Submission
+parameters use `↑`/`↓`, `e`, `enter` to keep, and `esc` to discard an edit.

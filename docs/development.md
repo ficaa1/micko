@@ -103,6 +103,19 @@ live in [ci.yml](../.github/workflows/ci.yml).
   action is a sequence of single requests, each with its own preflight and
   read-back. Every attempt is appended to the action journal
   (`internal/journal`), whose failures are reported and never block a write.
+- Template and cron mutations use `core.ResourceReader` for identity
+  preflight and `core.ResourceActioner` for a single send. Submissions use
+  POST `/api/v1/workflows/{namespace}/submit` with `resourceKind`,
+  `resourceName` and `submitOptions.parameters`; cron suspend/resume use
+  PUT `/api/v1/cron-workflows/{namespace}/{name}/{suspend|resume}`.
+  Originating resource identity and workflow destination are distinct for
+  cluster templates. A subsequent read promotes ACCEPTED to CONFIRMED;
+  ambiguous writes remain UNKNOWN and are never resent. These contracts
+  are verified against the pinned upstream
+  [workflow protobuf](https://github.com/argoproj/argo-workflows/blob/v4.1.2/pkg/apiclient/workflow/workflow.proto),
+  [cron protobuf](https://github.com/argoproj/argo-workflows/blob/v4.1.2/pkg/apiclient/cronworkflow/cron-workflow.proto),
+  [submit options](https://github.com/argoproj/argo-workflows/blob/v4.1.2/pkg/apis/workflow/v1alpha1/common.go)
+  and [submission handler](https://github.com/argoproj/argo-workflows/blob/v4.1.2/server/workflow/workflow_server.go).
 - A workflow counts as suspended when it holds a running Suspend node or has
   not finished and has `spec.suspend` set, the two states Argo's resume clears.
   The list projection carries `spec.suspend`; the gate scan adds the node half.

@@ -637,6 +637,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openDetailActions()
 			return m, nil
 		}
+		if (m.route == RouteCron || m.route == RouteTemplates || m.route == RouteClusterTemplates) && key == "a" && !m.textEntryActive() {
+			return m, m.openResourceActions()
+		}
 		if m.route == RouteList && key == "a" && !m.textEntryActive() {
 			m.openListActions()
 			return m, nil
@@ -850,6 +853,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case BackMsg:
 		return m, m.back()
 
+	case actions.ResourceIntentMsg:
+		if !m.resourceIntentMatches(msg.Request) {
+			return m, nil
+		}
+		return m, m.startResourceAction(msg.Request)
 	case actions.ActionIntentMsg:
 		// Only the active, confirmed child intent may reach the executor.
 		if m.actionView == nil || m.actionView.Bulk() || msg.Request.Ref != m.actionView.Ref() ||
@@ -982,6 +990,9 @@ func (m *Root) View() tea.View {
 		f.TitleRight = m.kindSummary(m.route, def.noun)
 		f.Route = m.route.String()
 		f.Hints = def.pane.Hints()
+		if m.route == RouteCron || m.route == RouteTemplates || m.route == RouteClusterTemplates {
+			f.Hints = "a actions  " + f.Hints
+		}
 		f.Body = def.pane.BodyLines(m.deps.clock.Now())
 		f.Status = def.pane.WindowStatus()
 	default:

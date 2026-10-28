@@ -20,13 +20,15 @@ import (
 // Entry is one line of the journal. The field names are the file format:
 // renaming one breaks every reader of an existing journal.
 type Entry struct {
-	Time      time.Time `json:"time"`
-	Profile   string    `json:"profile"`
-	Server    string    `json:"server"`
-	Namespace string    `json:"namespace"`
-	Name      string    `json:"name"`
-	UID       string    `json:"uid"`
-	Verb      string    `json:"verb"`
+	DestinationNamespace string    `json:"destinationNamespace,omitempty"`
+	Kind                 string    `json:"kind,omitempty"`
+	Time                 time.Time `json:"time"`
+	Profile              string    `json:"profile"`
+	Server               string    `json:"server"`
+	Namespace            string    `json:"namespace"`
+	Name                 string    `json:"name"`
+	UID                  string    `json:"uid"`
+	Verb                 string    `json:"verb"`
 	// Outcome is confirmed, accepted, refused or unknown, the same words
 	// the outcome pane shows.
 	Outcome string `json:"outcome"`

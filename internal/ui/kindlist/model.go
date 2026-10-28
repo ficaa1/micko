@@ -224,6 +224,8 @@ func (m *Model[T]) SetSize(w, h int) { m.width, m.height = w, h }
 func (m *Model[T]) Searching() bool { return m.searchOn }
 
 // revealed reports whether the selected row's values are shown.
+func (m *Model[T]) ValuesRevealed() bool { return m.revealed() }
+
 func (m *Model[T]) revealed() bool {
 	if m.selKey == "" {
 		return false

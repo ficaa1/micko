@@ -76,8 +76,9 @@ type Argument struct {
 	Value string
 	// HasValue separates an empty value from none: a parameter declared
 	// with no value must be supplied at submission.
-	HasValue bool
-	Default  string
+	HasValue   bool
+	HasDefault bool
+	Default    string
 	// Enum lists the allowed values, when the parameter restricts them.
 	Enum        []string
 	Description string

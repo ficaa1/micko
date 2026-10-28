@@ -321,6 +321,22 @@ controller's conditions and the arguments each run gets.
 entrypoint, template and parameter counts, age and description; `i` lists
 every argument and template. On all three, `enter` lists the workflows that
 row started, `v` hides or reveals values and `f` shows the manifest.
+Press `a` (or `:actions`) on the list or its info panel for actions: `g`
+submits a template or runs a cron workflow now; cron also offers `z` suspend
+and `u` resume. A cluster template submits into the session namespace shown
+in confirmation (change it with `:ns NAME`); other resources submit into
+their own namespace, including from an all-namespaces list.
+
+Submission confirmation uses `↑`/`↓`, `e`, `enter` and `esc` to edit parameter
+overrides, just like resubmit. Required parameters must be supplied; only
+edited values are sent. With values hidden, edits start empty and remain
+redacted on screen. Artifact overrides, arbitrary manifests, entrypoint and
+service-account overrides are not offered. Running a cron workflow now does
+not change its schedule or suspend state, and suspend/resume leave active
+runs running. Every action checks the originating resource identity before
+sending once. A successful submission opens the new workflow; `UNKNOWN`
+stays on screen and must be inspected before trying again. Read-only and
+demo modes refuse these actions too.
 
 `:aw` lists the workflow archive, newest first, including runs already gone
 from the cluster. `enter` opens one in the detail view; actions apply to live
@@ -368,7 +384,10 @@ outcome until you close it.
 
 Every write attempt, refused ones included, adds one JSON line to
 `~/.local/state/micko/actions.jsonl` (under `$XDG_STATE_HOME` when set):
-time, profile, server, namespace, name, UID, verb, outcome and error. Set
+time, profile, server, resource kind, namespace, name, UID, verb, outcome and
+error. Resource submissions also record the destination namespace, without
+parameter values; server errors for these actions are summarized to avoid
+recording echoed input. Set
 `journal: false` to turn it off. A journal that cannot be written never
 blocks an action.
 
@@ -481,10 +500,10 @@ the floor.
 - Parameter and output values are shown. Set `redactValues: true` in the
   config or on a profile, or pass `--redact-values`, to hide them until `v`.
   Logs, copied text and pipe output can still contain sensitive data.
-- micko cannot submit workflows, edit parameters other than a resubmit's,
-  or suspend, resume or submit cron workflows and templates.
-- Argo's action endpoints address workflows by name, so a same-name
-  replacement between micko's identity check and the write is possible.
+- Submission starts from WorkflowTemplates, ClusterWorkflowTemplates and
+  CronWorkflows; arbitrary workflow creation and artifact overrides are not offered.
+- Argo's action and submission endpoints address resources by name, so a
+  same-name replacement between the identity check and write is possible.
 - Tested live against Argo Workflows v4.1.2 on macOS arm64, through
   `kubectl port-forward` to an Argo Server in server auth mode without TLS.
   A direct connection with a bearer token is untested. The Windows release
