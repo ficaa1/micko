@@ -44,8 +44,8 @@ type EventsIntent struct {
 	Ref core.Ref
 }
 
-// EventsWanted reports the stream the Events section wants, and false when
-// it wants none: another section is on screen or no workflow is loaded.
+// EventsWanted reports the stream the Events or Explain section wants, and
+// false when it wants none: another section is on screen or no workflow is loaded.
 func (m *Model) EventsWanted() (EventsIntent, bool) {
 	if (m.tab != "events" && m.tab != "explain") || !m.loaded || m.loading || m.notFound || m.lastErr != "" {
 		return EventsIntent{}, false

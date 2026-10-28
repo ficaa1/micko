@@ -3,8 +3,9 @@ package detail
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -84,18 +85,9 @@ func (m *Model) buildComparisonReport() diagnose.Report {
 		return report
 	}
 	a, b := comparisonSteps(*base), comparisonSteps(wf)
-	keys := map[string]bool{}
-	for k := range a {
-		keys[k] = true
-	}
-	for k := range b {
-		keys[k] = true
-	}
-	ordered := make([]string, 0, len(keys))
-	for k := range keys {
-		ordered = append(ordered, k)
-	}
-	sort.Strings(ordered)
+	union := maps.Clone(a)
+	maps.Copy(union, b)
+	ordered := slices.Sorted(maps.Keys(union))
 	report.Findings = append(report.Findings, diagnose.Finding{Severity: diagnose.Info, Headline: "Steps (baseline → selected)", Evidence: []diagnose.Evidence{{Label: "matching", Text: "Task path, node type and template identify each position. Fanout/retry instances, duplicate positions and unplaced nodes are ambiguous; their individual durations are not aligned. Retry parents show aggregate retry counts. At most 300 positions are shown."}}})
 	for i, k := range ordered {
 		if i == 300 {
@@ -135,18 +127,9 @@ func compareParameters(a, b []core.Argument) []diagnose.Finding {
 	for _, p := range b {
 		right[p.Name] = p
 	}
-	names := map[string]bool{}
-	for k := range left {
-		names[k] = true
-	}
-	for k := range right {
-		names[k] = true
-	}
-	ordered := make([]string, 0, len(names))
-	for k := range names {
-		ordered = append(ordered, k)
-	}
-	sort.Strings(ordered)
+	union := maps.Clone(left)
+	maps.Copy(union, right)
+	ordered := slices.Sorted(maps.Keys(union))
 	f := diagnose.Finding{Severity: diagnose.Info, Headline: "Changed input parameters"}
 	for _, name := range ordered {
 		l, lok := left[name]

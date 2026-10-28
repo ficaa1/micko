@@ -4,13 +4,13 @@ package savedviews
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"unicode"
+
+	"github.com/ficaa1/micko/internal/journal"
 )
 
 type View struct {
@@ -27,22 +27,18 @@ type Store struct {
 	err  error
 }
 
+type file struct {
+	Version int             `json:"version"`
+	Views   map[string]View `json:"views"`
+}
+
+// Open keeps views.json beside the action journal.
 func Open() *Store {
-	dir := os.Getenv("XDG_STATE_HOME")
-	if !filepath.IsAbs(dir) {
-		dir = ""
-	}
-	if dir == "" {
-		if runtime.GOOS == "windows" {
-			dir, _ = os.UserConfigDir()
-		} else if home, err := os.UserHomeDir(); err == nil {
-			dir = filepath.Join(home, ".local", "state")
-		}
-	}
-	if dir == "" {
+	path, err := journal.DefaultPath()
+	if err != nil {
 		return &Store{err: errors.New("no saved views state directory")}
 	}
-	return &Store{path: filepath.Join(dir, "micko", "views.json")}
+	return &Store{path: filepath.Join(filepath.Dir(path), "views.json")}
 }
 
 func ValidName(name string) bool {
@@ -69,10 +65,7 @@ func (s *Store) Read() (map[string]View, error) {
 		return nil, errors.New("cannot read saved views file")
 	}
 	defer f.Close()
-	var data struct {
-		Version int             `json:"version"`
-		Views   map[string]View `json:"views"`
-	}
+	var data file
 	d := json.NewDecoder(io.LimitReader(f, 1<<20))
 	if err := d.Decode(&data); err != nil {
 		return nil, errors.New("saved views file is corrupt; keep it for recovery")
@@ -103,7 +96,7 @@ func (s *Store) Change(name string, view *View) error {
 	}
 	lock := s.path + ".lock"
 	if err := os.Mkdir(lock, 0700); err != nil {
-		return errors.New("saved views are busy or locked; no state changed")
+		return errors.New("saved views are busy or locked (remove " + lock + " if no micko is running); no state changed")
 	}
 	defer os.Remove(lock)
 	views, err := s.Read()
@@ -118,10 +111,7 @@ func (s *Store) Change(name string, view *View) error {
 	} else {
 		views[name] = *view
 	}
-	data, err := json.MarshalIndent(struct {
-		Version int             `json:"version"`
-		Views   map[string]View `json:"views"`
-	}{1, views}, "", "  ")
+	data, err := json.MarshalIndent(file{1, views}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -130,9 +120,7 @@ func (s *Store) Change(name string, view *View) error {
 		return errors.New("cannot write saved views; no state changed")
 	}
 	defer os.Remove(f.Name())
-	if err = f.Chmod(0600); err == nil {
-		_, err = f.Write(append(data, '\n'))
-	}
+	_, err = f.Write(append(data, '\n'))
 	if err == nil {
 		err = f.Sync()
 	}
@@ -144,7 +132,7 @@ func (s *Store) Change(name string, view *View) error {
 		err = os.Rename(f.Name(), s.path)
 	}
 	if err != nil {
-		return fmt.Errorf("cannot replace saved views; no state changed")
+		return errors.New("cannot replace saved views; no state changed")
 	}
 	return nil
 }

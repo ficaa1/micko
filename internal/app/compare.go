@@ -9,7 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/ficaa1/micko/internal/core"
+	"github.com/ficaa1/micko/internal/ui/cronlist"
 	"github.com/ficaa1/micko/internal/ui/shared"
+	"github.com/ficaa1/micko/internal/ui/templatelist"
 )
 
 type comparisonMsg struct {
@@ -82,7 +84,7 @@ func (m *Root) handleComparison(msg comparisonMsg) tea.Cmd {
 }
 
 func comparisonLineage(s core.Summary) (string, string) {
-	for _, key := range []string{"workflows.argoproj.io/cron-workflow", "workflows.argoproj.io/workflow-template", "workflows.argoproj.io/cluster-workflow-template"} {
+	for _, key := range []string{cronlist.OwnerLabel, templatelist.OwnerLabel, templatelist.ClusterOwnerLabel} {
 		if value := s.Labels[key]; value != "" {
 			return key, value
 		}
@@ -125,9 +127,6 @@ func findComparison(ctx context.Context, reader core.Reader, wf core.Workflow) (
 			items = items[:100]
 		}
 		for _, s := range items {
-			if count == 300 {
-				break
-			}
 			count++
 			if comparisonCandidate(s, selected, key, value) {
 				candidates = append(candidates, s)
@@ -140,7 +139,7 @@ func findComparison(ctx context.Context, reader core.Reader, wf core.Workflow) (
 			complete = true
 			break
 		}
-		if count >= 300 || page.Continue == token || seen[page.Continue] {
+		if seen[page.Continue] {
 			break
 		}
 		token = page.Continue
@@ -176,7 +175,7 @@ func findComparison(ctx context.Context, reader core.Reader, wf core.Workflow) (
 
 func comparisonCandidate(s, selected core.Summary, key, value string) bool {
 	candidateKey, candidateValue := comparisonLineage(s)
-	return candidateKey == key && candidateValue == value && s.Ref.Namespace == selected.Ref.Namespace && s.Ref.UID != "" && s.Ref.UID != selected.Ref.UID && s.Ref.Name != "" && s.Phase == "Succeeded" && s.Labels[key] == value && !s.CreatedAt.IsZero() && s.CreatedAt.Before(selected.CreatedAt) && s.FinishedAt != nil && !s.FinishedAt.After(selected.CreatedAt) && !s.FinishedAt.Before(s.CreatedAt)
+	return candidateKey == key && candidateValue == value && s.Ref.Namespace == selected.Ref.Namespace && s.Ref.UID != "" && s.Ref.UID != selected.Ref.UID && s.Ref.Name != "" && s.Phase == "Succeeded" && !s.CreatedAt.IsZero() && s.CreatedAt.Before(selected.CreatedAt) && s.FinishedAt != nil && !s.FinishedAt.After(selected.CreatedAt) && !s.FinishedAt.Before(s.CreatedAt)
 }
 
 func comparisonError(ctx context.Context, err error) string {

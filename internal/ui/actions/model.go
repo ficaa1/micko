@@ -573,7 +573,7 @@ func (m *Model) updateEditParam(key tea.KeyPressMsg) {
 			m.editBuf = string(r[:len(r)-1])
 		}
 	case tea.KeyEnter:
-		required := m.resource != nil && !m.params[m.cursor].HasValue && !m.params[m.cursor].HasDefault && m.params[m.cursor].Default == "" && m.params[m.cursor].ValueFrom == ""
+		required := m.resource != nil && m.params[m.cursor].Required()
 		if !required && (m.editBuf == m.params[m.cursor].Value || (m.hideValues && m.editBuf == "")) {
 			delete(m.edits, m.cursor)
 		} else {

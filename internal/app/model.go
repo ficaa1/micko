@@ -619,7 +619,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cancelInflight("comparison")
 				m.detailView.ResetComparison()
 			}
-			// On the Events section r also restarts the streams.
+			// On the Events and Explain sections r also restarts the streams.
 			if m.detailView.Section() == shared.SectionEvents || m.detailView.Section() == shared.SectionExplain {
 				return m, tea.Batch(m.startDetailFetch(), m.restartEvents())
 			}
@@ -637,7 +637,7 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openDetailActions()
 			return m, nil
 		}
-		if (m.route == RouteCron || m.route == RouteTemplates || m.route == RouteClusterTemplates) && key == "a" && !m.textEntryActive() {
+		if m.route.hasResourceActions() && key == "a" && !m.textEntryActive() {
 			return m, m.openResourceActions()
 		}
 		if m.route == RouteList && key == "a" && !m.textEntryActive() {
@@ -990,7 +990,7 @@ func (m *Root) View() tea.View {
 		f.TitleRight = m.kindSummary(m.route, def.noun)
 		f.Route = m.route.String()
 		f.Hints = def.pane.Hints()
-		if m.route == RouteCron || m.route == RouteTemplates || m.route == RouteClusterTemplates {
+		if m.route.hasResourceActions() {
 			f.Hints = "a actions  " + f.Hints
 		}
 		f.Body = def.pane.BodyLines(m.deps.clock.Now())

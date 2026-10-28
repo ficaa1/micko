@@ -28,7 +28,7 @@ docker info >/dev/null
 if [[ ${1:-} == --check ]]; then echo 'Disposable compatibility prerequisites available'; exit 0; fi
 
 compat_state=$(mktemp -d "${TMPDIR:-/tmp}/micko-compat.XXXXXXXX")
-compat_cluster="micko-compat-$(basename "$compat_state" | tr '[:upper:].' '[:lower:]-')"
+compat_cluster="$(basename "$compat_state" | tr '[:upper:].' '[:lower:]-')"
 compat_owned=0
 cleanup() {
   status=$?
@@ -45,7 +45,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if kind get clusters 2>/dev/null | python3 -c 'import sys; name=sys.argv[1]; sys.exit(0 if name in sys.stdin.read().splitlines() else 1)' "$compat_cluster"; then
+if kind get clusters 2>/dev/null | grep -xF "$compat_cluster" >/dev/null; then
   echo 'Refusing to reuse an existing cluster' >&2; exit 1
 fi
 compat_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')

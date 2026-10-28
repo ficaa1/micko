@@ -206,7 +206,7 @@ func renderParams(b *strings.Builder, m *Model) {
 				current = clipRight(shared.Sanitize(p.Value), paramClip)
 				if !p.HasValue && m.resource != nil {
 					switch {
-					case p.HasDefault || p.Default != "":
+					case p.HasDefault:
 						current = clipRight(shared.Sanitize(p.Default), paramClip) + " (default)"
 					case p.ValueFrom != "":
 						current = "from resource"

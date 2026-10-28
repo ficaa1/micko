@@ -20,12 +20,12 @@ import (
 // Entry is one line of the journal. The field names are the file format:
 // renaming one breaks every reader of an existing journal.
 type Entry struct {
-	DestinationNamespace string    `json:"destinationNamespace,omitempty"`
-	Kind                 string    `json:"kind,omitempty"`
 	Time                 time.Time `json:"time"`
 	Profile              string    `json:"profile"`
 	Server               string    `json:"server"`
+	Kind                 string    `json:"kind,omitempty"`
 	Namespace            string    `json:"namespace"`
+	DestinationNamespace string    `json:"destinationNamespace,omitempty"`
 	Name                 string    `json:"name"`
 	UID                  string    `json:"uid"`
 	Verb                 string    `json:"verb"`

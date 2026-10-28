@@ -151,6 +151,9 @@ func TestComparisonShowsChangesAndAmbiguity(t *testing.T) {
 					if m.cmp.top != 0 {
 						t.Fatal("home does not scroll")
 					}
+					if width >= 80 && !strings.Contains(m.tabStatusLine(), "values redacted") {
+						t.Fatalf("status %q hides that changed parameters are redacted", m.tabStatusLine())
+					}
 					press(m, "v")
 					revealed := strings.Join(m.RawLines(), "\n")
 					if !strings.Contains(revealed, "secret-after") {
@@ -169,6 +172,9 @@ func TestComparisonShowsChangesAndAmbiguity(t *testing.T) {
 					press(m, "C")
 					if strings.Contains(strings.Join(m.RawLines(), "\n"), "before") {
 						t.Fatal("identity change kept baseline")
+					}
+					if strings.Contains(m.tabStatusLine(), "values redacted") {
+						t.Fatalf("status %q claims redaction with no parameters shown", m.tabStatusLine())
 					}
 				}
 			}

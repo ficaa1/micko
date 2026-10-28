@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 )
 
@@ -83,19 +84,11 @@ func (r ResourceActionRequest) ValidateParameters(actual ResourceState) error {
 	}
 	for _, p := range actual.Arguments {
 		value, edited := edits[p.Name]
-		if !edited && !p.HasValue && !p.HasDefault && p.Default == "" && p.ValueFrom == "" {
+		if !edited && p.Required() {
 			return errors.New("supply every required parameter before submitting")
 		}
-		if edited && len(p.Enum) > 0 {
-			valid := false
-			for _, allowed := range p.Enum {
-				if allowed == value {
-					valid = true
-				}
-			}
-			if !valid {
-				return errors.New("a parameter override is outside its allowed values")
-			}
+		if edited && len(p.Enum) > 0 && !slices.Contains(p.Enum, value) {
+			return errors.New("a parameter override is outside its allowed values")
 		}
 		delete(edits, p.Name)
 	}

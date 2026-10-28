@@ -84,11 +84,8 @@ func TestAFailedAppendIsReturned(t *testing.T) {
 // which a session without a journal holds, records nothing and never fails.
 func TestAJournalWithoutAFile(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
-	homeKey := "HOME"
-	if runtime.GOOS == "windows" {
-		homeKey = "USERPROFILE"
-	}
-	t.Setenv(homeKey, "")
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 	if err := Open().Record(Entry{Verb: "stop"}); err == nil {
 		t.Error("a journal with no state directory reported success")
 	}
@@ -114,11 +111,8 @@ func TestDefaultPath(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("XDG_STATE_HOME", c.xdg)
-			homeKey := "HOME"
-			if runtime.GOOS == "windows" {
-				homeKey = "USERPROFILE"
-			}
-			t.Setenv(homeKey, home)
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
 			got, err := DefaultPath()
 			if err != nil || got != c.want {
 				t.Errorf("DefaultPath() = %q, %v; want %q", got, err, c.want)

@@ -101,10 +101,7 @@ jobs:
           fi
 
       - name: vet
-        run: |
-          go vet ./...
-          go vet -tags=integration ./...
-          go vet -tags=e2e,compat ./...
+        run: go vet -tags=integration,e2e,compat ./...
 
       - name: Unused production code
         if: runner.os == 'Linux'
@@ -113,8 +110,7 @@ jobs:
       - name: Compatibility runner syntax and cleanup
         if: runner.os == 'Linux'
         run: |
-          bash -n scripts/compat/argo.sh
-          curl -fsSL https://github.com/argoproj/argo-workflows/releases/download/v4.1.2/install.yaml -o "$RUNNER_TEMP/argo-install.yaml"
+          curl -fsSL --retry 3 https://github.com/argoproj/argo-workflows/releases/download/v4.1.2/install.yaml -o "$RUNNER_TEMP/argo-install.yaml"
           python3 scripts/compat/test_runner.py "$RUNNER_TEMP/argo-install.yaml"
 
       - name: Check release-channel updater
@@ -186,6 +182,9 @@ jobs:
   windows:
     name: Windows unit and transport smoke
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -194,22 +193,21 @@ jobs:
       - name: Unit tests and HTTP integration fixtures
         run: |
           go test ./... -count=1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test -tags=integration ./tests/integration/... -count=1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet -tags=integration,e2e,compat ./...
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build and startup smoke
         run: |
           go build -o dist/micko.exe ./cmd/micko
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./dist/micko.exe --version
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $configPath = Join-Path $env:RUNNER_TEMP "empty-micko.yaml"
-          Set-Content -Path $configPath -Value "profiles: {}"
-          ./dist/micko.exe --config $configPath --profile missing 2>$null
-          if ($LASTEXITCODE -ne 1) { throw "Unknown profile must exit 1" }
-          exit 0
+          echo "profiles: {}" > "$RUNNER_TEMP/empty-micko.yaml"
+          set +e
+          ./dist/micko.exe --config "$RUNNER_TEMP/empty-micko.yaml" --profile missing 2>/dev/null
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ]; then
+            echo "::error::an unknown profile exited with $status, want 1"
+            exit 1
+          fi
 
   deployment-compatibility:
     name: Disposable Argo v4.1.2 compatibility

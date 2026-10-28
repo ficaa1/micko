@@ -18,7 +18,6 @@ import (
 
 var errCanceled = errors.New("setup canceled")
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
 type guide struct {
 	input  *bufio.Scanner
@@ -65,8 +64,8 @@ func Run(input io.Reader, output io.Writer, path string) (err error) {
 	if err != nil {
 		return err
 	}
-	if !namePattern.MatchString(name) {
-		return errors.New("invalid profile name; use letters, digits, dots, underscores or hyphens, starting with a letter or digit")
+	if err := config.CheckProfileName(name); err != nil {
+		return err
 	}
 	mode, err := g.ask("Connection (direct/forward)", "direct")
 	if err != nil {

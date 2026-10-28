@@ -25,6 +25,7 @@ func TestConnectionCheck(t *testing.T) {
 	}{
 		{name: "direct CLI server auth", mode: "server", status: 200, body: `{"items":[]}`, stage: "ready", direct: true},
 		{name: "server auth", mode: "server", status: 200, body: `{"items":[]}`, stage: "ready"},
+		{name: "non-empty namespace", mode: "server", status: 200, body: `{"items":[{"metadata":{"name":"wf","namespace":"workflows","uid":"u1"},"status":{"phase":"Running"}}]}`, stage: "ready"},
 		{name: "legacy environment source", mode: "env", status: 200, body: `{"items":[]}`, stage: "ready"},
 		{name: "legacy file source", mode: "file", status: 200, body: `{"items":[]}`, stage: "ready"},
 		{name: "unauthorized", mode: "env", status: 401, body: `{"message":"check-secret private upstream message"}`, stage: "authentication"},

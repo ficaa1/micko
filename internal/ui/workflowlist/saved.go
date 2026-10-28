@@ -1,6 +1,9 @@
 package workflowlist
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // View is the local query, phase bucket and sort order saved by the shell.
 type View struct {
@@ -15,13 +18,7 @@ func (m *Model) RestoreView(v View) error {
 	if v.Sort != SortPhaseName && v.Sort != SortName && v.Sort != SortTime {
 		return fmt.Errorf("unknown saved sort order")
 	}
-	validPhase := false
-	for _, phase := range phaseCycle {
-		if phase == v.Phase {
-			validPhase = true
-		}
-	}
-	if !validPhase {
+	if !slices.Contains(phaseCycle, v.Phase) {
 		return fmt.Errorf("unknown saved phase filter")
 	}
 	if _, err := ParseQuery(v.Query); err != nil {

@@ -91,9 +91,8 @@ micko --profile prod
 `tokenEnv` names an environment variable; `tokenFile` names a file. micko
 reads the token from it on every request and never logs or shows it. If your
 Argo Server runs with `--auth-mode=server` it needs no token: use
-`authMode: server` and omit both token sources. Existing profiles with
-`tokenEnv` or `tokenFile` keep working without an `authMode` key. Plain `http` is only allowed to
-loopback addresses.
+`authMode: server` and omit both token sources. Plain `http` is only allowed
+to loopback addresses.
 
 No cluster at hand? `micko --demo` runs on synthetic data, with no
 credentials and no writes.
@@ -105,8 +104,9 @@ Tested live against Argo Workflows v4.1.2 on macOS arm64, through
 token. A direct connection with a bearer token and other Argo versions are
 untested; an issue saying how micko fared on yours is welcome.
 
-Releases include macOS, Linux and Windows binaries. The Windows build has
-not been tested yet; an issue saying how it ran for you is welcome.
+Releases include macOS, Linux and Windows binaries. CI runs the Windows
+build's unit tests and a startup smoke check, but it has not been used in a
+real Windows terminal; an issue saying how it ran for you is welcome.
 
 ## Documentation
 

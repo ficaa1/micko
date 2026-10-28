@@ -65,7 +65,6 @@ For Argo's server auth mode, set `authMode: server` and omit `tokenEnv` and
 For bearer authentication use `authMode: token` (the default when omitted)
 and exactly one of `tokenEnv` (an environment variable name) or `tokenFile`
 (an absolute path). Tokens are read on every request so rotation works.
-Existing token profiles work unchanged, including their empty-token behavior.
 The Kubernetes context does not provide an Argo bearer token, and there is
 no interactive SSO login. `--auth-mode` overrides the profile's mode, but
 server mode still rejects any configured token source.
@@ -85,7 +84,7 @@ micko --config /path/to/empty.yaml --check --server https://argo.example.com --n
 
 The check uses the production session and Argo workflow list reader, requests
 one page with limit 1 in the configured namespace, and performs only GETs.
-The reader may also scan incomplete workflows for suspend gates. Managed
+Managed
 forwarding starts an owned `kubectl` child and closes it on completion;
 HTTP connections are closed too. The default 15-second deadline covers
 forward readiness, TLS and response reads; `--check-timeout` must be positive.

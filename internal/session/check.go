@@ -27,9 +27,6 @@ type CheckResult struct {
 // Check reads one workflow page through the same session used by the TUI.
 // The deadline covers forwarding, TLS and reading the response.
 func (c *Connector) Check(ctx context.Context, profile string, timeout time.Duration) CheckResult {
-	if timeout <= 0 {
-		return CheckResult{Stage: "config", Message: "Use a positive --check-timeout."}
-	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	conn, err := c.connect(ctx, profile, false)
@@ -46,7 +43,7 @@ func (c *Connector) Check(ctx context.Context, profile string, timeout time.Dura
 		return CheckResult{Stage: "config", Message: "Profile validation failed. Check the profile name, endpoint, namespace, authMode, token source and CA file; run micko --setup to add a profile."}
 	}
 	defer conn.Close()
-	_, err = conn.Reader.List(ctx, core.Query{Namespace: conn.Namespace, Limit: 1})
+	_, err = conn.Reader.List(ctx, core.Query{Namespace: conn.Namespace, Limit: 1, SummaryOnly: true})
 	if err == nil {
 		return CheckResult{OK: true, Stage: "ready", Message: "Workflow list access succeeded. This checks reads in the configured namespace only; it does not verify write permissions."}
 	}

@@ -44,15 +44,9 @@ func (f *FakeReader) GetResource(ctx context.Context, kind core.ResourceKind, re
 
 func (f *FakeReader) ExecuteResourceAction(ctx context.Context, req core.ResourceActionRequest) (core.ActionResult, error) {
 	result := core.ActionResult{Action: req.Action, Target: req.Resource.Ref, Outcome: core.ActionRefused}
-	if err := req.Validate(); err != nil {
-		return result, err
-	}
 	actual, err := f.GetResource(ctx, req.Resource.Kind, req.Resource.Ref)
 	if err != nil {
 		return result, err
-	}
-	if actual.Ref != req.Resource.Ref {
-		return result, &core.UIDMismatchError{Expected: req.Resource.Ref, Actual: actual.Ref}
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()

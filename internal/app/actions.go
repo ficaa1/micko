@@ -298,7 +298,7 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 	}
 	msg.Result.Outcome = settledOutcome(msg.Result.Outcome, msg.Err)
 	m.actionView.SetOutcome(msg.Result)
-	if msg.Result.Action == core.ActionSubmit || m.route == RouteCron || m.route == RouteTemplates || m.route == RouteClusterTemplates {
+	if msg.Resource {
 		m.actionView.SetReason(errText(msg.Err))
 	}
 	// A finished action closes its pane and reports in the footer of the route
@@ -398,7 +398,7 @@ func (m *Root) handleBulkStep(msg bulkStepMsg) tea.Cmd {
 // afterActionPane drops the marks the action used, so a second a cannot
 // resend them, and refetches the route behind the pane.
 func (m *Root) afterActionPane() tea.Cmd {
-	if m.route == RouteCron || m.route == RouteTemplates || m.route == RouteClusterTemplates {
+	if m.route.hasResourceActions() {
 		return m.startKindFetch(m.route)
 	}
 	if m.actionFromMarks {

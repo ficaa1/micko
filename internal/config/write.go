@@ -13,11 +13,19 @@ import (
 
 var profileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
+// CheckProfileName reports why name cannot be used as a profile key.
+func CheckProfileName(name string) error {
+	if !profileName.MatchString(name) {
+		return fmt.Errorf("profile name must contain letters, digits, dots, underscores or hyphens and start with a letter or digit")
+	}
+	return nil
+}
+
 // AddProfile validates and appends a profile without replacing an existing name.
 // YAML nodes retain unrelated fields and comments; encoding may change spacing.
 func AddProfile(path, name string, profile Profile) error {
-	if !profileName.MatchString(name) {
-		return fmt.Errorf("profile name must contain letters, digits, dots, underscores or hyphens and start with a letter or digit")
+	if err := CheckProfileName(name); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
@@ -48,10 +56,6 @@ func AddProfile(path, name string, profile Profile) error {
 		var extra yaml.Node
 		if err := dec.Decode(&extra); err != io.EOF {
 			return fmt.Errorf("config must contain one YAML document")
-		}
-		var f File
-		if err := doc.Decode(&f); err != nil {
-			return fmt.Errorf("config fields could not be parsed")
 		}
 	} else {
 		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}

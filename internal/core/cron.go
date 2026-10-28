@@ -87,6 +87,11 @@ type Argument struct {
 	ValueFrom string
 }
 
+// Required reports whether a submission must supply the parameter.
+func (a Argument) Required() bool {
+	return !a.HasValue && !a.HasDefault && a.ValueFrom == ""
+}
+
 // Condition is one status condition.
 type Condition struct {
 	Type    string

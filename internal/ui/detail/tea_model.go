@@ -693,11 +693,11 @@ func (m *Model) tabStatusLine() string {
 	case "timeline":
 		return m.timelineStatusLine()
 	case "compare":
-		values := "values redacted (v reveals)"
-		if m.revealResource {
-			values = "values shown"
+		s := "compare · baseline → selected · j/k scroll"
+		if !m.revealResource && explainHasParams(m.comparisonReport()) {
+			s += " · values redacted (v reveals)"
 		}
-		return truncCell("compare · baseline → selected · j/k scroll · "+values, m.width)
+		return truncCell(s, m.width)
 	case "explain":
 		return m.explainStatusLine()
 	case "events":
