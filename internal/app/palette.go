@@ -62,6 +62,7 @@ func listKinds() []listKind {
 // builtinCommands are the commands that are not a resource kind.
 func builtinCommands() []command {
 	return []command{
+		{Command: palette.Command{Name: "compare", Desc: "compare an open or selected run with its last success"}, run: func(m *Root, _ string) tea.Cmd { return m.openComparison() }},
 		{
 			Command: palette.Command{Name: "ns", Arg: "namespace",
 				Desc: "switch namespace; no name opens the picker"},

@@ -50,7 +50,8 @@ type Root struct {
 	listState listState
 
 	// detailState is the loaded detail for the detail route.
-	detailState detailState
+	detailState  detailState
+	comparisonID uint64
 
 	// logState is the retained log state for the logs route.
 	logState logState
@@ -610,6 +611,10 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.openProfilePicker()
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
+			if m.detailView.Section() == "compare" {
+				m.cancelInflight("comparison")
+				m.detailView.ResetComparison()
+			}
 			// On the Events section r also restarts the streams.
 			if m.detailView.Section() == shared.SectionEvents || m.detailView.Section() == shared.SectionExplain {
 				return m, tea.Batch(m.startDetailFetch(), m.restartEvents())
@@ -757,6 +762,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailView.SetSection(msg.Section)
 		}
 		return m, tea.Batch(cmd, m.syncSections())
+
+	case comparisonMsg:
+		return m, m.handleComparison(msg)
 
 	case explainLogMsg:
 		return m, m.handleExplainLog(msg)
@@ -1217,6 +1225,7 @@ func (m *Root) back() tea.Cmd {
 		return m.syncSections()
 	case RouteDetail:
 		m.cancelInflight("detail")
+		m.stopComparison()
 		m.stopExplainLog()
 		m.stopEvents()
 		m.detailState.loading = false
@@ -1249,6 +1258,7 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 		// The pane drops another workflow's events, so their cursors go too.
 		m.stopEvents()
 	}
+	m.stopComparison()
 	m.selection = ref
 	m.selGen++
 	m.route = RouteDetail
@@ -1273,6 +1283,7 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if m.route != RouteLogs {
 		m.logsFrom = m.route
 	}
+	m.stopComparison()
 	m.stopExplainLog()
 	m.stopEvents()
 	// Logs opened from an archived run's detail, or a pod switch inside

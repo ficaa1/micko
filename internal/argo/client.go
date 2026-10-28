@@ -632,8 +632,10 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if err != nil {
 		return core.Page{}, core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable response (protocol mismatch; see docs/development.md)", err)
 	}
-	if err := c.markSuspended(ctx, q, &page); err != nil {
-		return core.Page{}, err
+	if !q.SummaryOnly {
+		if err := c.markSuspended(ctx, q, &page); err != nil {
+			return core.Page{}, err
+		}
 	}
 	return page, nil
 }

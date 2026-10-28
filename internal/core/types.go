@@ -30,6 +30,9 @@ type Query struct {
 	Continue string
 	// Limit is the page size; 0 means server default.
 	Limit int64
+	// SummaryOnly omits the node scan for suspended workflows.
+	// Suspended then reflects spec.suspend alone.
+	SummaryOnly bool
 }
 
 // Summary is the list-level projection of a workflow.

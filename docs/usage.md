@@ -183,9 +183,9 @@ folds, `i` opens the same info panel and
 
 ### Explain
 
-`X` says why the workflow ended the way it did, as findings built from what
-it records and nothing else: no network service, no model, the same answer
-every time. Each finding is a card with a severity (`✗ ERROR`, `▲ WARNING`,
+`X` explains the workflow through fixed local rules using its recorded state,
+collected logs and Kubernetes events. The same input produces the same report,
+with no model. Each finding is a card with a severity (`✗ ERROR`, `▲ WARNING`,
 `◇ INFO`), a headline, the evidence and a next step.
 
 The rules find the node that failed first, not the groups that failed because
@@ -202,6 +202,60 @@ eight: error lines, whole tracebacks and the line before each. `y` copies the
 report as plain text for an incident channel, and `l` opens the failing pod's
 full log. With more than one failure, `n`/`N` pick the card `l` opens; the
 picked card's rule is drawn heavy (`┃`).
+
+#### Kubernetes event evidence
+
+Opening `X` also opens the same bounded event streams used by `E`; switching
+between them shares collection. Explain quotes up to 20 warning events with
+UTC times, reason, message and count, alongside the workflow and log findings.
+Workflow events require the involved object's UID to match. Pod events require
+a unique verified pod name and an event time within the run's recorded lifetime
+(the later workflow/node finish bounds completed runs); node
+status does not provide a pod UID, and each pod card states this limit.
+A warning is an observation at its timestamp, not proof a condition persists.
+The report's coverage card includes connection/permission status and omitted
+warnings. Collection retains at most 2,000 candidate events; expired, absent or
+unverified events never establish that no problem occurred. `r` restarts stopped
+streams and `y` copies this evidence and its limits with the existing report.
+
+### Compare with last success
+
+Press `C` in an open run, select the Compare tab (`7`), or run `:compare`
+from the workflow list or an open run. Compare shows the baseline and selected
+namespace/name/UID, changed workflow input parameters, whole-run status and
+duration, added/missing steps, step status, retry counts and duration differences.
+All arrows read **baseline → selected**. `j`/`k`, page keys, `home` and `G`
+scroll; `y` copies the report, `v` hides/reveals values, `r` refreshes the run
+and repeats the baseline search. `esc` returns to the previous run section;
+a second `esc` returns to the list. The feature is read-only, including in demo.
+
+The search uses the run's lineage labels, preferring CronWorkflow, then
+WorkflowTemplate, then ClusterWorkflowTemplate. It compares only the same
+namespace and lineage kind/name. A baseline must have a UID, have succeeded,
+and have been created and finished before the selected run was created.
+The most recently created eligible run wins. No lineage or no qualifying
+success produces an explicit no-baseline notice; it never falls back to an
+unrelated workflow. Lineage names are labels, not a guarantee that a template
+or cron object has kept the same specification or UID across runs.
+
+Only live runs are searched, even when the selected run is archived. The
+search reads up to three pages of 100 summaries, fetches one baseline detail,
+and times out after 20 seconds. Pagination limits, repeated tokens and incomplete
+searches are disclosed; an incomplete search's baseline is the newest eligible
+run **among inspected candidates**, not a claim about all history. The adapter
+omits its suspended-node scan for this search, so candidates do not download
+node maps. Archive-only successes are currently outside the search.
+
+Steps match by task path, step-group position, node type and template identity,
+including external template scope when recorded. Per-run node IDs do not match
+steps. Duplicate positions, unplaced nodes, fanout instances and individual retry
+attempts are marked ambiguous and get no fabricated alignment; Retry parents
+show aggregate counts. A task changing between a Pod and Retry wrapper appears
+as added/missing. At most 300 positions appear. Unavailable node maps and missing
+times remain explicit, and running durations are labelled elapsed. Comparison
+never includes node output values; hidden input values stay hidden in copy too.
+Try `:cron`, open `demo-etl-hourly`, open the failed demo run and press `C` to
+compare its quality check and batch input with the previous success.
 
 ### Logs
 
@@ -416,17 +470,3 @@ the floor.
   `kubectl port-forward` to an Argo Server in server auth mode without TLS.
   A direct connection with a bearer token is untested. The Windows release
   is untested, and log piping needs `/bin/sh`.
-
-### Event evidence in Explain
-
-Opening `X` also opens the same bounded event streams used by `E`; switching
-between them shares collection. Explain quotes up to 20 warning events with
-UTC times, reason, message and count, alongside the workflow and log findings.
-Workflow events require the involved object's UID to match. Pod events require
-a unique verified pod name and an event time after the run's creation; node
-status does not provide a pod UID, and each pod card states this limit.
-A warning is an observation at its timestamp, not proof a condition persists.
-The report's coverage card includes connection/permission status and omitted
-warnings. Collection retains at most 2,000 candidate events; expired, absent or
-unverified events never establish that no problem occurred. `r` restarts stopped
-streams and `y` copies this evidence and its limits with the existing report.

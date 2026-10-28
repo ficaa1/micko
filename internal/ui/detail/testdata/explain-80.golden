@@ -1,5 +1,5 @@
 == demo-nightly-report
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 1 error · 3 info · 1/38
 ✗ ERROR  transform failed all 3 attempts: exit code 1 each time
 │ node      transform(2) · Pod · template transform
@@ -36,7 +36,7 @@ explain · 1 error · 3 info · 1/38
 ◇ INFO  Kubernetes event coverage
 │ events    connecting; event evidence is pending. At most 2,000 recent
 == demo-oom-backfill
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 1 error · 1 info
 ✗ ERROR  backfill-2026-q2 failed: out of memory (OOMKilled, exit code 137)
 │ node      backfill-2026-q2 · Pod · template backfill-quarter
@@ -62,7 +62,7 @@ explain · 1 error · 1 info
 │           evidence of no problem. No correlated warning events are
 │           available.
 == demo-etl-hourly-1790000000
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 1 error · 1 info
 ✗ ERROR  quality-check failed: exit code 2
 │ node      quality-check · Pod · template quality-check
@@ -89,7 +89,7 @@ explain · 1 error · 1 info
 │           evidence of no problem. No correlated warning events are
 │           available.
 == demo-param-check
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 1 error · 1 info
 ✗ ERROR  The workflow failed validation before any node ran:
          {{inputs.parameters.bucket}} did not resolve
@@ -107,7 +107,7 @@ explain · 1 error · 1 info
 │            evidence of no problem. No correlated warning events are
 │            available.
 == demo-release-gate
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 3 info
 ◇ INFO  Waiting for a person at approve-production for 4m50s
 │ node     approve-production · Suspend · template approval
@@ -127,7 +127,7 @@ explain · 3 info
 │          evidence of no problem. No correlated warning events are
 │          available.
 == demo-train-pipeline
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 2 info
 ◇ INFO  Running for 4m00s of an estimated 9m00s
 │ running       train-shard(2:2) 2m40s, train-shard(3:3) 2m40s,
@@ -146,7 +146,7 @@ explain · 2 info
 │               absence is not evidence of no problem. No correlated warning
 │               events are available.
 == demo-cleanup
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 2 info
 ◇ INFO  Not started: submitted 1m00s ago and the controller has not run any
         node
@@ -163,7 +163,7 @@ explain · 2 info
 │           evidence of no problem. No correlated warning events are
 │           available.
 == demo-deploy-multi-layer
- Nodes   Timeline  [Explain]  Events   Resource   Summary 
+ Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare 
 explain · 2 info
 ◇ INFO  Succeeded in 11m00s
 │ ran    5 pods succeeded, 16 nodes skipped by their conditions

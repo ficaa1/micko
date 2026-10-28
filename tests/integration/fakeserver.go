@@ -61,14 +61,16 @@ type WireWorkflowStatus struct {
 
 // WireNode is one status.nodes entry.
 type WireNode struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName,omitempty"`
-	Type        string `json:"type"`
-	Phase       string `json:"phase,omitempty"`
-	BoundaryID  string `json:"boundaryID,omitempty"`
-	StartedAt   string `json:"startedAt,omitempty"`
-	PodName     string `json:"podName,omitempty"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	DisplayName  string `json:"displayName,omitempty"`
+	Type         string `json:"type"`
+	TemplateName string `json:"templateName,omitempty"`
+	FinishedAt   string `json:"finishedAt,omitempty"`
+	Phase        string `json:"phase,omitempty"`
+	BoundaryID   string `json:"boundaryID,omitempty"`
+	StartedAt    string `json:"startedAt,omitempty"`
+	PodName      string `json:"podName,omitempty"`
 }
 
 // WireLogEntry is a log record: Argo sends the content and the pod, nothing
