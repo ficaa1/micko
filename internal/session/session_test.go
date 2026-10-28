@@ -3,6 +3,7 @@ package session
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -121,9 +122,11 @@ func TestStartingSkin(t *testing.T) {
 // A profile with no port-forward connects directly with its own namespace
 // and skin, and a profile the file does not name fails by name.
 func TestConnect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{}`) }))
+	defer srv.Close()
 	path := writeConfig(t, "skin: nord\nprofiles:\n"+
-		"  dev:\n    server: https://argo.example.com\n    namespace: argo\n    tokenEnv: T\n"+
-		"  prod:\n    server: https://argo.example.com\n    namespace: prod\n    tokenEnv: T\n    skin: dracula\n")
+		"  dev:\n    server: "+srv.URL+"\n    namespace: argo\n    tokenEnv: T\n"+
+		"  prod:\n    server: "+srv.URL+"\n    namespace: prod\n    tokenEnv: T\n    skin: dracula\n")
 	cases := []struct {
 		profile       string
 		wantNamespace string
@@ -140,6 +143,7 @@ func TestConnect(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer connector.Close()
 			conn, err := connector.Connect(context.Background(), c.profile)
 			if c.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
@@ -154,8 +158,8 @@ func TestConnect(t *testing.T) {
 				t.Errorf("connection = profile %q namespace %q skin %q, want %q %q %q",
 					conn.Profile, conn.Namespace, conn.Skin, c.profile, c.wantNamespace, c.wantSkin)
 			}
-			if conn.States != nil || conn.Close != nil {
-				t.Error("a connection with no port-forward reported a transport lifecycle")
+			if conn.States != nil || conn.Close == nil {
+				t.Error("a direct connection must have transport cleanup without forwarding states")
 			}
 		})
 	}
@@ -174,6 +178,7 @@ func TestRequestTimingsFollowDebug(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer connector.Close()
 		conn, err := connector.Connect(context.Background(), "dev")
 		if err != nil {
 			t.Fatal(err)

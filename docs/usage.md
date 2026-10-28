@@ -6,7 +6,26 @@ listed in [keybindings](keybindings.md); every config key is in
 
 ## Connect
 
-Copy [the example config](micko.config.example.yaml) to
+Run `micko --setup` to create a named profile, or
+`micko --setup --config PATH` to choose the config file. The guide supports
+direct endpoints and managed `kubectl` forwarding, workflow and service
+namespaces, server or token authentication, and an optional PEM CA bundle.
+It validates locally and makes no cluster requests. Enter only a token
+environment variable name or an absolute token file path, never the token
+itself. It does not read token values. Type `:cancel`, send EOF (Ctrl+D on
+POSIX terminals), or decline the final `yes` confirmation to leave the
+config untouched. Ctrl+C exits before saving when still answering prompts.
+
+Setup appends a profile and refuses existing names. Existing profiles,
+unknown YAML fields and comments are retained; formatting may change.
+YAML merges at the top level or in the profiles map, aliased profiles maps,
+multiple YAML documents and symlink config files require manual editing.
+New directories use mode `0700` and config files `0600` on POSIX; existing
+directories retain their permissions. Saves use a temporary file and rename,
+with a `.lock` file preventing simultaneous setup saves. If a crashed setup
+leaves a lock, remove it only after confirming no setup is running.
+
+Alternatively, copy [the example config](micko.config.example.yaml) to
 `~/.config/micko/config.yaml` and edit it for your cluster. One profile per
 cluster:
 
@@ -37,21 +56,52 @@ used as it is.
 micko reads `$XDG_CONFIG_HOME/micko/config.yaml`, then
 `~/.config/micko/config.yaml`, then the OS user config directory, and uses the
 first that exists; `--config PATH` names one. With no config file the picker
-shows the path to write and a sample profile.
+shows `micko --setup`, the config path and a sample profile.
 
 ### Authentication and TLS
 
-Set exactly one of `tokenEnv` (an environment variable name) or `tokenFile`
-(an absolute path); it is read for each request. For Argo's server auth mode,
-keep `tokenEnv: MICKO_TOKEN` and leave the variable empty: an empty token
-sends no Authorization header. For client auth, supply a bearer token Argo
-accepts; the Kubernetes context does not provide one, and there is no
-interactive SSO login.
+For Argo's server auth mode, set `authMode: server` and omit `tokenEnv` and
+`tokenFile`: no Authorization header is sent and no dummy variable is needed.
+For bearer authentication use `authMode: token` (the default when omitted)
+and exactly one of `tokenEnv` (an environment variable name) or `tokenFile`
+(an absolute path). Tokens are read on every request so rotation works.
+Existing token profiles work unchanged, including their empty-token behavior.
+The Kubernetes context does not provide an Argo bearer token, and there is
+no interactive SSO login. `--auth-mode` overrides the profile's mode, but
+server mode still rejects any configured token source.
 
-HTTPS verifies certificates; `--ca-file` adds a CA, and
+HTTPS verifies certificates; `caFile` or `--ca-file` selects a PEM CA bundle, and
 `--insecure-skip-tls-verify` turns verification off for one run with a
 warning. Plain HTTP is allowed only to loopback addresses, and redirects are
 rejected. Never put a literal token in a command line or a committed config.
+
+### Connection check
+
+```sh
+micko --check --profile dev
+micko --config /path/to/config.yaml --check --profile dev --check-timeout 30s
+micko --config /path/to/empty.yaml --check --server https://argo.example.com --namespace workflows --auth-mode server
+```
+
+The check uses the production session and Argo workflow list reader, requests
+one page with limit 1 in the configured namespace, and performs only GETs.
+The reader may also scan incomplete workflows for suspend gates. Managed
+forwarding starts an owned `kubectl` child and closes it on completion;
+HTTP connections are closed too. The default 15-second deadline covers
+forward readiness, TLS and response reads; `--check-timeout` must be positive.
+Ctrl+C cancels a running check. No action journal is opened and config is
+not written. Name a profile or a server explicitly; `currentProfile` alone
+is not enough for a check.
+
+The output identifies configuration, forwarding, endpoint/network, TLS,
+authentication (401 or login interception), permission (403), or other API
+failures, with local next steps. Upstream bodies and token values are never
+printed. An endpoint answering 401 or 403 is reachable but does not grant
+the requested read access. Exit status is 0 for successful read access,
+1 for failed checks or configuration, and 2 for invalid CLI usage.
+Success covers workflow reads in that namespace only; it establishes no
+write permissions or deployment compatibility. Managed forwarding verifies
+TLS against its loopback host, so the certificate must cover that address.
 
 ## Features
 
@@ -326,6 +376,10 @@ the floor.
 
 | Flag | Purpose |
 | --- | --- |
+| `--setup` | Guide creation of a profile; accepts only `--config` alongside it |
+| `--check` | Check workflow read access and exit; requires `--profile` or `--server` |
+| `--check-timeout DURATION` | Bound the complete check, default `15s` |
+| `--auth-mode server\|token` | Override authentication mode; server sends no bearer token |
 | `--config PATH` | Select the configuration file |
 | `--profile NAME` | Connect to this profile instead of opening the picker |
 | `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
@@ -344,6 +398,7 @@ the floor.
 
 ## Limits and troubleshooting
 
+- Run `micko --check --profile NAME` to diagnose first-connection failures.
 - Startup errors name the missing or invalid setting, never a secret.
 - A 401 means the token or Argo's auth mode; a 403 means access to the
   namespace. The server's permissions always decide what an action may do.

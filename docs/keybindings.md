@@ -40,3 +40,7 @@ space completes the name.
 
 `/` on a list filters it as you type. Terms separated by spaces must all
 match; see [Filtering](usage.md#filtering) for the full query language.
+
+With no profiles, the picker shows `micko --setup` and the config path.
+Quit the picker and run setup in the terminal; use `--setup --config PATH`
+for a custom file, then `micko --check --profile NAME` to check read access.

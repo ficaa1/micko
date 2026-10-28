@@ -268,6 +268,7 @@ func TestErrorsMapByStatus(t *testing.T) {
 	}{
 		{"forbidden", 403, "", `{"code":7,"message":"workflows.argoproj.io is forbidden: cannot list in ns-a"}`,
 			core.ErrForbidden, "cannot list in ns-a", -1},
+		{"forbidden HTML", 403, "", `<html>access denied</html>`, core.ErrForbidden, "GET /api/v1/workflows/ns-a failed", -1},
 		{"token echoed back", 401, "", `{"code":16,"message":"rejected Bearer ` + testToken + `"}`,
 			core.ErrUnauthenticated, "rejected Bearer [REDACTED]", -1},
 		{"error field only", 404, "", `{"error":"no such workflow"}`, core.ErrNotFound, "no such workflow", -1},

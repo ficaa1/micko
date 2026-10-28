@@ -37,7 +37,8 @@ access for managed forwarding goes through `kubectl`.
 | Package | Responsibility |
 | --- | --- |
 | `cmd/micko` | Flags, config, connection setup and process lifecycle |
-| `internal/config`, `internal/portforward` | Profile validation and owned port-forward recovery |
+| `internal/config`, `internal/setup` | Profile validation, guided creation and YAML-preserving persistence |
+| `internal/session`, `internal/portforward` | Connection ownership, bounded read-only checks and port-forward recovery |
 | `internal/core` | Reader, Watcher and Actioner interfaces, the optional listers of the other kinds and the archive; workflow, cron workflow and template types and errors |
 | `internal/cronexpr` | The controller's cron dialect: parsing and next run times in a time zone |
 | `internal/argo` | REST transport, pagination, watch/log parsing, pod resolution and mutations |

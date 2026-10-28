@@ -40,6 +40,7 @@ type Options struct {
 	ConfigPath            string
 	Server                string
 	Namespace             string
+	AuthMode              string
 	TokenFile             string
 	CAFile                string
 	RefreshInterval       time.Duration
@@ -182,11 +183,16 @@ func (c *Connector) Close() {
 // It blocks: starting a port-forward and waiting for it to bind a local port
 // takes seconds. Every caller runs it off the update loop.
 func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connection, error) {
+	return c.connect(ctx, profile, true)
+}
+
+func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*app.Connection, error) {
 	cfg, err := config.Load(c.data, config.Options{
 		ConfigPath:            c.path,
 		Profile:               profile,
 		Server:                c.opts.Server,
 		Namespace:             c.opts.Namespace,
+		AuthMode:              c.opts.AuthMode,
 		TokenFile:             c.opts.TokenFile,
 		CAFile:                c.opts.CAFile,
 		RefreshInterval:       c.opts.RefreshInterval,
@@ -197,12 +203,15 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		RedactValues:          c.opts.RedactValues,
 	})
 	if err != nil {
-		return nil, err
+		return nil, &connectionError{stage: "config", err: err}
 	}
 
 	// The token is read per request rather than captured here, so a rotated
 	// token is picked up without a reconnection.
 	tokenFn := func() (string, error) {
+		if cfg.AuthMode == "server" {
+			return "", nil
+		}
 		if cfg.TokenFile != "" {
 			b, err := os.ReadFile(cfg.TokenFile)
 			return strings.TrimSuffix(string(b), "\n"), err
@@ -217,7 +226,7 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 	if cfg.Target.Service != "" {
 		forwarder, states, serverURL, err = c.startForward(ctx, cfg)
 		if err != nil {
-			return nil, err
+			return nil, &connectionError{stage: "forwarding", err: err}
 		}
 		// resolveServer keeps the transport pointed at the currently owned
 		// local port. The configured scheme, path prefix and TLS material are
@@ -239,11 +248,14 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		if forwarder != nil {
 			forwarder.Close()
 		}
-		return nil, err
+		return nil, &connectionError{stage: "TLS/config", err: err}
 	}
 
 	// The client's deadline bounds this lookup even if the connection is replaced.
-	go client.WarmScope(context.Background())
+	scopeCtx, cancelScope := context.WithCancel(ctx)
+	if warm {
+		go client.WarmScope(scopeCtx)
+	}
 
 	var once sync.Once
 	conn := &app.Connection{
@@ -260,11 +272,14 @@ func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connectio
 		States:      states,
 		Diagnostics: c.sink,
 	}
-	if forwarder != nil {
-		// Close is idempotent: the root closes a connection it replaces, and
-		// the entrypoint closes whatever is live on the way out. Those are the
-		// same connection whenever the program exits without a switch.
-		conn.Close = func() { once.Do(forwarder.Close) }
+	conn.Close = func() {
+		once.Do(func() {
+			cancelScope()
+			if forwarder != nil {
+				forwarder.Close()
+			}
+			client.Close()
+		})
 	}
 	c.mu.Lock()
 	c.live = conn

@@ -31,19 +31,19 @@ const (
 )
 
 // Profile is one named server connection. Token material is never stored
-// here: tokens come from the environment variable named by TokenEnv or the
-// file at TokenFile (mutually exclusive), and are read per request to
-// support rotation.
+// here: server auth sends none; token auth reads TokenEnv or TokenFile
+// on each request to support rotation. The two sources are mutually exclusive.
 type Profile struct {
-	KubeContext string `yaml:"kubeContext"`
-	Service     string `yaml:"service"`
+	KubeContext string `yaml:"kubeContext,omitempty"`
+	Service     string `yaml:"service,omitempty"`
 	// ServiceNamespace is where the Argo Server service runs. It is often a
 	// different namespace from the workflows being watched, so it defaults to
 	// Namespace only when it is not set.
 	ServiceNamespace string   `yaml:"serviceNamespace,omitempty"`
-	RemotePort       int      `yaml:"remotePort"`
+	RemotePort       int      `yaml:"remotePort,omitempty"`
 	Server           string   `yaml:"server"`
 	Namespace        string   `yaml:"namespace"`
+	AuthMode         string   `yaml:"authMode,omitempty"`
 	TokenEnv         string   `yaml:"tokenEnv,omitempty"`
 	TokenFile        string   `yaml:"tokenFile,omitempty"`
 	CAFile           string   `yaml:"caFile,omitempty"`
@@ -180,6 +180,7 @@ type Config struct {
 	// RedactValues starts every workflow with its parameter and output
 	// values hidden; `v` still reveals them for the session.
 	RedactValues    bool
+	AuthMode        string
 	TokenEnv        string
 	TokenFile       string
 	CAFile          string
@@ -207,6 +208,7 @@ type Options struct {
 	Profile               string
 	Server                string
 	Namespace             string
+	AuthMode              string
 	TokenFile             string
 	CAFile                string
 	RefreshInterval       time.Duration
@@ -274,6 +276,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 		cfg.RedactValues = opts.RedactValues || *prof.RedactValues
 	}
 	cfg.Namespace = firstNonEmpty(opts.Namespace, prof.Namespace)
+	cfg.AuthMode = firstNonEmpty(opts.AuthMode, prof.AuthMode, "token")
 	cfg.TokenEnv = prof.TokenEnv
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)
 	cfg.CAFile = firstNonEmpty(opts.CAFile, prof.CAFile)
@@ -282,7 +285,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	cfg.Target = Target{Context: prof.KubeContext, Namespace: targetNS, Service: prof.Service, RemotePort: prof.RemotePort}
 	cfg.Debug = Debug{Enabled: opts.Debug}
 	if opts.Demo {
-		if name != "" || opts.Server != "" || opts.Namespace != "" || opts.TokenFile != "" || opts.CAFile != "" || opts.InsecureSkipTLSVerify || opts.Debug {
+		if name != "" || opts.Server != "" || opts.Namespace != "" || opts.AuthMode != "" || opts.TokenFile != "" || opts.CAFile != "" || opts.InsecureSkipTLSVerify || opts.Debug {
 			return Config{}, fmt.Errorf("config: --demo cannot be combined with profile, connection, TLS, or debug options")
 		}
 		return Config{Demo: true, RedactValues: opts.RedactValues}, nil
@@ -326,8 +329,14 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 			return Config{}, fmt.Errorf("config: profile %q target requires kubeContext, service, and remotePort 1-65535", cfg.ProfileName)
 		}
 	}
-	if cfg.TokenEnv == "" && cfg.TokenFile == "" {
-		return Config{}, fmt.Errorf("config: token source missing: set tokenEnv or tokenFile in profile %q", cfg.ProfileName)
+	if cfg.AuthMode != "server" && cfg.AuthMode != "token" {
+		return Config{}, fmt.Errorf("config: authMode must be server or token")
+	}
+	if cfg.AuthMode == "server" && (cfg.TokenEnv != "" || cfg.TokenFile != "") {
+		return Config{}, fmt.Errorf("config: authMode server cannot be combined with tokenEnv or tokenFile")
+	}
+	if cfg.AuthMode == "token" && cfg.TokenEnv == "" && cfg.TokenFile == "" {
+		return Config{}, fmt.Errorf("config: token source missing: set tokenEnv or tokenFile, or authMode: server in profile %q", cfg.ProfileName)
 	}
 	if err := validateTokenSource(cfg.TokenEnv, cfg.TokenFile); err != nil {
 		return Config{}, err

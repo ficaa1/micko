@@ -243,6 +243,8 @@ func TestLoadLayers(t *testing.T) {
 		opts                              Options
 		server, namespace, profile, token string
 	}{
+		{"server auth", strings.Replace(yamlOneProfile, "tokenEnv: MICKO_TOKEN", "authMode: server", 1), Options{}, "https://argo.example.test/argo", "workflows", "dev", ""},
+		{"explicit token auth", yamlOneProfile + "    authMode: token\n", Options{}, "https://argo.example.test/argo", "workflows", "dev", "MICKO_TOKEN"},
 		{"profile", yamlOneProfile, Options{}, "https://argo.example.test/argo", "workflows", "dev", "MICKO_TOKEN"},
 		{"connection flags", yamlOneProfile, Options{Server: "https://cli.example.test/argo", Namespace: "cli-ns"}, "https://cli.example.test/argo", "cli-ns", "dev", "MICKO_TOKEN"},
 		{"profile flag", yamlTwoProfiles, Options{Profile: "prod"}, "https://prod.example.test/argo", "prod-wf", "prod", "PROD_TOKEN"},
@@ -267,6 +269,9 @@ func TestLoadRejectedInputs(t *testing.T) {
 		opts       Options
 		want       string
 	}{
+		{"server auth with token", yamlOneProfile + "    authMode: server\n", Options{}, "authMode server"},
+		{"invalid auth mode", yamlOneProfile + "    authMode: password\n", Options{}, "authMode must"},
+		{"missing token source", strings.Replace(yamlOneProfile, "    tokenEnv: MICKO_TOKEN\n", "", 1), Options{}, "token source missing"},
 		{"unknown profile", yamlTwoProfiles, Options{Profile: "nope"}, `profile "nope" not found`},
 		{"missing namespace", strings.Replace(yamlOneProfile, "    namespace: workflows\n", "", 1), Options{}, "namespace missing"},
 		{"missing server", strings.Replace(yamlOneProfile, "    server: https://argo.example.test/argo\n", "", 1), Options{}, "endpoint missing"},
