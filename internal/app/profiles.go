@@ -120,7 +120,6 @@ func (m *Root) switchProfile(name string) tea.Cmd {
 	}
 	// Everything in flight belongs to the old server; the generation bump drops
 	// late replies.
-	m.pendingView = nil
 	m.cancelAll()
 	m.connGen++
 	m.selGen++
@@ -161,7 +160,6 @@ func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 		m.profView.SetConnecting("")
 	}
 	if msg.Err != nil {
-		m.pendingView = nil
 		if m.profView != nil {
 			m.profView.SetError(msg.Err.Error())
 		}
@@ -170,9 +168,6 @@ func (m *Root) handleProfileConnected(msg profileConnectedMsg) tea.Cmd {
 	m.Adopt(msg.Connection)
 	if m.profView != nil {
 		m.profView.Close()
-	}
-	if v := m.pendingView; v != nil {
-		return tea.Batch(m.restoreView(*v), m.waitConnStates(), m.backgroundQuery())
 	}
 	m.flash = "profile: " + msg.Profile
 	list := m.startListGeneration()

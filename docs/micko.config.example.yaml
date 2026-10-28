@@ -1,5 +1,4 @@
-# Create a profile with micko --setup, or copy this file and select with --config.
-# Check read access with micko --check --profile dev.
+# Copy to ~/.config/micko/config.yaml or select with --config.
 # Actions ask for confirmation for each request; --read-only turns them off.
 currentProfile: dev
 refreshInterval: 5s

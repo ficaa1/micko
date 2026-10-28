@@ -107,9 +107,6 @@ func (m *Root) showKind(r Route, label string) tea.Cmd {
 // leaveDetailAndLogs stops the requests of the detail and logs routes when
 // the palette moves away from them.
 func (m *Root) leaveDetailAndLogs() {
-	m.stopComparison()
-	m.stopEvents()
-	m.stopExplainLog()
 	switch m.route {
 	case RouteLogs:
 		m.cancelInflight("logs")

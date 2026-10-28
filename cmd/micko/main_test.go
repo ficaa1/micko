@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,11 +33,6 @@ func TestRunExitCodes(t *testing.T) {
 	}{
 		{"version", []string{"--version"}, 0},
 		{"help", []string{"--help"}, 0},
-		{"check requires destination", []string{"--check", "--config", missing}, 2},
-		{"check refuses demo", []string{"--check", "--demo", "--profile", "dev"}, 2},
-		{"check positive timeout", []string{"--check", "--profile", "dev", "--check-timeout=0"}, 2},
-		{"setup refuses connection overrides", []string{"--setup", "--server", "https://fixture.example.test"}, 2},
-		{"check missing profile", []string{"--check", "--profile", "missing", "--config", missing}, 1},
 		{"allow-actions still parses", []string{"--allow-actions", "--version"}, 0},
 		{"read-only", []string{"--read-only", "--version"}, 0},
 		{"positional argument", []string{"stray-argument"}, 2},
@@ -154,22 +148,5 @@ func TestVersionReportsTheInjectedCommit(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "(feedfac)") {
 		t.Errorf("--version = %q, want the injected commit feedfac", out)
-	}
-}
-
-// The CLI routes setup to the guide and exits without starting the TUI.
-func TestSetupCommand(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	var out, errOut bytes.Buffer
-	code := runIO([]string{"--setup", "--config", path}, strings.NewReader("dev\ndirect\nhttps://argo.example.test\nworkflows\nserver\n\nyes\n"), &out, &errOut)
-	if code != 0 || !strings.Contains(out.String(), "Profile saved.") {
-		t.Fatalf("exit=%d output=%s stderr=%s", code, &out, &errOut)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "authMode: server") {
-		t.Fatalf("profile not saved: %s", data)
 	}
 }

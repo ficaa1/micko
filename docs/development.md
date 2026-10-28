@@ -134,15 +134,6 @@ warning cards require workflow UID identity or a unique verified pod name plus
 a creation-time bound. Event order, replay replacement and eviction ties are
 deterministic. Event coverage is additive to workflow and log rules.
 
-Compare uses `core.Query.SummaryOnly` to skip the list adapter's supplemental
-suspended-node scan. Its baseline search is namespace/lineage scoped, bounded
-by three pages, 300 summaries and a 20-second context; only the selected baseline
-gets a detail GET. Async replies must match connection/selection generations,
-request ID and full workflow identity. The detail pane reuses the production
-outline and report renderer for path matching, scrolling, sanitization and
-redacted clipboard output. Retry/fanout instances have explicit ambiguous
-alignment; template scope and step-group indexes qualify stable task paths.
-
 The adapter and fixtures target Argo Workflows v4.1.2. See the
 [usage guide](usage.md#limits-and-troubleshooting) for the scope of recorded
 live testing. Synthetic test results do not establish deployment compatibility.

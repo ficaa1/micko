@@ -81,7 +81,6 @@ func (m *Root) openArchived(ref core.Ref) tea.Cmd {
 		return nil
 	}
 	m.detailFrom = m.route
-	m.stopComparison()
 	m.selection = ref
 	m.selGen++
 	m.route = RouteDetail

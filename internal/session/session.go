@@ -183,10 +183,6 @@ func (c *Connector) Close() {
 // It blocks: starting a port-forward and waiting for it to bind a local port
 // takes seconds. Every caller runs it off the update loop.
 func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connection, error) {
-	return c.connect(ctx, profile, true)
-}
-
-func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*app.Connection, error) {
 	cfg, err := config.Load(c.data, config.Options{
 		ConfigPath:            c.path,
 		Profile:               profile,
@@ -203,7 +199,7 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 		RedactValues:          c.opts.RedactValues,
 	})
 	if err != nil {
-		return nil, &connectionError{stage: "config", err: err}
+		return nil, err
 	}
 
 	// The token is read per request rather than captured here, so a rotated
@@ -226,7 +222,7 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 	if cfg.Target.Service != "" {
 		forwarder, states, serverURL, err = c.startForward(ctx, cfg)
 		if err != nil {
-			return nil, &connectionError{stage: "forwarding", err: err}
+			return nil, err
 		}
 		// resolveServer keeps the transport pointed at the currently owned
 		// local port. The configured scheme, path prefix and TLS material are
@@ -248,14 +244,11 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 		if forwarder != nil {
 			forwarder.Close()
 		}
-		return nil, &connectionError{stage: "TLS/config", err: err}
+		return nil, err
 	}
 
 	// The client's deadline bounds this lookup even if the connection is replaced.
-	scopeCtx, cancelScope := context.WithCancel(ctx)
-	if warm {
-		go client.WarmScope(scopeCtx)
-	}
+	go client.WarmScope(context.Background())
 
 	var once sync.Once
 	conn := &app.Connection{
@@ -272,14 +265,11 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 		States:      states,
 		Diagnostics: c.sink,
 	}
-	conn.Close = func() {
-		once.Do(func() {
-			cancelScope()
-			if forwarder != nil {
-				forwarder.Close()
-			}
-			client.Close()
-		})
+	if forwarder != nil {
+		// Close is idempotent: the root closes a connection it replaces, and
+		// the entrypoint closes whatever is live on the way out. Those are the
+		// same connection whenever the program exits without a switch.
+		conn.Close = func() { once.Do(forwarder.Close) }
 	}
 	c.mu.Lock()
 	c.live = conn

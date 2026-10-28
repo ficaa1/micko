@@ -62,7 +62,6 @@ func listKinds() []listKind {
 // builtinCommands are the commands that are not a resource kind.
 func builtinCommands() []command {
 	return []command{
-		{Command: palette.Command{Name: "compare", Desc: "compare an open or selected run with its last success"}, run: func(m *Root, _ string) tea.Cmd { return m.openComparison() }},
 		{Command: palette.Command{Name: "actions", Desc: "actions for the selected workflow, template or cron"}, run: func(m *Root, _ string) tea.Cmd {
 			switch m.route {
 			case RouteList:
@@ -78,10 +77,6 @@ func builtinCommands() []command {
 			}
 			return nil
 		}},
-		{Command: palette.Command{Name: "views", Desc: "list saved workflow views"}, run: (*Root).listViews},
-		{Command: palette.Command{Name: "view-save", Arg: "name", Desc: "save this workflow view (replaces the same name)"}, args: (*Root).viewNames, run: (*Root).saveView},
-		{Command: palette.Command{Name: "view", Arg: "name", Desc: "load a saved workflow view"}, args: (*Root).viewNames, run: (*Root).loadView},
-		{Command: palette.Command{Name: "view-delete", Arg: "name", Desc: "delete a saved workflow view"}, args: (*Root).viewNames, run: (*Root).deleteView},
 		{
 			Command: palette.Command{Name: "ns", Arg: "namespace",
 				Desc: "switch namespace; no name opens the picker"},
@@ -186,7 +181,7 @@ func (m *Root) runCommand(msg palette.RunMsg) tea.Cmd {
 			m.flash = c.Name + " takes no argument"
 			return nil
 		}
-		if strings.ContainsAny(msg.Arg, " \t") && c.Arg != "name" {
+		if strings.ContainsAny(msg.Arg, " \t") {
 			m.flash = c.Name + " takes one " + c.Arg + " name"
 			return nil
 		}

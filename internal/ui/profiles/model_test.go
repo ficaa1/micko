@@ -126,7 +126,7 @@ func TestStates(t *testing.T) {
 			configPath,
 		}, nil},
 		{"no profiles", nil, func(m *Model) { m.Open("", "") }, []string{
-			"no profiles configured", "micko --setup", "write them to:\n  " + configPath,
+			"no profiles configured", "write them to:\n  " + configPath,
 			"  profiles:\n    dev:\n      server: https://argo.example.com\n      namespace: argo\n      tokenEnv: ARGO_TOKEN",
 			"micko --demo looks around without a cluster",
 		}, nil},

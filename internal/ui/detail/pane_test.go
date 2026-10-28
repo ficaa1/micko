@@ -85,11 +85,11 @@ func TestPaneGolden(t *testing.T) {
 func TestSectionKeys(t *testing.T) {
 	m := workflowModel(demoWorkflow(t, "demo-nightly-report"), 80, 20)
 	for _, c := range []struct{ key, want string }{
-		{"2", "timeline"}, {"3", "explain"}, {"4", "events"}, {"5", "resource"}, {"6", "summary"}, {"7", "compare"}, {"1", "nodes"},
+		{"2", "timeline"}, {"3", "explain"}, {"4", "events"}, {"5", "resource"}, {"6", "summary"}, {"1", "nodes"},
 		{"T", "timeline"}, {"X", "explain"}, {"E", "events"},
 		{"9", "events"}, {"0", "events"}, {"t", "events"}, {"x", "events"},
-		{"tab", "resource"}, {"tab", "summary"}, {"tab", "compare"}, {"tab", "nodes"},
-		{"shift+tab", "compare"}, {"shift+tab", "summary"}, {"shift+tab", "resource"},
+		{"tab", "resource"}, {"tab", "summary"}, {"tab", "nodes"},
+		{"shift+tab", "summary"}, {"shift+tab", "resource"},
 	} {
 		press(m, c.key)
 		if m.Section() != c.want {
@@ -109,11 +109,11 @@ func TestTabStripFits(t *testing.T) {
 		width  int
 		want   string
 	}{
-		{"explain", 80, " Nodes   Timeline  [Explain]  Events   Resource   Summary   Compare "},
-		{"explain", 50, "Nodes Timeline [Explain] Events Resource Summary …"},
+		{"explain", 80, " Nodes   Timeline  [Explain]  Events   Resource   Summary "},
+		{"explain", 50, "Nodes Timeline [Explain] Events Resource Summary"},
 		{"explain", 30, "… Timeline [Explain] Events …"},
 		{"nodes", 30, "[Nodes] Timeline Explain …"},
-		{"summary", 24, "… [Summary] Compare"},
+		{"summary", 24, "… Resource [Summary]"},
 		{"explain", 13, "… [Explain] …"},
 		{"explain", 8, "… [Expl…"},
 	} {
@@ -128,7 +128,7 @@ func TestEverySectionFitsThePane(t *testing.T) {
 	r := testkit.DemoReader(testkit.NewFakeClock(testkit.FixtureEpoch))
 	th := skin(t)
 	for ref, wf := range r.Workflows {
-		for _, section := range []string{"summary", "nodes", "timeline", "explain", "events", "resource", "compare"} {
+		for _, section := range []string{"summary", "nodes", "timeline", "explain", "events", "resource"} {
 			for _, theme := range []shared.Theme{shared.NewTheme(true), th} {
 				m := workflowModel(wf, 80, 24)
 				m.SetTheme(theme)

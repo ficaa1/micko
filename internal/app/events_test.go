@@ -43,7 +43,7 @@ func pump(m *Root, wait time.Duration, cmds ...tea.Cmd) (*Root, []running) {
 						queue = append(queue, start(c))
 					}
 				}
-			case detailLoadedMsg, eventsMsg, eventsDoneMsg, eventsRetryMsg, explainLogMsg, comparisonMsg, OpenWorkflowMsg:
+			case detailLoadedMsg, eventsMsg, eventsDoneMsg, eventsRetryMsg, explainLogMsg, OpenWorkflowMsg:
 				next, c := m.Update(msg)
 				m = next.(*Root)
 				if c != nil {
