@@ -12,6 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/config"
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/notify"
+	"github.com/ficaa1/micko/internal/savedviews"
 	"github.com/ficaa1/micko/internal/ui/actions"
 	"github.com/ficaa1/micko/internal/ui/archivedlist"
 	"github.com/ficaa1/micko/internal/ui/detail"
@@ -27,7 +28,9 @@ import (
 
 // Root is the top-level Tea model. Only its update loop changes UI state.
 type Root struct {
-	deps deps
+	viewStore   *savedviews.Store
+	pendingView *savedviews.View
+	deps        deps
 
 	// route is the active top-level route.
 	route Route
@@ -420,6 +423,7 @@ func (m *Root) newActionView(ref core.Ref) *actions.Model {
 // loop. The forwarder runs on its own goroutine, so it sends this message
 // instead of calling SetConnectionState.
 type ConnectionStateMsg struct {
+	source *Connection
 	// Conn is the connection generation the event belongs to, so an event from
 	// a closed forward cannot mark the new connection lost.
 	Conn   int
@@ -733,8 +737,8 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startWatch()
 
 	case ConnectionStateMsg:
-		// An older generation's event comes from a forward a switch already closed.
-		if msg.Conn != m.connGen {
+		// A namespace change keeps the transport; a profile change replaces it.
+		if (msg.source != nil && msg.source != m.conn) || (msg.source == nil && msg.Conn != m.connGen) {
 			return m, nil
 		}
 		m.SetConnectionState(msg.Ready, msg.Target)

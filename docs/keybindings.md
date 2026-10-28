@@ -46,3 +46,7 @@ match; see [Filtering](usage.md#filtering) for the full query language.
 With no profiles, the picker shows `micko --setup` and the config path.
 Quit the picker and run setup in the terminal; use `--setup --config PATH`
 for a custom file, then `micko --check --profile NAME` to check read access.
+
+Saved workflow views: `:view-save NAME` saves or replaces a view, `:views`
+lists names, `:view NAME` restores one, and `:view-delete NAME` deletes it.
+Names can contain spaces; tab completes saved names.

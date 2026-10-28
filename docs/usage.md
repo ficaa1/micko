@@ -147,6 +147,25 @@ cancels the edit. The toolbar shows the filter as it was read, such as
 `phase=Failed & age<2h`. `p` cycles a phase filter. Filtering and sorting run
 on the collected snapshot, not on the server.
 
+### Saved views
+
+`:view-save NAME` saves the current profile, namespace (or all namespaces),
+workflow query, phase filter and sort. Names can contain spaces and are
+case-sensitive; saving the same name replaces it. `:views` lists names,
+`:view NAME` reconnects to its profile (even when already connected) and
+restores the scope, and
+`:view-delete NAME` removes it. Tab completes names. A missing profile is
+reported without changing the current connection. Return to `:wf` before
+saving a drill-down. Filter history remains local to the session.
+
+Views are stored atomically in `$XDG_STATE_HOME/micko/views.json`, or
+`~/.local/state/micko/views.json` (the user config directory on Windows),
+with private permissions. They contain no credentials or workflow objects;
+query text is stored as entered, so avoid putting secrets in queries. A
+corrupt file is reported and preserved for recovery. A `.lock` directory
+prevents concurrent updates; after an interrupted write, remove it only
+when no micko is saving views. Demo mode disables saved views.
+
 ### Nodes
 
 The Nodes tab draws the workflow the way it runs, not the way the controller
