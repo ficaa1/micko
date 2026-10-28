@@ -143,7 +143,7 @@ func TestVersionReportsTheInjectedCommit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds the binary")
 	}
-	bin := filepath.Join(t.TempDir(), "micko")
+	bin := filepath.Join(t.TempDir(), "micko.exe")
 	build := exec.Command("go", "build", "-ldflags", "-X github.com/ficaa1/micko/internal/buildinfo.Commit=feedfac", "-o", bin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
