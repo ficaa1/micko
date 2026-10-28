@@ -39,15 +39,19 @@ type Profile struct {
 	// ServiceNamespace is where the Argo Server service runs. It is often a
 	// different namespace from the workflows being watched, so it defaults to
 	// Namespace only when it is not set.
-	ServiceNamespace string   `yaml:"serviceNamespace,omitempty"`
-	RemotePort       int      `yaml:"remotePort,omitempty"`
-	Server           string   `yaml:"server"`
-	Namespace        string   `yaml:"namespace"`
-	AuthMode         string   `yaml:"authMode,omitempty"`
-	TokenEnv         string   `yaml:"tokenEnv,omitempty"`
-	TokenFile        string   `yaml:"tokenFile,omitempty"`
-	CAFile           string   `yaml:"caFile,omitempty"`
-	Namespaces       []string `yaml:"namespaces,omitempty"`
+	ServiceNamespace string `yaml:"serviceNamespace,omitempty"`
+	RemotePort       int    `yaml:"remotePort,omitempty"`
+	Server           string `yaml:"server"`
+	Namespace        string `yaml:"namespace"`
+	AuthMode         string `yaml:"authMode,omitempty"`
+	TokenEnv         string `yaml:"tokenEnv,omitempty"`
+	TokenFile        string `yaml:"tokenFile,omitempty"`
+	CAFile           string `yaml:"caFile,omitempty"`
+	// InsecureSkipTLSVerify accepts the Argo Server's self-signed certificate.
+	// It is allowed only on a forwarded profile, whose traffic runs through the
+	// Kubernetes API tunnel to loopback.
+	InsecureSkipTLSVerify bool     `yaml:"insecureSkipTLSVerify,omitempty"`
+	Namespaces            []string `yaml:"namespaces,omitempty"`
 	// WebURL is the browser address of this cluster's Argo UI, for example
 	// "https://argo.example.com". It is used only to build a link to open or
 	// copy; micko never sends a request to it. Leave it out and the open
@@ -280,7 +284,7 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 	cfg.TokenEnv = prof.TokenEnv
 	cfg.TokenFile = firstNonEmpty(opts.TokenFile, prof.TokenFile)
 	cfg.CAFile = firstNonEmpty(opts.CAFile, prof.CAFile)
-	cfg.InsecureSkipTLSVerify = opts.InsecureSkipTLSVerify
+	cfg.InsecureSkipTLSVerify = opts.InsecureSkipTLSVerify || prof.InsecureSkipTLSVerify
 	targetNS := firstNonEmpty(prof.ServiceNamespace, cfg.Namespace)
 	cfg.Target = Target{Context: prof.KubeContext, Namespace: targetNS, Service: prof.Service, RemotePort: prof.RemotePort}
 	cfg.Debug = Debug{Enabled: opts.Debug}
@@ -328,6 +332,9 @@ func Load(cfgData []byte, opts Options) (Config, error) {
 		if prof.KubeContext == "" || prof.Service == "" || prof.RemotePort < 1 || prof.RemotePort > 65535 {
 			return Config{}, fmt.Errorf("config: profile %q target requires kubeContext, service, and remotePort 1-65535", cfg.ProfileName)
 		}
+	}
+	if prof.InsecureSkipTLSVerify && prof.Service == "" {
+		return Config{}, fmt.Errorf("config: profile %q: insecureSkipTLSVerify is allowed only with a kubectl forward (service, kubeContext, remotePort)", cfg.ProfileName)
 	}
 	if cfg.AuthMode != "server" && cfg.AuthMode != "token" {
 		return Config{}, fmt.Errorf("config: authMode must be server or token")

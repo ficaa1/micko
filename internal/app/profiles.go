@@ -34,8 +34,14 @@ type profileConnectedMsg struct {
 }
 
 // SetConnector installs what builds connections; without it, choosing a
-// profile does nothing.
-func (m *Root) SetConnector(c Connector) { m.connector = c }
+// profile does nothing. A connector that can also set up profiles enables the
+// picker's new-profile wizard.
+func (m *Root) SetConnector(c Connector) {
+	m.connector = c
+	if s, ok := c.(profiles.Setup); ok && m.profView != nil {
+		m.profView.SetSetup(s)
+	}
+}
 
 // SetProfiles loads the config file's profiles into the picker.
 func (m *Root) SetProfiles(l ProfileList) {
@@ -108,8 +114,7 @@ func (m *Root) openProfilePicker() tea.Cmd {
 	if cursor == "" {
 		cursor = m.profileCursor
 	}
-	m.profView.Open(m.profileCurrent, cursor)
-	return nil
+	return m.profView.Open(m.profileCurrent, cursor)
 }
 
 // switchProfile moves the session to another cluster. The dialog stays open

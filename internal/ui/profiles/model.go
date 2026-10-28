@@ -7,8 +7,10 @@
 // target, so choosing one is a reconnection, not a filter.
 //
 // The picker is a dialog: while it is open it owns every
-// key except Ctrl-C. It holds no client and starts nothing. The root loads the
-// profile names into it and converts its one intent into a reconnection.
+// key except Ctrl-C. It holds no client. The root loads the profile names into
+// it and converts its SwitchMsg into a reconnection. Its "+ new profile" row
+// starts the setup wizard (setup.go), which talks to the cluster only through
+// the Setup it was given.
 //
 // Unlike the namespace picker, typed text only narrows the list. A namespace
 // that appears in no list is still a namespace the server may hold, so that
@@ -60,6 +62,9 @@ type Model struct {
 	// screen for those seconds looks like a crash.
 	connecting string
 
+	setup Setup
+	w     wizard
+
 	theme         shared.Theme
 	width, height int
 }
@@ -76,18 +81,29 @@ func (m *Model) Connecting() bool { return m.connecting != "" }
 // Open shows the picker and clears the previous filter, so it never reopens
 // narrowed by a search the reader has forgotten about. cursor is the profile
 // to start on: the connected one, or the file's currentProfile before the
-// first connection.
-func (m *Model) Open(current, cursor string) {
+// first connection. With no profiles to list it starts the wizard.
+func (m *Model) Open(current, cursor string) tea.Cmd {
 	m.open = true
 	m.current = current
 	m.filter = ""
 	m.connecting = ""
+	m.stopRequest()
+	m.w = wizard{seq: m.w.seq}
 	m.applyFilter()
 	m.selectName(cursor)
+	if len(m.items) == 0 && m.setup != nil {
+		return m.startSetup()
+	}
+	return nil
 }
 
-// Close hides the picker.
-func (m *Model) Close() { m.open = false; m.connecting = "" }
+// Close hides the picker and abandons the wizard.
+func (m *Model) Close() {
+	m.open = false
+	m.connecting = ""
+	m.stopRequest()
+	m.w = wizard{seq: m.w.seq}
+}
 
 // SetItems records the configured profiles and the file they came from.
 func (m *Model) SetItems(items []Item, configPath string) {
@@ -130,8 +146,17 @@ func (m *Model) Selected() string {
 // gone and the new one is not up, so a second choice would have nothing to
 // cancel and would race the first.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
+	if r, ok := msg.(ReplyMsg); ok {
+		return m.reply(r)
+	}
+	if !m.open || m.connecting != "" {
+		return nil
+	}
+	if m.InSetup() {
+		return m.updateSetup(msg)
+	}
 	key, ok := msg.(tea.KeyPressMsg)
-	if !ok || !m.open || m.connecting != "" {
+	if !ok {
 		return nil
 	}
 	switch s := key.String(); s {
@@ -139,6 +164,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.Close()
 		return nil
 	case "enter":
+		if m.onNewRow() {
+			return m.startSetup()
+		}
 		name := m.Selected()
 		if name == "" || name == m.current {
 			m.Close()
@@ -167,18 +195,24 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	}
 }
 
+// rowCount is the selectable rows: the profiles, and "+ new profile" when
+// setup is available.
+func (m *Model) rowCount() int {
+	if m.setup != nil {
+		return len(m.rows) + 1
+	}
+	return len(m.rows)
+}
+
+func (m *Model) onNewRow() bool { return m.setup != nil && m.cursor == len(m.rows) }
+
 func (m *Model) move(delta int) {
-	if len(m.rows) == 0 {
+	n := m.rowCount()
+	if n == 0 {
 		m.cursor = 0
 		return
 	}
-	m.cursor += delta
-	if m.cursor < 0 {
-		m.cursor = len(m.rows) - 1
-	}
-	if m.cursor >= len(m.rows) {
-		m.cursor = 0
-	}
+	m.cursor = (m.cursor + delta + n) % n
 }
 
 func (m *Model) applyFilter() {
@@ -190,7 +224,7 @@ func (m *Model) applyFilter() {
 		}
 	}
 	m.rows = rows
-	if m.cursor >= len(rows) {
+	if m.cursor >= m.rowCount() {
 		m.cursor = 0
 	}
 }
@@ -211,6 +245,9 @@ func (m *Model) Hints() string {
 	if m.connecting != "" {
 		return "connecting to " + shared.Sanitize(m.connecting) + "…"
 	}
+	if m.InSetup() {
+		return m.setupHints()
+	}
 	if m.current == "" {
 		// Nothing is connected yet, so there is no session to escape back to.
 		return "type to filter  ↑↓ move  enter connect  esc quit"
@@ -222,6 +259,9 @@ func (m *Model) Hints() string {
 // with no config file gets the path to write and a file to write into it,
 // rather than an empty box that looks like a broken program.
 func (m *Model) BodyLines() []string {
+	if m.InSetup() && m.connecting == "" {
+		return m.clamp(m.setupLines())
+	}
 	var lines []string
 	if m.current != "" {
 		lines = append(lines, m.theme.Title.Render("switch profile")+m.theme.Muted.Render(" — current: ")+shared.Sanitize(m.current))
@@ -238,6 +278,7 @@ func (m *Model) BodyLines() []string {
 		lines = append(lines, "", m.theme.Warning.Render("config: "+m.lastErr))
 	}
 	if len(m.items) == 0 {
+		lines = append(lines, m.newRow()...)
 		return m.clamp(append(lines, m.emptyLines()...))
 	}
 	typed := strings.TrimSpace(m.filter)
@@ -272,10 +313,25 @@ func (m *Model) BodyLines() []string {
 		}
 		lines = append(lines, row)
 	}
+	lines = append(lines, m.newRow()...)
 	if m.configPath != "" {
 		lines = append(lines, "", m.theme.Dim.Render(shared.Sanitize(m.configPath)))
 	}
 	return m.clamp(lines)
+}
+
+// newRow is the "+ new profile" row, drawn when setup is available.
+func (m *Model) newRow() []string {
+	if m.setup == nil {
+		return nil
+	}
+	row := "  + new profile"
+	if m.onNewRow() {
+		row = m.theme.SelectRow(row, m.width)
+	} else {
+		row = m.theme.Muted.Render(row)
+	}
+	return []string{"", row}
 }
 
 // emptyLines is what a reader with no profiles sees: where the file goes, what

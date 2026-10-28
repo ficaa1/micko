@@ -281,6 +281,7 @@ func TestLoadRejectedInputs(t *testing.T) {
 		{"flag secret conflict", yamlOneProfile, Options{TokenFile: "/run/secrets/cli-token"}, "mutually exclusive"},
 		{"relative token file", strings.Replace(yamlOneProfile, "tokenEnv: MICKO_TOKEN", "tokenFile: relative/path", 1), Options{}, "absolute path"},
 		{"newline env", strings.Replace(yamlOneProfile, "MICKO_TOKEN", `"ARGO\nTOKEN"`, 1), Options{}, "newline"},
+		{"insecure without forward", yamlOneProfile + "    insecureSkipTLSVerify: true\n", Options{}, "only with a kubectl forward"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -292,20 +293,28 @@ func TestLoadRejectedInputs(t *testing.T) {
 	}
 }
 
-// Forwarding targets the service namespace while the session stays in the workflow namespace.
+// Forwarding targets the service namespace while the session stays in the
+// workflow namespace, and may accept the server's self-signed certificate.
 func TestLoadForwardTarget(t *testing.T) {
-	for _, c := range []struct{ name, serviceNamespace, want string }{
-		{"separate service namespace", "    serviceNamespace: argo-server-ns\n", "argo-server-ns"},
-		{"workflow namespace fallback", "", "workflows"},
+	for _, c := range []struct {
+		name, extra, want string
+		insecure          bool
+	}{
+		{"separate service namespace", "    serviceNamespace: argo-server-ns\n", "argo-server-ns", false},
+		{"workflow namespace fallback", "", "workflows", false},
+		{"self-signed certificate", "    insecureSkipTLSVerify: true\n", "workflows", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			data := yamlOneProfile + "    kubeContext: ctx\n    service: argo-server\n    remotePort: 2746\n" + c.serviceNamespace
+			data := yamlOneProfile + "    kubeContext: ctx\n    service: argo-server\n    remotePort: 2746\n" + c.extra
 			got, err := Load([]byte(data), Options{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got.Namespace != "workflows" || got.Target != (Target{Context: "ctx", Namespace: c.want, Service: "argo-server", RemotePort: 2746}) {
 				t.Fatalf("workflow namespace=%q target=%+v, want workflows and ctx/%s/argo-server:2746", got.Namespace, got.Target, c.want)
+			}
+			if got.InsecureSkipTLSVerify != c.insecure {
+				t.Fatalf("InsecureSkipTLSVerify = %v, want %v", got.InsecureSkipTLSVerify, c.insecure)
 			}
 		})
 	}

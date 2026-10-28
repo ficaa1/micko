@@ -517,6 +517,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_, cmd := m.actionView.Update(msg)
 			return m, cmd
 		}
+		if m.profileDialogOpen() {
+			return m, m.profView.Update(msg)
+		}
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -545,9 +548,10 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.nsView.Update(msg)
 		}
 		// The profile picker owns printable keys too. Before the first connection
-		// there is no session to return to, so esc quits.
+		// there is no session to return to, so esc quits, except in the wizard,
+		// where it steps back.
 		if m.profileDialogOpen() {
-			if key == "esc" && !m.connected() && !m.profView.Connecting() {
+			if key == "esc" && !m.connected() && !m.profView.Connecting() && !m.profView.InSetup() {
 				return m, m.quit()
 			}
 			return m, m.profView.Update(msg)
@@ -800,6 +804,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case profiles.SwitchMsg:
 		return m, m.switchProfile(msg.Profile)
+
+	case profiles.ReplyMsg:
+		return m, m.profView.Update(msg)
 
 	case palette.RunMsg:
 		return m, m.runCommand(msg)

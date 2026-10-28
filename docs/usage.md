@@ -6,9 +6,23 @@ listed in [keybindings](keybindings.md); every config key is in
 
 ## Connect
 
-Copy [the example config](micko.config.example.yaml) to
-`~/.config/micko/config.yaml` and edit it for your cluster. One profile per
-cluster:
+With no profiles, `micko` opens setup; `P` then `+ new profile` opens it
+later. It lists your kube contexts (the current one marked), the Argo Server
+services in the one you pick, and the namespace to watch, which defaults to
+the server's own. It then starts the port-forward and makes one request:
+
+- the server answers without a token: the profile uses `authMode: server`;
+- it wants one: name the environment variable that holds it, or an absolute
+  path to a file, and setup checks again;
+- its certificate is self-signed: `t` trusts it for this profile
+  (`insecureSkipTLSVerify: true`), `c` takes a CA file instead.
+
+Name the profile (it defaults to the context's name) and enter saves it to the
+config file, keeping the rest of the file and its comments, and connects.
+Setup needs `kubectl` on PATH and never asks for a token itself.
+
+To write a profile by hand, copy [the example config](micko.config.example.yaml)
+to `~/.config/micko/config.yaml` and edit it. One profile per cluster:
 
 ```yaml
 currentProfile: dev
@@ -36,8 +50,7 @@ used as it is.
 
 micko reads `$XDG_CONFIG_HOME/micko/config.yaml`, then
 `~/.config/micko/config.yaml`, then the OS user config directory, and uses the
-first that exists; `--config PATH` names one. With no config file the picker
-shows the config path and a sample profile.
+first that exists; `--config PATH` names one. Setup saves to that file.
 
 ### Authentication and TLS
 
@@ -52,7 +65,9 @@ server mode still rejects any configured token source.
 
 HTTPS verifies certificates; `caFile` or `--ca-file` selects a PEM CA bundle, and
 `--insecure-skip-tls-verify` turns verification off for one run with a
-warning. Plain HTTP is allowed only to loopback addresses, and redirects are
+warning. A forwarded profile may set `insecureSkipTLSVerify: true` to accept
+the Argo Server's self-signed certificate; the traffic runs through the
+Kubernetes API tunnel to loopback, and a profile without a forward is refused. Plain HTTP is allowed only to loopback addresses, and redirects are
 rejected. Never put a literal token in a command line or a committed config.
 
 ## Features
@@ -276,7 +291,7 @@ blocks an action.
 discovers, or a name you type. `0` or `:all` lists every namespace the token
 may read, with a NAMESPACE column, and `/` then matches `namespace/name`.
 `P` opens the profile picker, which is also the start screen without
-`--profile`.
+`--profile`. Its last row, `+ new profile`, opens setup.
 
 `o` opens the workflow in the Argo UI when the profile sets `webURL`. `y`
 copies through OSC52, so it depends on your terminal. `f` shows the current

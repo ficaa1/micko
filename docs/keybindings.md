@@ -14,6 +14,7 @@ Press `?` in micko for the same list on screen. Keys are case-sensitive:
 | Events | `s` warnings first, `/` filter, `y` copy, `r` restart the stream |
 | Logs | `t` follow, `G` newest, `space` pause, `c` container, `/` search, `n`/`N` matches, `&` only matching, `w` wrap, `L` labels, `ctrl+t` server timestamps, `\|` pipe |
 | Actions | `u` resume, `z` suspend, `r` retry, `b` resubmit, `s` stop, `t` terminate, `d` delete; `D` finishes a delete |
+| Profile picker | type to filter, `enter` connect, `+ new profile` row opens setup; in setup `enter` choose, `esc` back a step, `t` trust a self-signed certificate, `c` give a CA file |
 | Anywhere | `:` palette, `P` profile, `f` full screen, `y` copy, `o` open in Argo UI, `?` help, `esc` back, `q` quit outside text entry, `ctrl+c` quit |
 
 ## Palette commands

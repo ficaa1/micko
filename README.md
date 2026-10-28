@@ -49,8 +49,13 @@ Nix: Linux x86_64/ARM64 and macOS ARM64; Intel macOS is not supported.
 
 ## Quick start
 
-micko reads profiles, one per cluster, from `~/.config/micko/config.yaml`.
-Run `micko`, pick a profile, and press `?` for help.
+Run `micko`. With no profiles it opens setup: pick a kube context, the Argo
+Server found in it and a namespace, and micko forwards to it, finds out
+whether it needs a token or trusts a self-signed certificate, and saves the
+profile to `~/.config/micko/config.yaml`. `P` switches profile, and
+`+ new profile` there adds another. Press `?` for help.
+
+To write profiles by hand:
 
 **Through `kubectl port-forward`**, when the Argo Server is not exposed.
 micko starts the forward itself on a free local port, using your kubeconfig,

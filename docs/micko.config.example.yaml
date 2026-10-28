@@ -40,6 +40,8 @@ profiles:
     remotePort: 2746
     # With forwarding, only the scheme and path prefix are used.
     # Use https when Argo expects TLS; caFile supplies a custom CA.
+    # insecureSkipTLSVerify: true accepts a self-signed certificate. It is
+    # allowed only with a forward, whose traffic stays in the kubectl tunnel.
     server: http://127.0.0.1:2746
     namespace: workflows
     # token is the default when authMode is omitted; choose exactly one source.
