@@ -251,3 +251,49 @@ func TestLogStates(t *testing.T) {
 		})
 	}
 }
+
+func TestComparisonJourney(t *testing.T) {
+	fs := NewFixtureServer(t)
+	selected := FixtureWorkflow(testNS, "selected", "Failed", "selected-uid")
+	baseline := FixtureWorkflow(testNS, "baseline", "Succeeded", "baseline-uid")
+	selected.Metadata.Labels["workflows.argoproj.io/workflow-template"] = "pipeline"
+	baseline.Metadata.Labels["workflows.argoproj.io/workflow-template"] = "pipeline"
+	selected.Metadata.CreationTimestamp = rfctime(FixtureEpoch.Add(-10 * time.Minute))
+	selected.Status.StartedAt = selected.Metadata.CreationTimestamp
+	selected.Status.FinishedAt = rfctime(FixtureEpoch.Add(-time.Minute))
+	for _, wf := range []*WireWorkflow{&selected, &baseline} {
+		for id, n := range wf.Status.Nodes {
+			n.TemplateName = "work"
+			n.FinishedAt = wf.Status.FinishedAt
+			wf.Status.Nodes[id] = n
+		}
+		value := "before"
+		if wf.Metadata.Name == "selected" {
+			value = "after"
+		}
+		wf.Spec["arguments"] = map[string]any{"parameters": []map[string]string{{"name": "batch", "value": value}}}
+		fs.PutWorkflow(*wf)
+	}
+	h := newHarness(t, fs, testNS)
+	h.press("enter")
+	before := fs.RequestsByMethod()["GET"]
+	h.press("C")
+	view := h.screen()
+	for _, want := range []string{"[Compare]", "baseline-uid", "selected-uid", "Succeeded → Failed", "batch changed", "baseline=before", "selected=after"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("missing %q:\n%s", want, view)
+		}
+	}
+	if got := fs.RequestsByMethod()["GET"] - before; got != 2 {
+		t.Fatalf("comparison reads=%d want one summary page and one baseline", got)
+	}
+	h.press("esc")
+	if !strings.Contains(h.screen(), "[Nodes]") {
+		t.Fatal("escape did not return to run")
+	}
+	for method := range fs.RequestsByMethod() {
+		if method != "GET" {
+			t.Fatalf("comparison sent %s", method)
+		}
+	}
+}

@@ -61,7 +61,7 @@ func (m *Root) syncExplainLog() tea.Cmd {
 // syncSections starts and stops the detail sections' background work: the
 // Explain log read and the Events streams.
 func (m *Root) syncSections() tea.Cmd {
-	return tea.Batch(m.syncExplainLog(), m.syncEvents())
+	return tea.Batch(m.syncExplainLog(), m.syncEvents(), m.syncComparison())
 }
 
 // stopExplainLog cancels a read under way and tells the section, which asks

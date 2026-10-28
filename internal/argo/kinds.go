@@ -152,7 +152,7 @@ func arguments(ps []rawArgument) []core.Argument {
 	for _, p := range ps {
 		a := core.Argument{Name: p.Name, Description: p.Description}
 		a.Value, a.HasValue = anyString(p.Value)
-		a.Default, _ = anyString(p.Default)
+		a.Default, a.HasDefault = anyString(p.Default)
 		for _, e := range p.Enum {
 			if v, ok := anyString(e); ok {
 				a.Enum = append(a.Enum, v)

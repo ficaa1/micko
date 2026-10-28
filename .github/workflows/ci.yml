@@ -1,6 +1,4 @@
-# Routine checks on push and pull requests. The disposable-cluster E2E job
-# needs manual dispatch and E2E_ALLOWLIST_B64; it does not provision an Argo
-# environment. See docs/development.md.
+# Routine checks and opt-in deployment compatibility checks. See docs/development.md.
 
 name: ci
 
@@ -9,6 +7,15 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      deployment_compatibility:
+        description: Provision a disposable Argo v4.1.2 cluster and run deployment checks
+        type: boolean
+        default: false
+      external_e2e:
+        description: Run the separately allowlisted external-cluster E2E journey
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,7 +25,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.4"
+  GO_VERSION: "1.27.3"
   KIND_VERSION: "v0.33.0"
   KUBECTL_VERSION: "v1.37.0"
 
@@ -94,7 +101,17 @@ jobs:
           fi
 
       - name: vet
-        run: go vet ./...
+        run: go vet -tags=integration,e2e,compat ./...
+
+      - name: Unused production code
+        if: runner.os == 'Linux'
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 -checks U1000 -tags integration,e2e,compat ./...
+
+      - name: Compatibility runner syntax and cleanup
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL --retry 3 https://github.com/argoproj/argo-workflows/releases/download/v4.1.2/install.yaml -o "$RUNNER_TEMP/argo-install.yaml"
+          python3 scripts/compat/test_runner.py "$RUNNER_TEMP/argo-install.yaml"
 
       - name: Check release-channel updater
         if: runner.os == 'Linux'
@@ -131,7 +148,7 @@ jobs:
   e2e:
     name: e2e (opt-in)
     # Real tier: explicit dispatch only, never on plain push or PR.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.external_e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -155,9 +172,62 @@ jobs:
           E2E_CONFIG_B64: ${{ secrets.E2E_ALLOWLIST_B64 }}
         run: |
           if [ -z "$E2E_CONFIG_B64" ]; then
-            echo "E2E_ALLOWLIST_B64 not set — skipping REAL tier (recorded BLOCKED, not silent pass)."
-            exit 0
+            echo "::error::External E2E requested but E2E_ALLOWLIST_B64 is absent."
+            exit 1
           fi
           echo "$E2E_CONFIG_B64" | base64 -d > e2e-config.yaml
           MICKO_E2E=1 MICKO_E2E_CONFIG=./e2e-config.yaml \
             go test -tags=e2e ./tests/e2e/... -count=1 -v
+
+  windows:
+    name: Windows unit and transport smoke
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - name: Unit tests and HTTP integration fixtures
+        run: |
+          go test ./... -count=1
+          go test -tags=integration ./tests/integration/... -count=1
+          go vet -tags=integration,e2e,compat ./...
+      - name: Build and startup smoke
+        run: |
+          go build -o dist/micko.exe ./cmd/micko
+          ./dist/micko.exe --version
+          echo "profiles: {}" > "$RUNNER_TEMP/empty-micko.yaml"
+          set +e
+          ./dist/micko.exe --config "$RUNNER_TEMP/empty-micko.yaml" --profile missing 2>/dev/null
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ]; then
+            echo "::error::an unknown profile exited with $status, want 1"
+            exit 1
+          fi
+
+  deployment-compatibility:
+    name: Disposable Argo v4.1.2 compatibility
+    if: github.event_name == 'workflow_dispatch' && inputs.deployment_compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      - name: Install pinned cluster tools
+        run: |
+          curl -fsSL -o kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d  kind" | sha256sum -c -
+          chmod +x kind
+          sudo mv kind /usr/local/bin/kind
+          curl -fsSL -o kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f  kubectl" | sha256sum -c -
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+      - name: Provision, exercise and clean up
+        run: scripts/compat/argo.sh

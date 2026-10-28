@@ -67,6 +67,9 @@ type BulkItem struct {
 // in the bulk path: explicit confirmation, one request per workflow, and
 // an outcome that says what is known and nothing more.
 type Model struct {
+	resource                     *core.ResourceState
+	destination                  string
+	resourceIntent               *core.ResourceActionRequest
 	ref                          core.Ref
 	allowActions, readOnly, demo bool
 	state                        State
@@ -155,7 +158,7 @@ func (m *Model) SetParameters(args []core.Argument, hidden bool) {
 
 // editsParams reports whether the confirmation offers parameter edits.
 func (m *Model) editsParams() bool {
-	return m.action == core.ActionResubmit && !m.bulk
+	return (m.action == core.ActionResubmit || m.action == core.ActionSubmit) && !m.bulk
 }
 
 // overrides returns the edited parameters as Argo's name=value pairs.
@@ -190,7 +193,7 @@ type Availability struct {
 // unknown, and hiding a verb on a guess would make it unreachable.
 func (m *Model) Available() []Availability {
 	var out []Availability
-	for _, a := range core.Actions {
+	for _, a := range m.menuActions() {
 		if n := len(m.applicable(a)); n > 0 {
 			out = append(out, Availability{Action: a, Applies: n})
 		}
@@ -201,7 +204,7 @@ func (m *Model) Available() []Availability {
 // Unavailable lists the actions that apply to no target, in menu order.
 func (m *Model) Unavailable() []core.Action {
 	var out []core.Action
-	for _, a := range core.Actions {
+	for _, a := range m.menuActions() {
 		if len(m.applicable(a)) == 0 {
 			out = append(out, a)
 		}
@@ -211,6 +214,13 @@ func (m *Model) Unavailable() []core.Action {
 
 // applicable returns the targets action applies to.
 func (m *Model) applicable(action core.Action) []core.Summary {
+	if m.resource != nil {
+		valid := action == core.ActionSubmit || (m.resource.Kind == core.KindCronWorkflow && ((action == core.ActionSuspend && !m.resource.Suspended) || (action == core.ActionResume && m.resource.Suspended)))
+		if valid {
+			return []core.Summary{{Ref: m.ref}}
+		}
+		return nil
+	}
 	if len(m.targets) == 0 {
 		return []core.Summary{{Ref: m.ref, Phase: m.phase}}
 	}
@@ -375,6 +385,16 @@ func (m *Model) submitConfirmed(typed string) bool {
 	if m.state == StateSubmitting || m.intent != nil || m.bulkIntent != nil {
 		return false
 	}
+	if m.resource != nil {
+		req := core.ResourceActionRequest{Resource: *m.resource, Namespace: m.destination, Action: m.action, Parameters: m.overrides(), Confirmation: core.Confirmation{Confirmed: true}}
+		if err := req.ValidateParameters(*m.resource); err != nil {
+			m.reason = err.Error()
+			return false
+		}
+		m.resourceIntent = &req
+		m.state = StateSubmitting
+		return true
+	}
 	final := m.action == core.ActionDelete
 	if m.bulk {
 		if len(m.applies) == 0 {
@@ -443,6 +463,9 @@ func (m *Model) Hints() string {
 	case StateMenu:
 		return "letter choose  esc cancel"
 	case StateConfirm:
+		if m.resource != nil {
+			return "y confirm  ↑/↓ choose  e edit  n/enter/esc cancel"
+		}
 		if m.editsParams() && len(m.params) > 0 {
 			return "y confirm  ↑/↓ choose  e edit  m memoized  n/enter/esc cancel"
 		}
@@ -486,6 +509,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+	}
+	if m.state == StateSubmitting && m.resourceIntent != nil {
+		req := *m.resourceIntent
+		m.resourceIntent = nil
+		return m, func() tea.Msg { return ResourceIntentMsg{Request: req} }
 	}
 	if m.state == StateSubmitting && m.intent != nil {
 		req := *m.intent
@@ -545,7 +573,8 @@ func (m *Model) updateEditParam(key tea.KeyPressMsg) {
 			m.editBuf = string(r[:len(r)-1])
 		}
 	case tea.KeyEnter:
-		if m.editBuf == m.params[m.cursor].Value || (m.hideValues && m.editBuf == "") {
+		required := m.resource != nil && m.params[m.cursor].Required()
+		if !required && (m.editBuf == m.params[m.cursor].Value || (m.hideValues && m.editBuf == "")) {
 			delete(m.edits, m.cursor)
 		} else {
 			if m.edits == nil {
@@ -594,6 +623,9 @@ func (m *Model) updateParamKeys(k string) bool {
 		m.editBuf = m.paramValue(m.cursor)
 		m.state = StateEditParam
 	case "m":
+		if m.resource != nil {
+			return true
+		}
 		m.memoized = !m.memoized
 	default:
 		return false
@@ -662,9 +694,10 @@ func (m *Model) updateNonInput(key tea.KeyPressMsg) {
 // already has u, and sharing one would leave the restart unreachable.
 var menuKeys = map[string]core.Action{
 	"u": core.ActionResume,
+	"b": core.ActionResubmit,
+	"g": core.ActionSubmit,
 	"z": core.ActionSuspend,
 	"r": core.ActionRetry,
-	"b": core.ActionResubmit,
 	"s": core.ActionStop,
 	"t": core.ActionTerminate,
 	"d": core.ActionDelete,
@@ -697,6 +730,9 @@ func appendLimited(current, input string, limit int) string {
 }
 
 func (m *Model) View() tea.View {
+	if m.resource != nil {
+		return tea.NewView(renderResource(m))
+	}
 	return tea.NewView(render(m))
 }
 

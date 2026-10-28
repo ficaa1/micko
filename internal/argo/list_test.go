@@ -93,9 +93,11 @@ func TestListMarksSuspendedWorkflows(t *testing.T) {
 	}
 	cases := []struct {
 		selector, scanSelector string
+		summaryOnly            bool
 	}{
-		{"", "workflows.argoproj.io/completed!=true"},
-		{"app=users", "app=users,workflows.argoproj.io/completed!=true"},
+		{"", "workflows.argoproj.io/completed!=true", false},
+		{"app=users", "app=users,workflows.argoproj.io/completed!=true", false},
+		{"app=summary", "", true},
 	}
 	for _, c := range cases {
 		t.Run("selector "+c.selector, func(t *testing.T) {
@@ -110,16 +112,24 @@ func TestListMarksSuspendedWorkflows(t *testing.T) {
 				listFieldsSent = r.URL.Query().Get("fields")
 				_, _ = io.WriteString(w, list)
 			})
-			page, err := newTestClient(t, srv).List(context.Background(), core.Query{Namespace: "ns", LabelSelector: c.selector})
+			page, err := newTestClient(t, srv).List(context.Background(), core.Query{Namespace: "ns", LabelSelector: c.selector, SummaryOnly: c.summaryOnly})
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, it := range page.Items {
-				if it.Suspended != want[it.Ref.Name] {
+				expected := want[it.Ref.Name]
+				if c.summaryOnly {
+					expected = it.Ref.Name == "spec"
+				}
+				if it.Suspended != expected {
 					t.Errorf("%s suspended = %v, want %v", it.Ref.Name, it.Suspended, want[it.Ref.Name])
 				}
 			}
-			if scanSelector != c.scanSelector || scanLimit != "500" {
+			expectedLimit := "500"
+			if c.summaryOnly {
+				expectedLimit = ""
+			}
+			if scanSelector != c.scanSelector || scanLimit != expectedLimit {
 				t.Errorf("gate scan selector %q limit %q, want %q and 500", scanSelector, scanLimit, c.scanSelector)
 			}
 			sent := strings.Split(listFieldsSent, ",")

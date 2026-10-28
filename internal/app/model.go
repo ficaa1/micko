@@ -12,6 +12,7 @@ import (
 	"github.com/ficaa1/micko/internal/config"
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/notify"
+	"github.com/ficaa1/micko/internal/savedviews"
 	"github.com/ficaa1/micko/internal/ui/actions"
 	"github.com/ficaa1/micko/internal/ui/archivedlist"
 	"github.com/ficaa1/micko/internal/ui/detail"
@@ -27,7 +28,9 @@ import (
 
 // Root is the top-level Tea model. Only its update loop changes UI state.
 type Root struct {
-	deps deps
+	viewStore   *savedviews.Store
+	pendingView *savedviews.View
+	deps        deps
 
 	// route is the active top-level route.
 	route Route
@@ -50,7 +53,8 @@ type Root struct {
 	listState listState
 
 	// detailState is the loaded detail for the detail route.
-	detailState detailState
+	detailState  detailState
+	comparisonID uint64
 
 	// logState is the retained log state for the logs route.
 	logState logState
@@ -419,6 +423,7 @@ func (m *Root) newActionView(ref core.Ref) *actions.Model {
 // loop. The forwarder runs on its own goroutine, so it sends this message
 // instead of calling SetConnectionState.
 type ConnectionStateMsg struct {
+	source *Connection
 	// Conn is the connection generation the event belongs to, so an event from
 	// a closed forward cannot mark the new connection lost.
 	Conn   int
@@ -610,8 +615,12 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.openProfilePicker()
 		}
 		if m.route == RouteDetail && key == "r" && !m.textEntryActive() {
-			// On the Events section r also restarts the streams.
-			if m.detailView.Section() == shared.SectionEvents {
+			if m.detailView.Section() == "compare" {
+				m.cancelInflight("comparison")
+				m.detailView.ResetComparison()
+			}
+			// On the Events and Explain sections r also restarts the streams.
+			if m.detailView.Section() == shared.SectionEvents || m.detailView.Section() == shared.SectionExplain {
 				return m, tea.Batch(m.startDetailFetch(), m.restartEvents())
 			}
 			return m, m.startDetailFetch()
@@ -627,6 +636,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.openDetailActions()
 			return m, nil
+		}
+		if m.route.hasResourceActions() && key == "a" && !m.textEntryActive() {
+			return m, m.openResourceActions()
 		}
 		if m.route == RouteList && key == "a" && !m.textEntryActive() {
 			m.openListActions()
@@ -728,8 +740,8 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startWatch()
 
 	case ConnectionStateMsg:
-		// An older generation's event comes from a forward a switch already closed.
-		if msg.Conn != m.connGen {
+		// A namespace change keeps the transport; a profile change replaces it.
+		if (msg.source != nil && msg.source != m.conn) || (msg.source == nil && msg.Conn != m.connGen) {
 			return m, nil
 		}
 		m.SetConnectionState(msg.Ready, msg.Target)
@@ -757,6 +769,9 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailView.SetSection(msg.Section)
 		}
 		return m, tea.Batch(cmd, m.syncSections())
+
+	case comparisonMsg:
+		return m, m.handleComparison(msg)
 
 	case explainLogMsg:
 		return m, m.handleExplainLog(msg)
@@ -838,6 +853,11 @@ func (m *Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case BackMsg:
 		return m, m.back()
 
+	case actions.ResourceIntentMsg:
+		if !m.resourceIntentMatches(msg.Request) {
+			return m, nil
+		}
+		return m, m.startResourceAction(msg.Request)
 	case actions.ActionIntentMsg:
 		// Only the active, confirmed child intent may reach the executor.
 		if m.actionView == nil || m.actionView.Bulk() || msg.Request.Ref != m.actionView.Ref() ||
@@ -970,6 +990,9 @@ func (m *Root) View() tea.View {
 		f.TitleRight = m.kindSummary(m.route, def.noun)
 		f.Route = m.route.String()
 		f.Hints = def.pane.Hints()
+		if m.route.hasResourceActions() {
+			f.Hints = "a actions  " + f.Hints
+		}
 		f.Body = def.pane.BodyLines(m.deps.clock.Now())
 		f.Status = def.pane.WindowStatus()
 	default:
@@ -1217,6 +1240,7 @@ func (m *Root) back() tea.Cmd {
 		return m.syncSections()
 	case RouteDetail:
 		m.cancelInflight("detail")
+		m.stopComparison()
 		m.stopExplainLog()
 		m.stopEvents()
 		m.detailState.loading = false
@@ -1249,6 +1273,7 @@ func (m *Root) openWorkflow(ref core.Ref) tea.Cmd {
 		// The pane drops another workflow's events, so their cursors go too.
 		m.stopEvents()
 	}
+	m.stopComparison()
 	m.selection = ref
 	m.selGen++
 	m.route = RouteDetail
@@ -1273,6 +1298,7 @@ func (m *Root) openLogs(msg OpenLogsMsg) tea.Cmd {
 	if m.route != RouteLogs {
 		m.logsFrom = m.route
 	}
+	m.stopComparison()
 	m.stopExplainLog()
 	m.stopEvents()
 	// Logs opened from an archived run's detail, or a pod switch inside

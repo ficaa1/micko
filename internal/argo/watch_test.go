@@ -113,12 +113,12 @@ func TestWatchEventsDecodesTheStream(t *testing.T) {
 			}
 			at := func(h, m, s, ns int) time.Time { return time.Date(2026, 9, 8, h, m, s, ns, time.UTC) }
 			p := evs[0]
-			if p.UID != "e1" || p.Type != "Warning" || p.Reason != "BackOff" || p.ObjectKind != "Pod" || p.ObjectName != "wf-main-123" ||
+			if p.ObjectUID != "p1" || p.UID != "e1" || p.Type != "Warning" || p.Reason != "BackOff" || p.ObjectKind != "Pod" || p.ObjectName != "wf-main-123" ||
 				p.Count != 4 || p.Source != "kubelet" || p.Namespace != "ns" || p.ResourceVersion != "501" || p.Deleted ||
 				!p.FirstSeen.Equal(at(11, 0, 0, 0)) || !p.LastSeen.Equal(at(11, 4, 0, 0)) {
 				t.Errorf("pod event = %+v", p)
 			}
-			if w := evs[1]; w.ObjectKind != "Workflow" || w.Reason != "WorkflowFailed" || w.Source != "workflow-controller" {
+			if w := evs[1]; w.ObjectUID != "w1" || w.ObjectKind != "Workflow" || w.Reason != "WorkflowFailed" || w.Source != "workflow-controller" {
 				t.Errorf("workflow event = %+v", w)
 			}
 			if s := evs[2]; s.Count != 9 || s.Source != "kubelet" || !s.FirstSeen.Equal(at(11, 1, 0, 123456000)) || !s.LastSeen.Equal(at(11, 9, 0, 1000)) {

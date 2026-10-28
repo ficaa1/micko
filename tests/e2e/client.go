@@ -23,7 +23,7 @@ import (
 )
 
 // e2eClient carries the production client and what the harness needs to
-// submit and delete the synthetic workflows the product cannot create.
+// submit arbitrary synthetic workflow manifests and poll their lifecycle.
 type e2eClient struct {
 	reader *argo.Client
 	base   string

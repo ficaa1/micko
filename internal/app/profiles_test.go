@@ -203,14 +203,32 @@ func TestEscReturnsToTheSessionAfterAConnection(t *testing.T) {
 	}
 }
 
-func TestAStaleTransportEventCannotMarkTheNewConnectionLost(t *testing.T) {
-	conn := &fakeConnector{}
-	m := profileRoot(t, conn)
-	m.Adopt(mustConnect(t, conn, "dev"))
-	m.connGen = 4
-	m.Update(ConnectionStateMsg{Conn: 3, Ready: false})
-	if !m.connectionReady {
-		t.Fatal("an event from a closed forward marked the live connection lost")
+func TestTransportEventsFollowTheirOwnedConnection(t *testing.T) {
+	for _, c := range []string{"stale generation", "namespace switch", "profile switch"} {
+		t.Run(c, func(t *testing.T) {
+			states := make(chan ConnectionStateMsg, 1)
+			conn := &fakeConnector{states: states}
+			m := profileRoot(t, conn)
+			m.Adopt(mustConnect(t, conn, "dev"))
+			states <- ConnectionStateMsg{Ready: false}
+			messages := runCmd(m.waitConnStates())
+			switch c {
+			case "stale generation":
+				messages = []tea.Msg{ConnectionStateMsg{Conn: -1, Ready: false}}
+			case "namespace switch":
+				runLine(m, "ns reports")
+			case "profile switch":
+				conn.states = nil
+				runLine(m, "profile prod")
+			}
+			for _, msg := range messages {
+				m.Update(msg)
+			}
+			if m.connectionReady != (c != "namespace switch") {
+				t.Fatalf("connection ready=%v after %s", m.connectionReady, c)
+			}
+			m.quit()
+		})
 	}
 }
 

@@ -82,14 +82,14 @@ type eventsRetryMsg struct {
 	Stream int
 }
 
-// syncEvents runs the streams while the Events section is on screen. Leaving
+// syncEvents runs the streams while Events or Explain is on screen. Leaving
 // the section pauses them and keeps their cursors; leaving detail stops them.
 func (m *Root) syncEvents() tea.Cmd {
 	if m.route != RouteDetail || m.detailView == nil {
 		m.stopEvents()
 		return nil
 	}
-	if m.detailView.Section() != shared.SectionEvents {
+	if m.detailView.Section() != shared.SectionEvents && m.detailView.Section() != shared.SectionExplain {
 		m.pauseEvents()
 		return nil
 	}

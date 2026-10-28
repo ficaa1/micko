@@ -1,7 +1,8 @@
 // Package diagnose explains a workflow's outcome from what the workflow
 // itself records: its phase and message, each node's phase, message, exit
 // code and times, the order the pipeline ran in, and, when the caller has
-// read it, the end of the failing pod's log. It is deterministic and local:
+// read it, the end of the failing pod's log and Kubernetes warning events.
+// It is deterministic and local:
 // the same input always gives the same findings, and nothing in it talks to
 // a server or a model.
 //
@@ -131,6 +132,9 @@ type Input struct {
 	// Logs holds one read per failing pod. nil means no log is read at all;
 	// a pod missing here or still loading shows its log as on its way.
 	Logs []Log
+	// Events is nil when the caller does not collect event evidence.
+	Events      []core.Event
+	EventStatus string
 }
 
 // logFor returns the log read for pod, or nil.
@@ -277,6 +281,7 @@ func Explain(in Input) Report {
 			}
 		}
 	}
+	add(eventFindings(in)...)
 	if f, ok := x.workflowSuspended(); ok {
 		add(f)
 	}

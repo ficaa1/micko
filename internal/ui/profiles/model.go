@@ -285,7 +285,7 @@ func (m *Model) emptyLines() []string {
 	if path == "" {
 		path = "~/.config/micko/config.yaml"
 	}
-	lines := []string{"", "no profiles configured", "", "write them to:", "  " + shared.Sanitize(path), "", "a file that connects:"}
+	lines := []string{"", "no profiles configured", "", "run micko --setup to create a profile", "or use --setup --config with this path:", "", "write them to:", "  " + shared.Sanitize(path), "", "a file that connects:"}
 	for _, l := range strings.Split(sampleConfig, "\n") {
 		lines = append(lines, "  "+l)
 	}

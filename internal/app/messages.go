@@ -30,6 +30,11 @@ const (
 	RouteArchived
 )
 
+// hasResourceActions reports whether a opens the cron or template action pane.
+func (r Route) hasResourceActions() bool {
+	return r == RouteCron || r == RouteTemplates || r == RouteClusterTemplates
+}
+
 // String implements fmt.Stringer.
 func (r Route) String() string {
 	switch r {

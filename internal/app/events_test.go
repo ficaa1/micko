@@ -43,7 +43,7 @@ func pump(m *Root, wait time.Duration, cmds ...tea.Cmd) (*Root, []running) {
 						queue = append(queue, start(c))
 					}
 				}
-			case detailLoadedMsg, eventsMsg, eventsDoneMsg, eventsRetryMsg, explainLogMsg, OpenWorkflowMsg:
+			case detailLoadedMsg, eventsMsg, eventsDoneMsg, eventsRetryMsg, explainLogMsg, comparisonMsg, OpenWorkflowMsg:
 				next, c := m.Update(msg)
 				m = next.(*Root)
 				if c != nil {
@@ -326,5 +326,38 @@ func TestEventsCopy(t *testing.T) {
 	got := m.copyText()
 	if !strings.HasPrefix(got, "AGE") || !strings.Contains(got, "Memory cgroup out of memory: Killed process 4127 (python) total-vm:2621440kB, anon-rss:2097152kB") {
 		t.Fatalf("copied:\n%s", got)
+	}
+}
+
+func TestExplainCollectsEventsWithoutOpeningEvents(t *testing.T) {
+	m := resize(t, loadDemoList(t), 140, 40)
+	f := m.deps.reader.(*testkit.FakeReader)
+	for i := 0; i < 20 && m.listView.SelectedRef().Name != "demo-oom-backfill"; i++ {
+		typeKeys(m, "j")
+	}
+	next, cmd := m.Update(key("X"))
+	m, left := pump(next.(*Root), 100*time.Millisecond, cmd)
+	defer m.stopEvents()
+	if f.EventStartCount() != 2 {
+		t.Fatalf("streams = %d", f.EventStartCount())
+	}
+	raw := m.copyText()
+	if !strings.Contains(raw, "Kubernetes reported OOMKilling") || !strings.Contains(raw, "out of memory (OOMKilled") {
+		t.Fatalf("report: %s", raw)
+	}
+	next, cmd = m.Update(key("E"))
+	m, _ = pump(next.(*Root), 100*time.Millisecond, cmd)
+	if f.EventStartCount() != 2 {
+		t.Fatal("switching sections duplicated streams")
+	}
+	next, cmd = m.Update(key("X"))
+	m, _ = pump(next.(*Root), 100*time.Millisecond, cmd)
+	if f.EventStartCount() != 2 {
+		t.Fatal("return to Explain duplicated streams")
+	}
+	m.stopEvents()
+	_, left = resume(m, 100*time.Millisecond, left)
+	if len(left) > 0 {
+		t.Fatal("canceled streams did not end")
 	}
 }

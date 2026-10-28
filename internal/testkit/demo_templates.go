@@ -91,7 +91,7 @@ func demoTemplates(now time.Time) (namespaced, cluster []core.WorkflowTemplate) 
 			CreatedAt:   now.Add(-200 * 24 * time.Hour),
 			Description: "Print a message, the classic first workflow",
 			Entrypoint:  "whalesay",
-			Arguments:   []core.Argument{{Name: "message", Default: "hello world", HasValue: false}},
+			Arguments:   []core.Argument{{Name: "message", Default: "hello world", HasDefault: true}},
 			Templates:   []core.TemplateInfo{tmpl("whalesay", "container")},
 		}),
 	}

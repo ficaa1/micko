@@ -60,6 +60,11 @@ func (m *Model) explainReport() diagnose.Report {
 		in := explainInput(m.state.Outline, m.explainWorkflow(), m.now)
 		// Never nil, so a card whose read has not started says it is coming.
 		in.Logs = append([]diagnose.Log{}, m.ex.logs...)
+		in.Events = make([]core.Event, 0, len(m.ev.byUID))
+		for _, e := range m.ev.byUID {
+			in.Events = append(in.Events, e)
+		}
+		in.EventStatus = m.ev.status
 		m.ex.report = diagnose.Explain(in)
 		m.ex.at, m.ex.stale = m.now, false
 	}

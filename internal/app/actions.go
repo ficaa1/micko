@@ -15,6 +15,7 @@ import (
 )
 
 type actionResultMsg struct {
+	Resource bool
 	genStamp
 	Result core.ActionResult
 	Err    error
@@ -152,6 +153,7 @@ func (x actionExec) record(req core.ActionRequest, result core.ActionResult, err
 		return nil
 	}
 	e := journal.Entry{
+		Kind:      "Workflow",
 		Profile:   x.profile,
 		Server:    x.server,
 		Namespace: req.Ref.Namespace,
@@ -296,9 +298,12 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 	}
 	msg.Result.Outcome = settledOutcome(msg.Result.Outcome, msg.Err)
 	m.actionView.SetOutcome(msg.Result)
+	if msg.Resource {
+		m.actionView.SetReason(errText(msg.Err))
+	}
 	// A finished action closes its pane and reports in the footer of the route
 	// behind it. UNKNOWN stays on screen: the reader must see it.
-	if msg.Result.Outcome == core.ActionUnknown {
+	if msg.Result.Outcome == core.ActionUnknown || (msg.Resource && msg.Result.Outcome == core.ActionRefused) {
 		m.flash = warning
 		return nil
 	}
@@ -310,7 +315,7 @@ func (m *Root) handleActionResult(msg actionResultMsg) tea.Cmd {
 		return m.back()
 	}
 	// A resubmit opens the workflow it started.
-	if next := msg.Result.Affected; msg.Result.Action == core.ActionResubmit && next != nil && next.UID != "" && *next != msg.Result.Target {
+	if next := msg.Result.Affected; (msg.Result.Action == core.ActionResubmit || msg.Result.Action == core.ActionSubmit) && next != nil && next.UID != "" && *next != msg.Result.Target {
 		m.actionFromMarks = false
 		return m.openWorkflow(*next)
 	}
@@ -393,6 +398,9 @@ func (m *Root) handleBulkStep(msg bulkStepMsg) tea.Cmd {
 // afterActionPane drops the marks the action used, so a second a cannot
 // resend them, and refetches the route behind the pane.
 func (m *Root) afterActionPane() tea.Cmd {
+	if m.route.hasResourceActions() {
+		return m.startKindFetch(m.route)
+	}
 	if m.actionFromMarks {
 		m.listView.ClearMarks()
 		m.actionFromMarks = false

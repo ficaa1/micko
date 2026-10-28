@@ -28,9 +28,10 @@ type Event struct {
 	Type    string
 	Reason  string
 	Message string
-	// ObjectKind and ObjectName name the involved object.
+	// ObjectKind, ObjectName and ObjectUID identify the involved object.
 	ObjectKind string
 	ObjectName string
+	ObjectUID  string
 	// Count is how many times the event happened, at least 1.
 	Count int
 	// FirstSeen and LastSeen bound when it happened. LastSeen falls back to

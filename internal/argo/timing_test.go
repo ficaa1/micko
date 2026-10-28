@@ -22,6 +22,8 @@ func TestRequestTimings(t *testing.T) {
 			serveNoGates(w)
 			return
 		}
+		// A measurable wait keeps ttfb above zero on coarse Windows clocks.
+		time.Sleep(2 * time.Millisecond)
 		_, _ = w.Write(page)
 	})
 	var out bytes.Buffer

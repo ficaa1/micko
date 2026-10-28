@@ -34,6 +34,7 @@ type wireEvent struct {
 		CreationTimestamp string `json:"creationTimestamp"`
 	} `json:"metadata"`
 	InvolvedObject struct {
+		UID       string `json:"uid"`
 		Kind      string `json:"kind"`
 		Name      string `json:"name"`
 		Namespace string `json:"namespace"`
@@ -106,6 +107,7 @@ func decodeEvent(raw json.RawMessage) (core.Event, error) {
 		Type:            w.Type,
 		Reason:          w.Reason,
 		Message:         w.Message,
+		ObjectUID:       w.InvolvedObject.UID,
 		ObjectKind:      w.InvolvedObject.Kind,
 		ObjectName:      w.InvolvedObject.Name,
 		Count:           w.Count,

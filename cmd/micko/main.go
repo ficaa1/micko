@@ -8,8 +8,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"charm.land/bubbletea/v2"
@@ -19,6 +22,7 @@ import (
 	"github.com/ficaa1/micko/internal/config"
 	"github.com/ficaa1/micko/internal/journal"
 	"github.com/ficaa1/micko/internal/session"
+	"github.com/ficaa1/micko/internal/setup"
 	"github.com/ficaa1/micko/internal/testkit"
 	"github.com/ficaa1/micko/internal/ui/actions"
 	"github.com/ficaa1/micko/internal/ui/shared"
@@ -29,8 +33,16 @@ func main() {
 }
 
 func run(args []string) int {
+	return runIO(args, os.Stdin, os.Stdout, os.Stderr)
+}
+
+func runIO(args []string, input io.Reader, output, errorOutput io.Writer) int {
 	fs := flag.NewFlagSet("micko", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	fs.SetOutput(errorOutput)
+	setupFlag := fs.Bool("setup", false, "create a named profile interactively (no connection; never enter token values)")
+	check := fs.Bool("check", false, "check workflow read access and exit (requires --profile or --server)")
+	checkTimeout := fs.Duration("check-timeout", 15*time.Second, "total connection check timeout")
+	authMode := fs.String("auth-mode", "", "authentication: server (no bearer token) or token (token source required)")
 	demo := fs.Bool("demo", false, "run against the built-in synthetic demo dataset (no network, no writes)")
 	versionFlag := fs.Bool("version", false, "print version and exit")
 	configPath := fs.String("config", "", "configuration file path")
@@ -51,21 +63,55 @@ func run(args []string) int {
 	fs.Var(&mascot, "mascot", "perch Mićko on the pane, or --mascot=floor to sit him in its bottom corner (terminals of 80x40 and larger)")
 	if err := fs.Parse(args); err != nil {
 		// The flag package already printed the usage error.
+		if err == flag.ErrHelp {
+			return 0
+		}
 		return 2
 	}
 	if *versionFlag {
-		fmt.Printf("micko %s (%s)\n", buildinfo.Version, buildinfo.Commit)
+		fmt.Fprintf(output, "micko %s (%s)\n", buildinfo.Version, buildinfo.Commit)
 		return 0
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "micko: unexpected argument %q\n", fs.Arg(0))
+		fmt.Fprintf(errorOutput, "micko: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
+	if *setupFlag {
+		invalid := false
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name != "setup" && f.Name != "config" {
+				invalid = true
+			}
+		})
+		if invalid {
+			fmt.Fprintln(errorOutput, "micko: --setup accepts only --config")
+			return 2
+		}
+		path := *configPath
+		if path == "" {
+			var err error
+			path, err = config.DefaultConfigPath()
+			if err != nil {
+				fmt.Fprintln(errorOutput, "micko: cannot resolve config path")
+				return 1
+			}
+		}
+		if err := setup.Run(input, output, path); err != nil {
+			fmt.Fprintln(errorOutput, "micko:", err)
+			return 1
+		}
+		return 0
+	}
+	if *check && (*demo || !directConnect(*profile, *server) || *checkTimeout <= 0) {
+		fmt.Fprintln(errorOutput, "micko: --check requires --profile or --server, a positive --check-timeout, and no --demo")
+		return 2
+	}
+
 	// A misspelled skin is a usage error like a misspelled flag: it is
 	// reported before anything connects, with every name that would work.
 	if *skin != "" {
 		if err := shared.CheckSkin(*skin); err != nil {
-			fmt.Fprintln(os.Stderr, "micko: --skin:", err)
+			fmt.Fprintln(errorOutput, "micko: --skin:", err)
 			return 2
 		}
 	}
@@ -87,6 +133,7 @@ func run(args []string) int {
 			ConfigPath:            *configPath,
 			Server:                *server,
 			Namespace:             *namespace,
+			AuthMode:              *authMode,
 			TokenFile:             *tokenFile,
 			CAFile:                *caFile,
 			RefreshInterval:       *refresh,
@@ -96,16 +143,33 @@ func run(args []string) int {
 			Skins:                 shared.SkinNames(),
 			RedactValues:          *redactValues,
 			Mascot:                mascot.spot,
-			Diagnostics:           os.Stderr,
+			Diagnostics:           errorOutput,
 		})
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "micko:", err)
+			if *check {
+				fmt.Fprintln(errorOutput, "check config: Could not read configuration; check YAML, permissions and skin names.")
+			} else {
+				fmt.Fprintln(errorOutput, "micko:", err)
+			}
 			return 1
 		}
 		// The connector owns the port-forward of whatever connection is live.
 		// The model closes the one it replaces on a switch; this closes the
 		// last one on every exit path, including a failed Run.
 		defer connector.Close()
+		if *check {
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer cancel()
+			if *insecure {
+				fmt.Fprintln(errorOutput, "warning: TLS certificate verification is disabled (--insecure-skip-tls-verify).")
+			}
+			result := connector.Check(ctx, *profile, *checkTimeout)
+			fmt.Fprintf(output, "check %s: %s\n", result.Stage, result.Message)
+			if !result.OK {
+				return 1
+			}
+			return 0
+		}
 
 		root = app.NewRoot(nil, clock, "", config.DefaultRefreshInterval, opts)
 		// The journal records write attempts, so only a session that can
@@ -120,7 +184,7 @@ func run(args []string) int {
 		// Before a profile is chosen the picker uses the flag or the file's
 		// top-level skin. Init starts the auto skin's background query.
 		if _, err := root.ApplySkin(connector.Skin()); err != nil {
-			fmt.Fprintln(os.Stderr, "micko:", err)
+			fmt.Fprintln(errorOutput, "micko:", err)
 			return 1
 		}
 
@@ -131,7 +195,7 @@ func run(args []string) int {
 		if directConnect(*profile, *server) {
 			conn, err := connector.Connect(context.Background(), *profile)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "micko:", err)
+				fmt.Fprintln(errorOutput, "micko:", err)
 				return 1
 			}
 			root.Adopt(conn)
@@ -140,7 +204,7 @@ func run(args []string) int {
 	root.SetVersion(buildinfo.Version + " @ " + buildinfo.Commit)
 
 	if _, err := tea.NewProgram(root).Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "micko: %v\n", err)
+		fmt.Fprintf(errorOutput, "micko: %v\n", err)
 		return 1
 	}
 	return 0

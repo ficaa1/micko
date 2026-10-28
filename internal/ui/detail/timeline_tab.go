@@ -30,6 +30,9 @@ func (m *Model) timelineChanged() {
 // showSection makes id the active section, laying the chart out first if
 // it went stale while another section was on screen.
 func (m *Model) showSection(id string) {
+	if id == "compare" && m.tab != "compare" {
+		m.compareFrom = m.tab
+	}
 	m.tab = id
 	if id == "timeline" && m.tlStale {
 		m.rebuildTimeline(m.tlSelectedID())

@@ -1,4 +1,5 @@
-# Copy to ~/.config/micko/config.yaml or select with --config.
+# Create a profile with micko --setup, or copy this file and select with --config.
+# Check read access with micko --check --profile dev.
 # Actions ask for confirmation for each request; --read-only turns them off.
 currentProfile: dev
 refreshInterval: 5s
@@ -42,9 +43,10 @@ profiles:
     # Use https when Argo expects TLS; caFile supplies a custom CA.
     server: http://127.0.0.1:2746
     namespace: workflows
-    # A source is required even for tokenless server auth: leave this
-    # variable unset/empty to send no Authorization header.
+    # token is the default when authMode is omitted; choose exactly one source.
+    authMode: token
     tokenEnv: MICKO_TOKEN
+    # For Argo --auth-mode=server, set authMode: server and omit BOTH sources.
     # Use tokenFile INSTEAD of tokenEnv; the path must be absolute.
     # tokenFile: /absolute/path/to/token
     # caFile: /absolute/path/to/ca.pem

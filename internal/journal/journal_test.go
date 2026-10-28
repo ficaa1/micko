@@ -85,6 +85,7 @@ func TestAFailedAppendIsReturned(t *testing.T) {
 func TestAJournalWithoutAFile(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 	if err := Open().Record(Entry{Verb: "stop"}); err == nil {
 		t.Error("a journal with no state directory reported success")
 	}
@@ -111,6 +112,7 @@ func TestDefaultPath(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Setenv("XDG_STATE_HOME", c.xdg)
 			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
 			got, err := DefaultPath()
 			if err != nil || got != c.want {
 				t.Errorf("DefaultPath() = %q, %v; want %q", got, err, c.want)

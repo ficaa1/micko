@@ -266,6 +266,9 @@ func (c *Client) baseURL() (*url.URL, error) {
 	return &next, nil
 }
 
+// Close releases idle connections after requests have stopped.
+func (c *Client) Close() { c.http.CloseIdleConnections() }
+
 // setAuthorization attaches the bearer credential. An empty token means the
 // deployment authenticates by another means (for example an Argo server run
 // with --auth-mode=server), so no header is sent at all: an empty "Bearer "
@@ -330,9 +333,9 @@ func (c *Client) do(ctx context.Context, req *http.Request, ep endpoint) (*http.
 		// http failure as a certificate problem sends the operator after the
 		// wrong cause; a dead port-forward is the usual real reason.
 		if req.URL != nil && req.URL.Scheme == "https" && isTLSFailure(msg) {
-			return nil, core.ErrUnavailablef("TLS handshake with server failed: %s (check server certificate or configured caFile %s)", sanitizeLine(msg), c.caFileOr("none"))
+			return nil, core.WrapAPIError(core.ErrUnavailable, 0, fmt.Sprintf("TLS handshake with server failed: %s (check server certificate or configured caFile %s)", sanitizeLine(msg), c.caFileOr("none")), err)
 		}
-		return nil, core.ErrUnavailablef("server unreachable: %s", sanitizeLine(msg))
+		return nil, core.WrapAPIError(core.ErrUnavailable, 0, fmt.Sprintf("server unreachable: %s", sanitizeLine(msg)), err)
 	}
 	timer.track(resp)
 	// No redirect hop may ever carry our credentials.
@@ -429,7 +432,7 @@ func mapHTTPError(resp *http.Response, method, path string, body []byte, rawErr 
 	// appear at any status (200 through 503 from SSO gateways). HTML
 	// bodies get unauthenticated-style guidance with the content type
 	// named, never retry-looped.
-	if isHTMLBody(body, resp) {
+	if status != http.StatusForbidden && isHTMLBody(body, resp) {
 		return core.NewAPIError(core.ErrUnauthenticated, http.StatusUnauthorized,
 			"server returned an HTML page instead of API data (content-type "+
 				sanitizeLine(headerGet(resp, "Content-Type"))+
@@ -629,8 +632,10 @@ func (c *Client) List(ctx context.Context, q core.Query) (core.Page, error) {
 	if err != nil {
 		return core.Page{}, core.WrapAPIError(core.ErrProtocol, 0, "list: unparseable response (protocol mismatch; see docs/development.md)", err)
 	}
-	if err := c.markSuspended(ctx, q, &page); err != nil {
-		return core.Page{}, err
+	if !q.SummaryOnly {
+		if err := c.markSuspended(ctx, q, &page); err != nil {
+			return core.Page{}, err
+		}
 	}
 	return page, nil
 }
@@ -710,7 +715,7 @@ const maxBodyBytes = 16 * 1024 * 1024
 func readAllBody(r io.Reader) ([]byte, error) {
 	b, err := io.ReadAll(io.LimitReader(r, maxBodyBytes+1))
 	if err != nil {
-		return b, core.ErrUnavailablef("reading the response body failed: %s", sanitizeLine(err.Error()))
+		return b, core.WrapAPIError(core.ErrUnavailable, 0, fmt.Sprintf("reading the response body failed: %s", sanitizeLine(err.Error())), err)
 	}
 	if len(b) > maxBodyBytes {
 		return b[:maxBodyBytes], core.ErrProtocalf("response body is larger than %d bytes", maxBodyBytes)

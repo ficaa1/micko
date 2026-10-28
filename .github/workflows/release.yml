@@ -22,7 +22,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.25.4"
+  GO_VERSION: "1.27.3"
   # TAG is the release's tag: the pushed one, or v and the version a run by
   # hand was given.
   TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}

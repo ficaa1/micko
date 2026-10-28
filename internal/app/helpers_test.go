@@ -98,7 +98,7 @@ func settle(m *Root, cmd tea.Cmd) {
 		var cmds []tea.Cmd
 		for _, msg := range runCmd(cmd) {
 			switch msg.(type) {
-			case detailLoadedMsg, explainLogMsg, OpenWorkflowMsg:
+			case detailLoadedMsg, explainLogMsg, comparisonMsg, OpenWorkflowMsg:
 				_, c := m.Update(msg)
 				cmds = append(cmds, c)
 			}

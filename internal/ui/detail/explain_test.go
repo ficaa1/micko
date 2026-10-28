@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/diagnose"
@@ -135,7 +136,7 @@ func TestExplainRawReport(t *testing.T) {
 	m := explainModel(t, "demo-nightly-report", 136, 40, true)
 	m.SetTheme(skin(t))
 	raw := m.RawLines()
-	if raw[0] != "Explain demo-nightly-report in demo: Failed after 4m00s" || raw[1] != "1 error · 2 info" || raw[2] != "" {
+	if raw[0] != "Explain demo-nightly-report in demo: Failed after 4m00s" || raw[1] != "1 error · 3 info" || raw[2] != "" {
 		t.Fatalf("report head:\n%s", strings.Join(raw[:3], "\n"))
 	}
 	joined := strings.Join(raw, "\n")
@@ -159,7 +160,7 @@ func TestExplainRawReport(t *testing.T) {
 // The status line counts the findings; j and G scroll; the hints offer the failing log when there is one.
 func TestExplainStatusScrollAndHints(t *testing.T) {
 	m := explainModel(t, "demo-nightly-report", 76, 12, true)
-	if s := m.explainStatusLine(); !strings.HasPrefix(s, "explain · 1 error · 2 info · 1/") {
+	if s := m.explainStatusLine(); !strings.HasPrefix(s, "explain · 1 error · 3 info · 1/") {
 		t.Errorf("status %q", s)
 	}
 	press(m, "j")
@@ -168,7 +169,7 @@ func TestExplainStatusScrollAndHints(t *testing.T) {
 	}
 	press(m, "G")
 	lines := m.BodyLines()
-	if last := lines[len(lines)-1]; !strings.Contains(last, "Nothing to do: it ran after the workflow failed.") {
+	if last := lines[len(lines)-1]; !strings.Contains(last, "available.") {
 		t.Errorf("G does not show the end: %q", last)
 	}
 	if h := m.Hints(); !strings.Contains(h, "y copy report") || !strings.Contains(h, "l failing log") {
@@ -310,5 +311,71 @@ func TestExplainGolden(t *testing.T) {
 			b.WriteString(strings.Join(m.BodyLines(), "\n") + "\n")
 		}
 		golden(t, "explain-"+strconv.Itoa(width), b.String())
+	}
+}
+
+func TestExplainEventEvidence(t *testing.T) {
+	for _, c := range []struct {
+		name, kind, objectUID, namespace string
+		old, unknown, late               bool
+		want                             bool
+	}{
+		{name: "verified pod", kind: "Pod", namespace: "demo", want: true},
+		{name: "workflow UID", kind: "Workflow", objectUID: "uid", namespace: "demo", want: true},
+		{name: "replacement", kind: "Workflow", objectUID: "other", namespace: "demo"},
+		{name: "missing UID", kind: "Workflow", namespace: "demo"},
+		{name: "other namespace", kind: "Pod", namespace: "other"},
+		{name: "before run", kind: "Pod", namespace: "demo", old: true},
+		{name: "after run", kind: "Pod", namespace: "demo", late: true},
+		{name: "unverified pod", kind: "Pod", namespace: "demo", unknown: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			for _, width := range []int{40, 80, 140} {
+				m := New()
+				m.SetTheme(shared.NewTheme(true))
+				m.SetSize(width, 20)
+				at := testkit.FixtureEpoch
+				wf := core.Workflow{Summary: core.Summary{Ref: core.Ref{Namespace: "demo", Name: "run", UID: "uid"}, Phase: "Running", CreatedAt: at.Add(-time.Minute)}, NodesAvailable: true, Nodes: map[string]core.Node{"step": {ID: "step", Name: "run.step", DisplayName: "step", Type: "Pod", Phase: "Pending", PodName: "run-pod"}}}
+				if c.late {
+					finish := at.Add(-time.Second)
+					wf.Summary.FinishedAt = &finish
+				}
+				m.SetWorkflow(wf, at)
+				m.SetSection("explain")
+				object := "run-pod"
+				if c.kind == "Workflow" {
+					object = "run"
+				}
+				if c.unknown {
+					object = "run-unknown"
+				}
+				if c.old {
+					at = at.Add(-time.Hour)
+				}
+				e := core.Event{UID: "event", Namespace: c.namespace, ObjectKind: c.kind, ObjectName: object, ObjectUID: c.objectUID, Type: "Warning", Reason: "FailedScheduling", Message: "0/3 nodes: insufficient memory\x1b[2J", FirstSeen: at, LastSeen: at, Count: 3}
+				m.ApplyEvents([]core.Event{e})
+				m.SetEventsStatus("reconnecting", true)
+				raw := strings.Join(m.RawLines(), "\n")
+				if strings.Contains(raw, "Kubernetes reported FailedScheduling") != c.want {
+					t.Fatalf("at width %d: %s", width, raw)
+				}
+				if c.want && (!strings.Contains(raw, "insufficient memory") || !strings.Contains(raw, "2026-09-08T12:00:00Z") || strings.Contains(raw, "\x1b")) {
+					t.Fatalf("unsafe or missing evidence: %s", raw)
+				}
+				if !strings.Contains(raw, "reconnecting") || !strings.Contains(raw, "Running") {
+					t.Fatalf("coverage suppresses findings: %s", raw)
+				}
+				before := raw
+				m.ApplyEvents([]core.Event{e})
+				if strings.Join(m.RawLines(), "\n") != before {
+					t.Fatal("replay changes report")
+				}
+				for _, line := range m.BodyLines() {
+					if cellWidth(line) > width {
+						t.Fatalf("wide line: %q", line)
+					}
+				}
+			}
+		})
 	}
 }

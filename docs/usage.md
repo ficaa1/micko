@@ -6,7 +6,26 @@ listed in [keybindings](keybindings.md); every config key is in
 
 ## Connect
 
-Copy [the example config](micko.config.example.yaml) to
+Run `micko --setup` to create a named profile, or
+`micko --setup --config PATH` to choose the config file. The guide supports
+direct endpoints and managed `kubectl` forwarding, workflow and service
+namespaces, server or token authentication, and an optional PEM CA bundle.
+It validates locally and makes no cluster requests. Enter only a token
+environment variable name or an absolute token file path, never the token
+itself. It does not read token values. Type `:cancel`, send EOF (Ctrl+D on
+POSIX terminals), or decline the final `yes` confirmation to leave the
+config untouched. Ctrl+C exits before saving when still answering prompts.
+
+Setup appends a profile and refuses existing names. Existing profiles,
+unknown YAML fields and comments are retained; formatting may change.
+YAML merges at the top level or in the profiles map, aliased profiles maps,
+multiple YAML documents and symlink config files require manual editing.
+New directories use mode `0700` and config files `0600` on POSIX; existing
+directories retain their permissions. Saves use a temporary file and rename,
+with a `.lock` file preventing simultaneous setup saves. If a crashed setup
+leaves a lock, remove it only after confirming no setup is running.
+
+Alternatively, copy [the example config](micko.config.example.yaml) to
 `~/.config/micko/config.yaml` and edit it for your cluster. One profile per
 cluster:
 
@@ -37,21 +56,51 @@ used as it is.
 micko reads `$XDG_CONFIG_HOME/micko/config.yaml`, then
 `~/.config/micko/config.yaml`, then the OS user config directory, and uses the
 first that exists; `--config PATH` names one. With no config file the picker
-shows the path to write and a sample profile.
+shows `micko --setup`, the config path and a sample profile.
 
 ### Authentication and TLS
 
-Set exactly one of `tokenEnv` (an environment variable name) or `tokenFile`
-(an absolute path); it is read for each request. For Argo's server auth mode,
-keep `tokenEnv: MICKO_TOKEN` and leave the variable empty: an empty token
-sends no Authorization header. For client auth, supply a bearer token Argo
-accepts; the Kubernetes context does not provide one, and there is no
-interactive SSO login.
+For Argo's server auth mode, set `authMode: server` and omit `tokenEnv` and
+`tokenFile`: no Authorization header is sent and no dummy variable is needed.
+For bearer authentication use `authMode: token` (the default when omitted)
+and exactly one of `tokenEnv` (an environment variable name) or `tokenFile`
+(an absolute path). Tokens are read on every request so rotation works.
+The Kubernetes context does not provide an Argo bearer token, and there is
+no interactive SSO login. `--auth-mode` overrides the profile's mode, but
+server mode still rejects any configured token source.
 
-HTTPS verifies certificates; `--ca-file` adds a CA, and
+HTTPS verifies certificates; `caFile` or `--ca-file` selects a PEM CA bundle, and
 `--insecure-skip-tls-verify` turns verification off for one run with a
 warning. Plain HTTP is allowed only to loopback addresses, and redirects are
 rejected. Never put a literal token in a command line or a committed config.
+
+### Connection check
+
+```sh
+micko --check --profile dev
+micko --config /path/to/config.yaml --check --profile dev --check-timeout 30s
+micko --config /path/to/empty.yaml --check --server https://argo.example.com --namespace workflows --auth-mode server
+```
+
+The check uses the production session and Argo workflow list reader, requests
+one page with limit 1 in the configured namespace, and performs only GETs.
+Managed
+forwarding starts an owned `kubectl` child and closes it on completion;
+HTTP connections are closed too. The default 15-second deadline covers
+forward readiness, TLS and response reads; `--check-timeout` must be positive.
+Ctrl+C cancels a running check. No action journal is opened and config is
+not written. Name a profile or a server explicitly; `currentProfile` alone
+is not enough for a check.
+
+The output identifies configuration, forwarding, endpoint/network, TLS,
+authentication (401 or login interception), permission (403), or other API
+failures, with local next steps. Upstream bodies and token values are never
+printed. An endpoint answering 401 or 403 is reachable but does not grant
+the requested read access. Exit status is 0 for successful read access,
+1 for failed checks or configuration, and 2 for invalid CLI usage.
+Success covers workflow reads in that namespace only; it establishes no
+write permissions or deployment compatibility. Managed forwarding verifies
+TLS against its loopback host, so the certificate must cover that address.
 
 ## Features
 
@@ -97,6 +146,26 @@ cancels the edit. The toolbar shows the filter as it was read, such as
 `phase=Failed & age<2h`. `p` cycles a phase filter. Filtering and sorting run
 on the collected snapshot, not on the server.
 
+### Saved views
+
+`:view-save NAME` saves the current profile, namespace (or all namespaces),
+workflow query, phase filter and sort. Names can contain spaces and are
+case-sensitive; saving the same name replaces it. `:views` lists names,
+`:view NAME` reconnects to its profile (even when already connected) and
+restores the scope, and
+`:view-delete NAME` removes it. Tab completes names. A missing profile is
+reported without changing the current connection. Return to `:wf` before
+saving a drill-down. Filter history remains local to the session.
+
+Views are stored atomically in `$XDG_STATE_HOME/micko/views.json`, or
+`~/.local/state/micko/views.json` (the user config directory on Windows),
+with private permissions (Windows uses the account directory ACLs). They
+contain no credentials or workflow objects;
+query text is stored as entered, so avoid putting secrets in queries. A
+corrupt file is reported and preserved for recovery. A `.lock` directory
+prevents concurrent updates; after an interrupted write, remove it only
+when no micko is saving views. Demo mode disables saved views.
+
 ### Nodes
 
 The Nodes tab draws the workflow the way it runs, not the way the controller
@@ -133,9 +202,9 @@ folds, `i` opens the same info panel and
 
 ### Explain
 
-`X` says why the workflow ended the way it did, as findings built from what
-it records and nothing else: no network service, no model, the same answer
-every time. Each finding is a card with a severity (`✗ ERROR`, `▲ WARNING`,
+`X` explains the workflow through fixed local rules using its recorded state,
+collected logs and Kubernetes events. The same input produces the same report,
+with no model. Each finding is a card with a severity (`✗ ERROR`, `▲ WARNING`,
 `◇ INFO`), a headline, the evidence and a next step.
 
 The rules find the node that failed first, not the groups that failed because
@@ -152,6 +221,60 @@ eight: error lines, whole tracebacks and the line before each. `y` copies the
 report as plain text for an incident channel, and `l` opens the failing pod's
 full log. With more than one failure, `n`/`N` pick the card `l` opens; the
 picked card's rule is drawn heavy (`┃`).
+
+#### Kubernetes event evidence
+
+Opening `X` also opens the same bounded event streams used by `E`; switching
+between them shares collection. Explain quotes up to 20 warning events with
+UTC times, reason, message and count, alongside the workflow and log findings.
+Workflow events require the involved object's UID to match. Pod events require
+a unique verified pod name and an event time within the run's recorded lifetime
+(the later workflow/node finish bounds completed runs); node
+status does not provide a pod UID, and each pod card states this limit.
+A warning is an observation at its timestamp, not proof a condition persists.
+The report's coverage card includes connection/permission status and omitted
+warnings. Collection retains at most 2,000 candidate events; expired, absent or
+unverified events never establish that no problem occurred. `r` restarts stopped
+streams and `y` copies this evidence and its limits with the existing report.
+
+### Compare with last success
+
+Press `C` in an open run, select the Compare tab (`7`), or run `:compare`
+from the workflow list or an open run. Compare shows the baseline and selected
+namespace/name/UID, changed workflow input parameters, whole-run status and
+duration, added/missing steps, step status, retry counts and duration differences.
+All arrows read **baseline → selected**. `j`/`k`, page keys, `home` and `G`
+scroll; `y` copies the report, `v` hides/reveals values, `r` refreshes the run
+and repeats the baseline search. `esc` returns to the previous run section;
+a second `esc` returns to the list. The feature is read-only, including in demo.
+
+The search uses the run's lineage labels, preferring CronWorkflow, then
+WorkflowTemplate, then ClusterWorkflowTemplate. It compares only the same
+namespace and lineage kind/name. A baseline must have a UID, have succeeded,
+and have been created and finished before the selected run was created.
+The most recently created eligible run wins. No lineage or no qualifying
+success produces an explicit no-baseline notice; it never falls back to an
+unrelated workflow. Lineage names are labels, not a guarantee that a template
+or cron object has kept the same specification or UID across runs.
+
+Only live runs are searched, even when the selected run is archived. The
+search reads up to three pages of 100 summaries, fetches one baseline detail,
+and times out after 20 seconds. Pagination limits, repeated tokens and incomplete
+searches are disclosed; an incomplete search's baseline is the newest eligible
+run **among inspected candidates**, not a claim about all history. The adapter
+omits its suspended-node scan for this search, so candidates do not download
+node maps. Archive-only successes are currently outside the search.
+
+Steps match by task path, step-group position, node type and template identity,
+including external template scope when recorded. Per-run node IDs do not match
+steps. Duplicate positions, unplaced nodes, fanout instances and individual retry
+attempts are marked ambiguous and get no fabricated alignment; Retry parents
+show aggregate counts. A task changing between a Pod and Retry wrapper appears
+as added/missing. At most 300 positions appear. Unavailable node maps and missing
+times remain explicit, and running durations are labelled elapsed. Comparison
+never includes node output values; hidden input values stay hidden in copy too.
+Try `:cron`, open `demo-etl-hourly`, open the failed demo run and press `C` to
+compare its quality check and batch input with the previous success.
 
 ### Logs
 
@@ -198,6 +321,22 @@ controller's conditions and the arguments each run gets.
 entrypoint, template and parameter counts, age and description; `i` lists
 every argument and template. On all three, `enter` lists the workflows that
 row started, `v` hides or reveals values and `f` shows the manifest.
+Press `a` (or `:actions`) on the list or its info panel for actions: `g`
+submits a template or runs a cron workflow now; cron also offers `z` suspend
+and `u` resume. A cluster template submits into the session namespace shown
+in confirmation (change it with `:ns NAME`); other resources submit into
+their own namespace, including from an all-namespaces list.
+
+Submission confirmation uses `↑`/`↓`, `e`, `enter` and `esc` to edit parameter
+overrides, just like resubmit. Required parameters must be supplied; only
+edited values are sent. With values hidden, edits start empty and remain
+redacted on screen. Artifact overrides, arbitrary manifests, entrypoint and
+service-account overrides are not offered. Running a cron workflow now does
+not change its schedule or suspend state, and suspend/resume leave active
+runs running. Every action checks the originating resource identity before
+sending once. A successful submission opens the new workflow; `UNKNOWN`
+stays on screen and must be inspected before trying again. Read-only and
+demo modes refuse these actions too.
 
 `:aw` lists the workflow archive, newest first, including runs already gone
 from the cluster. `enter` opens one in the detail view; actions apply to live
@@ -245,7 +384,10 @@ outcome until you close it.
 
 Every write attempt, refused ones included, adds one JSON line to
 `~/.local/state/micko/actions.jsonl` (under `$XDG_STATE_HOME` when set):
-time, profile, server, namespace, name, UID, verb, outcome and error. Set
+time, profile, server, resource kind, namespace, name, UID, verb, outcome and
+error. Resource submissions also record the destination namespace, without
+parameter values; server errors for these actions are summarized to avoid
+recording echoed input. Set
 `journal: false` to turn it off. A journal that cannot be written never
 blocks an action.
 
@@ -326,12 +468,16 @@ the floor.
 
 | Flag | Purpose |
 | --- | --- |
+| `--setup` | Guide creation of a profile; accepts only `--config` alongside it |
+| `--check` | Check workflow read access and exit; requires `--profile` or `--server` |
+| `--check-timeout DURATION` | Bound the complete check, default `15s` |
+| `--auth-mode server\|token` | Override authentication mode; server sends no bearer token |
 | `--config PATH` | Select the configuration file |
 | `--profile NAME` | Connect to this profile instead of opening the picker |
 | `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
 | `--token-file PATH`, `--ca-file PATH` | Override the credential file or CA bundle |
 | `--refresh-interval DURATION` | Poll interval, default `5s`, from `1s` to `10m` |
-| `--read-only` | Turn off workflow actions |
+| `--read-only` | Turn off all write actions |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--redact-values` | Open every workflow with parameter and output values hidden |
 | `--skin NAME` | Colour skin, overriding the config file |
@@ -344,6 +490,7 @@ the floor.
 
 ## Limits and troubleshooting
 
+- Run `micko --check --profile NAME` to diagnose first-connection failures.
 - Startup errors name the missing or invalid setting, never a secret.
 - A 401 means the token or Argo's auth mode; a 403 means access to the
   namespace. The server's permissions always decide what an action may do.
@@ -353,11 +500,14 @@ the floor.
 - Parameter and output values are shown. Set `redactValues: true` in the
   config or on a profile, or pass `--redact-values`, to hide them until `v`.
   Logs, copied text and pipe output can still contain sensitive data.
-- micko cannot submit workflows, edit parameters other than a resubmit's,
-  or suspend, resume or submit cron workflows and templates.
-- Argo's action endpoints address workflows by name, so a same-name
-  replacement between micko's identity check and the write is possible.
+- Submission starts from WorkflowTemplates, ClusterWorkflowTemplates and
+  CronWorkflows; arbitrary workflow creation and artifact overrides are not offered.
+- Argo's action and submission endpoints address resources by name, so a
+  same-name replacement between the identity check and write is possible.
 - Tested live against Argo Workflows v4.1.2 on macOS arm64, through
   `kubectl port-forward` to an Argo Server in server auth mode without TLS.
-  A direct connection with a bearer token is untested. The Windows release
-  is untested, and log piping needs `/bin/sh`.
+  The optional
+  [disposable compatibility runner](development.md#disposable-deployment-compatibility)
+  exercises direct HTTPS with a private CA and bearer authentication, plus
+  managed forwarding. Windows CI covers build, unit tests and HTTP fixture
+  journeys; Windows PTY and live clusters remain untested. Log piping needs `/bin/sh`.

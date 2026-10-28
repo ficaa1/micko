@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Package connected runs the managed port-forward and the production Argo
 // client together against a fake kubectl and a synthetic Argo server. It
 // never touches a real cluster: every endpoint is loopback-only.
@@ -18,7 +20,7 @@ import (
 // script emits the supplied lines in order, one per invocation, so a test can
 // stage a failed first attempt followed by a successful one.
 //
-// The script is POSIX sh, so the suite runs on every machine that runs Go.
+// The script requires a POSIX shell; Windows is covered by unit and HTTP fixture suites.
 //
 // Each element of scripts is the body for one invocation. A body that does not
 // exit keeps the fake process alive, which is what a healthy forward looks

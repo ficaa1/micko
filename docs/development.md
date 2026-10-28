@@ -37,7 +37,8 @@ access for managed forwarding goes through `kubectl`.
 | Package | Responsibility |
 | --- | --- |
 | `cmd/micko` | Flags, config, connection setup and process lifecycle |
-| `internal/config`, `internal/portforward` | Profile validation and owned port-forward recovery |
+| `internal/config`, `internal/setup` | Profile validation, guided creation and YAML-preserving persistence |
+| `internal/session`, `internal/portforward` | Connection ownership, bounded read-only checks and port-forward recovery |
 | `internal/core` | Reader, Watcher and Actioner interfaces, the optional listers of the other kinds and the archive; workflow, cron workflow and template types and errors |
 | `internal/cronexpr` | The controller's cron dialect: parsing and next run times in a time zone |
 | `internal/argo` | REST transport, pagination, watch/log parsing, pod resolution and mutations |
@@ -102,6 +103,19 @@ live in [ci.yml](../.github/workflows/ci.yml).
   action is a sequence of single requests, each with its own preflight and
   read-back. Every attempt is appended to the action journal
   (`internal/journal`), whose failures are reported and never block a write.
+- Template and cron mutations use `core.ResourceReader` for identity
+  preflight and `core.ResourceActioner` for a single send. Submissions use
+  POST `/api/v1/workflows/{namespace}/submit` with `resourceKind`,
+  `resourceName` and `submitOptions.parameters`; cron suspend/resume use
+  PUT `/api/v1/cron-workflows/{namespace}/{name}/{suspend|resume}`.
+  Originating resource identity and workflow destination are distinct for
+  cluster templates. A subsequent read promotes ACCEPTED to CONFIRMED;
+  ambiguous writes remain UNKNOWN and are never resent. These contracts
+  are verified against the pinned upstream
+  [workflow protobuf](https://github.com/argoproj/argo-workflows/blob/v4.1.2/pkg/apiclient/workflow/workflow.proto),
+  [cron protobuf](https://github.com/argoproj/argo-workflows/blob/v4.1.2/pkg/apiclient/cronworkflow/cron-workflow.proto),
+  [submit options](https://github.com/argoproj/argo-workflows/blob/v4.1.2/pkg/apis/workflow/v1alpha1/common.go)
+  and [submission handler](https://github.com/argoproj/argo-workflows/blob/v4.1.2/server/workflow/workflow_server.go).
 - A workflow counts as suspended when it holds a running Suspend node or has
   not finished and has `spec.suspend` set, the two states Argo's resume clears.
   The list projection carries `spec.suspend`; the gate scan adds the node half.
@@ -113,6 +127,21 @@ live in [ci.yml](../.github/workflows/ci.yml).
   values are shown unless the profile sets `redactValues` or the session was
   started with `--redact-values`. These controls do not guarantee that
   arbitrary application logs contain no secrets.
+
+Explain and Events share one pair of cancelable event streams per selected
+workflow. `diagnose.Input` accepts event snapshots and collection status; its
+warning cards require workflow UID identity or a unique verified pod name plus
+a creation-time bound. Event order, replay replacement and eviction ties are
+deterministic. Event coverage is additive to workflow and log rules.
+
+Compare uses `core.Query.SummaryOnly` to skip the list adapter's supplemental
+suspended-node scan. Its baseline search is namespace/lineage scoped, bounded
+by three pages, 300 summaries and a 20-second context; only the selected baseline
+gets a detail GET. Async replies must match connection/selection generations,
+request ID and full workflow identity. The detail pane reuses the production
+outline and report renderer for path matching, scrolling, sanitization and
+redacted clipboard output. Retry/fanout instances have explicit ambiguous
+alignment; template scope and step-group indexes qualify stable task paths.
 
 The adapter and fixtures target Argo Workflows v4.1.2. See the
 [usage guide](usage.md#limits-and-troubleshooting) for the scope of recorded
@@ -150,9 +179,10 @@ shell; in PowerShell set `$env:NAME` before running the command.
 | Suite | Scope and prerequisites |
 | --- | --- |
 | Default `go test ./...` | Package tests, production-adapter HTTP fixtures and connected-path regressions |
-| `tests/connected` | The managed port-forward and the production client against a POSIX sh fake kubectl and a synthetic server |
+| `tests/connected` | POSIX-only managed port-forward and production client against a sh fake kubectl and a synthetic server |
 | `tests/integration` | Tagged root-model journeys over the production client against a fixture server, and real-binary PTY tests |
-| `tests/e2e` | Tagged tests with an explicit gate for the real-cluster submit/list/detail/delete journey |
+| `tests/e2e` | Tagged tests with an explicit gate for the external-cluster submit/list/detail/delete journey |
+| `tests/compat` | `compat`-tagged deployment journeys provisioned by `scripts/compat/argo.sh`; Docker, kind, kubectl, curl, OpenSSL, Python 3 and Go required |
 
 PTY helpers are provided for Linux and macOS; terminal availability can cause
 skips. Inspect test output before claiming that a suite exercised every path.
@@ -162,7 +192,36 @@ skips. Inspect test output before claiming that a suite exercised every path.
 [performance.md](performance.md) covers the request timings of `--debug`, the
 scripted sessions in `scripts/perf` and the benchmarks.
 
-## Real-cluster tests
+## Disposable deployment compatibility
+
+Run `scripts/compat/argo.sh --check` to check prerequisites, then
+`scripts/compat/argo.sh` from a Linux or macOS host with Docker running
+(on macOS, Docker Desktop must expose loopback-published ports). The runner
+creates a uniquely named kind cluster with its own temporary kubeconfig, never
+touches an existing cluster, and deletes the cluster and its temporary state
+on exit, including after a failure. A forced kill cannot run the trap; remove
+a leftover cluster with `kind delete cluster --name NAME` using the printed
+`micko-compat-...` name.
+
+The runner applies the official Argo v4.1.2 release `install.yaml` only after
+its SHA-256 matches the value pinned in `argo.sh`, on kind v0.33.0's
+Kubernetes v1.37.0 node image. The tests in `tests/compat` go through the
+production `session.Connector`, both over direct HTTPS and through the managed
+kubectl port-forward, and cover TLS and token failures, template submission,
+cron run-now and suspend/resume, and list, detail and delete. Artifact stores,
+archive persistence, SSO and a Windows terminal are outside the suite.
+
+CI runs this on a manual `workflow_dispatch` with `deployment_compatibility`;
+it needs no secrets. Routine CI runs `scripts/compat/test_runner.py`, which
+drives the runner against fake tools to check isolation and cleanup, not Argo
+compatibility. Without the runner, `go test -tags=compat ./tests/compat/...`
+skips.
+
+CI on Windows runs the build and startup smoke, the unit tests and the
+fixture-server journeys. PTY, managed forwarding and live-cluster tests are
+POSIX-only, and log piping needs `/bin/sh`.
+
+## External-cluster tests
 
 Use a disposable Argo environment and a dedicated namespace. The E2E journey
 creates and deletes workflows; it is not a read-only smoke test. Provision the
@@ -186,13 +245,14 @@ it is not evidence of a live pass. The gate's own tests still run.
 
 The journey lists, reads and deletes through the production client,
 `internal/argo.Client`; the harness submits the fixture and polls its phase with
-its own requests, because the product cannot submit workflows. The fixture uses
+its own requests, for arbitrary workflow-manifest fixtures; product submission starts from templates or cron workflows. The fixture uses
 `generateName`, and every step addresses the name the server assigned. The
 cleanup delete, which runs even when a step fails, goes by that name without
 checking ownership labels or UID. Use an isolated, disposable namespace with no
 existing workflows; fixtures under `tests/e2e/testdata` are synthetic.
 
-CI runs format, vet, unit, integration, race and build checks. E2E runs only on
-manual workflow dispatch with `E2E_ALLOWLIST_B64` configured. Installing kind
-and kubectl in that job does not provision a cluster; the allowlisted endpoint
-must already be reachable from the runner.
+CI runs format, vet (including integration, E2E and compatibility tags),
+unused-code staticcheck, unit, integration, race and build checks. External E2E
+requires the manual `external_e2e` dispatch input and `E2E_ALLOWLIST_B64`;
+requesting it without a secret fails. The allowlisted endpoint must already
+be reachable. It remains separate from the self-provisioning deployment job.
