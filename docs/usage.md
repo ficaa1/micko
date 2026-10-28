@@ -160,7 +160,8 @@ saving a drill-down. Filter history remains local to the session.
 
 Views are stored atomically in `$XDG_STATE_HOME/micko/views.json`, or
 `~/.local/state/micko/views.json` (the user config directory on Windows),
-with private permissions. They contain no credentials or workflow objects;
+with private permissions (Windows uses the account directory ACLs). They
+contain no credentials or workflow objects;
 query text is stored as entered, so avoid putting secrets in queries. A
 corrupt file is reported and preserved for recovery. A `.lock` directory
 prevents concurrent updates; after an interrupted write, remove it only
@@ -477,7 +478,7 @@ the floor.
 | `--server URL`, `--namespace NAME` | Override the profile endpoint or workflow namespace |
 | `--token-file PATH`, `--ca-file PATH` | Override the credential file or CA bundle |
 | `--refresh-interval DURATION` | Poll interval, default `5s`, from `1s` to `10m` |
-| `--read-only` | Turn off workflow actions |
+| `--read-only` | Turn off all write actions |
 | `--insecure-skip-tls-verify` | Disable TLS certificate verification |
 | `--redact-values` | Open every workflow with parameter and output values hidden |
 | `--skin NAME` | Colour skin, overriding the config file |
@@ -506,5 +507,8 @@ the floor.
   same-name replacement between the identity check and write is possible.
 - Tested live against Argo Workflows v4.1.2 on macOS arm64, through
   `kubectl port-forward` to an Argo Server in server auth mode without TLS.
-  A direct connection with a bearer token is untested. The Windows release
-  is untested, and log piping needs `/bin/sh`.
+  The optional
+  [disposable compatibility runner](development.md#disposable-deployment-compatibility)
+  exercises direct HTTPS with a private CA and bearer authentication, plus
+  managed forwarding. Windows CI covers build, unit tests and HTTP fixture
+  journeys; Windows PTY and live clusters remain untested. Log piping needs `/bin/sh`.

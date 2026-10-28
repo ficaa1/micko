@@ -180,9 +180,10 @@ shell; in PowerShell set `$env:NAME` before running the command.
 | Suite | Scope and prerequisites |
 | --- | --- |
 | Default `go test ./...` | Package tests, production-adapter HTTP fixtures and connected-path regressions |
-| `tests/connected` | The managed port-forward and the production client against a POSIX sh fake kubectl and a synthetic server |
+| `tests/connected` | POSIX-only managed port-forward and production client against a sh fake kubectl and a synthetic server |
 | `tests/integration` | Tagged root-model journeys over the production client against a fixture server, and real-binary PTY tests |
-| `tests/e2e` | Tagged tests with an explicit gate for the real-cluster submit/list/detail/delete journey |
+| `tests/e2e` | Tagged tests with an explicit gate for the external-cluster submit/list/detail/delete journey |
+| `tests/compat` | `compat`-tagged deployment journeys provisioned by `scripts/compat/argo.sh`; Docker, kind, kubectl, curl, OpenSSL, Python 3 and Go required |
 
 PTY helpers are provided for Linux and macOS; terminal availability can cause
 skips. Inspect test output before claiming that a suite exercised every path.
@@ -192,7 +193,114 @@ skips. Inspect test output before claiming that a suite exercised every path.
 [performance.md](performance.md) covers the request timings of `--debug`, the
 scripted sessions in `scripts/perf` and the benchmarks.
 
-## Real-cluster tests
+## Disposable deployment compatibility
+
+Run `scripts/compat/argo.sh --check` to check prerequisites, then
+`scripts/compat/argo.sh` from a Linux or macOS host with Docker running.
+Docker Desktop must expose loopback-published ports on macOS. The runner
+creates a uniquely named kind cluster with its own temporary kubeconfig;
+every kubectl call explicitly names that context and file. It creates
+`argo` and `micko-compat` namespaces in that cluster, labels the workload
+fixtures, and deletes the cluster and private temporary state on exit,
+including setup or test failure. It never selects or changes an existing
+cluster. A forced process kill or host failure cannot run a shell trap;
+remove a leftover cluster with `kind delete cluster --name NAME` using the
+printed `micko-compat-...` name.
+
+The runner pins the official Argo **v4.1.2 release asset** `install.yaml`
+by SHA-256 (`adac8370b9c0470acd3a71cf4139d40d7b8e995a774c1a639864b3db0e601a83`).
+The tag resolves to commit `16a52d67daf2f4a8a76fa8bec02a76a46aa46257`.
+It uses the release's versioned server/controller images; the source-tree
+quick-start manifest contains `latest` images and is not used. Kubernetes
+uses kind v0.33.0's published v1.37.0 node image and digest. Sources:
+[Argo release](https://github.com/argoproj/argo-workflows/releases/tag/v4.1.2),
+[kind release and node digest](https://github.com/kubernetes-sigs/kind/releases/tag/v0.33.0).
+No downloaded manifest is applied until its checksum matches.
+
+The server runs in client auth mode with a short-lived locally issued CA and
+IP-valid TLS certificate. Service-account bearer tokens live only in private
+temporary files. The tests use the production `session.Connector` and Argo
+transport for direct HTTPS through a loopback NodePort, and separately through
+the app's managed kubectl port-forward. They verify the pinned server version,
+CA rejection, missing/invalid token (401), a token with no namespace access
+(403), both template submissions, cron run-now and suspend/resume, completion,
+parameter delivery in logs, list/detail identity, deletion, and closing the
+managed listener. Cleanup checks workflow UID and fixture ownership before
+removing an individual run; cluster deletion is the final boundary. Artifact
+stores, archive persistence, SSO and a Windows terminal are outside this suite.
+A live failure fails the job; a requested deployment run cannot succeed by
+skipping for a missing secret or endpoint.
+
+CI's manual `workflow_dispatch` input `deployment_compatibility` provisions
+this environment on its own; it needs no repository secrets or external
+cluster. Routine CI checks the runner's shell syntax and runs fake-tool
+setup/cleanup tests, including setup, checksum and journey failure:
+
+```sh
+bash -n scripts/compat/argo.sh
+curl -fsSL https://github.com/argoproj/argo-workflows/releases/download/v4.1.2/install.yaml -o /tmp/argo-v4.1.2-install.yaml
+python3 scripts/compat/test_runner.py /tmp/argo-v4.1.2-install.yaml
+```
+
+These fake-tool checks verify isolation and cleanup; they do not establish
+Argo deployment compatibility. `go test -tags=compat ./tests/compat/...`
+without the runner reports an explicit skip and is compile/gate validation
+only.
+
+### Recorded local validation
+
+On 2026-10-28 in the Hermes Linux LXC, these checks passed:
+
+```sh
+gofmt -l .
+git diff --check
+go test ./...
+go test -race ./... -count=1
+go test -tags integration ./tests/... -count=1 -v
+go vet ./...
+go vet -tags integration ./...
+go vet -tags e2e ./...
+go vet -tags compat ./...
+go run honnef.co/go/tools/cmd/staticcheck@latest -checks U1000 -tags integration,e2e,compat ./...
+GOOS=windows GOARCH=amd64 go build -o /tmp/micko-compat-windows.exe ./cmd/micko
+GOOS=windows GOARCH=amd64 go test -exec=true -tags=integration,e2e,compat ./...
+bash -n scripts/compat/argo.sh
+/tmp/shellcheck-v0.11.0/shellcheck scripts/compat/argo.sh
+python3 scripts/compat/test_runner.py /tmp/micko-argo-install.yaml
+```
+
+The integration run executed its Linux PTY journeys without skips. The
+Windows commands cross-compiled executable and test binaries; `-exec=true`
+did not execute Windows code. Shellcheck v0.11.0 was downloaded to `/tmp`;
+the manifest supplied to the Python test was the checksum-verified upstream
+release asset. Parsing both workflow and fixture YAML and checking the
+release's server/controller image tags also passed.
+
+`go test -tags=e2e ./tests/... -count=1 -v` passed its gate tests and skipped
+the external live journey because `MICKO_E2E` was unset.
+`go test -tags=compat ./tests/compat/... -count=1 -v` compiled and explicitly
+skipped the deployment journey. `scripts/compat/argo.sh --check` exited 1,
+reporting missing **docker, kind and kubectl**. The real deployment, direct
+HTTPS/auth, managed real-cluster forwarding and native Windows execution
+remain unverified here. Reproduce the deployment checks with
+`scripts/compat/argo.sh` on a host with those tools and Docker running, or
+select `deployment_compatibility` in the manual CI dispatch.
+
+Mutation checks were run and restored: removing saved-view namespace
+restoration failed the palette roundtrip; removing resource UID preflight
+failed the replacement-refusal journey; removing cluster deletion failed
+all four runner cleanup scenarios. Their restored checks passed.
+
+### Windows scope
+
+CI runs Windows build/startup smoke, default unit and HTTP transport tests,
+and the integration fixture-server journeys. POSIX fake kubectl and Linux/macOS
+PTY files have platform constraints. Native home-directory tests use Windows'
+`USERPROFILE` in temporary environments. This covers executable startup and
+model/transport behavior; it does not claim Windows PTY, managed-forward live
+or live-cluster coverage. Log piping still requires `/bin/sh`.
+
+## External-cluster tests
 
 Use a disposable Argo environment and a dedicated namespace. The E2E journey
 creates and deletes workflows; it is not a read-only smoke test. Provision the
@@ -216,13 +324,16 @@ it is not evidence of a live pass. The gate's own tests still run.
 
 The journey lists, reads and deletes through the production client,
 `internal/argo.Client`; the harness submits the fixture and polls its phase with
-its own requests, because the product cannot submit workflows. The fixture uses
+its own requests, for arbitrary workflow-manifest fixtures; product submission starts from templates or cron workflows. The fixture uses
 `generateName`, and every step addresses the name the server assigned. The
 cleanup delete, which runs even when a step fails, goes by that name without
 checking ownership labels or UID. Use an isolated, disposable namespace with no
 existing workflows; fixtures under `tests/e2e/testdata` are synthetic.
 
-CI runs format, vet, unit, integration, race and build checks. E2E runs only on
-manual workflow dispatch with `E2E_ALLOWLIST_B64` configured. Installing kind
-and kubectl in that job does not provision a cluster; the allowlisted endpoint
-must already be reachable from the runner.
+CI runs format, vet (including integration, E2E and compatibility tags),
+unused-code staticcheck, unit, integration, race and build checks. The pinned
+staticcheck v0.8.2 tool selects Go 1.26 automatically for its own build; the
+application continues to target the version in go.mod. External E2E
+requires the manual `external_e2e` dispatch input and `E2E_ALLOWLIST_B64`;
+requesting it without a secret fails. The allowlisted endpoint must already
+be reachable. It remains separate from the self-provisioning deployment job.

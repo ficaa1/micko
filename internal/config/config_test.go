@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -321,7 +322,11 @@ func TestDefaultConfigPath(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			home := t.TempDir()
-			t.Setenv("HOME", home)
+			homeKey := "HOME"
+			if runtime.GOOS == "windows" {
+				homeKey = "USERPROFILE"
+			}
+			t.Setenv(homeKey, home)
 			t.Setenv("XDG_CONFIG_HOME", "")
 			base := filepath.Join(home, ".config")
 			if c.xdg {

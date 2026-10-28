@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: micko-compat
+  labels:
+    app.kubernetes.io/part-of: micko-compat
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: micko-runner
+  namespace: micko-compat
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: micko-noaccess
+  namespace: micko-compat
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: micko-executor
+  namespace: micko-compat
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: micko-runner
+  namespace: micko-compat
+rules:
+- apiGroups: [argoproj.io]
+  resources: [workflows, workflowtemplates, cronworkflows]
+  verbs: [get, list, watch, create, update, patch, delete]
+- apiGroups: ['']
+  resources: [pods, pods/log, events]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: micko-runner
+  namespace: micko-compat
+subjects:
+- kind: ServiceAccount
+  name: micko-runner
+  namespace: micko-compat
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: micko-runner
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: micko-executor
+  namespace: micko-compat
+rules:
+- apiGroups: [argoproj.io]
+  resources: [workflowtaskresults]
+  verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: micko-executor
+  namespace: micko-compat
+subjects:
+- kind: ServiceAccount
+  name: micko-executor
+  namespace: micko-compat
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: micko-executor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: micko-compat-template-reader
+rules:
+- apiGroups: [argoproj.io]
+  resources: [clusterworkflowtemplates]
+  verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: micko-compat-template-reader
+subjects:
+- kind: ServiceAccount
+  name: micko-runner
+  namespace: micko-compat
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: micko-compat-template-reader
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: micko-compat-template
+  namespace: micko-compat
+  labels:
+    app.kubernetes.io/part-of: micko-compat
+spec:
+  workflowMetadata:
+    labels:
+      app.kubernetes.io/part-of: micko-compat
+  entrypoint: main
+  serviceAccountName: micko-executor
+  arguments:
+    parameters:
+    - name: message
+      value: fixture
+  templates:
+  - name: main
+    container:
+      image: busybox:1.37.0
+      command: [sh, -c]
+      args: ['echo "{{workflow.parameters.message}}"']
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: micko-compat-cluster-template
+  labels:
+    app.kubernetes.io/part-of: micko-compat
+spec:
+  workflowMetadata:
+    labels:
+      app.kubernetes.io/part-of: micko-compat
+  entrypoint: main
+  serviceAccountName: micko-executor
+  arguments:
+    parameters:
+    - name: message
+      value: fixture
+  templates:
+  - name: main
+    container:
+      image: busybox:1.37.0
+      command: [sh, -c]
+      args: ['echo "{{workflow.parameters.message}}"']
+---
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: micko-compat-cron
+  namespace: micko-compat
+  labels:
+    app.kubernetes.io/part-of: micko-compat
+spec:
+  schedules: ['0 0 1 1 *']
+  suspend: true
+  workflowSpec:
+    workflowTemplateRef:
+      name: micko-compat-template
