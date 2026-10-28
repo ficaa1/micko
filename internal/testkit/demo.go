@@ -283,13 +283,6 @@ func (b *demoBuilder) resourceJSON(wf core.Workflow) []byte {
 		},
 		"status": status,
 	}
-	if len(wf.Summary.Arguments) > 0 {
-		ps := make([]map[string]string, 0, len(wf.Summary.Arguments))
-		for _, p := range wf.Summary.Arguments {
-			ps = append(ps, map[string]string{"name": p.Name, "value": p.Value})
-		}
-		doc["spec"].(map[string]any)["arguments"] = map[string]any{"parameters": ps}
-	}
 	out, err := json.Marshal(doc)
 	if err != nil {
 		panic(err) // a map of strings and slices always marshals
@@ -620,13 +613,10 @@ func demoETLRun(start time.Time, i int) core.Workflow {
 		msg = "child 'quality-check' failed"
 	}
 	b.add(g1, root, check)
-	wf := b.finish(6*time.Minute, msg, map[string]string{
+	return b.finish(6*time.Minute, msg, map[string]string{
 		"workflows.argoproj.io/cron-workflow": "demo-etl-hourly",
 		"team":                                "data",
 	})
-	wf.Summary.Arguments = []core.Argument{{Name: "batch", Value: fmt.Sprintf("2026-09-08T%02d:00", 11-i), HasValue: true}}
-	wf.Resource = b.resourceJSON(wf)
-	return wf
 }
 
 // demoHParamSweep is a hyperparameter sweep in the second namespace: a DAG

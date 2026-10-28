@@ -131,17 +131,11 @@ live in [ci.yml](../.github/workflows/ci.yml).
 Explain and Events share one pair of cancelable event streams per selected
 workflow. `diagnose.Input` accepts event snapshots and collection status; its
 warning cards require workflow UID identity or a unique verified pod name plus
-a creation-time bound. Event order, replay replacement and eviction ties are
-deterministic. Event coverage is additive to workflow and log rules.
-
-Compare uses `core.Query.SummaryOnly` to skip the list adapter's supplemental
-suspended-node scan. Its baseline search is namespace/lineage scoped, bounded
-by three pages, 300 summaries and a 20-second context; only the selected baseline
-gets a detail GET. Async replies must match connection/selection generations,
-request ID and full workflow identity. The detail pane reuses the production
-outline and report renderer for path matching, scrolling, sanitization and
-redacted clipboard output. Retry/fanout instances have explicit ambiguous
-alignment; template scope and step-group indexes qualify stable task paths.
+a creation-time bound. The controller's WorkflowFailed, WorkflowNodeFailed and
+WorkflowNodeError warnings are left out, since the failure cards say the same.
+A coverage card appears only when the stream is not live or the 20-card limit
+dropped warnings. Event order, replay replacement and eviction ties are
+deterministic.
 
 The adapter and fixtures target Argo Workflows v4.1.2. See the
 [usage guide](usage.md#limits-and-troubleshooting) for the scope of recorded

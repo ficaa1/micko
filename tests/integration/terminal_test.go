@@ -165,7 +165,7 @@ func quit(t *testing.T, p *PTYProcess, keys ...string) {
 }
 
 // Every way out of micko exits 0 and leaves the alternate screen it
-// entered: q and ctrl+c from the demo, esc from the profile picker, and
+// entered: q and ctrl+c from the demo, esc from setup and the profile picker, and
 // --version before any screen.
 func TestPTYExits(t *testing.T) {
 	configured := filepath.Join(t.TempDir(), "config.yaml")
@@ -176,24 +176,30 @@ func TestPTYExits(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := []struct {
-		name    string
-		args    []string
-		ready   []string
+		name  string
+		args  []string
+		ready []string
+		// back is the screen one esc must reach before keys are sent.
+		back    []string
 		keys    []string
 		altScrn bool
 	}{
-		{"q from the demo", []string{"--demo"}, []string{demoListed}, []string{"q"}, true},
-		{"ctrl+c from the demo", []string{"--demo"}, []string{demoListed}, []string{"ctrl+c"}, true},
-		{"esc from an empty picker", []string{"--config", filepath.Join(t.TempDir(), "none.yaml")},
-			[]string{"no profiles configured", "write them to:", "currentProfile: dev", "tokenEnv: ARGO_TOKEN"}, []string{"esc"}, true},
+		{"q from the demo", []string{"--demo"}, []string{demoListed}, nil, []string{"q"}, true},
+		{"ctrl+c from the demo", []string{"--demo"}, []string{demoListed}, nil, []string{"ctrl+c"}, true},
+		{"esc from setup, then the empty picker", []string{"--config", filepath.Join(t.TempDir(), "none.yaml")},
+			[]string{"new profile", "kube context"}, []string{"no profiles configured", "+ new profile", "write them to:"}, []string{"esc"}, true},
 		{"esc from the configured profiles", []string{"--config", configured},
-			[]string{"choose a profile", "https://dev.invalid", "https://prod.invalid"}, []string{"esc"}, true},
-		{"--version", []string{"--version"}, []string{"micko " + buildinfo.Version}, nil, false},
+			[]string{"choose a profile", "https://dev.invalid", "https://prod.invalid"}, nil, []string{"esc"}, true},
+		{"--version", []string{"--version"}, []string{"micko " + buildinfo.Version}, nil, nil, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			p := start(t, 100, 30, c.args...)
 			await(t, p, c.ready, nil)
+			if c.back != nil {
+				send(t, p, "esc")
+				await(t, p, c.back, nil)
+			}
 			quit(t, p, c.keys...)
 			raw := p.Raw()
 			for _, seq := range []string{"\x1b[?1049h", "\x1b[?1049l"} {

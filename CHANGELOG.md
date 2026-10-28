@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Profile setup is part of the TUI. With no profiles micko opens it, and the
+  picker's `+ new profile` row opens it later. It lists kube contexts, the
+  Argo Server services in the chosen one and its namespaces, then forwards to
+  the server and checks it: no token needed sets `authMode: server`, a 401
+  asks for a token variable or file, and a self-signed certificate offers `t`
+  to trust it or `c` for a CA file. Enter saves the profile and connects.
+- `insecureSkipTLSVerify: true` on a forwarded profile accepts the Argo
+  Server's self-signed certificate. A profile without a forward is refused.
+- Explain's event cards are one line each: node, reason and count, then
+  time, object and message. Warnings that restate a failure card are left
+  out, and the event coverage card appears only when the event stream is not
+  live.
+- Removed `micko --setup`, `micko --check`, Compare and saved views.
+
 ## 0.9.0-rc.1
 
 - `micko --setup` guides creating a profile, for a direct endpoint or a

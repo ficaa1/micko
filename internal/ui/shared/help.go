@@ -75,7 +75,7 @@ func helpLines() []string {
 		"          i info  / find  n / N next / previous  h skipped  s sort  p phase",
 		"Timeline  l logs  i info  space fold",
 		"Explain   y copy report  l open failing pod's log  n / N pick failure",
-		"Events    s warnings first  / filter   Compare C / :compare last success",
+		"Events    s warnings first  / filter",
 		"Logs      t follow  space pause  c container  G newest  esc back",
 		"          / search  n / N next / previous match  & only matching lines",
 		"          w wrap long lines  L source labels  | pipe to a program",

@@ -1,6 +1,7 @@
 package detail
 
 import (
+	"cmp"
 	"strconv"
 	"strings"
 	"testing"
@@ -136,7 +137,7 @@ func TestExplainRawReport(t *testing.T) {
 	m := explainModel(t, "demo-nightly-report", 136, 40, true)
 	m.SetTheme(skin(t))
 	raw := m.RawLines()
-	if raw[0] != "Explain demo-nightly-report in demo: Failed after 4m00s" || raw[1] != "1 error · 3 info" || raw[2] != "" {
+	if raw[0] != "Explain demo-nightly-report in demo: Failed after 4m00s" || raw[1] != "1 error · 2 info" || raw[2] != "" {
 		t.Fatalf("report head:\n%s", strings.Join(raw[:3], "\n"))
 	}
 	joined := strings.Join(raw, "\n")
@@ -160,7 +161,7 @@ func TestExplainRawReport(t *testing.T) {
 // The status line counts the findings; j and G scroll; the hints offer the failing log when there is one.
 func TestExplainStatusScrollAndHints(t *testing.T) {
 	m := explainModel(t, "demo-nightly-report", 76, 12, true)
-	if s := m.explainStatusLine(); !strings.HasPrefix(s, "explain · 1 error · 3 info · 1/") {
+	if s := m.explainStatusLine(); !strings.HasPrefix(s, "explain · 1 error · 2 info · 1/") {
 		t.Errorf("status %q", s)
 	}
 	press(m, "j")
@@ -169,7 +170,7 @@ func TestExplainStatusScrollAndHints(t *testing.T) {
 	}
 	press(m, "G")
 	lines := m.BodyLines()
-	if last := lines[len(lines)-1]; !strings.Contains(last, "available.") {
+	if last := lines[len(lines)-1]; !strings.Contains(last, "it ran after the workflow failed") {
 		t.Errorf("G does not show the end: %q", last)
 	}
 	if h := m.Hints(); !strings.Contains(h, "y copy report") || !strings.Contains(h, "l failing log") {
@@ -316,12 +317,13 @@ func TestExplainGolden(t *testing.T) {
 
 func TestExplainEventEvidence(t *testing.T) {
 	for _, c := range []struct {
-		name, kind, objectUID, namespace string
-		old, unknown, late               bool
-		want                             bool
+		name, kind, objectUID, namespace, reason string
+		old, unknown, late                       bool
+		want                                     bool
 	}{
 		{name: "verified pod", kind: "Pod", namespace: "demo", want: true},
 		{name: "workflow UID", kind: "Workflow", objectUID: "uid", namespace: "demo", want: true},
+		{name: "controller phase warning", kind: "Workflow", objectUID: "uid", namespace: "demo", reason: "WorkflowNodeFailed"},
 		{name: "replacement", kind: "Workflow", objectUID: "other", namespace: "demo"},
 		{name: "missing UID", kind: "Workflow", namespace: "demo"},
 		{name: "other namespace", kind: "Pod", namespace: "other"},
@@ -352,19 +354,25 @@ func TestExplainEventEvidence(t *testing.T) {
 				if c.old {
 					at = at.Add(-time.Hour)
 				}
-				e := core.Event{UID: "event", Namespace: c.namespace, ObjectKind: c.kind, ObjectName: object, ObjectUID: c.objectUID, Type: "Warning", Reason: "FailedScheduling", Message: "0/3 nodes: insufficient memory\x1b[2J", FirstSeen: at, LastSeen: at, Count: 3}
+				e := core.Event{UID: "event", Namespace: c.namespace, ObjectKind: c.kind, ObjectName: object, ObjectUID: c.objectUID, Type: "Warning", Reason: cmp.Or(c.reason, "FailedScheduling"), Message: "0/3 nodes: insufficient memory\x1b[2J", FirstSeen: at, LastSeen: at, Count: 3}
 				m.ApplyEvents([]core.Event{e})
 				m.SetEventsStatus("reconnecting", true)
 				raw := strings.Join(m.RawLines(), "\n")
-				if strings.Contains(raw, "Kubernetes reported FailedScheduling") != c.want {
+				if strings.Contains(raw, ": "+e.Reason+" ×3") != c.want {
 					t.Fatalf("at width %d: %s", width, raw)
 				}
 				if c.want && (!strings.Contains(raw, "insufficient memory") || !strings.Contains(raw, "2026-09-08T12:00:00Z") || strings.Contains(raw, "\x1b")) {
 					t.Fatalf("unsafe or missing evidence: %s", raw)
 				}
-				if !strings.Contains(raw, "reconnecting") || !strings.Contains(raw, "Running") {
+				if !strings.Contains(raw, "Kubernetes events: reconnecting") || !strings.Contains(raw, "Running") {
 					t.Fatalf("coverage suppresses findings: %s", raw)
 				}
+				m.SetEventsStatus("live", false)
+				if live := strings.Join(m.RawLines(), "\n"); strings.Contains(live, "Kubernetes events") {
+					t.Fatalf("a live stream still reports coverage: %s", live)
+				}
+				m.SetEventsStatus("reconnecting", true)
+				raw = strings.Join(m.RawLines(), "\n")
 				before := raw
 				m.ApplyEvents([]core.Event{e})
 				if strings.Join(m.RawLines(), "\n") != before {

@@ -119,9 +119,7 @@ type Model struct {
 
 	// ev is the Events section: the events streamed in, the order, the
 	// filter and the stream's status.
-	ev          eventsState
-	cmp         comparisonState
-	compareFrom string
+	ev eventsState
 
 	// theme styles the node rows. It is injected so goldens can force the
 	// plain theme.
@@ -159,7 +157,7 @@ func (m *Model) SetNow(t time.Time) { m.now = t }
 func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 	var sameWorkflow bool
 	if m.loaded {
-		sameWorkflow = m.state.Summary.Ref == wf.Summary.Ref
+		sameWorkflow = m.state.Summary.Ref.UID == wf.Summary.Ref.UID
 	}
 	m.state = workflowState{
 		Summary:  wf.Summary,
@@ -179,13 +177,10 @@ func (m *Model) SetWorkflow(wf core.Workflow, now time.Time) {
 		m.autoFolded = map[string]bool{}
 		m.find = nodeFind{}
 		m.ex = explainState{}
-		m.cmp = comparisonState{}
-		m.compareFrom = "nodes"
 		m.ev = eventsState{order: m.ev.order}
 		keep = ""
 	}
 	m.explainChanged()
-	m.cmp.stale = true
 	m.ev.stale = true
 	m.applyDefaultFolds()
 	m.rebuildNodes(keep)
@@ -293,14 +288,6 @@ func (m *Model) handleKey(key string) tea.Cmd {
 		m.showSection(prevTab(m.tab))
 		return nil
 	case "esc":
-		if m.tab == "compare" {
-			id := m.compareFrom
-			if id == "" {
-				id = "nodes"
-			}
-			m.showSection(id)
-			return nil
-		}
 		// A find is cleared before esc leaves the workflow, so the key
 		// undoes the last thing the reader set up, one thing at a time.
 		if m.tab == "nodes" && m.find.active() {
@@ -443,8 +430,6 @@ func (m *Model) scrollLines() int {
 		return len(m.nodes)
 	case "timeline":
 		return len(m.tl.rows)
-	case "compare":
-		return len(m.comparisonLines(false))
 	case "explain":
 		return len(m.explainLines())
 	case "events":
@@ -508,8 +493,6 @@ func (m *Model) scrollPos() int {
 		return m.nodeCursor
 	case "timeline":
 		return m.tlCursor
-	case "compare":
-		return m.cmp.top
 	case "explain":
 		return m.ex.top
 	case "events":
@@ -533,8 +516,6 @@ func (m *Model) jumpTo(pos int) {
 		m.nodeCursor = pos
 	case "timeline":
 		m.tlCursor = pos
-	case "compare":
-		m.cmp.top = pos
 	case "explain":
 		m.ex.top = pos
 	case "events":
@@ -576,8 +557,6 @@ func (m *Model) Hints() string {
 		h = m.nodesHints()
 	case "timeline":
 		h = m.timelineHints()
-	case "compare":
-		h = "tab section  j/k scroll  y copy comparison  v reveal  r refresh  esc back"
 	case "explain":
 		h = m.explainHints()
 	case "events":
@@ -586,9 +565,6 @@ func (m *Model) Hints() string {
 		h = m.summaryHints()
 	default:
 		h = "tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back"
-	}
-	if m.tab != "compare" && !m.TextEntry() {
-		h += "  C compare"
 	}
 	if m.archived {
 		h = strings.Replace(h, "  a actions", "", 1)
@@ -601,10 +577,10 @@ func (m *Model) Hints() string {
 func (m *Model) TextEntry() bool { return m.find.editing || (m.tab == "events" && m.ev.editing) }
 
 // EscapeConsumed reports whether esc belongs to the pane rather than leaving
-// the workflow: it returns from Compare, cancels an open find or events
-// filter, or clears a kept one.
+// the workflow: it cancels an open find or events filter, or clears a kept
+// one.
 func (m *Model) EscapeConsumed() bool {
-	return m.tab == "compare" || (m.tab == "nodes" && m.find.active()) || m.eventsFilterActive()
+	return (m.tab == "nodes" && m.find.active()) || m.eventsFilterActive()
 }
 
 // PaneStatus is the right-aligned footer cell: the workflow phase, carried
@@ -654,8 +630,6 @@ func (m *Model) RawLines() []string {
 		return m.nodesRawLines()
 	case "timeline":
 		return m.timelineRawLines()
-	case "compare":
-		return m.comparisonLines(true)
 	case "explain":
 		return m.explainRawLines()
 	case "events":
@@ -692,12 +666,6 @@ func (m *Model) tabStatusLine() string {
 		return m.nodesStatusLine()
 	case "timeline":
 		return m.timelineStatusLine()
-	case "compare":
-		s := "compare · baseline → selected · j/k scroll"
-		if !m.revealResource && explainHasParams(m.comparisonReport()) {
-			s += " · values redacted (v reveals)"
-		}
-		return truncCell(s, m.width)
 	case "explain":
 		return m.explainStatusLine()
 	case "events":
@@ -724,8 +692,6 @@ func (m *Model) windowedLines() []string {
 		return m.nodeTreeLines(m.nodesLayout())
 	case "timeline":
 		return m.timelineLines(m.timelineLayout())
-	case "compare":
-		return sliceLines(m.comparisonLines(false), m.cmp.top, h)
 	case "explain":
 		return sliceLines(m.explainLines(), m.ex.top, h)
 	case "events":

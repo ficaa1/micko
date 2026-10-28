@@ -28,7 +28,6 @@ var sections = []section{
 	{id: "events", title: "Events", key: "E"},
 	{id: "resource", title: "Resource"},
 	{id: "summary", title: "Summary"},
-	{id: "compare", title: "Compare", key: "C"},
 }
 
 // sectionIndex is id's position in the strip, and -1 for an unknown ID.

@@ -25,6 +25,7 @@ import (
 	"github.com/ficaa1/micko/internal/buildinfo"
 	"github.com/ficaa1/micko/internal/config"
 	"github.com/ficaa1/micko/internal/diagnostics"
+	"github.com/ficaa1/micko/internal/kube"
 	"github.com/ficaa1/micko/internal/portforward"
 	"github.com/ficaa1/micko/internal/ui/profiles"
 )
@@ -61,12 +62,13 @@ type Options struct {
 	Diagnostics io.Writer
 }
 
-// Connector builds connections from one config file.
+// Connector builds connections from one config file, and is the profile
+// picker's Setup.
 //
-// The file is read once, at construction. A profile added to it while the
-// program runs is not offered until the next run: re-reading it on every
-// switch would let an edit halfway through saving break a switch that was
-// working a second earlier.
+// The file is read at construction and again after the wizard saves a
+// profile. An edit made in another program is not offered until the next run:
+// re-reading it on every switch would let an edit halfway through saving break
+// a switch that was working a second earlier.
 type Connector struct {
 	opts Options
 	// path is the resolved config file, or empty when none was found.
@@ -81,9 +83,15 @@ type Connector struct {
 	// A shared sink prevents concurrent connections and forwards from interleaving lines.
 	sink *diagnostics.Sink
 
-	// mu guards live, the connection this connector last handed out. The
-	// entrypoint closes it on the way out, and Connect closes nothing: the
-	// root closes the connection it is replacing before it asks for the next.
+	// kubectl answers the setup wizard's discovery; forward starts the
+	// port-forward a probe checks the server through.
+	kubectl kube.Run
+	forward func(context.Context, config.Config) (endpoint string, stop func(), err error)
+
+	// mu guards live, the connection this connector last handed out, and
+	// data and items, which a save replaces. The entrypoint closes live on the
+	// way out, and Connect closes nothing: the root closes the connection it
+	// is replacing before it asks for the next.
 	mu   sync.Mutex
 	live *app.Connection
 }
@@ -91,7 +99,14 @@ type Connector struct {
 // NewConnector reads the config file and lists the profiles in it. A missing
 // file is not an error: the picker opens empty and says where to write one.
 func NewConnector(opts Options) (*Connector, error) {
-	c := &Connector{opts: opts, path: opts.ConfigPath}
+	c := &Connector{opts: opts, path: opts.ConfigPath, kubectl: kube.Kubectl}
+	c.forward = func(ctx context.Context, cfg config.Config) (string, func(), error) {
+		fwd, _, endpoint, err := c.startForward(ctx, cfg)
+		if err != nil {
+			return "", nil, err
+		}
+		return endpoint, fwd.Close, nil
+	}
 	if opts.Debug && opts.Diagnostics != nil {
 		c.sink = diagnostics.New(opts.Diagnostics)
 	}
@@ -129,6 +144,8 @@ func NewConnector(opts Options) (*Connector, error) {
 
 // ProfileList is what the root needs to render the picker.
 func (c *Connector) ProfileList() app.ProfileList {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return app.ProfileList{Items: c.items, ConfigPath: c.path, Current: c.current, Err: c.listErr}
 }
 
@@ -183,11 +200,10 @@ func (c *Connector) Close() {
 // It blocks: starting a port-forward and waiting for it to bind a local port
 // takes seconds. Every caller runs it off the update loop.
 func (c *Connector) Connect(ctx context.Context, profile string) (*app.Connection, error) {
-	return c.connect(ctx, profile, true)
-}
-
-func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*app.Connection, error) {
-	cfg, err := config.Load(c.data, config.Options{
+	c.mu.Lock()
+	data := c.data
+	c.mu.Unlock()
+	cfg, err := config.Load(data, config.Options{
 		ConfigPath:            c.path,
 		Profile:               profile,
 		Server:                c.opts.Server,
@@ -203,7 +219,7 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 		RedactValues:          c.opts.RedactValues,
 	})
 	if err != nil {
-		return nil, &connectionError{stage: "config", err: err}
+		return nil, err
 	}
 
 	// The token is read per request rather than captured here, so a rotated
@@ -226,7 +242,7 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 	if cfg.Target.Service != "" {
 		forwarder, states, serverURL, err = c.startForward(ctx, cfg)
 		if err != nil {
-			return nil, &connectionError{stage: "forwarding", err: err}
+			return nil, err
 		}
 		// resolveServer keeps the transport pointed at the currently owned
 		// local port. The configured scheme, path prefix and TLS material are
@@ -248,14 +264,11 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 		if forwarder != nil {
 			forwarder.Close()
 		}
-		return nil, &connectionError{stage: "TLS/config", err: err}
+		return nil, err
 	}
 
 	// The client's deadline bounds this lookup even if the connection is replaced.
-	scopeCtx, cancelScope := context.WithCancel(ctx)
-	if warm {
-		go client.WarmScope(scopeCtx)
-	}
+	go client.WarmScope(context.Background())
 
 	var once sync.Once
 	conn := &app.Connection{
@@ -272,14 +285,11 @@ func (c *Connector) connect(ctx context.Context, profile string, warm bool) (*ap
 		States:      states,
 		Diagnostics: c.sink,
 	}
-	conn.Close = func() {
-		once.Do(func() {
-			cancelScope()
-			if forwarder != nil {
-				forwarder.Close()
-			}
-			client.Close()
-		})
+	if forwarder != nil {
+		// Close is idempotent: the root closes a connection it replaces, and
+		// the entrypoint closes whatever is live on the way out. Those are the
+		// same connection whenever the program exits without a switch.
+		conn.Close = func() { once.Do(forwarder.Close) }
 	}
 	c.mu.Lock()
 	c.live = conn

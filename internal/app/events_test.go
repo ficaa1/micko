@@ -43,7 +43,7 @@ func pump(m *Root, wait time.Duration, cmds ...tea.Cmd) (*Root, []running) {
 						queue = append(queue, start(c))
 					}
 				}
-			case detailLoadedMsg, eventsMsg, eventsDoneMsg, eventsRetryMsg, explainLogMsg, comparisonMsg, OpenWorkflowMsg:
+			case detailLoadedMsg, eventsMsg, eventsDoneMsg, eventsRetryMsg, explainLogMsg, OpenWorkflowMsg:
 				next, c := m.Update(msg)
 				m = next.(*Root)
 				if c != nil {
@@ -342,7 +342,7 @@ func TestExplainCollectsEventsWithoutOpeningEvents(t *testing.T) {
 		t.Fatalf("streams = %d", f.EventStartCount())
 	}
 	raw := m.copyText()
-	if !strings.Contains(raw, "Kubernetes reported OOMKilling") || !strings.Contains(raw, "out of memory (OOMKilled") {
+	if !strings.Contains(raw, "backfill-2026-q2: OOMKilling") || !strings.Contains(raw, "out of memory (OOMKilled") {
 		t.Fatalf("report: %s", raw)
 	}
 	next, cmd = m.Update(key("E"))

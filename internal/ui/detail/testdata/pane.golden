@@ -1,26 +1,26 @@
 == nothing loaded
 Detail
 (no workflow loaded)
-tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back  C compare
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 
 == loading
 Detail demo-nightly-report
 loading detail…
-tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back  C compare
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ✗ Failed
 == error
 Detail demo-nightly-report
 detail error: forbidden: RBAC
-tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back  C compare
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ✗ Failed
 == not found
 Detail demo-nightly-report
 workflow no longer available
-tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back  C compare
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ✗ Failed
 == summary
 Detail demo-nightly-report
- Nodes   Timeline   Explain   Events   Resource  [Summary]  Compare 
+ Nodes   Timeline   Explain   Events   Resource  [Summary]
 summary · tab changes section
 name:      demo-nightly-report
 namespace: demo
@@ -28,22 +28,22 @@ uid:       synthetic-uid-demo-nightly-report
 phase:     ✗ Failed
 message:   child 'transform' failed
 labels:    schedule=nightly, team=data
-tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back  C compare
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
 ✗ Failed
 == summary, suspended
 Detail demo-release-gate
- Nodes   Timeline   Explain   Events   Resource  [Summary]  Compare 
+ Nodes   Timeline   Explain   Events   Resource  [Summary]
 summary · tab changes section
 name:      demo-release-gate
 namespace: demo
 uid:       synthetic-uid-demo-release-gate
 phase:     ● Running  (suspended: waiting for a resume)
 labels:    env=prod, team=platform, workflows.argoproj.io/phase=Running, workflows.argoproj.io/workflow-template=release
-tab section  1-9 jump  h/l pan  w wrap  v reveal  y copy  a actions  f raw  r refresh  esc back  C compare
+tab section  1-9 jump  h/l pan  w wrap  v reveal  y copy  a actions  f raw  r refresh  esc back
 ● Running
 == summary, archived
 Detail demo-nightly-report (archived)
- Nodes   Timeline   Explain   Events   Resource  [Summary]  Compare 
+ Nodes   Timeline   Explain   Events   Resource  [Summary]
 summary · tab changes section
 source:    the workflow archive — a record kept after the run; actions do not apply
 name:      demo-nightly-report
@@ -52,11 +52,11 @@ uid:       synthetic-uid-demo-nightly-report
 phase:     ✗ Failed
 message:   child 'transform' failed
 labels:    schedule=nightly, team=data
-tab section  1-9 jump  h/l pan  w wrap  v reveal  y copy  f raw  r refresh  esc back  C compare
+tab section  1-9 jump  h/l pan  w wrap  v reveal  y copy  f raw  r refresh  esc back
 ✗ Failed
 == resource
 Detail redact-wf
- Nodes   Timeline   Explain   Events  [Resource]  Summary   Compare 
+ Nodes   Timeline   Explain   Events  [Resource]  Summary 
 resource · values shown (v redacts) · 1/24
 metadata:
   annotations:
@@ -68,21 +68,21 @@ spec:
     parameters:
       - name: api-key
         value: sk-1234567890abcdef123456
-tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back  C compare
+tab section  1-9 jump  v reveal  y copy  a actions  f raw  r refresh  esc back
 ✓ Succeeded
 == nodes, offloaded
 Detail fixture-offloaded
-[Nodes]  Timeline   Explain   Events   Resource   Summary   Compare 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 
 node status unavailable
 node status offloaded and not hydrated by the server
-tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back  C compare
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ● Running
 == nodes, not started
 Detail pending
-[Nodes]  Timeline   Explain   Events   Resource   Summary   Compare 
+[Nodes]  Timeline   Explain   Events   Resource   Summary 
 
 0 nodes · sort pipeline
 (no nodes yet — workflow not started)
-tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back  C compare
+tab section  space fold  i info  / find  h show skipped  s sort  p phase  l logs  a actions  r refresh  f raw  esc back
 ○ Pending

@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/ficaa1/micko/internal/core"
 	"github.com/ficaa1/micko/internal/testkit"
@@ -261,5 +263,55 @@ func TestPIsRefusedWithNothingToConnectTo(t *testing.T) {
 	}
 	if m.flash == "" {
 		t.Error("P did nothing and said nothing")
+	}
+}
+
+// setupConnector is a connector that can also set up profiles.
+type setupConnector struct{ fakeConnector }
+
+func (setupConnector) KubeContexts(context.Context) ([]string, string, error) {
+	return []string{"kind-dev"}, "kind-dev", nil
+}
+func (setupConnector) ArgoServers(context.Context, string) ([]profiles.Server, error) {
+	return nil, nil
+}
+func (setupConnector) Namespaces(context.Context, string) ([]string, error) { return nil, nil }
+func (setupConnector) Probe(context.Context, profiles.Draft) profiles.Check {
+	return profiles.Check{}
+}
+func (setupConnector) Save(string, profiles.Draft) ([]profiles.Item, error) { return nil, nil }
+
+// With no profiles the session starts in the setup wizard, whose replies
+// reach it and whose esc steps back; esc quits only from the picker itself.
+func TestStartWithNoProfilesOpensSetup(t *testing.T) {
+	m := newRoot(nil, "", time.Second)
+	m.SetConnector(&setupConnector{})
+	m.SetProfiles(ProfileList{ConfigPath: "/home/x/.config/micko/config.yaml"})
+	var pending []tea.Cmd
+	pending = append(pending, m.Init())
+	for len(pending) > 0 {
+		cmd := pending[0]
+		pending = pending[1:]
+		if cmd == nil {
+			continue
+		}
+		switch msg := cmd().(type) {
+		case tea.BatchMsg:
+			pending = append(pending, msg...)
+		case profiles.ReplyMsg:
+			_, next := m.Update(msg)
+			pending = append(pending, next)
+		}
+	}
+	if !m.profView.InSetup() || !strings.Contains(ansi.Strip(m.View().Content), "kind-dev  (current)") {
+		t.Fatalf("the session did not start in setup over the kube contexts:\n%s", m.View().Content)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	if m.quitting || !m.profileDialogOpen() || m.profView.InSetup() {
+		t.Fatalf("esc in setup: quitting %v, dialog %v, setup %v", m.quitting, m.profileDialogOpen(), m.profView.InSetup())
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	if !m.quitting {
+		t.Fatal("esc from the picker with nothing connected did not quit")
 	}
 }
