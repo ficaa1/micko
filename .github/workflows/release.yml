@@ -131,9 +131,11 @@ jobs:
             exit 1
           fi
           # --target is the commit a run by hand tags. A pushed tag already
-          # exists, and gh publishes it as it is.
+          # exists, and gh publishes it as it is. A pre-release tag must not
+          # become the latest release.
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
+            --prerelease="${{ contains(env.TAG, '-') }}" \
             --title "$TAG" \
             --notes-file /tmp/notes.md \
             dist/*.tar.gz dist/*.zip dist/checksums.txt
