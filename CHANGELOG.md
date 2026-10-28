@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-rc.2
 
 - Profile setup is part of the TUI. With no profiles micko opens it, and the
   picker's `+ new profile` row opens it later. It lists kube contexts, the
@@ -8,32 +8,13 @@
   the server and checks it: no token needed sets `authMode: server`, a 401
   asks for a token variable or file, and a self-signed certificate offers `t`
   to trust it or `c` for a CA file. Enter saves the profile and connects.
-- `insecureSkipTLSVerify: true` on a forwarded profile accepts the Argo
-  Server's self-signed certificate. A profile without a forward is refused.
-- Explain's event cards are one line each: node, reason and count, then
-  time, object and message. Warnings that restate a failure card are left
-  out, and the event coverage card appears only when the event stream is not
-  live.
-- Removed `micko --setup`, `micko --check`, Compare and saved views.
-
-## 0.9.0-rc.1
-
-- `micko --setup` guides creating a profile, for a direct endpoint or a
-  managed `kubectl port-forward`. It asks only for token variable names or
-  file paths, never token values, and keeps the rest of the config file.
-- `micko --check --profile NAME` checks workflow read access and exits. It
-  reports which stage failed: config, forwarding, TLS, authentication,
-  permission, API or endpoint. `--check-timeout` bounds it.
 - `authMode: server` (or `--auth-mode server`) connects to an Argo Server in
   server auth mode with no token.
-- Explain adds cards for Kubernetes warning events matched to the workflow's
-  pods, and says how much event history it could see.
-- Compare (`C`, `:compare` or section `7`) sets an open run beside the
-  previous successful run of the same cron workflow or template: phase,
-  duration, changed parameters and each step's status, retries and
-  duration.
-- Saved views keep a profile, namespace, filter, phase and sort under a
-  name: `:view-save NAME`, `:views`, `:view NAME` and `:view-delete NAME`.
+- `insecureSkipTLSVerify: true` on a forwarded profile accepts the Argo
+  Server's self-signed certificate. A profile without a forward is refused.
+- Explain adds a card for each Kubernetes warning event matched to the
+  workflow or its pods: node, reason and count, then time, object and
+  message. It says so when the event stream is not live.
 - On template and cron lists, `a` or `:actions` opens actions: `g` submits a
   template or runs a cron workflow now, with parameter edits; `z` suspends
   and `u` resumes a cron workflow. Writes are confirmed, checked against the
