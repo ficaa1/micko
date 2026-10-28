@@ -131,8 +131,11 @@ live in [ci.yml](../.github/workflows/ci.yml).
 Explain and Events share one pair of cancelable event streams per selected
 workflow. `diagnose.Input` accepts event snapshots and collection status; its
 warning cards require workflow UID identity or a unique verified pod name plus
-a creation-time bound. Event order, replay replacement and eviction ties are
-deterministic. Event coverage is additive to workflow and log rules.
+a creation-time bound. The controller's WorkflowFailed, WorkflowNodeFailed and
+WorkflowNodeError warnings are left out, since the failure cards say the same.
+A coverage card appears only when the stream is not live or the 20-card limit
+dropped warnings. Event order, replay replacement and eviction ties are
+deterministic.
 
 The adapter and fixtures target Argo Workflows v4.1.2. See the
 [usage guide](usage.md#limits-and-troubleshooting) for the scope of recorded

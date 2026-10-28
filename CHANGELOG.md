@@ -10,6 +10,10 @@
   to trust it or `c` for a CA file. Enter saves the profile and connects.
 - `insecureSkipTLSVerify: true` on a forwarded profile accepts the Argo
   Server's self-signed certificate. A profile without a forward is refused.
+- Explain's event cards are one line each: node, reason and count, then
+  time, object and message. Warnings that restate a failure card are left
+  out, and the event coverage card appears only when the event stream is not
+  live.
 - Removed `micko --setup`, `micko --check`, Compare and saved views.
 
 ## 0.9.0-rc.1
