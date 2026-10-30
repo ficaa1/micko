@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0-rc.2
+## 0.9.0
 
 - Profile setup is part of the TUI. With no profiles micko opens it, and the
   picker's `+ new profile` row opens it later. It lists kube contexts, the
