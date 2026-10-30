@@ -38,14 +38,17 @@ class StableChannel(unittest.TestCase):
             (repo / "flake.nix").write_text("{}\n")
             (repo / "flake.lock").write_text("{}\n")
 
-            def release(version):
+            def release(version, annotated=False):
                 (repo / "internal/buildinfo/buildinfo.go").write_text(
                     f'const Version = "{version}"\n')
                 git("add", ".")
                 git("commit", "-m", version)
-                git("tag", f"v{version}")
+                git("tag", *(["-a", "-m", version] if annotated else []), f"v{version}")
                 git("push", "origin", f"refs/tags/v{version}")
                 git("tag", "-d", f"v{version}")
+                if annotated:
+                    # A tag push checks out a lightweight copy of the annotated tag.
+                    git("tag", f"v{version}")
                 return git("rev-parse", "HEAD")
 
             def promote(tag, latest):
@@ -78,6 +81,9 @@ class StableChannel(unittest.TestCase):
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.assertNotEqual(failed.returncode, 0)
             self.assertEqual(stable(), second)
+            third = release("0.9.1", annotated=True)
+            promote("v0.9.1", "v0.9.1")
+            self.assertEqual(stable(), third)
 
 
 if __name__ == "__main__":
