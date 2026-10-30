@@ -11,7 +11,7 @@ if [ "$latest" != "$TAG" ]; then
   exit 0
 fi
 
-git fetch --no-tags origin "refs/tags/$TAG:refs/tags/$TAG"
+git fetch --no-tags --force origin "refs/tags/$TAG:refs/tags/$TAG"
 release_commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
 test "$release_commit" = "$(git rev-parse HEAD)"
 git cat-file -e "$release_commit:flake.nix"
