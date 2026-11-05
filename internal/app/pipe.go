@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"charm.land/bubbletea/v2"
@@ -29,6 +30,11 @@ var pipeShell = "/bin/sh"
 // hands it the terminal until it exits.
 func (m *Root) startPipe(intent logs.PipeIntent) tea.Cmd {
 	if m.logsView == nil {
+		return nil
+	}
+	// The browser demo has no shell to hand the lines to.
+	if runtime.GOOS == "js" {
+		m.flash = "piping needs a shell: run micko --demo in a terminal"
 		return nil
 	}
 	lines := m.logsView.RawLines()

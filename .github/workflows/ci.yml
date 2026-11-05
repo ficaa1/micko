@@ -130,6 +130,12 @@ jobs:
       - name: build
         run: go build -o dist/micko ./cmd/micko
 
+      # The browser demo carries a js platform file for bubbletea; a bubbletea
+      # update that it no longer fits fails here rather than on the site.
+      - name: build the browser demo
+        if: runner.os == 'Linux'
+        run: make web WEB_OUT=dist
+
       # Starting with no arguments opens the profile picker, which needs a
       # terminal. This runner has none, so the smoke check is the path that
       # refuses before anything starts: a profile no config file names.

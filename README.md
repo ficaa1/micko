@@ -97,7 +97,8 @@ Argo Server runs with `--auth-mode=server` it needs no token: use
 to loopback addresses.
 
 No cluster at hand? `micko --demo` runs on synthetic data, with no
-credentials and no writes.
+credentials and no writes. The same demo runs in a browser at
+<https://www.filipbiljic.com/micko/demo/>.
 
 ## Compatibility
 
