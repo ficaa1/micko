@@ -18,3 +18,7 @@ coverage.*
 
 # --debug output written to the repo root
 /diag.jsonl
+
+# Output of make web
+/site/demo/micko.wasm.gz
+/site/demo/wasm_exec.js

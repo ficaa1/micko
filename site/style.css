@@ -81,6 +81,8 @@ kbd { display: inline-block; min-width: 1.9em; text-align: center; font-weight: 
 .try .ln + .ln { margin-top: 10px; }
 .try .ps { color: var(--olive); }
 .try .cm { color: var(--dim); font-size: 14px; margin-top: 10px; white-space: normal; }
+.try .web { display: inline-block; margin-top: 14px; font-weight: 700; font-size: 15px; color: var(--red); text-decoration: none; }
+.try .web:hover { text-decoration: underline; }
 @media (max-width: 420px) { .try { padding: 16px 12px; } .try .ln { font-size: 12px; gap: 8px; flex-wrap: wrap; } }
 .copy { margin-left: auto; font: 700 12px JBM, monospace; padding: 3px 8px; cursor: pointer; background: var(--paper2);
   border: 2px solid var(--ink); border-radius: 5px; box-shadow: 2px 2px 0 var(--ink); }

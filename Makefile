@@ -6,7 +6,7 @@ GO ?= go
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
 LDFLAGS ?= -X github.com/ficaa1/micko/internal/buildinfo.Commit=$(COMMIT)
 
-.PHONY: build test test-race vet lint-fmt smoke demo clean
+.PHONY: build test test-race vet lint-fmt smoke demo web clean
 
 # Build the binary into dist/.
 build:
@@ -45,6 +45,26 @@ smoke: build
 # which is the path that does not depend on any of that.
 demo: build
 	vhs docs/demo.tape
+
+# Build the browser demo into site/demo/: micko.wasm.gz and the wasm_exec.js
+# of the same Go toolchain. bubbletea has no js platform file, so this copies
+# the version go.mod resolves to dist/bubbletea, adds
+# cmd/micko-web/_bubbletea/platform_js.go, and builds against the copy through
+# a replace in dist/web.mod. go.mod and the native build do not change.
+WEB_OUT ?= site/demo
+web:
+	@mkdir -p dist
+	@chmod -R u+w dist/bubbletea 2>/dev/null; rm -r -f dist/bubbletea; \
+		cp -r "$$($(GO) list -m -f '{{.Dir}}' charm.land/bubbletea/v2)" dist/bubbletea && \
+		chmod -R u+w dist/bubbletea && \
+		cp cmd/micko-web/_bubbletea/platform_js.go dist/bubbletea/
+	cp go.mod dist/web.mod
+	cp go.sum dist/web.sum
+	$(GO) mod edit -modfile=dist/web.mod -replace charm.land/bubbletea/v2=./dist/bubbletea
+	GOOS=js GOARCH=wasm $(GO) build -modfile=dist/web.mod -trimpath \
+		-ldflags "-s -w $(LDFLAGS)" -o dist/micko.wasm ./cmd/micko-web
+	gzip -9 -n -c dist/micko.wasm > $(WEB_OUT)/micko.wasm.gz
+	install -m 0644 "$$($(GO) env GOROOT)/lib/wasm/wasm_exec.js" $(WEB_OUT)/wasm_exec.js
 
 clean:
 	rm -rf dist

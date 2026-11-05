@@ -28,6 +28,23 @@ To re-record the latest release without publishing again:
 gh workflow run demo.yml --repo ficaa1/micko --ref main
 ```
 
+## Browser demo
+
+`site/demo/` runs `micko --demo` in the browser: `cmd/micko-web` compiled to
+WebAssembly, drawn by a vendored xterm.js. `make web` builds
+`site/demo/micko.wasm.gz` and copies the toolchain's `wasm_exec.js` beside it;
+both are build output and stay out of git. To try it locally:
+
+```sh
+make web && python3 -m http.server -d site 8000   # then open /demo/
+```
+
+bubbletea ships no js platform file. `make web` builds against a copy of the
+version `go.mod` names with `cmd/micko-web/_bubbletea/platform_js.go` added,
+through a replace in `dist/web.mod`; `go.mod` itself is unchanged. CI builds
+the demo on every check, so a bubbletea update the file no longer fits fails
+there. The pages workflow builds and publishes it with the site.
+
 ## Architecture
 
 The app uses Bubble Tea v2 and a standard-library HTTP adapter for Argo's REST
