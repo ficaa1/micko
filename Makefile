@@ -54,6 +54,8 @@ demo: build
 WEB_OUT ?= site/demo
 web:
 	@mkdir -p dist
+	@# go list names the module's directory only once it is downloaded.
+	$(GO) mod download charm.land/bubbletea/v2
 	@chmod -R u+w dist/bubbletea 2>/dev/null; rm -r -f dist/bubbletea; \
 		cp -r "$$($(GO) list -m -f '{{.Dir}}' charm.land/bubbletea/v2)" dist/bubbletea && \
 		chmod -R u+w dist/bubbletea && \
