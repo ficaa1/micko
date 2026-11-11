@@ -133,8 +133,9 @@
       <div class="copy-side">
         <div class="kicker">explain</div>
         <h2>Why it failed, in plain words</h2>
-        <p>Findings come from what the workflow records and nothing else. No network service, no model, the same answer every time.</p>
+        <p>Findings come from what the cluster records and nothing else. No network service, no model, the same answer every time.</p>
         <p>For a failed pod micko reads the end of its log and quotes the lines that matter: the error, the traceback, the line before. Then it says what to do next.</p>
+        <p>Each Kubernetes warning about the run or its pods gets a card too, with its reason and how many times it happened.</p>
         <div class="keys"><span><kbd>X</kbd> explain</span><span><kbd>y</kbd> copy the report</span><span><kbd>l</kbd> failing log</span></div>
       </div>
       <div class="shot">
@@ -188,8 +189,10 @@
           <tr><td>/^demo-.*$/</td><td>a regular expression</td></tr>
           <tr><td>dur&gt;10m</td><td>run time</td></tr>
           <tr><td>label:team=data</td><td>a label</td></tr>
+          <tr><td>param:env=prod</td><td>a parameter</td></tr>
           <tr><td>cron=etl-hourly</td><td>started by this CronWorkflow</td></tr>
         </table>
+        <p><kbd>tab</kbd> completes fields, labels, parameters and their values. <kbd>↑</kbd><kbd>↓</kbd> bring back your last 50 filters.</p>
       </div>
       <div class="shot">
         <div class="win"><div class="bar"><i></i><i></i><i></i><b>micko --demo</b></div><div class="screen"></div></div>
@@ -217,6 +220,7 @@
         <div class="kicker">marks &amp; bulk actions</div>
         <h2>Act on many, safely</h2>
         <p>Mark rows with <kbd>space</kbd> and press <kbd>a</kbd>. The menu counts how many runs each verb applies to. Requests go one at a time, each checked again just before it is sent and never retried.</p>
+        <p>On template and cron lists, <kbd>a</kbd> submits a template or runs a cron now, with parameters you can edit, and suspends or resumes a cron. Resubmit takes new parameter values too.</p>
         <p>Terminate asks you to type the name. Delete asks twice. <code>--read-only</code> turns actions off for a session.</p>
         <div class="outcomes">
           <div><b style="color:var(--olive)">CONFIRMED</b>end state observed</div>
@@ -234,13 +238,33 @@
   <section class="wrap">
     <div class="feat in">
       <div class="copy-side">
+        <div class="kicker">notifications</div>
+        <h2>Know when a run changes</h2>
+        <p>Press <kbd>W</kbd> on a run, or on marked runs, and get on with something else. micko tells you each time a watched run changes phase, and when it is deleted.</p>
+        <p>It can post a banner or play a sound on macOS, ring the terminal bell, or hand the notification to your terminal; the config picks which. With <code>notifications.suspended: true</code> it also tells you when any run in the list stops to wait for you.</p>
+        <div class="keys"><span><kbd>W</kbd> watch, again to stop</span><span><kbd>space</kbd> mark</span></div>
+      </div>
+      <div class="shot">
+        <div class="pings">
+          <div class="card ping"><span class="ico"></span><div><div class="hd"><b>demo-release-gate</b><span>now</span></div><div class="ns">demo</div><div>Running → Suspended</div></div></div>
+          <div class="card ping"><span class="ico"></span><div><div class="hd"><b>demo-nightly-report</b><span>2m ago</span></div><div class="ns">demo</div><div>Running → Failed</div></div></div>
+          <div class="card ping"><span class="ico"></span><div><div class="hd"><b>demo-cleanup</b><span>9m ago</span></div><div class="ns">demo</div><div>deleted; no longer watched</div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="feat flip in">
+      <div class="copy-side">
         <div class="kicker">connect</div>
         <h2>Point it at your cluster</h2>
-        <p>One profile per cluster in <code>~/.config/micko/config.yaml</code>. Give each its own skin and you will never mistake prod for dev.</p>
+        <p>Run <code>micko</code> with no profiles and it sets one up. Pick a kube context, the Argo Server in it and a namespace. micko forwards to the server and checks it, asks where to read a token only if the server wants one, offers to trust a self-signed certificate, and saves the profile.</p>
+        <p><kbd>P</kbd> then <code>+ new profile</code> adds the next cluster. Profiles live in <code>~/.config/micko/config.yaml</code>, one per cluster, and you can write them by hand. Give each its own skin and you will never mistake prod for dev.</p>
         <div class="facts">
           <div><b>kubectl port-forward</b>started for you, closed on exit</div>
-          <div><b>token from env or file</b>read on every request, never logged</div>
-          <div><b>TLS verified</b><code>caFile</code> for a private CA</div>
+          <div><b>no token in server auth mode</b>or one from env or file, never logged</div>
+          <div><b>TLS verified</b><code>caFile</code> for a private CA, or trust a forwarded server's own certificate</div>
           <div><b>--read-only</b>when you only want to look</div>
         </div>
       </div>
@@ -253,7 +277,8 @@
     <span class="k">remotePort:</span> <span class="s">2746</span>
     <span class="k">server:</span> <span class="s">https://127.0.0.1:2746</span>
     <span class="k">namespace:</span> <span class="s">workflows</span>
-    <span class="k">tokenEnv:</span> <span class="s">MICKO_TOKEN</span>
+    <span class="k">authMode:</span> <span class="s">server</span>
+    <span class="k">insecureSkipTLSVerify:</span> <span class="s">true</span>   <span class="c"># self-signed</span>
   <span class="k">prod:</span>
     <span class="k">server:</span> <span class="s">https://argo.example.com</span>
     <span class="k">namespace:</span> <span class="s">workflows</span>
@@ -271,7 +296,9 @@
       <div><b>in the terminal you are in</b>no browser tab, a key for everything</div>
       <div><b>every namespace in one list</b><code>:all</code>, narrowed by a query</div>
       <div><b>many runs at once</b>mark them, then act, each one confirmed</div>
-      <div><b>submit and edit in the UI</b>micko does not create workflows or change parameters</div>
+      <div><b>submit with your parameters</b>a template, a cron run now, or a resubmit</div>
+      <div><b>write and edit in the UI</b>micko starts runs from what is already there: no new manifest, no template edits</div>
+      <div><b>sign in with SSO in the UI</b>micko uses a token, or none in server auth mode</div>
     </div>
   </section>
 
@@ -333,6 +360,11 @@
       <div class="card way">
         <h3>mise</h3>
         <pre><span class="ps">$</span> mise use -g github:ficaa1/micko</pre>
+      </div>
+      <div class="card way">
+        <h3>Nix</h3>
+        <pre><span class="ps">$</span> nix profile install github:ficaa1/micko/stable</pre>
+        <p>Follows verified releases. Linux x86_64 and ARM64, macOS ARM64.</p>
       </div>
       <div class="card way">
         <h3>Go</h3>

@@ -155,11 +155,26 @@ section { padding: 72px 0; }
 table.q { border-collapse: collapse; font-size: 14px; margin-top: 10px; }
 table.q td { padding: 4px 14px 4px 0; vertical-align: top; color: var(--soft); }
 table.q td:first-child { white-space: nowrap; color: var(--ink); font-weight: 700; }
+table.q + p { margin-top: 16px; }
 
 /* Actions: four outcomes. */
 .outcomes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
 .outcomes div { padding: 10px 14px; font-size: 13px; color: var(--soft); background: var(--cream); border: 2.5px solid var(--ink); border-radius: 8px; box-shadow: 4px 4px 0 var(--ink); }
 .outcomes b { display: block; font-size: 16px; letter-spacing: .06em; }
+
+/* Notifications: banners as micko posts them, name over namespace over the change. */
+.pings { display: grid; gap: 22px; max-width: 480px; margin-inline: auto; }
+.ping { display: flex; gap: 16px; align-items: flex-start; padding: 14px 18px; font-size: 14px; line-height: 1.45; color: var(--ink); box-shadow: 6px 6px 0 var(--ink); }
+.ping:nth-child(1) { transform: rotate(-1.5deg); } .ping:nth-child(2) { transform: rotate(1deg); margin-left: 8%; }
+.ping:nth-child(3) { transform: rotate(-.5deg); margin-right: 6%; }
+.ping > div { flex: 1; min-width: 0; }
+/* The site's favicon, as the banner's icon. */
+.ping .ico { flex: none; position: relative; width: 40px; height: 40px; border: 2.5px solid var(--ink); border-radius: 9px; background: var(--paper); }
+.ping .ico::after { content: ''; position: absolute; inset: 6px 10px; background: var(--red); }
+.ping .hd { display: flex; align-items: baseline; gap: 10px; }
+.ping .hd b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ping .hd span, .ping .ns { color: var(--dim); font-size: 13px; }
+.ping .hd span { margin-left: auto; white-space: nowrap; }
 
 /* Connect */
 .yaml { padding: 22px 24px; font-size: 14px; line-height: 1.65; white-space: pre; overflow-x: auto; }
@@ -203,6 +218,7 @@ table.q td:first-child { white-space: nowrap; color: var(--ink); font-weight: 70
 .way pre { font: 500 15px/1.6 JBM, monospace; white-space: pre-wrap; word-break: break-all; color: var(--ink); }
 .way pre .ps { color: var(--olive); }
 .way p { font-size: 14px; margin-top: 8px; }
+.way:last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 760px) { .ways { grid-template-columns: 1fr; } }
 
 /* Feature ticker */
