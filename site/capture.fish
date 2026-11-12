@@ -83,7 +83,7 @@ function anim -a name secs flag
         set -l t (math "$now - $t0")
         test $t -lt $secs; or break
         set -l screen (tmux capture-pane -t $sess -e -p | string collect)
-        set -l h (printf '%s' $screen | md5 -q)
+        set -l h (printf '%s' $screen | $md5)
         set -l n (contains -i -- $h $hashes)
         if test -z "$n"
             set -a hashes $h
@@ -99,6 +99,10 @@ function anim -a name secs flag
     end
     echo "  $name: "(count $hashes)" frames over $secs"s
 end
+
+# md5 on macOS, md5sum on Linux.
+set -g md5 md5 -q
+command -q md5; or set md5 md5sum
 
 mkdir -p $out
 echo "recording with "($bin --version)

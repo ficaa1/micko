@@ -14,14 +14,15 @@ A keyboard-first terminal UI for [Argo Workflows](https://argoproj.github.io/wor
 
 ## Features
 
-- **Workflow list** with phase, progress and failure reason, filtered by a small query language (`phase=failed age<2h`)
+- **Workflow list** with phase, progress and failure reason, filtered by a small query language that searches parameters too (`phase=failed param:env=prod`), with completion and history
 - **Timeline** of each run as a Gantt chart, with the critical path marked
-- **Explain**: why a run failed, in plain words, from what the workflow records
+- **Explain**: why a run failed, in plain words, from what the workflow records, quoting the failing pods' logs and the Kubernetes warnings
 - **Node tree** that reads like the pipeline: retries, DAG dependencies, exit handlers
 - **Logs** labelled by step, with search, filtering and piping; **live Kubernetes events**
-- **Actions**: resume, suspend, retry, resubmit, stop, terminate, delete, one at a time or in bulk, each confirmed
+- **Actions**, each confirmed: resume, suspend, retry, stop, terminate and delete, one run or many; resubmit a run, submit a template or run a cron workflow now, with parameters you edit; suspend or resume a cron workflow
+- **Notifications**: `W` watches runs and tells you when their phase changes, by desktop banner, terminal bell, terminal notification or sound
 - **Cron workflows, templates and the archive**, with next-run times computed locally
-- **Profiles** per cluster, with managed `kubectl port-forward`
+- **Profiles** per cluster, set up in the app, with managed `kubectl port-forward`
 - **13 colour skins**, and my bird Mićko, as an optional mascot. He won't be offended if you don't turn it on :)
 
 ## Install
@@ -50,9 +51,11 @@ Nix: Linux x86_64/ARM64 and macOS ARM64; Intel macOS is not supported.
 ## Quick start
 
 Run `micko`. With no profiles it opens setup: pick a kube context, the Argo
-Server found in it and a namespace, and micko forwards to it, finds out
-whether it needs a token or trusts a self-signed certificate, and saves the
-profile to `~/.config/micko/config.yaml`. `P` switches profile, and
+Server found in it and a namespace, and micko forwards to the server and
+checks it. If it wants a token, name the environment variable or file that
+holds it; if its certificate is self-signed, `t` trusts it or `c` takes a CA
+file. Name the profile, and `enter` saves it to `~/.config/micko/config.yaml`
+and connects. Setup needs `kubectl` on your PATH. `P` switches profile, and
 `+ new profile` there adds another. Press `?` for help.
 
 To write profiles by hand:
@@ -72,6 +75,7 @@ profiles:
                                      # micko swaps in the forwarded host and port
     namespace: workflows             # where your workflows run
     tokenEnv: MICKO_TOKEN            # the environment variable holding your Argo token
+    # insecureSkipTLSVerify: true    trusts a self-signed certificate; forwarded profiles only
 ```
 
 **Straight to a reachable Argo Server**, with a bearer token:
@@ -119,7 +123,8 @@ real Windows terminal; an issue saying how it ran for you is welcome.
 
 ## Building from source
 
-Requires Go 1.25 or later.
+Requires Go 1.25 or later. With the default `GOTOOLCHAIN`, `go` fetches
+Go 1.27.3, the version releases are built with.
 
 ```sh
 git clone https://github.com/ficaa1/micko.git
